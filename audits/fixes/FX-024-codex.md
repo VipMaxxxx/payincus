@@ -1,0 +1,1 @@
+已在 `admin-capacity-cost.ts` 的容量模型入口新增 `priceYuan = toMoney(plan.price) / 100`，月收入及返回价格统一使用“元”，全链仅换算一次；未改共享取数、下单、账单或展示逻辑。已在容量成本守卫中钉死该换算路径。服务端 type-check、capacity-cost 守卫、commercial-operations-overview 守卫均通过。未 commit。

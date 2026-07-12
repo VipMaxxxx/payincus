@@ -1,0 +1,3220 @@
+OpenAI Codex v0.144.0-alpha.4
+--------
+workdir: C:\Users\Administrator\Desktop\payinces
+model: gpt-5.6-sol
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: high
+reasoning summaries: none
+session id: 019f53c8-0ae9-7301-a2df-00530fbf23ee
+--------
+user
+你是 PayIncus 实现工程师。先读 AGENTS.md(邮箱/计费高危,先读代码+守卫;不 commit/push/发版、不大重构;不改 schema/package)。严格按规格只改 routes/mail.ts 购买唯一性校验+必要 db+守卫:订阅唯一性从全局一份改为每 mailSource 一份。不碰 transfers(并行),不动 BF-9-01/02/03 自动续费/过期自救 feature。改完跑守卫报告,不 commit。
+---
+# BF-9-04 规格：邮箱订阅"全局一份"vs"每源一份"(G-B 裁决:每邮箱源各一份)
+
+## 裁决
+邮箱订阅改**每邮箱源各一份**(非全局仅一份)。
+
+## 现状
+前端只阻止同源重复购买、允许换源结算,后端却**禁止用户存在任意第二份订阅**(全局一份)→ 前后端矛盾,用户无法买第二个源。证据:MailView.vue:63-67、476-495、mail.ts:1095-1100。
+
+## 修法(只改 routes/mail.ts(购买唯一性校验 1095-1100)+ 必要 db + 守卫;不碰 transfers(并行);不动 BF-9-01/02/03 自动续费/过期自救 feature 部分;不改 schema/package)
+1. 先只读:mail.ts:1095-1100 的"是否已有订阅"校验、订阅与 mailSource 关联、前端 MailView 的同源判断。
+2. **改为每源一份**:购买校验从"用户已有任意订阅→拒"改为"用户在**同一 mailSource** 已有 active 订阅→拒;不同源允许各一份"。与前端"每源一份"对齐。
+3. 保持退款/续费/计费口径不变;不触碰过期自救/自动续费(波4 feature)逻辑。
+
+## 加守卫
+`test:mail-subscription-cancel-guards` 或 mail 相关守卫追加:订阅唯一性按 mailSource 维度(每源一份)。不改 package.json。
+
+## 不许动
+不碰 transfers(并行)。不改 BF-9-01/02/03 feature。不改 schema/package。不 commit。
+
+## 验收
+type-check 通过;`test:mail-subscription-cancel-guards`、`test:mail-list-query-guards`、`test:mail-plan-financial-guards` 通过。交付一段话:唯一性改为按 mailSource、守卫结果。
+
+codex
+我会严格按 BF-9-04 的边界执行：先只读 `AGENTS.md`、购买校验及关联、前端同源判断和相关守卫；随后仅改 `routes/mail.ts` 与必要的现有守卫，不碰 schema、package、transfers 或 BF-9-01/02/03。完成后跑指定 type-check 与三组守卫，不 commit。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Content -Raw AGENTS.md; rg -n -C 12 "已有订阅|subscription|mailSource|mailSourceId" server/src/routes/mail.ts client/src -g "MailView.vue"; rg -n "mail-subscription-cancel|mail-list-query|mail-plan-financial|已有订阅|mailSourceId|subscription" server/src server/package.json -g "test-*-guards.ts" -g "package.json"' in C:\Users\Administrator\Desktop\payinces
+2026-07-12T00:44:16.284772Z ERROR codex_core::tools::router: error=Exit code: 1
+Wall time: 0.8 seconds
+Output:
+# PayIncus / Incudal â€” é¡¹ç›®ç»Ÿä¸€è§„çŸ©ï¼ˆAGENTS.mdï¼‰
+
+> æœ¬æ–‡ä»¶æ˜¯æœ¬ä»“åº“**æ‰€æœ‰ AI agentï¼ˆClaude Codeã€codex ç­‰ï¼‰çš„ç»Ÿä¸€å·¥ä½œè§„èŒƒ**ã€‚
+> `CLAUDE.md` é€šè¿‡ `@AGENTS.md` å¼•ç”¨æœ¬æ–‡ä»¶ â€”â€” Claude Code ä¸Ž codex è¯»åˆ°çš„æ˜¯**åŒä¸€å¥—è§„çŸ©**ï¼Œæ”¹è¿™ä¸€ä¸ªæ–‡ä»¶å³å¯ã€‚
+> æƒå¨è¿ç»´/å‘ç‰ˆäº‹å®žä»¥ä»“åº“æ ¹çš„ `OPERATIONS_HANDOFF.md`ï¼ˆæ“ä½œæ‰‹å†Œï¼‰ä¸Ž `HANDOFF.md`ï¼ˆç‰ˆæœ¬è¯æ®å°è´¦ï¼‰ä¸ºå‡†ã€‚
+
+---
+
+## 0. æ²Ÿé€šè¯­è¨€
+- ä¸Ž owner é»˜è®¤ç”¨**ä¸­æ–‡**æ²Ÿé€šã€‚
+
+## 1. è¿™æ˜¯ä»€ä¹ˆé¡¹ç›®
+**PayIncus**ï¼ˆå†…éƒ¨ä»£å· `incudal`ï¼‰â€”â€”å•†ç”¨ Incusï¼ˆLXC/KVMï¼‰NAT VPS å”®å–ä¸Žäº¤ä»˜å¹³å°ï¼Œ**çº¿ä¸Šè¿è¥ä¸­**ã€‚å½“å‰ç”Ÿäº§ç‰ˆæœ¬ **v1.3.7**ã€‚pnpm monorepoï¼š
+
+| ç›®å½• | æŠ€æœ¯æ ˆ / ä½œç”¨ |
+|------|----------------|
+| `client/` | Vue 3 + Vite SPAã€‚åŒç«¯æž„å»ºï¼ˆ`VITE_APP_ENTRY`ï¼‰â†’ `dist/user`ï¼ˆpay.payincus.comï¼‰+ `dist/admin`ï¼ˆadmin.payincus.comï¼‰ã€‚ä¸¤ç«¯ç‹¬ç«‹æºã€**ä¸å…±äº« cookie åŸŸ**ã€‚ |
+| `server/` | Fastify 5 + Prisma 7 + PostgreSQLï¼Œ~300 TS æ–‡ä»¶ã€~70 è·¯ç”±ã€~15 è°ƒåº¦/workerã€‚æ—  Redisï¼ˆç”¨ PG advisory lockï¼‰ã€‚ä¸‰å¥—é‰´æƒé¢ï¼šWeb çš„ JWT+refresh cookieã€Public API çš„ `pat_`/`poa_` tokenã€host agent çš„ HMACã€‚ |
+| `agent/` | Go å®¿ä¸» agentï¼Œåªè¯»ç›‘æŽ§ï¼ˆå¿ƒè·³/èµ„æº/å®žä¾‹æ€/æµé‡ï¼‰ï¼ŒHMAC ç­¾åï¼Œè‡ªå‡çº§ã€‚ |
+| å…¶å®ƒ | `docs-site/`ï¼ˆVitePressï¼‰ã€`deploy/`ï¼ˆsystemd+Nginxï¼‰ã€`scripts/`ï¼ˆå®‰è£…/æ ¡éªŒ/OTAï¼‰ã€`plugin-templates/`ã€`theme-templates/`ã€‚ |
+
+éƒ¨ç½²ï¼šä¸‰å±‚æ‹†åˆ†ï¼ˆuser / admin / ç§æœ‰åŽç«¯ `127.0.0.1:3001`ï¼‰ï¼Œè£…æœºæ ¹ `/opt/incudal`ï¼ŒåŽŸå­ OTAï¼ˆ`releases/<ver-ts>` + `current` è½¯é“¾ï¼‰+ è‡ªåŠ¨å›žæ»šã€‚
+
+---
+
+## 2. ðŸ”´ ç¡¬è§„çŸ©ï¼ˆä¸å¯åå•†ï¼Œè¿åå³äº‹æ•…ï¼‰
+
+1. **ä¸ç¢°ç”Ÿäº§**ï¼šæœªç» owner æ˜Žç¡®è¦æ±‚ï¼Œ**ç»ä¸** OTAã€å‘å¸ƒã€pushã€æ‰“ tagã€æ”¹ç”Ÿäº§çŽ¯å¢ƒã€‚
+2. **ä¸åšç ´åæ€§ git**ï¼šæœªç» owner æ˜Žç¡®è¦æ±‚ï¼Œ**ç»ä¸** `git reset`ã€`git checkout --`ã€å¼ºåˆ¶åˆ é™¤ã€æ¸…ç†æœªè·Ÿè¸ªæ–‡ä»¶ã€`git commit`/`git push`ã€‚
+3. **é«˜å±è·¯å¾„å…ˆè¯»åŽå†™**ï¼šæ”¹åŠ¨ä»¥ä¸‹ä»»ä¸€é¢†åŸŸï¼Œ**å¿…é¡»å…ˆè¯»ç›¸å…³ä»£ç  + å¯¹åº”å®ˆå«æµ‹è¯•**å†åŠ¨æ‰‹ï¼š
+   > é‰´æƒ Â· æ”¯ä»˜ Â· æƒé™ Â· é£ŽæŽ§ Â· èµ„æºäº¤ä»˜ Â· å…‘æ¢æµç¨‹ Â· å®žä¾‹åˆ›å»º Â· OTA
+4. **æ”¹åŠ¨æœ€å°åŒ–**ï¼šä¿® bug / å‘ç‰ˆæœŸé—´**ä¸åšå¤§èŒƒå›´é‡æž„**ï¼Œåªæ”¹å¿…è¦çš„ã€‚
+5. **ç»ä¸æ³„å¯†**ï¼šä»»ä½• commitã€handoffã€æ€»ç»“ã€æˆªå›¾ä¸­éƒ½**ä¸å¾—**å‡ºçŽ°å‡­è¯ / token / cookie / å¯†é’¥ã€‚
+6. **æœ¬åœ°è¿‡ â‰  ç”Ÿäº§éªŒè¯**ï¼šæœ¬åœ°é€šè¿‡ã€GitHub Actionsã€Release èµ„äº§ã€OTAã€çº¿ä¸Šå®žè¯æ˜¯**åˆ†å¼€çš„è¯æ®**ï¼Œä¸å¯æ··ä¸ºä¸€è°ˆã€‚
+7. **æ¯æ¬¡æ”¹åŠ¨å¿…é¡»è¿‡å¯¹åº”å®ˆå«**ï¼ˆè§ Â§4ï¼‰ï¼Œå¦åˆ™è§†ä¸º**æœªå®Œæˆ**ã€‚
+8. `RUN_DB_CHECKS=0 bash scripts/apply-online-update.sh <ver>` ä¼š**è·³è¿‡ DB/æ”¯ä»˜å°±ç»ªæ ¡éªŒ**ï¼Œä»…åœ¨ owner æ˜Žç¡®æ‰¹å‡†æ—¶ä½¿ç”¨ã€‚
+
+---
+
+## 3. æœ¬åœ°æ€Žä¹ˆè·‘
+
+- **çŽ¯å¢ƒ**ï¼šNode â‰¥ 20ã€pnpm 9.14.2ã€æœ¬åœ° PostgreSQL 16ã€‚
+- **è£…ä¾èµ–**ï¼š`pnpm install`
+- **ä¸€æŠŠèµ·å…¨éƒ¨ï¼ˆserver + user + adminï¼‰**ï¼š`pnpm dev`
+- **åˆ†å¼€èµ·**ï¼š
+  - åŽç«¯ï¼š`NODE_ENV=development JWT_SECRET=dev-secret-12345678 HOST=127.0.0.1 PORT=3001 pnpm --filter server exec tsx watch src/app.ts`
+  - ç”¨æˆ·å‰ç«¯ï¼š`pnpm dev:user`
+  - ç®¡ç†å‰ç«¯ï¼š`pnpm dev:admin`
+- **ç«¯å£**ï¼šåŽç«¯ API **3001** Â· ç”¨æˆ·å‰ç«¯ **3000** Â· ç®¡ç†å‰ç«¯ **3002**ï¼ˆå‰ç«¯ dev ç» proxy æ‰“åˆ° 3001ï¼‰ã€‚
+
+---
+
+## 4. ðŸ›¡ï¸ å®ˆå«æµ‹è¯•çºªå¾‹ï¼ˆæœ¬ä»“åº“çš„å‘½é—¨ï¼‰
+
+`server/package.json` é‡Œæœ‰ **200+ ä¸ªç‹¬ç«‹ `test-*-guards.ts`**ã€‚å®ƒä»¬æŠŠå…³é”®ä¸šåŠ¡/å‰ç«¯ç»“æž„â€œé’‰æ­»â€ï¼Œ`pnpm test` ä¼šè·‘å…¨å¥—ï¼ˆclient+server type-check + å…¨éƒ¨å®ˆå«ï¼‰ã€‚**ä»»ä½•æ”¹åŠ¨å¿…é¡»è®©ç›¸å…³å®ˆå«é€šè¿‡ã€‚**
+
+- **å…¨é‡**ï¼ˆæ…¢ï¼Œå‘ç‰ˆå‰è·‘ï¼‰ï¼š`pnpm test`
+- **å•ä¸ª**ï¼š`pnpm --filter server test:<guard-name>`
+- **å‰ç«¯æœ€å¸¸ç”¨ä¸‰ä¸ª**ï¼š
+  - `test:frontend-route-guards` â€”â€” è·¯ç”± / **è¡¨æ ¼å¸ƒå±€** / `@click` è·¯å¾„æ–­è¨€
+  - `test:frontend-dist-boundary-guards` â€”â€” åŒç«¯ dist è¾¹ç•Œ
+  - `test:frontend-i18n-keys` â€”â€” i18n key å®Œæ•´æ€§
+- **Go agent**ï¼š`pnpm test:agent`
+
+### âš ï¸ è¡¨æ ¼å¸ƒå±€å®ˆå«ï¼ˆæœ€å®¹æ˜“è¸©é›·ï¼‰
+ä¸€æ‰¹è¡¨è¢«å®ˆå«**é”å®š**ä¸ºâ€œ**ç§»åŠ¨å¡ + PC å®šå®½è¡¨ï¼ˆ`table-fixed` / `overflow-hidden`ï¼‰ï¼Œç»ä¸æ¨ªå‘æ»šåŠ¨**â€ï¼Œå¹¶**åå‘ç¦æ­¢** `overflow-x-auto` / `min-w-[...]` / åŽ»æŽ‰ `table-fixed`ã€‚
+- æƒ³ä¿®â€œå®½è¡¨æŒ¤åŽ‹â€æ—¶ï¼š**å…ˆåˆ¤æ–­è¯¥è¡¨æ˜¯å¦åœ¨å®ˆå«æ¸…å•é‡Œ**ã€‚é”å®šè¡¨**åªèƒ½åœ¨ `table-fixed` å†…å¹³è¡¡åˆ—å®½**ï¼ˆåˆ—å®½ç™¾åˆ†æ¯”åˆè®¡ = 100%ï¼‰+ å…è®¸å•å…ƒæ ¼æ¢è¡Œ + é ç§»åŠ¨å¡åº”å¯¹çª„å±ï¼›**ä¸èƒ½**æ”¹æˆæ¨ªå‘æ»šåŠ¨ã€‚
+- å—é”å®šçš„è¡¨ï¼ˆç”¨æˆ·ç«¯ï¼‰ï¼š`MyPackagesView`ã€`MyHostsView`ã€`TransfersView`ã€`OrdersView`ã€`InvitesView`ã€`FlashSalesView`ã€`HostingWalletView`ã€`InstancesView`ã€`LogsView`ã€`EntertainmentView`ï¼›ï¼ˆç®¡ç†ç«¯ï¼‰`admin/BillingView`ã€`admin/ImagesView`ã€`admin/HelpManageView`ã€`admin/MailView`ã€`admin/PluginCenterView`ï¼›ï¼ˆç»„ä»¶ï¼‰`HostPublicIpv4Tab`ã€`InstanceLogsTab`ã€`ConfigEditModal`ã€‚
+- æ”¹ä»»ä¸€å‰ç«¯æ–‡ä»¶åŽ**å¿…è·‘** `test:frontend-route-guards`ã€‚
+
+---
+
+## 5. æž„å»º / æ ¡éªŒå‘½ä»¤
+
+| ç›®çš„ | å‘½ä»¤ |
+|------|------|
+| æž„å»ºï¼ˆå« dist è¾¹ç•Œå®ˆå«ï¼‰| `pnpm build` |
+| åªæž„å»ºå‰ç«¯ / åŽç«¯ | `pnpm build:client` / `pnpm build:server` |
+| Lintï¼ˆæ£€æŸ¥ / è‡ªåŠ¨ä¿®ï¼‰| `pnpm lint` / `pnpm lint:fix` |
+| ç±»åž‹æ£€æŸ¥ | `pnpm --filter client type-check` Â· `pnpm --filter server type-check` |
+| å…¨å¥—å®ˆå« | `pnpm test` |
+| æ–‡æ¡£ç«™å¼€å‘ / æž„å»º | `pnpm docs:dev` / `pnpm docs:build` |
+
+---
+
+## 6. UI æ”¹åŠ¨çº¦æŸï¼ˆå•è‰²é‡åšè¿›è¡Œä¸­ï¼‰
+
+- **æ–¹å‘**ï¼šè‹¹æžœå¼**çº¯é»‘ç™½å•è‰²**ï¼ˆæµ…è‰²=ç™½åº•é»‘å­—ï¼Œæ·±è‰²=é»‘åº•ç™½å­—ï¼‰ï¼ŒåŽ»äºŒæ¬¡å…ƒ/å‰ç¥¥ç‰©/ç«‹ç»˜ã€‚çŠ¶æ€è‰²**åªä¿ç•™ç»¿/ç¥ç€/çº¢**ä¸‰ç§ï¼ˆè¿è¡Œ/å¾…å¤„ç†/å¤±è´¥ï¼‰ã€‚
+- **çº¢çº¿**ï¼šåªæ”¹**æ ·å¼ / å¸ƒå±€ / æ–‡æ¡ˆå±‚çº§**ï¼Œ**ä¸ç¢°**åŽç«¯æŽ¥å£ã€æƒé™ã€æ”¯ä»˜/è®¢å•/å®žä¾‹åˆ›å»º/OTA ç­‰ä¸šåŠ¡é€»è¾‘ä¸Žè·¯ç”±è¡Œä¸ºâ€”â€”**åŠŸèƒ½ 100% ä¸å˜**ã€‚
+- **é…è‰²èµ° token å±‚**ï¼ˆ`client/tailwind.config.js`ï¼‰ï¼šä¸€å †å½©è‰² ramp å·²æ˜ å°„åˆ°ä¸­æ€§ç°ï¼›`rose â†’ çœŸçº¢`ï¼ˆå±é™©/äºæŸè¯­ä¹‰ï¼‰**ä¿ç•™ä¸å¯ç°åŒ–**ï¼›æ¸¸æˆåŒ–æ¨¡å—ï¼ˆæˆå°±/ç­¾åˆ°/æŠ½å¥–/ç¨€æœ‰åº¦ï¼‰å½©è‰²**åˆ»æ„ä¿ç•™**ã€‚
+- `kawaii-cloud.css` **æ¸è¿›æ”¹é€ ã€ä¸é‡å†™**ï¼›å•é¡µåŽ»è‰²ç”¨é¡µé¢ `<style scoped>`ã€‚
+- åŠ¨æ•ˆå¯ç”¨ **GSAP**ï¼ˆå·²è£… gsap-skillsï¼Œè§ `.claude/skills/`ï¼‰ï¼›å°Šé‡ `prefers-reduced-motion`ã€‚
+
+---
+
+## 7. åä½œæ¨¡åž‹ï¼ˆClaude Code â‡„ codexï¼‰
+
+- **Claude Code = æŠ€æœ¯è´Ÿè´£äºº / é›†æˆæ–¹**ï¼šå®šæ ¹å› ã€åˆ‡ä»»åŠ¡ã€å†™è§„æ ¼ã€å®ˆä¸å˜é‡ã€å®¡ diffã€è·‘å®ˆå«ã€çœŸæœºéªŒè¯ã€ç®¡ gitï¼ˆ**ä»…åœ¨ owner åŒæ„æ—¶** commit / pushï¼‰ã€‚
+- **codex = å®žçŽ°å·¥äºº**ï¼šæŒ‰ Claude ç»™çš„è§„æ ¼å®žçŽ°æ”¹åŠ¨ï¼Œå°¤å…¶**ä½Ž/ä¸­å±ã€è‡ªåŒ…å«ã€å¯å¹¶è¡Œ**çš„å—ã€‚
+- **é£Žé™©åˆ†æ¡£**ï¼šé«˜å±è·¯å¾„ç”± Claude å®šæ ¹å›  + æ”¶ç´§è§„æ ¼ï¼›ä½Ž/ä¸­å± codex å¯ç«¯åˆ°ç«¯ä¿®ã€‚**ä»»ä½•ä¸€æ–¹æ”¹å®Œéƒ½è¦è·‘ç›¸å…³å®ˆå«ï¼ŒClaude ç»Ÿä¸€å®¡æŸ¥åŽæ‰è¿›å…¥ä¸‹ä¸€æ­¥ã€‚**
+- **é¿å…å†²çª**ï¼šåŒä¸€æ‰¹æ–‡ä»¶ä¸€æ¬¡åªè®©ä¸€ä¸ª agent æ”¹ã€‚
+
+---
+
+## 8. ä¸€ä¸ªæ”¹åŠ¨çš„ã€Œå®Œæˆã€å®šä¹‰
+
+1. ç›¸å…³ **type-check** é€šè¿‡ï¼›
+2. ç›¸å…³ **å®ˆå«æµ‹è¯•** é€šè¿‡ï¼›
+3. è‹¥åŠ¨å‰ç«¯ â†’ **åŒç«¯ build** é€šè¿‡ï¼›
+4. **çœŸæœºè·‘è¿‡**å—å½±å“æµç¨‹ï¼ˆä¸æ˜¯åªçœ‹æµ‹è¯•ï¼‰ï¼›
+5. **æŠ¥å‘Š**ï¼šæ”¹äº†å“ªäº›æ–‡ä»¶ / ä¸ºä»€ä¹ˆ / é£Žé™© / æ€Žä¹ˆéªŒè¯çš„ã€‚
+
+ä»¥ä¸Šä»»ä¸€æœªæ»¡è¶³ = **æœªå®Œæˆ**ã€‚
+
+rg : The term 'rg' is not recognized as the name of a cmdlet, function, script file, or operable program. Check the 
+spelling of the name, or if a path was included, verify that the path is correct and try again.
+At line:2 char:29
++ Get-Content -Raw AGENTS.md; rg -n -C 12 "已有订阅|subscription|mailSource ...
++                             ~~
+    + CategoryInfo          : ObjectNotFound: (rg:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+rg : The term 'rg' is not recognized as the name of a cmdlet, function, script file, or operable program. Check the 
+spelling of the name, or if a path was included, verify that the path is correct and try again.
+At line:2 char:141
++ ... d" server/src/routes/mail.ts client/src -g "MailView.vue"; rg -n "mai ...
++                                                                ~~
+    + CategoryInfo          : ObjectNotFound: (rg:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+
+ exited 1 in 815ms:
+# PayIncus / Incudal â€” é¡¹ç›®ç»Ÿä¸€è§„çŸ©ï¼ˆAGENTS.mdï¼‰
+
+> æœ¬æ–‡ä»¶æ˜¯æœ¬ä»“åº“**æ‰€æœ‰ AI agentï¼ˆClaude Codeã€codex ç­‰ï¼‰çš„ç»Ÿä¸€å·¥ä½œè§„èŒƒ**ã€‚
+> `CLAUDE.md` é€šè¿‡ `@AGENTS.md` å¼•ç”¨æœ¬æ–‡ä»¶ â€”â€” Claude Code ä¸Ž codex è¯»åˆ°çš„æ˜¯**åŒä¸€å¥—è§„çŸ©**ï¼Œæ”¹è¿™ä¸€ä¸ªæ–‡ä»¶å³å¯ã€‚
+> æƒå¨è¿ç»´/å‘ç‰ˆäº‹å®žä»¥ä»“åº“æ ¹çš„ `OPERATIONS_HANDOFF.md`ï¼ˆæ“ä½œæ‰‹å†Œï¼‰ä¸Ž `HANDOFF.md`ï¼ˆç‰ˆæœ¬è¯æ®å°è´¦ï¼‰ä¸ºå‡†ã€‚
+
+---
+
+## 0. æ²Ÿé€šè¯­è¨€
+- ä¸Ž owner é»˜è®¤ç”¨**ä¸­æ–‡**æ²Ÿé€šã€‚
+
+## 1. è¿™æ˜¯ä»€ä¹ˆé¡¹ç›®
+**PayIncus**ï¼ˆå†…éƒ¨ä»£å· `incudal`ï¼‰â€”â€”å•†ç”¨ Incusï¼ˆLXC/KVMï¼‰NAT VPS å”®å–ä¸Žäº¤ä»˜å¹³å°ï¼Œ**çº¿ä¸Šè¿è¥ä¸­**ã€‚å½“å‰ç”Ÿäº§ç‰ˆæœ¬ **v1.3.7**ã€‚pnpm monorepoï¼š
+
+| ç›®å½• | æŠ€æœ¯æ ˆ / ä½œç”¨ |
+|------|----------------|
+| `client/` | Vue 3 + Vite SPAã€‚åŒç«¯æž„å»ºï¼ˆ`VITE_APP_ENTRY`ï¼‰â†’ `dist/user`ï¼ˆpay.payincus.comï¼‰+ `dist/admin`ï¼ˆadmin.payincus.comï¼‰ã€‚ä¸¤ç«¯ç‹¬ç«‹æºã€**ä¸å…±äº« cookie åŸŸ**ã€‚ |
+| `server/` | Fastify 5 + Prisma 7 + PostgreSQLï¼Œ~300 TS æ–‡ä»¶ã€~70 è·¯ç”±ã€~15 è°ƒåº¦/workerã€‚æ—  Redisï¼ˆç”¨ PG advisory lockï¼‰ã€‚ä¸‰å¥—é‰´æƒé¢ï¼šWeb çš„ JWT+refresh cookieã€Public API çš„ `pat_`/`poa_` tokenã€host agent çš„ HMACã€‚ |
+| `agent/` | Go å®¿ä¸» agentï¼Œåªè¯»ç›‘æŽ§ï¼ˆå¿ƒè·³/èµ„æº/å®žä¾‹æ€/æµé‡ï¼‰ï¼ŒHMAC ç­¾åï¼Œè‡ªå‡çº§ã€‚ |
+| å…¶å®ƒ | `docs-site/`ï¼ˆVitePressï¼‰ã€`deploy/`ï¼ˆsystemd+Nginxï¼‰ã€`scripts/`ï¼ˆå®‰è£…/æ ¡éªŒ/OTAï¼‰ã€`plugin-templates/`ã€`theme-templates/`ã€‚ |
+
+éƒ¨ç½²ï¼šä¸‰å±‚æ‹†åˆ†ï¼ˆuser / admin / ç§æœ‰åŽç«¯ `127.0.0.1:3001`ï¼‰ï¼Œè£…æœºæ ¹ `/opt/incudal`ï¼ŒåŽŸå­ OTAï¼ˆ`releases/<ver-ts>` + `current` è½¯é“¾ï¼‰+ è‡ªåŠ¨å›žæ»šã€‚
+
+---
+
+## 2. ðŸ”´ ç¡¬è§„çŸ©ï¼ˆä¸å¯åå•†ï¼Œè¿åå³äº‹æ•…ï¼‰
+
+1. **ä¸ç¢°ç”Ÿäº§**ï¼šæœªç» owner æ˜Žç¡®è¦æ±‚ï¼Œ**ç»ä¸** OTAã€å‘å¸ƒã€pushã€æ‰“ tagã€æ”¹ç”Ÿäº§çŽ¯å¢ƒã€‚
+2. **ä¸åšç ´åæ€§ git**ï¼šæœªç» owner æ˜Žç¡®è¦æ±‚ï¼Œ**ç»ä¸** `git reset`ã€`git checkout --`ã€å¼ºåˆ¶åˆ é™¤ã€æ¸…ç†æœªè·Ÿè¸ªæ–‡ä»¶ã€`git commit`/`git push`ã€‚
+3. **é«˜å±è·¯å¾„å…ˆè¯»åŽå†™**ï¼šæ”¹åŠ¨ä»¥ä¸‹ä»»ä¸€é¢†åŸŸï¼Œ**å¿…é¡»å…ˆè¯»ç›¸å…³ä»£ç  + å¯¹åº”å®ˆå«æµ‹è¯•**å†åŠ¨æ‰‹ï¼š
+   > é‰´æƒ Â· æ”¯ä»˜ Â· æƒé™ Â· é£ŽæŽ§ Â· èµ„æºäº¤ä»˜ Â· å…‘æ¢æµç¨‹ Â· å®žä¾‹åˆ›å»º Â· OTA
+4. **æ”¹åŠ¨æœ€å°åŒ–**ï¼šä¿® bug / å‘ç‰ˆæœŸé—´**ä¸åšå¤§èŒƒå›´é‡æž„**ï¼Œåªæ”¹å¿…è¦çš„ã€‚
+5. **ç»ä¸æ³„å¯†**ï¼šä»»ä½• commitã€handoffã€æ€»ç»“ã€æˆªå›¾ä¸­éƒ½**ä¸å¾—**å‡ºçŽ°å‡­è¯ / token / cookie / å¯†é’¥ã€‚
+6. **æœ¬åœ°è¿‡ â‰  ç”Ÿäº§éªŒè¯**ï¼šæœ¬åœ°é€šè¿‡ã€GitHub Actionsã€Release èµ„äº§ã€OTAã€çº¿ä¸Šå®žè¯æ˜¯**åˆ†å¼€çš„è¯æ®**ï¼Œä¸å¯æ··ä¸ºä¸€è°ˆã€‚
+7. **æ¯æ¬¡æ”¹åŠ¨å¿…é¡»è¿‡å¯¹åº”å®ˆå«**ï¼ˆè§ Â§4ï¼‰ï¼Œå¦åˆ™è§†ä¸º**æœªå®Œæˆ**ã€‚
+8. `RUN_DB_CHECKS=0 bash scripts/apply-online-update.sh <ver>` ä¼š**è·³è¿‡ DB/æ”¯ä»˜å°±ç»ªæ ¡éªŒ**ï¼Œä»…åœ¨ owner æ˜Žç¡®æ‰¹å‡†æ—¶ä½¿ç”¨ã€‚
+
+---
+
+## 3. æœ¬åœ°æ€Žä¹ˆè·‘
+
+- **çŽ¯å¢ƒ**ï¼šNode â‰¥ 20ã€pnpm 9.14.2ã€æœ¬åœ° PostgreSQL 16ã€‚
+- **è£…ä¾èµ–**ï¼š`pnpm install`
+- **ä¸€æŠŠèµ·å…¨éƒ¨ï¼ˆserver + user + adminï¼‰**ï¼š`pnpm dev`
+- **åˆ†å¼€èµ·**ï¼š
+  - åŽç«¯ï¼š`NODE_ENV=development JWT_SECRET=dev-secret-12345678 HOST=127.0.0.1 PORT=3001 pnpm --filter server exec tsx watch src/app.ts`
+  - ç”¨æˆ·å‰ç«¯ï¼š`pnpm dev:user`
+  - ç®¡ç†å‰ç«¯ï¼š`pnpm dev:admin`
+- **ç«¯å£**ï¼šåŽç«¯ API **3001** Â· ç”¨æˆ·å‰ç«¯ **3000** Â· ç®¡ç†å‰ç«¯ **3002**ï¼ˆå‰ç«¯ dev ç» proxy æ‰“åˆ° 3001ï¼‰ã€‚
+
+---
+
+## 4. ðŸ›¡ï¸ å®ˆå«æµ‹è¯•çºªå¾‹ï¼ˆæœ¬ä»“åº“çš„å‘½é—¨ï¼‰
+
+`server/package.json` é‡Œæœ‰ **200+ ä¸ªç‹¬ç«‹ `test-*-guards.ts`**ã€‚å®ƒä»¬æŠŠå…³é”®ä¸šåŠ¡/å‰ç«¯ç»“æž„â€œé’‰æ­»â€ï¼Œ`pnpm test` ä¼šè·‘å…¨å¥—ï¼ˆclient+server type-check + å…¨éƒ¨å®ˆå«ï¼‰ã€‚**ä»»ä½•æ”¹åŠ¨å¿…é¡»è®©ç›¸å…³å®ˆå«é€šè¿‡ã€‚**
+
+- **å…¨é‡**ï¼ˆæ…¢ï¼Œå‘ç‰ˆå‰è·‘ï¼‰ï¼š`pnpm test`
+- **å•ä¸ª**ï¼š`pnpm --filter server test:<guard-name>`
+- **å‰ç«¯æœ€å¸¸ç”¨ä¸‰ä¸ª**ï¼š
+  - `test:frontend-route-guards` â€”â€” è·¯ç”± / **è¡¨æ ¼å¸ƒå±€** / `@click` è·¯å¾„æ–­è¨€
+  - `test:frontend-dist-boundary-guards` â€”â€” åŒç«¯ dist è¾¹ç•Œ
+  - `test:frontend-i18n-keys` â€”â€” i18n key å®Œæ•´æ€§
+- **Go agent**ï¼š`pnpm test:agent`
+
+### âš ï¸ è¡¨æ ¼å¸ƒå±€å®ˆå«ï¼ˆæœ€å®¹æ˜“è¸©é›·ï¼‰
+ä¸€æ‰¹è¡¨è¢«å®ˆå«**é”å®š**ä¸ºâ€œ**ç§»åŠ¨å¡ + PC å®šå®½è¡¨ï¼ˆ`table-fixed` / `overflow-hidden`ï¼‰ï¼Œç»ä¸æ¨ªå‘æ»šåŠ¨**â€ï¼Œå¹¶**åå‘ç¦æ­¢** `overflow-x-auto` / `min-w-[...]` / åŽ»æŽ‰ `table-fixed`ã€‚
+- æƒ³ä¿®â€œå®½è¡¨æŒ¤åŽ‹â€æ—¶ï¼š**å…ˆåˆ¤æ–­è¯¥è¡¨æ˜¯å¦åœ¨å®ˆå«æ¸…å•é‡Œ**ã€‚é”å®šè¡¨**åªèƒ½åœ¨ `table-fixed` å†…å¹³è¡¡åˆ—å®½**ï¼ˆåˆ—å®½ç™¾åˆ†æ¯”åˆè®¡ = 100%ï¼‰+ å…è®¸å•å…ƒæ ¼æ¢è¡Œ + é ç§»åŠ¨å¡åº”å¯¹çª„å±ï¼›**ä¸èƒ½**æ”¹æˆæ¨ªå‘æ»šåŠ¨ã€‚
+- å—é”å®šçš„è¡¨ï¼ˆç”¨æˆ·ç«¯ï¼‰ï¼š`MyPackagesView`ã€`MyHostsView`ã€`TransfersView`ã€`OrdersView`ã€`InvitesView`ã€`FlashSalesView`ã€`HostingWalletView`ã€`InstancesView`ã€`LogsView`ã€`EntertainmentView`ï¼›ï¼ˆç®¡ç†ç«¯ï¼‰`admin/BillingView`ã€`admin/ImagesView`ã€`admin/HelpManageView`ã€`admin/MailView`ã€`admin/PluginCenterView`ï¼›ï¼ˆç»„ä»¶ï¼‰`HostPublicIpv4Tab`ã€`InstanceLogsTab`ã€`ConfigEditModal`ã€‚
+- æ”¹ä»»ä¸€å‰ç«¯æ–‡ä»¶åŽ**å¿…è·‘** `test:frontend-route-guards`ã€‚
+
+---
+
+## 5. æž„å»º / æ ¡éªŒå‘½ä»¤
+
+| ç›®çš„ | å‘½ä»¤ |
+|------|------|
+| æž„å»ºï¼ˆå« dist è¾¹ç•Œå®ˆå«ï¼‰| `pnpm build` |
+| åªæž„å»ºå‰ç«¯ / åŽç«¯ | `pnpm build:client` / `pnpm build:server` |
+| Lintï¼ˆæ£€æŸ¥ / è‡ªåŠ¨ä¿®ï¼‰| `pnpm lint` / `pnpm lint:fix` |
+| ç±»åž‹æ£€æŸ¥ | `pnpm --filter client type-check` Â· `pnpm --filter server type-check` |
+| å…¨å¥—å®ˆå« | `pnpm test` |
+| æ–‡æ¡£ç«™å¼€å‘ / æž„å»º | `pnpm docs:dev` / `pnpm docs:build` |
+
+---
+
+## 6. UI æ”¹åŠ¨çº¦æŸï¼ˆå•è‰²é‡åšè¿›è¡Œä¸­ï¼‰
+
+- **æ–¹å‘**ï¼šè‹¹æžœå¼**çº¯é»‘ç™½å•è‰²**ï¼ˆæµ…è‰²=ç™½åº•é»‘å­—ï¼Œæ·±è‰²=é»‘åº•ç™½å­—ï¼‰ï¼ŒåŽ»äºŒæ¬¡å…ƒ/å‰ç¥¥ç‰©/ç«‹ç»˜ã€‚çŠ¶æ€è‰²**åªä¿ç•™ç»¿/ç¥ç€/çº¢**ä¸‰ç§ï¼ˆè¿è¡Œ/å¾…å¤„ç†/å¤±è´¥ï¼‰ã€‚
+- **çº¢çº¿**ï¼šåªæ”¹**æ ·å¼ / å¸ƒå±€ / æ–‡æ¡ˆå±‚çº§**ï¼Œ**ä¸ç¢°**åŽç«¯æŽ¥å£ã€æƒé™ã€æ”¯ä»˜/è®¢å•/å®žä¾‹åˆ›å»º/OTA ç­‰ä¸šåŠ¡é€»è¾‘ä¸Žè·¯ç”±è¡Œä¸ºâ€”â€”**åŠŸèƒ½ 100% ä¸å˜**ã€‚
+- **é…è‰²èµ° token å±‚**ï¼ˆ`client/tailwind.config.js`ï¼‰ï¼šä¸€å †å½©è‰² ramp å·²æ˜ å°„åˆ°ä¸­æ€§ç°ï¼›`rose â†’ çœŸçº¢`ï¼ˆå±é™©/äºæŸè¯­ä¹‰ï¼‰**ä¿ç•™ä¸å¯ç°åŒ–**ï¼›æ¸¸æˆåŒ–æ¨¡å—ï¼ˆæˆå°±/ç­¾åˆ°/æŠ½å¥–/ç¨€æœ‰åº¦ï¼‰å½©è‰²**åˆ»æ„ä¿ç•™**ã€‚
+- `kawaii-cloud.css` **æ¸è¿›æ”¹é€ ã€ä¸é‡å†™**ï¼›å•é¡µåŽ»è‰²ç”¨é¡µé¢ `<style scoped>`ã€‚
+- åŠ¨æ•ˆå¯ç”¨ **GSAP**ï¼ˆå·²è£… gsap-skillsï¼Œè§ `.claude/skills/`ï¼‰ï¼›å°Šé‡ `prefers-reduced-motion`ã€‚
+
+---
+
+## 7. åä½œæ¨¡åž‹ï¼ˆClaude Code â‡„ codexï¼‰
+
+- **Claude Code = æŠ€æœ¯è´Ÿè´£äºº / é›†æˆæ–¹**ï¼šå®šæ ¹å› ã€åˆ‡ä»»åŠ¡ã€å†™è§„æ ¼ã€å®ˆä¸å˜é‡ã€å®¡ diffã€è·‘å®ˆå«ã€çœŸæœºéªŒè¯ã€ç®¡ gitï¼ˆ**ä»…åœ¨ owner åŒæ„æ—¶** commit / pushï¼‰ã€‚
+- **codex = å®žçŽ°å·¥äºº**ï¼šæŒ‰ Claude ç»™çš„è§„æ ¼å®žçŽ°æ”¹åŠ¨ï¼Œå°¤å…¶**ä½Ž/ä¸­å±ã€è‡ªåŒ…å«ã€å¯å¹¶è¡Œ**çš„å—ã€‚
+- **é£Žé™©åˆ†æ¡£**ï¼šé«˜å±è·¯å¾„ç”± Claude å®šæ ¹å›  + æ”¶ç´§è§„æ ¼ï¼›ä½Ž/ä¸­å± codex å¯ç«¯åˆ°ç«¯ä¿®ã€‚**ä»»ä½•ä¸€æ–¹æ”¹å®Œéƒ½è¦è·‘ç›¸å…³å®ˆå«ï¼ŒClaude ç»Ÿä¸€å®¡æŸ¥åŽæ‰è¿›å…¥ä¸‹ä¸€æ­¥ã€‚**
+- **é¿å…å†²çª**ï¼šåŒä¸€æ‰¹æ–‡ä»¶ä¸€æ¬¡åªè®©ä¸€ä¸ª agent æ”¹ã€‚
+
+---
+
+## 8. ä¸€ä¸ªæ”¹åŠ¨çš„ã€Œå®Œæˆã€å®šä¹‰
+
+1. ç›¸å…³ **type-check** é€šè¿‡ï¼›
+2. ç›¸å…³ **å®ˆå«æµ‹è¯•** é€šè¿‡ï¼›
+3. è‹¥åŠ¨å‰ç«¯ â†’ **åŒç«¯ build** é€šè¿‡ï¼›
+4. **çœŸæœºè·‘è¿‡**å—å½±å“æµç¨‹ï¼ˆä¸æ˜¯åªçœ‹æµ‹è¯•ï¼‰ï¼›
+5. **æŠ¥å‘Š**ï¼šæ”¹äº†å“ªäº›æ–‡ä»¶ / ä¸ºä»€ä¹ˆ / é£Žé™© / æ€Žä¹ˆéªŒè¯çš„ã€‚
+
+ä»¥ä¸Šä»»ä¸€æœªæ»¡è¶³ = **æœªå®Œæˆ**ã€‚
+
+rg : The term 'rg' is not recognized as the name of a cmdlet, function, script file, or operable program. Check the 
+spelling of the name, or if a path was included, verify that the path is correct and try again.
+At line:2 char:29
++ Get-Content -Raw AGENTS.md; rg -n -C 12 "已有订阅|subscription|mailSource ...
++                             ~~
+    + CategoryInfo          : ObjectNotFound: (rg:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+rg : The term 'rg' is not recognized as the name of a cmdlet, function, script file, or operable program. Check the 
+spelling of the name, or if a path was included, verify that the path is correct and try again.
+At line:2 char:141
++ ... d" server/src/routes/mail.ts client/src -g "MailView.vue"; rg -n "mai ...
++                                                                ~~
+    + CategoryInfo          : ObjectNotFound: (rg:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+
+codex
+`AGENTS.md` 已读；当前环境没有 `rg`，我会按仓库规范改用 PowerShell 的只读检索继续定位。先把购买事务、订阅模型字段和三份守卫完整读清，再落最小补丁。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$files = Get-ChildItem -Path server'"\\src -Recurse -File -Filter *.ts; "'$files | Select-String -Pattern '"'mail-subscription-cancel|mail-list-query|mail-plan-financial|mailSourceId|已有订阅|subscription' | Where-Object { "'$_.Path -match '"'mail|guard' } | Select-Object Path,LineNumber,Line; Get-ChildItem -Path client\\src -Recurse -File -Filter MailView.vue | ForEach-Object { Select-String -Path "'$_.FullName -Pattern '"'mailSource|subscription|订阅' -Context 8,8 }; Select-String -Path server\\package.json -Pattern 'mail-subscription-cancel|mail-list-query|mail-plan-financial'" in C:\Users\Administrator\Desktop\payinces
+ succeeded in 1459ms:
+
+Path                                                                                 LineNumber Line                   
+----                                                                                 ---------- ----                   
+C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts                                 7 import type { MailSo...
+C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts                                14 const MAIL_SUBSCRIPT...
+C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts                                43 function normalizePo...
+C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts                                49 function normalizeMa...
+C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts                                50   return MAIL_SUBSCR...
+C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts                                51     ? status as Mail...
+C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts                               108 export function sani...
+C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts                               109   subscription: T      
+C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts                               112     ...subscription,   
+C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts                               113     source: sanitize...
+C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts                               226   subscriptionCount:...
+C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts                               229   const [planCount, ...
+C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts                               231     prisma.mailSubsc...
+C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts                               234   return { planCount...
+C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts                               329 // =================...
+C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts                               334 export async functio...
+C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts                               339   const subscription...
+C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts                               349   return subscriptio...
+C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts                               355 export async functio...
+C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts                               357   status?: MailSubsc...
+C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts                               362   subscriptions: (Ma...
+C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts                               366   const sourceId = n...
+C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts                               367   const status = nor...
+C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts                               385   const [subscriptio...
+C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts                               386     prisma.mailSubsc...
+C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts                               397     prisma.mailSubsc...
+C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts                               400   return { subscript...
+C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts                               406 export async functio...
+C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts                               411   const subscription...
+C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts                               421   return subscriptio...
+C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts                               427 export async functio...
+C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts                               435 }): Promise<MailSubs...
+C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts                               436   return prisma.mail...
+C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts                               442 export async functio...
+C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts                               443   status?: MailSubsc...
+C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts                               446 }): Promise<MailSubs...
+C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts                               447   return prisma.mail...
+C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts                               453 export async functio...
+C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts                               458   const subscription...
+C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts                               459   if (!subscription)...
+C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts                               461   const currentExpir...
+C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts                               465   return prisma.mail...
+C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts                               476 export async functio...
+C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts                               478     where: { subscri...
+C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts                               489   subscription: Mail...
+C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts                               496       subscription: {  
+C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts                               520   subscriptionId: nu...
+C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts                               541   subscriptionId: nu...
+C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts                               598     subscription: Ma...
+C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts                               605   const sourceId = n...
+C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts                               619       { subscription...
+C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts                               620       { subscription...
+C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts                               621       ...(searchUser...
+C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts                               629         subscription: {
+C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts                               722 export async functio...
+C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts                               728     where: { subscri...
+C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts                               744 export async functio...
+C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts                               748   return prisma.mail...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                            15 import { MAIL_DOMAIN...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                            51 type MailSubscriptio...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                            56 type MailSubscriptio...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                            94   subscription: {      
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                           105       userId: subscr...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                           108       createdAt: { l...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                           121         userId: subs...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                           134         userId: subs...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                           148   let periodEnd = ne...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                           150     const periodMs =...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                           403 function normalizeMa...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                           430 function normalizeMa...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                           438 function normalizeMa...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                           664     if (stats.subscr...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                           796     const subscripti...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                           797     if (subscription...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                           825   }>('/admin/subscri...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                           830     const result = a...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                           840       subscriptions:...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                           851   }>('/admin/subscri...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                           854     const subscripti...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                           855     const { refundTy...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                           858     const subscripti...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                           859       where: { id: s...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                           868     if (!subscriptio...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                           872     const source = a...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                           880     for (const domai...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                           892         const balanc...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                           898           userId: su...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                           899           createdAt:...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                           900           expiresAt:...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                           901           billingCyc...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                           908           await tx.m...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                           913           where: { i...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                           919           where: { i...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                           927             userId: ...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                           932             remark: ...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                           938       await tx.mailS...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                           939         where: { id:...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                           946       'admin_cancel_...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                           947       `Admin cancell...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1050   fastify.get('/subs...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1053     const subscripti...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1055     if (!subscriptio...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1056       return { subsc...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1060     const usage = aw...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1063     const { getMailS...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1064     const affBinding...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1067       subscription: {  
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1068         id: subscrip...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1069         status: subs...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1070         expiresAt: s...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1071         autoRenew: s...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1073           id: subscr...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1074           name: subs...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1075           code: subs...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1078           id: subscr...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1079           name: subs...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1080           domainLimi...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1081           diskLimitG...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1082           billingCyc...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1083           price: Num...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1090         domains: sub...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1115   }>('/subscription', {
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1118     let purchaseInpu...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1120       purchaseInput ...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1128     // 检查是否已有订阅        
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1129     const existing =...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1187       const locked =...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1196       const existing...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1239       const newSubsc...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1258         await create...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1262           newSubscri...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1269       return { subsc...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1276     const subscripti...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1281       'purchase_mail...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1282       `Purchased mai...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1287       subscription: {  
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1288         id: subscrip...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1289         status: subs...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1290         expiresAt: s...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1291         source: { id...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1292         plan: { id: ...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1303   }>('/subscription/...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1309       renewMonths = ...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1314     const subscripti...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1315     if (!subscriptio...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1320     if (subscription...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1324     const plan = sub...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1337     const { getMailS...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1338     const affBinding...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1360       const locked =...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1369       const currentS...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1370         where: { id:...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1373       if (!currentSu...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1376       if (currentSub...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1380         validateMail...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1422       const currentE...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1427       const result =...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1428         where: { id:...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1436           subscripti...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1443       return { subsc...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1450     const updated = ...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1455       'renew_mail_su...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1456       `Renewed mail ...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1474     const subscripti...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1475     if (!subscriptio...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1479     const domains = ...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1502     if (!domain || d...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1540     if (!domain || d...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1563     const subscripti...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1564     if (!subscriptio...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1568     if (subscription...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1573       const subscrip...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1574       if (!subscript...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1578       const domainLo...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1583       const currentS...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1584         where: { id:...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1586       if (!currentSu...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1589       if (currentSub...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1594         where: { sub...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1596       if (domainCoun...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1604             sourceId...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1614         craneResult ...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1620         subscription...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1621         sourceId: cu...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1636             diskLimi...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1677     if (!domain || d...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1712     if (!domain || d...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1742     if (!domain || d...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1778     if (!domain || d...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1814     if (!domain || d...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1822     const maxDiskLim...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1920     if (!domain || d...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1930       maxDiskLimitMb...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1977     if (!domain || d...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          1988       maxDiskLimitMb...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                          2026     if (!domain || d...
+C:\Users\Administrator\Desktop\payinces\server\src\services\mail-expiry-scheduler.ts         13 export async functio...
+C:\Users\Administrator\Desktop\payinces\server\src\services\mail-expiry-scheduler.ts         18     const expiredSub...
+C:\Users\Administrator\Desktop\payinces\server\src\services\mail-expiry-scheduler.ts         31     if (expiredSubsc...
+C:\Users\Administrator\Desktop\payinces\server\src\services\mail-expiry-scheduler.ts         35     console.log(`[Ma...
+C:\Users\Administrator\Desktop\payinces\server\src\services\mail-expiry-scheduler.ts         38     const result = a...
+C:\Users\Administrator\Desktop\payinces\server\src\services\mail-expiry-scheduler.ts         40         id: { in: ex...
+C:\Users\Administrator\Desktop\payinces\server\src\services\mail-expiry-scheduler.ts         47     console.log(`[Ma...
+C:\Users\Administrator\Desktop\payinces\server\src\services\mail-expiry-scheduler.ts         49     console.error('[...
+C:\Users\Administrator\Desktop\payinces\server\src\services\mail-expiry-scheduler.ts         65   console.log('[Mail...
+C:\Users\Administrator\Desktop\payinces\server\src\services\mail-expiry-scheduler.ts         68   checkMailSubscript...
+C:\Users\Administrator\Desktop\payinces\server\src\services\mail-expiry-scheduler.ts         74     checkMailSubscri...
+C:\Users\Administrator\Desktop\payinces\client\src\views\MailView.vue                        26 // 订阅数据                
+C:\Users\Administrator\Desktop\payinces\client\src\views\MailView.vue                        27 const subscription =...
+C:\Users\Administrator\Desktop\payinces\client\src\views\MailView.vue                        63 // 检查选中地区是否已有订阅        
+C:\Users\Administrator\Desktop\payinces\client\src\views\MailView.vue                        64 const hasSubscriptio...
+C:\Users\Administrator\Desktop\payinces\client\src\views\MailView.vue                        65   if (!subscription....
+C:\Users\Administrator\Desktop\payinces\client\src\views\MailView.vue                        66   return subscriptio...
+C:\Users\Administrator\Desktop\payinces\client\src\views\MailView.vue                        87       api.mail.getSu...
+C:\Users\Administrator\Desktop\payinces\client\src\views\MailView.vue                        90     subscription.val...
+C:\Users\Administrator\Desktop\payinces\client\src\views\MailView.vue                       101     // 如果没有订阅，自动切换到购...
+C:\Users\Administrator\Desktop\payinces\client\src\views\MailView.vue                       102     if (!subscriptio...
+C:\Users\Administrator\Desktop\payinces\client\src\views\MailView.vue                       163 async function purch...
+C:\Users\Administrator\Desktop\payinces\client\src\views\MailView.vue                       171     await api.mail.p...
+C:\Users\Administrator\Desktop\payinces\client\src\views\MailView.vue                       218   if (subscription.v...
+C:\Users\Administrator\Desktop\payinces\client\src\views\MailView.vue                       227   if (!subscription....
+C:\Users\Administrator\Desktop\payinces\client\src\views\MailView.vue                       228   const plan = subsc...
+C:\Users\Administrator\Desktop\payinces\client\src\views\MailView.vue                       239   return subscriptio...
+C:\Users\Administrator\Desktop\payinces\client\src\views\MailView.vue                       250 async function renew...
+C:\Users\Administrator\Desktop\payinces\client\src\views\MailView.vue                       253     await api.mail.r...
+C:\Users\Administrator\Desktop\payinces\client\src\views\MailView.vue                       331       <!-- 无订阅状态 -->   
+C:\Users\Administrator\Desktop\payinces\client\src\views\MailView.vue                       332       <div v-if="!su...
+C:\Users\Administrator\Desktop\payinces\client\src\views\MailView.vue                       338         <h3 class="t...
+C:\Users\Administrator\Desktop\payinces\client\src\views\MailView.vue                       345       <!-- 有订阅状态 -->   
+C:\Users\Administrator\Desktop\payinces\client\src\views\MailView.vue                       347         <!-- 订阅概览卡片 -->
+C:\Users\Administrator\Desktop\payinces\client\src\views\MailView.vue                       350             <h3 clas...
+C:\Users\Administrator\Desktop\payinces\client\src\views\MailView.vue                       351             <span :c...
+C:\Users\Administrator\Desktop\payinces\client\src\views\MailView.vue                       352               {{ t('...
+C:\Users\Administrator\Desktop\payinces\client\src\views\MailView.vue                       359               <div c...
+C:\Users\Administrator\Desktop\payinces\client\src\views\MailView.vue                       363               <div c...
+C:\Users\Administrator\Desktop\payinces\client\src\views\MailView.vue                       367               <div c...
+C:\Users\Administrator\Desktop\payinces\client\src\views\MailView.vue                       373               {{ t('...
+C:\Users\Administrator\Desktop\payinces\client\src\views\MailView.vue                       374               {{ sub...
+C:\Users\Administrator\Desktop\payinces\client\src\views\MailView.vue                       375               {{ for...
+C:\Users\Administrator\Desktop\payinces\client\src\views\MailView.vue                       389               :disab...
+C:\Users\Administrator\Desktop\payinces\client\src\views\MailView.vue                       396           <div v-if=...
+C:\Users\Administrator\Desktop\payinces\client\src\views\MailView.vue                       402               v-for=...
+C:\Users\Administrator\Desktop\payinces\client\src\views\MailView.vue                       476         <div v-if="h...
+C:\Users\Administrator\Desktop\payinces\client\src\views\MailView.vue                       488                 {{ t...
+C:\Users\Administrator\Desktop\payinces\client\src\views\MailView.vue                       495         <div v-if="s...
+C:\Users\Administrator\Desktop\payinces\client\src\views\MailView.vue                       577         <div v-if="s...
+C:\Users\Administrator\Desktop\payinces\client\src\views\MailView.vue                       616         <div v-if="s...
+C:\Users\Administrator\Desktop\payinces\client\src\views\MailView.vue                       657             @click="...
+C:\Users\Administrator\Desktop\payinces\client\src\views\MailView.vue                       673       <div v-if="sel...
+C:\Users\Administrator\Desktop\payinces\client\src\views\MailView.vue                       716               @click...
+C:\Users\Administrator\Desktop\payinces\client\src\views\MailView.vue                       796             <h3 clas...
+C:\Users\Administrator\Desktop\payinces\client\src\views\MailView.vue                       808               <div v...
+C:\Users\Administrator\Desktop\payinces\client\src\views\MailView.vue                       823               <templ...
+C:\Users\Administrator\Desktop\payinces\client\src\views\MailView.vue                       826                   <s...
+C:\Users\Administrator\Desktop\payinces\client\src\views\MailView.vue                       855               @click...
+C:\Users\Administrator\Desktop\payinces\server\package.json                                  95     "test:mail-plan-...
+C:\Users\Administrator\Desktop\payinces\server\package.json                                  96     "test:mail-list-...
+C:\Users\Administrator\Desktop\payinces\server\package.json                                 101     "test:mail-subsc...
+
+
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$mail = Get-Content server'"\\src\\routes\\mail.ts; 1080..1285 | ForEach-Object { if ("'$_ -le $mail.Count) { '"'{0,5}: {1}' -f "'$_,$mail[$_-1] } }; $db = Get-Content server'"\\src\\db\\mail.ts; 329..470 | ForEach-Object { if ("'$_ -le $db.Count) { '"'{0,5}: {1}' -f "'$_,$db[$_-1] } }; $view = Get-Content client'"\\src\\views\\MailView.vue; 55..75 | ForEach-Object { '{0,5}: {1}' -f "'$_,$view[$_-1] }; 465..505 | ForEach-Object { '"'{0,5}: {1}' -f "'$_,$view[$_-1] }; $pkg = Get-Content server'"\\package.json; 88..105 | ForEach-Object { '{0,5}: {1}' -f "'$_,$pkg[$_-1] }; Get-ChildItem server'"\\src\\scripts -File -Filter '*mail*guard*.ts' | Select-Object -ExpandProperty FullName" in C:\Users\Administrator\Desktop\payinces
+ succeeded in 810ms:
+ 1080:           domainLimit: subscription.domainLimit,
+ 1081:           diskLimitGb: subscription.diskLimitGb,
+ 1082:           billingCycle: subscription.plan.billingCycle,
+ 1083:           price: Number(subscription.plan.price)
+ 1084:         },
+ 1085:         usage: {
+ 1086:           domainCount: usage.domainCount,
+ 1087:           accountCount: usage.accountCount,
+ 1088:           diskUsedGb: Math.round(usage.diskUsedMb / 1024 * 100) / 100
+ 1089:         },
+ 1090:         domains: subscription.domains.map(d => ({
+ 1091:           id: d.id,
+ 1092:           domain: d.domain,
+ 1093:           status: d.status,
+ 1094:           accountCount: (d as any).accounts?.length || 0,
+ 1095:           diskUsedMb: d.diskUsedMb,
+ 1096:           verifiedAt: d.verifiedAt,
+ 1097:           createdAt: d.createdAt
+ 1098:         })),
+ 1099:         affBinding: affBinding ? {
+ 1100:           affCode: {
+ 1101:             code: affBinding.affCode.code,
+ 1102:             discountRate: Number(affBinding.affCode.discountRate)
+ 1103:           }
+ 1104:         } : null
+ 1105:       }
+ 1106:     }
+ 1107:   })
+ 1108: 
+ 1109:   // è´­ä¹°è®¢é˜…
+ 1110:   fastify.post<{
+ 1111:     Body: {
+ 1112:       planId: number
+ 1113:       affCode?: string
+ 1114:     }
+ 1115:   }>('/subscription', {
+ 1116:     onRequest: [fastify.authenticate]
+ 1117:   }, async (request, reply) => {
+ 1118:     let purchaseInput: MailSubscriptionPurchaseInput
+ 1119:     try {
+ 1120:       purchaseInput = normalizeMailSubscriptionPurchaseInput(request.body)
+ 1121:     } catch (error) {
+ 1122:       return reply.code(400).send(error)
+ 1123:     }
+ 1124: 
+ 1125:     const { planId, affCode: affCodeInput } = purchaseInput
+ 1126:     const userId = request.user.id
+ 1127: 
+ 1128:     // æ£€æŸ¥æ˜¯å¦å·²æœ‰è®¢é˜…
+ 1129:     const existing = await db.getUserMailSubscription(userId)
+ 1130:     if (existing) {
+ 1131:       return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, 'æ‚¨å·²æœ‰é‚®ç®±è®¢é˜…ï¼Œè¯·ç»­è´¹æˆ–ç­‰å¾…è¿‡æœŸåŽå†è´­ä¹°'))
+ 1132:     }
+ 1133: 
+ 1134:     // èŽ·å–æ–¹æ¡ˆ
+ 1135:     const plan = await db.getMailPlanById(planId)
+ 1136:     if (!plan || !plan.enabled) {
+ 1137:       return reply.code(404).send(apiError(ErrorCode.NOT_FOUND, 'æ–¹æ¡ˆä¸å­˜åœ¨æˆ–å·²ä¸‹æž¶'))
+ 1138:     }
+ 1139: 
+ 1140:     const source = plan.source
+ 1141:     if (!source.enabled) {
+ 1142:       return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, 'è¯¥é‚®ç®±æºå·²åœç”¨'))
+ 1143:     }
+ 1144: 
+ 1145:     // è®¡ç®—è´¹ç”¨
+ 1146:     const originalPrice = Number(plan.price)
+ 1147:     let finalPrice = originalPrice
+ 1148:     let discountAmount = 0
+ 1149:     let validatedAffCode: { id: number; userId: number; discountRate: number } | null = null
+ 1150: 
+ 1151:     // éªŒè¯ä¼˜æƒ ç 
+ 1152:     if (affCodeInput) {
+ 1153:       const { validateMailAffCode } = await import('../db/aff.js')
+ 1154:       const validation = await validateMailAffCode(affCodeInput, userId)
+ 1155:       if (!validation.valid) {
+ 1156:         return reply.code(400).send(apiError(ErrorCode.VALIDATION_ERROR, validation.error || 'ä¼˜æƒ ç æ— æ•ˆ'))
+ 1157:       }
+ 1158:       validatedAffCode = {
+ 1159:         id: validation.affCode!.id,
+ 1160:         userId: validation.affCode!.userId,
+ 1161:         discountRate: validation.discountRate!
+ 1162:       }
+ 1163:       // è®¡ç®—æŠ˜æ‰£é‡‘é¢ï¼ˆæŠ˜æ‰£åº”ç”¨äºŽæ–¹æ¡ˆä»·æ ¼ï¼‰
+ 1164:       discountAmount = calculateDiscountAmount(originalPrice, validatedAffCode.discountRate)
+ 1165:       finalPrice = calculateDiscountedPrice(originalPrice, validatedAffCode.discountRate)
+ 1166:     }
+ 1167: 
+ 1168:     // æ£€æŸ¥ä½™é¢
+ 1169:     const user = await prisma.user.findUnique({
+ 1170:       where: { id: userId },
+ 1171:       select: { balance: true }
+ 1172:     })
+ 1173:     if (!user || Number(user.balance) < finalPrice) {
+ 1174:       return reply.code(400).send(apiError(ErrorCode.INSUFFICIENT_BALANCE, `ä½™é¢ä¸è¶³ï¼Œéœ€è¦ Â¥${finalPrice.toFixed(2)}ï¼Œå½“å‰ä½™é¢ Â¥${Number(user?.balance || 0).toFixed(2)}`))
+ 1175:     }
+ 1176: 
+ 1177:     // è®¡ç®—åˆ°æœŸæ—¶é—´
+ 1178:     const expiresAt = new Date()
+ 1179:     if (plan.billingCycle === 'monthly') {
+ 1180:       expiresAt.setMonth(expiresAt.getMonth() + 1)
+ 1181:     } else {
+ 1182:       expiresAt.setFullYear(expiresAt.getFullYear() + 1)
+ 1183:     }
+ 1184: 
+ 1185:     // äº‹åŠ¡ï¼šæ‰£è´¹ + åˆ›å»ºè®¢é˜… + å¤„ç†AFF
+ 1186:     const purchaseResult = await prisma.$transaction(async (tx) => {
+ 1187:       const locked = await tryAdvisoryTransactionLock(tx, MAIL_SUBSCRIPTION_LOCK_NAMESPACE, userId)
+ 1188:       if (!locked) {
+ 1189:         return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, 'é‚®ç®±è®¢é˜…æ­£åœ¨å¤„ç†ï¼Œè¯·ç¨åŽé‡è¯•') }
+ 1190:       }
+ 1191:       const balanceLocked = await tryAdvisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, userId)
+ 1192:       if (!balanceLocked) {
+ 1193:         return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, 'ç”¨æˆ·ä½™é¢æ­£åœ¨å¤„ç†ï¼Œè¯·ç¨åŽé‡è¯•') }
+ 1194:       }
+ 1195: 
+ 1196:       const existingInTx = await tx.mailSubscription.findFirst({
+ 1197:         where: { userId }
+ 1198:       })
+ 1199:       if (existingInTx) {
+ 1200:         return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, 'æ‚¨å·²æœ‰é‚®ç®±è®¢é˜…ï¼Œè¯·ç»­è´¹æˆ–ç­‰å¾…è¿‡æœŸåŽå†è´­ä¹°') }
+ 1201:       }
+ 1202: 
+ 1203:       const deductResult = await tx.user.updateMany({
+ 1204:         where: {
+ 1205:           id: userId,
+ 1206:           balance: { gte: finalPrice }
+ 1207:         },
+ 1208:         data: { balance: { decrement: finalPrice } }
+ 1209:       })
+ 1210:       if (deductResult.count === 0) {
+ 1211:         const currentUser = await tx.user.findUnique({
+ 1212:           where: { id: userId },
+ 1213:           select: { balance: true }
+ 1214:         })
+ 1215:         return { error: apiError(ErrorCode.INSUFFICIENT_BALANCE, `ä½™é¢ä¸è¶³ï¼Œéœ€è¦ Â¥${finalPrice.toFixed(2)}ï¼Œå½“å‰ä½™é¢ Â¥${Number(currentUser?.balance || 0).toFixed(2)}`) }
+ 1216:       }
+ 1217: 
+ 1218:       const updatedUser = await tx.user.findUnique({
+ 1219:         where: { id: userId },
+ 1220:         select: { balance: true }
+ 1221:       })
+ 1222:       const balanceAfter = Number(updatedUser?.balance || 0)
+ 1223:       const balanceBefore = Number((balanceAfter + finalPrice).toFixed(2))
+ 1224: 
+ 1225:       await tx.balanceLog.create({
+ 1226:         data: {
+ 1227:           userId,
+ 1228:           type: 'consume',
+ 1229:           amount: -finalPrice,
+ 1230:           balanceBefore,
+ 1231:           balanceAfter,
+ 1232:           remark: validatedAffCode 
+ 1233:             ? `è´­ä¹°åŸŸåé‚®ç®± - ${plan.name} (æŠ˜æ‰£ Â¥${discountAmount.toFixed(2)})`
+ 1234:             : `è´­ä¹°åŸŸåé‚®ç®± - ${plan.name} (${source.name})`
+ 1235:         }
+ 1236:       })
+ 1237: 
+ 1238:       // åˆ›å»ºè®¢é˜…
+ 1239:       const newSubscription = await tx.mailSubscription.create({
+ 1240:         data: {
+ 1241:           userId,
+ 1242:           sourceId: source.id,
+ 1243:           planId: plan.id,
+ 1244:           domainLimit: plan.domainLimit,
+ 1245:           diskLimitGb: plan.diskLimitGb,
+ 1246:           expiresAt
+ 1247:         },
+ 1248:         include: {
+ 1249:           source: true,
+ 1250:           plan: true
+ 1251:         }
+ 1252:       })
+ 1253: 
+ 1254:       // å¦‚æžœä½¿ç”¨äº†ä¼˜æƒ ç ï¼Œåˆ›å»º AFF ç»‘å®šå¹¶å¤„ç†è¿”åˆ©
+ 1255:       if (validatedAffCode) {
+ 1256:         const { createMailAffBinding, processMailAffCommission } = await import('../db/aff.js')
+ 1257:         // åˆ›å»ºè®¢é˜…ä¸Žä¼˜æƒ ç çš„æ°¸ä¹…ç»‘å®š
+ 1258:         await createMailAffBinding(newSubscription.id, validatedAffCode.id, tx as any)
+ 1259:         // ç»™ä¼˜æƒ ç åˆ›å»ºè€…è¿”åˆ©ï¼ˆåŸºäºŽåŽŸä»·ï¼Œä¸æ˜¯æŠ˜æ‰£åŽä»·æ ¼ï¼‰
+ 1260:         await processMailAffCommission(
+ 1261:           validatedAffCode.id,
+ 1262:           newSubscription.id,
+ 1263:           originalPrice,
+ 1264:           'new_purchase',
+ 1265:           tx as any
+ 1266:         )
+ 1267:       }
+ 1268: 
+ 1269:       return { subscription: newSubscription }
+ 1270:     })
+ 1271: 
+ 1272:     if ('error' in purchaseResult) {
+ 1273:       return reply.code(400).send(purchaseResult.error)
+ 1274:     }
+ 1275: 
+ 1276:     const subscription = purchaseResult.subscription
+ 1277: 
+ 1278:     await createLog(
+ 1279:       userId,
+ 1280:       'mail',
+ 1281:       'purchase_mail_subscription',
+ 1282:       `Purchased mail subscription: planId=${planId}, price=${finalPrice}${validatedAffCode ? `, affDiscount=${discountAmount}` : ''}`,
+ 1283:       'success'
+ 1284:     )
+ 1285: 
+  329: // ==================== ç”¨æˆ·è®¢é˜… (MailSubscription) ====================
+  330: 
+  331: /**
+  332:  * èŽ·å–ç”¨æˆ·çš„è®¢é˜…
+  333:  */
+  334: export async function getUserMailSubscription(userId: number): Promise<(MailSubscription & {
+  335:   source: MailSource
+  336:   plan: MailPlan
+  337:   domains: MailDomain[]
+  338: }) | null> {
+  339:   const subscription = await prisma.mailSubscription.findFirst({
+  340:     where: { userId, status: 'active' },
+  341:     include: {
+  342:       source: true,
+  343:       plan: true,
+  344:       domains: {
+  345:         include: { accounts: true }
+  346:       }
+  347:     }
+  348:   })
+  349:   return subscription ? withDecryptedSource(subscription) : null
+  350: }
+  351: 
+  352: /**
+  353:  * èŽ·å–æ‰€æœ‰è®¢é˜…ï¼ˆç®¡ç†å‘˜ç”¨ï¼‰
+  354:  */
+  355: export async function getAllMailSubscriptions(options?: {
+  356:   sourceId?: number
+  357:   status?: MailSubscriptionStatus | string
+  358:   search?: string
+  359:   page?: number
+  360:   pageSize?: number
+  361: }): Promise<{
+  362:   subscriptions: (MailSubscription & { user: { id: number; username: string; email: string | null; avatarStyle: string | null; avatarBadgeId: string | null }; source: MailSource; plan: MailPlan })[]
+  363:   total: number
+  364: }> {
+  365:   const { page, pageSize } = clampMailListPagination(options?.page, options?.pageSize)
+  366:   const sourceId = normalizePositiveMailSourceId(options?.sourceId)
+  367:   const status = normalizeMailSubscriptionStatus(options?.status)
+  368:   const searchTerm = normalizeMailListSearch(options?.search)
+  369:   const searchUserId = parseMailSearchUserId(searchTerm)
+  370:   
+  371:   const where: any = {
+  372:     ...(sourceId ? { sourceId } : {}),
+  373:     ...(status ? { status } : {})
+  374:   }
+  375:   
+  376:   // æœç´¢æ¡ä»¶ï¼šç”¨æˆ·åã€é‚®ç®±ã€ç”¨æˆ·ID
+  377:   if (searchTerm) {
+  378:     where.OR = [
+  379:       { user: { username: { contains: searchTerm, mode: 'insensitive' } } },
+  380:       { user: { email: { contains: searchTerm, mode: 'insensitive' } } },
+  381:       ...(searchUserId ? [{ userId: searchUserId }] : [])
+  382:     ]
+  383:   }
+  384:   
+  385:   const [subscriptions, total] = await Promise.all([
+  386:     prisma.mailSubscription.findMany({
+  387:       where,
+  388:       include: {
+  389:         user: { select: { id: true, username: true, email: true, avatarStyle: true, avatarBadgeId: true } },
+  390:         source: true,
+  391:         plan: true
+  392:       },
+  393:       orderBy: { createdAt: 'desc' },
+  394:       skip: (page - 1) * pageSize,
+  395:       take: pageSize
+  396:     }),
+  397:     prisma.mailSubscription.count({ where })
+  398:   ])
+  399:   
+  400:   return { subscriptions: subscriptions.map(withDecryptedSource), total }
+  401: }
+  402: 
+  403: /**
+  404:  * æ ¹æ® ID èŽ·å–è®¢é˜…
+  405:  */
+  406: export async function getMailSubscriptionById(id: number): Promise<(MailSubscription & {
+  407:   source: MailSource
+  408:   plan: MailPlan
+  409:   domains: (MailDomain & { accounts: MailAccount[] })[]
+  410: }) | null> {
+  411:   const subscription = await prisma.mailSubscription.findUnique({
+  412:     where: { id },
+  413:     include: {
+  414:       source: true,
+  415:       plan: true,
+  416:       domains: {
+  417:         include: { accounts: true }
+  418:       }
+  419:     }
+  420:   })
+  421:   return subscription ? withDecryptedSource(subscription) : null
+  422: }
+  423: 
+  424: /**
+  425:  * åˆ›å»ºè®¢é˜…
+  426:  */
+  427: export async function createMailSubscription(data: {
+  428:   userId: number
+  429:   sourceId: number
+  430:   planId: number
+  431:   domainLimit: number
+  432:   diskLimitGb: number
+  433:   expiresAt: Date
+  434:   autoRenew?: boolean
+  435: }): Promise<MailSubscription> {
+  436:   return prisma.mailSubscription.create({ data })
+  437: }
+  438: 
+  439: /**
+  440:  * æ›´æ–°è®¢é˜…
+  441:  */
+  442: export async function updateMailSubscription(id: number, data: {
+  443:   status?: MailSubscriptionStatus
+  444:   expiresAt?: Date
+  445:   autoRenew?: boolean
+  446: }): Promise<MailSubscription> {
+  447:   return prisma.mailSubscription.update({ where: { id }, data })
+  448: }
+  449: 
+  450: /**
+  451:  * ç»­è´¹è®¢é˜…
+  452:  */
+  453: export async function renewMailSubscription(id: number, months: number): Promise<MailSubscription> {
+  454:   if (!Number.isSafeInteger(months) || months < 1 || months > 12) {
+  455:     throw new Error('Invalid mail renewal months')
+  456:   }
+  457: 
+  458:   const subscription = await prisma.mailSubscription.findUnique({ where: { id } })
+  459:   if (!subscription) throw new Error('Subscription not found')
+  460:   
+  461:   const currentExpiry = subscription.expiresAt > new Date() ? subscription.expiresAt : new Date()
+  462:   const newExpiry = new Date(currentExpiry)
+  463:   newExpiry.setMonth(newExpiry.getMonth() + months)
+  464:   
+  465:   return prisma.mailSubscription.update({
+  466:     where: { id },
+  467:     data: { expiresAt: newExpiry, status: 'active' }
+  468:   })
+  469: }
+  470: 
+   55: 
+   56:   return {
+   57:     originalPrice,
+   58:     discountAmount,
+   59:     finalPrice
+   60:   }
+   61: })
+   62: 
+   63: // æ£€æŸ¥é€‰ä¸­åœ°åŒºæ˜¯å¦å·²æœ‰è®¢é˜…
+   64: const hasSubscriptionInSelectedRegion = computed(() => {
+   65:   if (!subscription.value || !selectedSourceId.value) return false
+   66:   return subscription.value.source.id === selectedSourceId.value
+   67: })
+   68: 
+   69: // åŸŸåæ·»åŠ å¼¹çª—
+   70: const showAddDomainModal = ref(false)
+   71: const addDomainLoading = ref(false)
+   72: const newDomain = ref('')
+   73: 
+   74: // ç»­è´¹å¼¹çª—
+   75: const showRenewModal = ref(false)
+  465:                 >
+  466:                   <svg v-if="selectedSourceId === source.id" class="w-3 h-3 text-white dark:text-black" fill="currentColor" viewBox="0 0 20 20">
+  467:                     <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+  468:                   </svg>
+  469:                 </div>
+  470:               </div>
+  471:             </div>
+  472:           </div>
+  473:         </div>
+  474: 
+  475:         <!-- å·²è´­ä¹°è¯¥åœ°åŒºæç¤º -->
+  476:         <div v-if="hasSubscriptionInSelectedRegion" class="card p-5 border-amber-200 dark:border-amber-800/50 bg-amber-50/50 dark:bg-amber-950/20">
+  477:           <div class="flex items-start gap-3">
+  478:             <svg class="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+  479:               <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+  480:             </svg>
+  481:             <div>
+  482:               <h4 class="font-medium text-amber-800 dark:text-amber-200">{{ t('mail.alreadyPurchased') }}</h4>
+  483:               <p class="text-sm text-amber-600 dark:text-amber-300/80 mt-1">{{ t('mail.alreadyPurchasedDesc') }}</p>
+  484:               <button 
+  485:                 class="btn btn-sm btn-ghost mt-3 text-amber-700 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/30"
+  486:                 @click="activeTab = 'my'"
+  487:               >
+  488:                 {{ t('mail.viewMySubscription') }}
+  489:               </button>
+  490:             </div>
+  491:           </div>
+  492:         </div>
+  493: 
+  494:         <!-- Step 2: æ–¹æ¡ˆé…ç½®è¯¦æƒ… -->
+  495:         <div v-if="selectedSource && !hasSubscriptionInSelectedRegion" class="card p-5">
+  496:           <div class="flex items-center gap-2.5 mb-4">
+  497:             <span class="w-6 h-6 rounded-full bg-accent text-white dark:text-black text-xs font-bold flex items-center justify-center">2</span>
+  498:             <h3 class="text-sm font-semibold text-themed">{{ t('mail.planDetails') }}</h3>
+  499:           </div>
+  500:           
+  501:           <div v-for="plan in selectedSource.plans" :key="plan.id" class="mb-4 last:mb-0">
+  502:             <div
+  503:               :class="[
+  504:                 'relative p-5 rounded-xl border-2 transition-all cursor-pointer',
+  505:                 selectedPlanId === plan.id
+   88:     "test:instance-operation-conflict-guards": "node --import tsx scripts/test-instance-operation-conflict-guards.ts",
+   89:     "test:instance-quota-zero-guards": "node --import tsx scripts/test-instance-quota-zero-guards.ts",
+   90:     "test:instance-task-cancel-race-guard": "node --import tsx scripts/test-instance-task-cancel-race-guard.ts",
+   91:     "test:instance-task-query-guards": "node --import tsx scripts/test-instance-task-query-guards.ts",
+   92:     "test:mail-source-secret-handling": "node --import tsx scripts/test-mail-source-secret-handling.ts",
+   93:     "test:mail-source-outbound-guard": "node --import tsx scripts/test-mail-source-outbound-guard.ts",
+   94:     "test:mail-source-input-guards": "node --import tsx scripts/test-mail-source-input-guards.ts",
+   95:     "test:mail-plan-financial-guards": "node --import tsx scripts/test-mail-plan-financial-guards.ts",
+   96:     "test:mail-list-query-guards": "node --import tsx scripts/test-mail-list-query-guards.ts",
+   97:     "test:mail-route-id-guards": "node --import tsx scripts/test-mail-route-id-guards.ts",
+   98:     "test:mail-account-quota-guards": "node --import tsx scripts/test-mail-account-quota-guards.ts",
+   99:     "test:mail-account-create-compensation": "node --import tsx scripts/test-mail-account-create-compensation.ts",
+  100:     "test:mail-domain-lifecycle-guards": "node --import tsx scripts/test-mail-domain-lifecycle-guards.ts",
+  101:     "test:mail-subscription-cancel-guards": "node --import tsx scripts/test-mail-subscription-cancel-guards.ts",
+  102:     "test:mail-renewal-month-guards": "node --import tsx scripts/test-mail-renewal-month-guards.ts",
+  103:     "test:notification-fetch-guards": "node --import tsx scripts/test-notification-fetch-guards.ts",
+  104:     "test:notification-log-query-guards": "node --import tsx scripts/test-notification-log-query-guards.ts",
+  105:     "test:demo-account-safety-guards": "node --import tsx scripts/test-demo-account-safety-guards.ts",
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "Get-Content -Raw server\\scripts\\test-mail-subscription-cancel-guards.ts; Get-Content -Raw server\\scripts\\test-mail-list-query-guards.ts; Get-Content -Raw server\\scripts\\test-mail-plan-financial-guards.ts; git status --short; git diff -- server/src/routes/mail.ts server/scripts/test-mail-subscription-cancel-guards.ts" in C:\Users\Administrator\Desktop\payinces
+ succeeded in 602ms:
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+
+const source = readFileSync(resolve(__dirname, '../src/routes/mail.ts'), 'utf8')
+
+function section(sourceText: string, startMarker: string, endMarker: string): string {
+  const start = sourceText.indexOf(startMarker)
+  assert.notEqual(start, -1, `missing start marker: ${startMarker}`)
+  const end = sourceText.indexOf(endMarker, start + startMarker.length)
+  assert.notEqual(end, -1, `missing end marker: ${endMarker}`)
+  return sourceText.slice(start, end)
+}
+
+assert.ok(
+  source.includes('type MailSubscriptionCancelInput = {') &&
+    source.includes("refundType: 'none' | 'full' | 'remaining'") &&
+    source.includes('const MAIL_CANCEL_REASON_MAX_LENGTH = 500') &&
+    source.includes('function isPlainRecord(value: unknown): value is Record<string, unknown>') &&
+    source.includes('function normalizeMailSubscriptionCancelInput(input: unknown): MailSubscriptionCancelInput'),
+  'mail subscription cancel route must use a dedicated runtime body normalizer'
+)
+
+const normalizerSection = section(
+  source,
+  'function normalizeMailSubscriptionCancelInput(input: unknown): MailSubscriptionCancelInput',
+  'function parseOptionalPositiveQueryInteger'
+)
+
+assert.ok(
+  normalizerSection.includes('if (!isPlainRecord(input))') &&
+    normalizerSection.includes("throw apiError(ErrorCode.VALIDATION_ERROR, 'è¯·æ±‚å‚æ•°æ— æ•ˆ')"),
+  'mail subscription cancel normalizer must reject missing, array, or non-object bodies'
+)
+assert.ok(
+  normalizerSection.includes("refundType !== 'none' && refundType !== 'full' && refundType !== 'remaining'") &&
+    normalizerSection.includes("throw apiError(ErrorCode.VALIDATION_ERROR, 'è¯·é€‰æ‹©é€€æ¬¾æ–¹å¼')"),
+  'mail subscription cancel normalizer must allowlist refundType'
+)
+assert.ok(
+  normalizerSection.includes("input.reason !== undefined && typeof input.reason !== 'string'") &&
+    normalizerSection.includes("throw apiError(ErrorCode.VALIDATION_ERROR, 'é€€æ¬¾åŽŸå› æ— æ•ˆ')"),
+  'mail subscription cancel normalizer must reject non-string refund reasons'
+)
+assert.ok(
+  normalizerSection.includes('reason.length > MAIL_CANCEL_REASON_MAX_LENGTH') &&
+    normalizerSection.includes('é€€æ¬¾åŽŸå› ä¸èƒ½è¶…è¿‡'),
+  'mail subscription cancel normalizer must cap refund reason length'
+)
+assert.ok(
+  normalizerSection.includes("if (refundType !== 'none' && !reason)") &&
+    normalizerSection.includes("throw apiError(ErrorCode.VALIDATION_ERROR, 'é€€æ¬¾æ—¶å¿…é¡»å¡«å†™åŽŸå› ')"),
+  'mail subscription cancel normalizer must require a reason for refunding cancellations'
+)
+
+const cancelRouteSection = section(
+  source,
+  '// ç®¡ç†å‘˜é€€è®¢ï¼ˆåˆ é™¤è®¢é˜…ï¼‰',
+  '// ==================== ç®¡ç†å‘˜ï¼šåŸŸåç®¡ç† ===================='
+)
+
+assert.ok(
+  cancelRouteSection.includes('const { refundType, reason } = normalizeMailSubscriptionCancelInput(request.body)'),
+  'mail subscription cancel route must normalize the body before business side effects'
+)
+assert.ok(
+  !cancelRouteSection.includes('const { refundType, reason } = request.body') &&
+    !cancelRouteSection.includes('reason!.trim()') &&
+    !cancelRouteSection.includes('reason.trim()'),
+  'mail subscription cancel route must not trust typed request bodies or trim unchecked reasons'
+)
+assert.ok(
+  cancelRouteSection.includes('åŽŸå› ï¼š${reason}'),
+  'mail subscription cancel balance log must use the normalized refund reason'
+)
+
+console.log('mail subscription cancel guard tests passed')
+
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+
+const routeSource = readFileSync(resolve(__dirname, '../src/routes/mail.ts'), 'utf8')
+const dbSource = readFileSync(resolve(__dirname, '../src/db/mail.ts'), 'utf8')
+
+function sectionBetween(source: string, startMarker: string, endMarker: string): string {
+  const start = source.indexOf(startMarker)
+  assert.notEqual(start, -1, `missing start marker: ${startMarker}`)
+  const end = source.indexOf(endMarker, start + startMarker.length)
+  assert.notEqual(end, -1, `missing end marker: ${endMarker}`)
+  return source.slice(start, end)
+}
+
+const subscriptionsHelper = sectionBetween(
+  dbSource,
+  'export async function getAllMailSubscriptions',
+  '/**\n * æ ¹æ® ID èŽ·å–è®¢é˜…'
+)
+const domainsHelper = sectionBetween(
+  dbSource,
+  'export async function getAllMailDomains',
+  '// ==================== é‚®ç®±è´¦æˆ· (MailAccount) ===================='
+)
+const adminSubscriptionsRoute = sectionBetween(
+  routeSource,
+  '// èŽ·å–æ‰€æœ‰è®¢é˜…',
+  '// ç®¡ç†å‘˜é€€è®¢ï¼ˆåˆ é™¤è®¢é˜…ï¼‰'
+)
+const adminDomainsRoute = sectionBetween(
+  routeSource,
+  '// èŽ·å–æ‰€æœ‰åŸŸå',
+  '// ==================== ç”¨æˆ·ç«¯ï¼šå…¬å¼€æŽ¥å£ ===================='
+)
+
+assert.ok(
+  dbSource.includes('const MAIL_LIST_SEARCH_MAX_LENGTH = 128') &&
+    dbSource.includes('const MAIL_LIST_MAX_PAGE_SIZE = 100') &&
+    dbSource.includes('function clampMailListPagination') &&
+    dbSource.includes('function normalizeMailListSearch') &&
+    dbSource.includes('return trimmed ? trimmed.slice(0, MAIL_LIST_SEARCH_MAX_LENGTH) : undefined'),
+  'mail list DB helpers must define shared pagination and search guards'
+)
+
+assert.ok(
+  dbSource.includes("const MAIL_SUBSCRIPTION_STATUSES = new Set<MailSubscriptionStatus>(['active', 'expired', 'suspended'])") &&
+    dbSource.includes("const MAIL_DOMAIN_STATUSES = new Set<MailDomainStatus>(['pending', 'verified', 'suspended'])") &&
+    dbSource.includes('function normalizeMailSubscriptionStatus') &&
+    dbSource.includes('function normalizeMailDomainStatus'),
+  'mail list DB helpers must allowlist subscription and domain statuses'
+)
+
+for (const [name, helper, statusNormalizer] of [
+  ['subscriptions', subscriptionsHelper, 'normalizeMailSubscriptionStatus(options?.status)'],
+  ['domains', domainsHelper, 'normalizeMailDomainStatus(options?.status)']
+] as const) {
+  assert.ok(
+    helper.includes('const { page, pageSize } = clampMailListPagination(options?.page, options?.pageSize)') &&
+      helper.includes('skip: (page - 1) * pageSize') &&
+      helper.includes('take: pageSize'),
+    `${name} helper must use sanitized pagination for Prisma skip/take`
+  )
+  assert.ok(
+    helper.includes(statusNormalizer) &&
+      helper.includes('const searchTerm = normalizeMailListSearch(options?.search)') &&
+      helper.includes('const searchUserId = parseMailSearchUserId(searchTerm)') &&
+      !helper.includes('const searchId = parseInt(searchTerm)'),
+    `${name} helper must sanitize status and search filters`
+  )
+}
+
+assert.ok(
+  dbSource.includes('function parseMailSearchUserId(searchTerm: string | undefined): number | undefined') &&
+    dbSource.includes("if (!searchTerm || !/^\\d+$/.test(searchTerm))") &&
+    dbSource.includes('return Number.isSafeInteger(id) && id > 0 ? id : undefined'),
+  'mail list numeric search must only accept positive integer user IDs'
+)
+
+assert.ok(
+  routeSource.includes('function parseOptionalPositiveQueryInteger') &&
+    routeSource.includes('function parsePositiveQueryInteger'),
+  'mail routes must define shared safe query integer parsers'
+)
+assert.ok(
+  routeSource.includes('if (!POSITIVE_ROUTE_ID_RE.test(value))') &&
+    routeSource.includes('Number.isSafeInteger(parsed)'),
+  'mail list query integer parsers must reject loose formats and unsafe integers'
+)
+assert.ok(
+  !routeSource.includes('return Number.isInteger(parsed) && parsed > 0 && parsed <= max ? parsed : undefined'),
+  'mail list query integer parser must not accept Number coercion formats such as scientific notation'
+)
+
+for (const [name, route] of [
+  ['admin subscriptions', adminSubscriptionsRoute],
+  ['admin domains', adminDomainsRoute]
+] as const) {
+  assert.ok(
+    route.includes('sourceId: parseOptionalPositiveQueryInteger(sourceId)') &&
+      route.includes('page: parsePositiveQueryInteger(page, 1)') &&
+      route.includes('pageSize: parsePositiveQueryInteger(pageSize, 20, 100)') &&
+      route.includes('status,') &&
+      !route.includes('parseInt(sourceId)') &&
+      !route.includes('status as any') &&
+      !route.includes("parseInt(page || '1')") &&
+      !route.includes("parseInt(pageSize || '20')"),
+    `${name} route must sanitize query integers and pass raw status to DB allowlist`
+  )
+}
+
+console.log('mail list query guard tests passed')
+
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+
+const source = readFileSync(resolve(__dirname, '../src/routes/mail.ts'), 'utf8')
+
+assert.ok(
+  source.includes('function normalizeMailPlanInput'),
+  'mail plan create/update routes must share normalized backend validation'
+)
+assert.ok(
+  source.includes('function requireNumber(value: unknown, field: string): number') &&
+    source.includes('function requireSafeInteger(value: unknown, field: string): number'),
+  'mail plan validation must require runtime JSON numbers instead of loose coercion'
+)
+assert.ok(
+  source.includes("const sourceId = requireSafeInteger(input.sourceId, 'é‚®ç®±æº')") &&
+    source.includes("const domainLimit = requireSafeInteger(input.domainLimit, 'åŸŸåæ•°é‡é™åˆ¶')") &&
+    source.includes("const diskLimitGb = requireSafeInteger(input.diskLimitGb, 'ç£ç›˜å®¹é‡')") &&
+    source.includes("const price = requireNumber(input.price, 'ä»·æ ¼')") &&
+    source.includes("const sortOrder = requireSafeInteger(input.sortOrder, 'æŽ’åºå€¼')"),
+  'mail plan financial and quota fields must use strict runtime number helpers'
+)
+for (const looseCoercion of [
+  'const sourceId = Number(input.sourceId)',
+  'const domainLimit = Number(input.domainLimit)',
+  'const diskLimitGb = Number(input.diskLimitGb)',
+  'const price = Number(input.price)',
+  'const sortOrder = Number(input.sortOrder)'
+]) {
+  assert.ok(
+    !source.includes(looseCoercion),
+    `mail plan validation must not use loose numeric coercion: ${looseCoercion}`
+  )
+}
+assert.ok(
+  source.includes('price <= 0') && source.includes('price > 99999999.99'),
+  'mail plan prices must reject negative, zero, and unbounded values'
+)
+assert.ok(
+  source.includes('Math.abs(price - roundedPrice) > 1e-8'),
+  'mail plan prices must reject more than two decimal places'
+)
+assert.ok(
+  source.includes('domainLimit <= 0') && source.includes('domainLimit > 1000'),
+  'mail plan domain limits must be bounded positive integers'
+)
+assert.ok(
+  source.includes('diskLimitGb <= 0') && source.includes('diskLimitGb > 102400'),
+  'mail plan disk limits must be bounded positive integers'
+)
+assert.ok(
+  source.includes("input.billingCycle !== 'monthly' && input.billingCycle !== 'yearly'"),
+  'mail plan billing cycle must reject unexpected enum values before Prisma writes'
+)
+
+const createSectionStart = source.indexOf('// åˆ›å»ºæ–¹æ¡ˆ')
+const updateSectionStart = source.indexOf('// æ›´æ–°æ–¹æ¡ˆ')
+const deleteSectionStart = source.indexOf('// åˆ é™¤æ–¹æ¡ˆ')
+const purchaseSectionStart = source.indexOf('// è´­ä¹°è®¢é˜…')
+const renewSectionStart = source.indexOf('// ç»­è´¹è®¢é˜…')
+assert.notEqual(createSectionStart, -1, 'mail plan create section not found')
+assert.notEqual(updateSectionStart, -1, 'mail plan update section not found')
+assert.notEqual(deleteSectionStart, -1, 'mail plan delete section not found')
+assert.notEqual(purchaseSectionStart, -1, 'mail subscription purchase section not found')
+assert.notEqual(renewSectionStart, -1, 'mail subscription renew section not found')
+
+const createSection = source.slice(createSectionStart, updateSectionStart)
+const updateSection = source.slice(updateSectionStart, deleteSectionStart)
+const purchaseSection = source.slice(purchaseSectionStart, renewSectionStart)
+
+assert.ok(
+  createSection.includes('const planInput = normalizeMailPlanInput(request.body, true)'),
+  'mail plan create route must normalize and require all financial/quota fields'
+)
+assert.ok(
+  createSection.includes('price: planInput.price!'),
+  'mail plan create route must persist normalized price'
+)
+assert.ok(
+  updateSection.includes('const data = normalizeMailPlanInput(request.body, false)'),
+  'mail plan update route must validate partial direct API updates'
+)
+assert.ok(
+  updateSection.includes('if (data.sourceId !== undefined)'),
+  'mail plan update route must verify a changed source exists before persistence'
+)
+assert.ok(
+  source.includes('type MailSubscriptionPurchaseInput = {') &&
+    source.includes('const MAIL_AFF_CODE_MAX_LENGTH = 64') &&
+    source.includes('function normalizeMailSubscriptionPurchaseInput(input: unknown): MailSubscriptionPurchaseInput'),
+  'mail subscription purchase must define a runtime body normalizer'
+)
+assert.ok(
+  source.includes("const planId = requireSafeInteger(input.planId, 'é‚®ç®±æ–¹æ¡ˆ')") &&
+    source.includes('if (planId <= 0)') &&
+    source.includes("typeof input.affCode !== 'string'") &&
+    source.includes('input.affCode.trim().toUpperCase()') &&
+    source.includes('normalizedAffCode.length > MAIL_AFF_CODE_MAX_LENGTH'),
+  'mail subscription purchase must validate planId and optional AFF code before billing'
+)
+assert.ok(
+  purchaseSection.includes('purchaseInput = normalizeMailSubscriptionPurchaseInput(request.body)') &&
+    purchaseSection.includes('const { planId, affCode: affCodeInput } = purchaseInput') &&
+    purchaseSection.includes('const validation = await validateMailAffCode(affCodeInput, userId)'),
+  'mail subscription purchase route must use normalized purchase input for plan lookup and AFF validation'
+)
+assert.ok(
+  !purchaseSection.includes('const { planId, affCode: affCodeInput } = request.body') &&
+    !purchaseSection.includes('validateMailAffCode(affCodeInput.trim(), userId)'),
+  'mail subscription purchase route must not destructure raw typed bodies or trim AFF codes inline'
+)
+
+const cancelSectionStart = source.indexOf('// ç®¡ç†å‘˜é€€è®¢ï¼ˆåˆ é™¤è®¢é˜…ï¼‰')
+const domainManagementSectionStart = source.indexOf('// ==================== ç®¡ç†å‘˜ï¼šåŸŸåç®¡ç† ====================')
+assert.notEqual(cancelSectionStart, -1, 'mail subscription cancel section not found')
+assert.notEqual(domainManagementSectionStart, -1, 'mail domain management section not found')
+const cancelSection = source.slice(cancelSectionStart, domainManagementSectionStart)
+
+assert.ok(
+  source.includes('async function getMailRefundableAmount(') &&
+    source.includes("type: 'consume'") &&
+    source.includes('const totalPaid = paymentRecords.reduce') &&
+    source.includes('const totalRefunded = refundRecords.reduce') &&
+    source.includes('Math.max(0, totalPaid - totalRefunded)'),
+  'mail refunds must use actual purchase/renew balance logs and cap cumulative refunds at cumulative paid amount'
+)
+assert.ok(
+  source.includes('remainingValue += Math.abs(Number(record.amount)) * unusedRatio') &&
+    source.includes('Math.min(remainingValue, maxRefundable)'),
+  'mail remaining-value refunds must prorate actual per-period payments and respect the paid-minus-refunded cap'
+)
+assert.ok(
+  cancelSection.includes('refundAmount = refundType === \'full\'') &&
+    cancelSection.includes('? refundable.maxRefundable') &&
+    !cancelSection.includes('const planPrice = Number(subscription.plan.price)') &&
+    !cancelSection.includes('refundAmount = planPrice'),
+  'mail full refunds must use historical actual payments instead of the current plan price'
+)
+
+console.log('mail plan financial guard tests passed')
+
+ M client/src/components/instance/TrafficStats.vue
+ M client/src/components/plugins/PluginFrame.vue
+ M client/src/locales/en.ts
+ M client/src/locales/zh-CN.ts
+ M client/src/locales/zh-TW.ts
+ M client/src/router/user.ts
+ M client/src/utils/validation.ts
+ M client/src/views/FlashSalesView.vue
+ M client/src/views/GiftCardsView.vue
+ M client/src/views/InstanceDetailView.vue
+ M client/src/views/TicketsView.vue
+ M client/src/views/admin/DeliveryCenterView.vue
+ M client/src/views/admin/FlashSalesView.vue
+ M client/src/views/admin/OAuthConfigView.vue
+ M client/src/views/admin/OrdersView.vue
+ M client/src/views/admin/ResourceRiskView.vue
+ M client/src/views/resources/MyPackagesView.vue
+ M client/src/views/resources/PackageFormView.vue
+ M deploy/incudal-backend.service.example
+ M deploy/incudal-online-rollback@.service.example
+ M deploy/incudal-online-update@.service.example
+ M package.json
+ M scripts/install-panel.sh
+ M scripts/test-install-panel-guards.sh
+ M server/package.json
+ M server/prisma/schema.prisma
+ M server/scripts/test-admin-billing-route-id-guards.ts
+ M server/scripts/test-admin-entertainment-route-guards.ts
+ M server/scripts/test-admin-user-delete-resource-guards.ts
+ M server/scripts/test-aff-review-ui-guards.ts
+ M server/scripts/test-agent-report-state-guards.ts
+ M server/scripts/test-backup-task-race-guards.ts
+ M server/scripts/test-balance-adjustment-approval-guards.ts
+ M server/scripts/test-batch-config-route-guards.ts
+ M server/scripts/test-billing-expiry-delete.ts
+ M server/scripts/test-billing-expiry-race-guards.ts
+ M server/scripts/test-billing-query-guards.ts
+ M server/scripts/test-capacity-cost-guards.ts
+ M server/scripts/test-commercial-operations-overview-guards.ts
+ M server/scripts/test-delivery-center-guards.ts
+ M server/scripts/test-flash-sale-guards.ts
+ M server/scripts/test-frontend-i18n-keys.ts
+ M server/scripts/test-frontend-route-guards.ts
+ M server/scripts/test-gift-card-flow.ts
+ M server/scripts/test-gift-card-guards.ts
+ M server/scripts/test-host-resource-atomic-guards.ts
+ M server/scripts/test-hosting-balance-guards.ts
+ M server/scripts/test-instance-billing-route-id-guards.ts
+ M server/scripts/test-instance-create-failure-compensation.ts
+ M server/scripts/test-instance-delete-incus-order.ts
+ M server/scripts/test-instance-operation-conflict-guards.ts
+ M server/scripts/test-instance-quota-zero-guards.ts
+ M server/scripts/test-instance-recreate-consistency.ts
+ M server/scripts/test-instance-route-id-guards.ts
+ M server/scripts/test-ip-address-route-guards.ts
+ M server/scripts/test-log-sanitizer.ts
+ M server/scripts/test-mail-plan-financial-guards.ts
+ M server/scripts/test-mail-renewal-month-guards.ts
+ M server/scripts/test-order-payment-operations-guards.ts
+ M server/scripts/test-plan-bandwidth-limit-guards.ts
+ M server/scripts/test-plugin-client-boundary-guards.ts
+ M server/scripts/test-plugin-market-governance-guards.ts
+ M server/scripts/test-plugin-market-publish-guards.ts
+ M server/scripts/test-port-mapping-safety.ts
+ M server/scripts/test-proxy-site-route-id-guards.ts
+ M server/scripts/test-recharge-state-transitions.ts
+ M server/scripts/test-redeem-code-management-guards.ts
+ M server/scripts/test-resource-pool-apply-consistency.ts
+ M server/scripts/test-resource-quota-bigint-guards.ts
+ M server/scripts/test-resource-risk-guards.ts
+ M server/scripts/test-risk-audit-guards.ts
+ M server/scripts/test-storage-outbound-guards.ts
+ M server/scripts/test-system-config-value-guards.ts
+ M server/scripts/test-system-redeem-consistency.ts
+ M server/scripts/test-system-update-guards.ts
+ M server/scripts/test-terminal-route-id-guards.ts
+ M server/scripts/test-terminal-saved-command-route-id-guards.ts
+ M server/scripts/test-ticket-auto-close-guards.ts
+ M server/scripts/test-ticket-query-guards.ts
+ M server/scripts/test-ticket-success-guards.ts
+ M server/scripts/test-traffic-collector-status-guard.ts
+ M server/scripts/test-traffic-notification-claim-guards.ts
+ M server/scripts/test-traffic-reset-locks.ts
+ M server/scripts/test-traffic-route-limit-guards.ts
+ M server/scripts/test-transfer-query-guards.ts
+ M server/scripts/test-trust-proxy-config.ts
+ M server/scripts/test-user-destroy-incus-order.ts
+ M server/scripts/test-user-lifecycle-guards.ts
+ M server/scripts/test-vip-benefit-route-guards.ts
+ M server/src/app.ts
+ M server/src/db/aff.ts
+ M server/src/db/balance.ts
+ M server/src/db/billing-operations.ts
+ M server/src/db/gift-cards.ts
+ M server/src/db/hosts.ts
+ M server/src/db/instances.ts
+ M server/src/db/ipv6-subnets.ts
+ M server/src/db/lottery.ts
+ M server/src/db/redeem-codes.ts
+ M server/src/db/resource-pool.ts
+ M server/src/db/terminal-saved-commands.ts
+ M server/src/db/tickets.ts
+ M server/src/db/traffic.ts
+ M server/src/db/user-lifecycle.ts
+ M server/src/db/users.ts
+ M server/src/lib/billing-calc.ts
+ M server/src/lib/caddy-client.ts
+ M server/src/lib/epay.ts
+ M server/src/lib/errors.ts
+ M server/src/lib/heleket.ts
+ M server/src/lib/log-sanitizer.ts
+ M server/src/lib/lottery-notifier.ts
+ M server/src/lib/lsky.ts
+ M server/src/lib/managed-instance-provision.ts
+ M server/src/lib/notifier.ts
+ M server/src/lib/outbound-security.ts
+ M server/src/lib/plugin-market-publisher.ts
+ M server/src/lib/plugin-market-submission-scan.ts
+ M server/src/lib/redirect-validator.ts
+ M server/src/lib/terminal-proxy.ts
+ M server/src/lib/theme-market-publisher.ts
+ M server/src/lib/theme-market-submission-scan.ts
+ M server/src/lib/trust-proxy-config.ts
+ M server/src/routes/admin-billing.ts
+ M server/src/routes/admin-capacity-cost.ts
+ M server/src/routes/admin-delivery.ts
+ M server/src/routes/admin-entertainment.ts
+ M server/src/routes/admin-statistics.ts
+ M server/src/routes/batch-config.ts
+ M server/src/routes/checkin.ts
+ M server/src/routes/gift-cards.ts
+ M server/src/routes/hosting.ts
+ M server/src/routes/instance-billing.ts
+ M server/src/routes/instance-destroy.ts
+ M server/src/routes/instances.ts
+ M server/src/routes/ip-addresses.ts
+ M server/src/routes/mail.ts
+ M server/src/routes/orders.ts
+ M server/src/routes/plugin-market-submissions.ts
+ M server/src/routes/proxy-sites.ts
+ M server/src/routes/recharge.ts
+ M server/src/routes/redeem-codes.ts
+ M server/src/routes/resource-pool.ts
+ M server/src/routes/resource-risk.ts
+ M server/src/routes/system-config.ts
+ M server/src/routes/terminal.ts
+ M server/src/routes/theme-market-submissions.ts
+ M server/src/routes/tickets.ts
+ M server/src/routes/traffic.ts
+ M server/src/routes/transfers.ts
+ M server/src/routes/user-lifecycle.ts
+ M server/src/routes/users.ts
+ M server/src/services/agent-instance-report.ts
+ M server/src/services/billing-scheduler.ts
+ M server/src/services/cranemail.ts
+ M server/src/services/flash-sales.ts
+ M server/src/services/instance-traffic-collector.ts
+ M server/src/services/resource-risk.ts
+ M server/src/services/smartermail.ts
+ M server/src/services/system-monitor.ts
+ M server/src/services/traffic-bandwidth.ts
+ M server/src/services/traffic-notifier.ts
+ M server/src/services/traffic-scheduler.ts
+ M server/src/services/traffic-utils.ts
+ M server/src/services/user-order-restrictions.ts
+ M server/src/services/vip-benefits.ts
+ M server/src/workers/restoreTaskWorker.ts
+?? AGENTS.md
+?? BEHAVIOR.md
+?? CLAUDE.md
+?? DEFECTS.md
+?? EXECUTION.md
+?? EXECUTION_LOG.md
+?? FIX_PLAN.md
+?? MAINTENANCE_PLAN.md
+?? artifacts/
+?? audits/
+?? deploy/incudal-online-task.sh.example
+?? deploy/incudal-ota-chown-wrapper.sh.example
+?? deploy/incudal-systemctl-wrapper.sh.example
+?? server/scripts/test-error-response-guards.ts
+?? server/scripts/test-redirect-validator-guards.ts
+?? server/scripts/test-safe-outbound-fetch-guards.ts
+?? skills-lock.json
+diff --git a/server/src/routes/mail.ts b/server/src/routes/mail.ts
+index 0caaaf6..30b358d 100644
+--- a/server/src/routes/mail.ts
++++ b/server/src/routes/mail.ts
+@@ -4,7 +4,7 @@
+  */
+ 
+ import type { FastifyInstance } from 'fastify'
+-import type { MailAccount } from '@prisma/client'
++import type { MailAccount, Prisma } from '@prisma/client'
+ import { prisma } from '../db/prisma.js'
+ import { createLog } from '../db/logs.js'
+ import { apiError, ErrorCode } from '../lib/errors.js'
+@@ -63,11 +63,105 @@ const MAIL_CANCEL_REASON_MAX_LENGTH = 500
+ const MAIL_SOURCE_CODE_RE = /^[a-z0-9_-]{2,32}$/
+ const MAIL_SOURCE_SECRET_MAX_LENGTH = 4096
+ const MAIL_AFF_CODE_MAX_LENGTH = 64
++const MAIL_PURCHASE_REMARK_PREFIX = '购买域名邮箱 - '
++const MAIL_RENEW_REMARK_PREFIX = '续费域名邮箱 '
++const MAIL_REFUND_REMARK_PREFIX = '管理员退订邮箱 - '
++const DAY_MS = 24 * 60 * 60 * 1000
+ 
+ function isPlainRecord(value: unknown): value is Record<string, unknown> {
+   return typeof value === 'object' && value !== null && !Array.isArray(value)
+ }
+ 
++function roundMailCurrency(value: number): number {
++  return Number(value.toFixed(2))
++}
++
++function getMailPaymentPeriodMs(remark: string | null, billingCycle: 'monthly' | 'yearly'): number {
++  if (remark?.startsWith(MAIL_RENEW_REMARK_PREFIX)) {
++    const months = Number(remark.slice(MAIL_RENEW_REMARK_PREFIX.length).match(/^(\d+) 个月/)?.[1])
++    if (Number.isSafeInteger(months) && months > 0) {
++      return billingCycle === 'yearly'
++        ? (months / 12) * 365 * DAY_MS
++        : months * 30 * DAY_MS
++    }
++  }
++
++  return billingCycle === 'monthly' ? 30 * DAY_MS : 365 * DAY_MS
++}
++
++async function getMailRefundableAmount(
++  tx: Prisma.TransactionClient,
++  subscription: {
++    userId: number
++    createdAt: Date
++    expiresAt: Date
++    billingCycle: 'monthly' | 'yearly'
++  },
++  now: Date
++): Promise<{ maxRefundable: number; remainingRefundable: number }> {
++  // 邮箱暂无独立计费表：以订阅创建时同一事务写入的购买 BalanceLog 作为流水起点。
++  const purchaseRecord = await tx.balanceLog.findFirst({
++    where: {
++      userId: subscription.userId,
++      type: 'consume',
++      remark: { startsWith: MAIL_PURCHASE_REMARK_PREFIX },
++      createdAt: { lte: subscription.createdAt }
++    },
++    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
++    select: { id: true }
++  })
++
++  if (!purchaseRecord) {
++    return { maxRefundable: 0, remainingRefundable: 0 }
++  }
++
++  const [paymentRecords, refundRecords] = await Promise.all([
++    tx.balanceLog.findMany({
++      where: {
++        userId: subscription.userId,
++        id: { gte: purchaseRecord.id },
++        type: 'consume',
++        OR: [
++          { remark: { startsWith: MAIL_PURCHASE_REMARK_PREFIX } },
++          { remark: { startsWith: MAIL_RENEW_REMARK_PREFIX } }
++        ]
++      },
++      orderBy: { id: 'asc' },
++      select: { amount: true, remark: true }
++    }),
++    tx.balanceLog.findMany({
++      where: {
++        userId: subscription.userId,
++        id: { gte: purchaseRecord.id },
++        type: 'refund',
++        remark: { startsWith: MAIL_REFUND_REMARK_PREFIX }
++      },
++      select: { amount: true }
++    })
++  ])
++
++  const totalPaid = paymentRecords.reduce((sum, record) => sum + Math.abs(Number(record.amount)), 0)
++  const totalRefunded = refundRecords.reduce((sum, record) => sum + Math.abs(Number(record.amount)), 0)
++  const maxRefundable = roundMailCurrency(Math.max(0, totalPaid - totalRefunded))
++
++  let remainingValue = 0
++  let periodEnd = new Date(subscription.expiresAt).getTime()
++  for (const record of [...paymentRecords].reverse()) {
++    const periodMs = getMailPaymentPeriodMs(record.remark, subscription.billingCycle)
++    const periodStart = periodEnd - periodMs
++    if (periodEnd > now.getTime()) {
++      const unusedRatio = Math.min(Math.max(periodEnd - now.getTime(), 0) / periodMs, 1)
++      remainingValue += Math.abs(Number(record.amount)) * unusedRatio
++    }
++    periodEnd = periodStart
++  }
++
++  return {
++    maxRefundable,
++    remainingRefundable: roundMailCurrency(Math.min(remainingValue, maxRefundable))
++  }
++}
++
+ function requireNumber(value: unknown, field: string): number {
+   if (typeof value !== 'number' || !Number.isFinite(value)) {
+     throw apiError(ErrorCode.VALIDATION_ERROR, `${field} 无效`)
+@@ -290,12 +384,22 @@ function normalizeMailAccountInput(input: MailAccountInput, options: {
+ 
+ function normalizeMailRenewMonths(value: unknown): number {
+   const months = requireSafeInteger(value, '续费月数')
+-  if (months < 1 || months > 12) {
+-    throw apiError(ErrorCode.VALIDATION_ERROR, '续费月数需为 1-12 的整数')
++  if (months < 1) {
++    throw apiError(ErrorCode.VALIDATION_ERROR, '续费月数需为正整数')
+   }
+   return months
+ }
+ 
++function validateMailRenewMonthsForBillingCycle(months: number, billingCycle: 'monthly' | 'yearly'): void {
++  const billingCycleMonths = billingCycle === 'yearly' ? 12 : 1
++  if (months % billingCycleMonths !== 0) {
++    throw apiError(ErrorCode.VALIDATION_ERROR, '年付套餐只能按年续费')
++  }
++  if (billingCycle === 'monthly' && months > 12) {
++    throw apiError(ErrorCode.VALIDATION_ERROR, '续费月数需为 1-12 的整数')
++  }
++}
++
+ function normalizeMailSubscriptionPurchaseInput(input: unknown): MailSubscriptionPurchaseInput {
+   if (!isPlainRecord(input)) {
+     throw apiError(ErrorCode.VALIDATION_ERROR, '请求参数无效')
+@@ -770,25 +874,7 @@ export default async function mailRoutes(fastify: FastifyInstance) {
+       return reply.code(404).send(apiError(ErrorCode.NOT_FOUND, '邮箱源不存在'))
+     }
+ 
+-    // 计算退款金额
+     let refundAmount = 0
+-    const planPrice = Number(subscription.plan.price)
+-
+-    if (refundType === 'full') {
+-      refundAmount = planPrice
+-    } else if (refundType === 'remaining') {
+-      const now = new Date()
+-      const expiresAt = new Date(subscription.expiresAt)
+-      if (expiresAt > now) {
+-        const totalMs = subscription.plan.billingCycle === 'monthly'
+-          ? 30 * 24 * 60 * 60 * 1000
+-          : 365 * 24 * 60 * 60 * 1000
+-        const remainingMs = expiresAt.getTime() - now.getTime()
+-        const ratio = Math.min(remainingMs / totalMs, 1)
+-        refundAmount = Number((planPrice * ratio).toFixed(2))
+-      }
+-      // 已过期则剩余价值为 0
+-    }
+ 
+     // 删除 CraneMail 域名。远端删除失败时不能删除本地订阅，否则会隐藏残留资源。
+     for (const domain of subscription.domains) {
+@@ -802,12 +888,27 @@ export default async function mailRoutes(fastify: FastifyInstance) {
+ 
+     // DB 事务：退款 + 删除订阅
+     await prisma.$transaction(async (tx) => {
+-      if (refundAmount > 0) {
++      if (refundType !== 'none') {
+         const balanceLocked = await tryAdvisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, subscription.user.id)
+         if (!balanceLocked) {
+           throw apiError(ErrorCode.OPERATION_NOT_ALLOWED, '用户余额正在处理，请稍后重试')
+         }
+ 
++        const refundable = await getMailRefundableAmount(tx, {
++          userId: subscription.user.id,
++          createdAt: subscription.createdAt,
++          expiresAt: subscription.expiresAt,
++          billingCycle: subscription.plan.billingCycle
++        }, new Date())
++        refundAmount = refundType === 'full'
++          ? refundable.maxRefundable
++          : refundable.remainingRefundable
++
++        if (refundAmount <= 0) {
++          await tx.mailSubscription.delete({ where: { id: subscriptionId } })
++          return
++        }
++
+         const currentUser = await tx.user.findUnique({
+           where: { id: subscription.user.id },
+           select: { balance: true }
+@@ -1221,6 +1322,11 @@ export default async function mailRoutes(fastify: FastifyInstance) {
+     }
+ 
+     const plan = subscription.plan
++    try {
++      validateMailRenewMonthsForBillingCycle(renewMonths, plan.billingCycle)
++    } catch (error) {
++      return reply.code(400).send(error)
++    }
+     const monthlyPrice = plan.billingCycle === 'monthly' 
+       ? Number(plan.price) 
+       : Number(plan.price) / 12
+@@ -1270,6 +1376,11 @@ export default async function mailRoutes(fastify: FastifyInstance) {
+       if (currentSubscription.status === 'suspended') {
+         return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '订阅已被暂停，无法续费') }
+       }
++      try {
++        validateMailRenewMonthsForBillingCycle(renewMonths, currentSubscription.plan.billingCycle)
++      } catch (error) {
++        return { error }
++      }
+ 
+       const deductResult = await tx.user.updateMany({
+         where: {
+warning: in the working copy of 'server/src/routes/mail.ts', LF will be replaced by CRLF the next time Git touches it
+
+codex
+只读核对完成：`MailSubscription.sourceId` 已直接关联购买方案的 `plan.source`；前端通过 `subscription.value.source.id === selectedSourceId.value` 仅拦同源。后端有两层全局拦截（事务外和事务内），因此我会同时把两层都收紧为 `{ userId, sourceId: source.id, status: 'active' }`，保留现有用户级事务锁与全部计费/退款/续费逻辑。守卫将加在现有 mail subscription guard 中，锁定这两个条件并禁止回退到全局查询。
+apply patch
+patch: completed
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-mail-subscription-cancel-guards.ts
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts
+diff --git a/server/scripts/test-mail-subscription-cancel-guards.ts b/server/scripts/test-mail-subscription-cancel-guards.ts
+index ab6b9b9e69002be06d9f72bab4521aa08be37b7e..f84e20a8669deca02943abbdf869c755248e3bde
+--- a/server/scripts/test-mail-subscription-cancel-guards.ts
++++ b/server/scripts/test-mail-subscription-cancel-guards.ts
+@@ -78,4 +78,21 @@
+   'mail subscription cancel balance log must use the normalized refund reason'
+ )
+ 
++const purchaseRouteSection = section(
++  source,
++  '// 购买订阅',
++  '// 续费订阅'
++)
++
++assert.ok(
++  purchaseRouteSection.includes("where: { userId, sourceId: source.id, status: 'active' }") &&
++    purchaseRouteSection.match(/where: \{ userId, sourceId: source\.id, status: 'active' \}/g)?.length === 2,
++  'mail subscription uniqueness must be enforced per mail source for active subscriptions before and inside the purchase transaction'
++)
++assert.ok(
++  !purchaseRouteSection.includes('db.getUserMailSubscription(userId)') &&
++    !purchaseRouteSection.includes('where: { userId }'),
++  'mail subscription purchase must not reject a user merely for having a subscription from another mail source'
++)
++
+ console.log('mail subscription cancel guard tests passed')
+diff --git a/server/src/routes/mail.ts b/server/src/routes/mail.ts
+index 30b358d06ac8cc96ce0118b756837ba1134de985..2cf645428d950549ad1bce435d3fbb0e45aa394e
+--- a/server/src/routes/mail.ts
++++ b/server/src/routes/mail.ts
+@@ -1125,12 +1125,6 @@
+     const { planId, affCode: affCodeInput } = purchaseInput
+     const userId = request.user.id
+ 
+-    // 检查是否已有订阅
+-    const existing = await db.getUserMailSubscription(userId)
+-    if (existing) {
+-      return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您已有邮箱订阅，请续费或等待过期后再购买'))
+-    }
+-
+     // 获取方案
+     const plan = await db.getMailPlanById(planId)
+     if (!plan || !plan.enabled) {
+@@ -1142,6 +1136,14 @@
+       return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '该邮箱源已停用'))
+     }
+ 
++    // 每个邮箱源只允许一份有效订阅，不同邮箱源可分别购买
++    const existing = await prisma.mailSubscription.findFirst({
++      where: { userId, sourceId: source.id, status: 'active' }
++    })
++    if (existing) {
++      return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您在该邮箱源已有有效订阅，请续费或等待过期后再购买'))
++    }
++
+     // 计算费用
+     const originalPrice = Number(plan.price)
+     let finalPrice = originalPrice
+@@ -1194,10 +1196,10 @@
+       }
+ 
+       const existingInTx = await tx.mailSubscription.findFirst({
+-        where: { userId }
++        where: { userId, sourceId: source.id, status: 'active' }
+       })
+       if (existingInTx) {
+-        return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您已有邮箱订阅，请续费或等待过期后再购买') }
++        return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您在该邮箱源已有有效订阅，请续费或等待过期后再购买') }
+       }
+ 
+       const deductResult = await tx.user.updateMany({
+
+diff --git a/server/scripts/test-mail-subscription-cancel-guards.ts b/server/scripts/test-mail-subscription-cancel-guards.ts
+index ab6b9b9e69002be06d9f72bab4521aa08be37b7e..f84e20a8669deca02943abbdf869c755248e3bde
+--- a/server/scripts/test-mail-subscription-cancel-guards.ts
++++ b/server/scripts/test-mail-subscription-cancel-guards.ts
+@@ -78,4 +78,21 @@
+   'mail subscription cancel balance log must use the normalized refund reason'
+ )
+ 
++const purchaseRouteSection = section(
++  source,
++  '// 购买订阅',
++  '// 续费订阅'
++)
++
++assert.ok(
++  purchaseRouteSection.includes("where: { userId, sourceId: source.id, status: 'active' }") &&
++    purchaseRouteSection.match(/where: \{ userId, sourceId: source\.id, status: 'active' \}/g)?.length === 2,
++  'mail subscription uniqueness must be enforced per mail source for active subscriptions before and inside the purchase transaction'
++)
++assert.ok(
++  !purchaseRouteSection.includes('db.getUserMailSubscription(userId)') &&
++    !purchaseRouteSection.includes('where: { userId }'),
++  'mail subscription purchase must not reject a user merely for having a subscription from another mail source'
++)
++
+ console.log('mail subscription cancel guard tests passed')
+diff --git a/server/src/routes/mail.ts b/server/src/routes/mail.ts
+index 30b358d06ac8cc96ce0118b756837ba1134de985..2cf645428d950549ad1bce435d3fbb0e45aa394e
+--- a/server/src/routes/mail.ts
++++ b/server/src/routes/mail.ts
+@@ -1125,12 +1125,6 @@
+     const { planId, affCode: affCodeInput } = purchaseInput
+     const userId = request.user.id
+ 
+-    // 检查是否已有订阅
+-    const existing = await db.getUserMailSubscription(userId)
+-    if (existing) {
+-      return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您已有邮箱订阅，请续费或等待过期后再购买'))
+-    }
+-
+     // 获取方案
+     const plan = await db.getMailPlanById(planId)
+     if (!plan || !plan.enabled) {
+@@ -1142,6 +1136,14 @@
+       return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '该邮箱源已停用'))
+     }
+ 
++    // 每个邮箱源只允许一份有效订阅，不同邮箱源可分别购买
++    const existing = await prisma.mailSubscription.findFirst({
++      where: { userId, sourceId: source.id, status: 'active' }
++    })
++    if (existing) {
++      return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您在该邮箱源已有有效订阅，请续费或等待过期后再购买'))
++    }
++
+     // 计算费用
+     const originalPrice = Number(plan.price)
+     let finalPrice = originalPrice
+@@ -1194,10 +1196,10 @@
+       }
+ 
+       const existingInTx = await tx.mailSubscription.findFirst({
+-        where: { userId }
++        where: { userId, sourceId: source.id, status: 'active' }
+       })
+       if (existingInTx) {
+-        return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您已有邮箱订阅，请续费或等待过期后再购买') }
++        return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您在该邮箱源已有有效订阅，请续费或等待过期后再购买') }
+       }
+ 
+       const deductResult = await tx.user.updateMany({
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'git diff --check -- server/src/routes/mail.ts server/scripts/test-mail-subscription-cancel-guards.ts; git diff -- server/src/routes/mail.ts server/scripts/test-mail-subscription-cancel-guards.ts' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 522ms:
+diff --git a/server/scripts/test-mail-subscription-cancel-guards.ts b/server/scripts/test-mail-subscription-cancel-guards.ts
+index ab6b9b9..f84e20a 100644
+--- a/server/scripts/test-mail-subscription-cancel-guards.ts
++++ b/server/scripts/test-mail-subscription-cancel-guards.ts
+@@ -78,4 +78,21 @@ assert.ok(
+   'mail subscription cancel balance log must use the normalized refund reason'
+ )
+ 
++const purchaseRouteSection = section(
++  source,
++  '// 购买订阅',
++  '// 续费订阅'
++)
++
++assert.ok(
++  purchaseRouteSection.includes("where: { userId, sourceId: source.id, status: 'active' }") &&
++    purchaseRouteSection.match(/where: \{ userId, sourceId: source\.id, status: 'active' \}/g)?.length === 2,
++  'mail subscription uniqueness must be enforced per mail source for active subscriptions before and inside the purchase transaction'
++)
++assert.ok(
++  !purchaseRouteSection.includes('db.getUserMailSubscription(userId)') &&
++    !purchaseRouteSection.includes('where: { userId }'),
++  'mail subscription purchase must not reject a user merely for having a subscription from another mail source'
++)
++
+ console.log('mail subscription cancel guard tests passed')
+diff --git a/server/src/routes/mail.ts b/server/src/routes/mail.ts
+index 0caaaf6..2cf6454 100644
+--- a/server/src/routes/mail.ts
++++ b/server/src/routes/mail.ts
+@@ -4,7 +4,7 @@
+  */
+ 
+ import type { FastifyInstance } from 'fastify'
+-import type { MailAccount } from '@prisma/client'
++import type { MailAccount, Prisma } from '@prisma/client'
+ import { prisma } from '../db/prisma.js'
+ import { createLog } from '../db/logs.js'
+ import { apiError, ErrorCode } from '../lib/errors.js'
+@@ -63,11 +63,105 @@ const MAIL_CANCEL_REASON_MAX_LENGTH = 500
+ const MAIL_SOURCE_CODE_RE = /^[a-z0-9_-]{2,32}$/
+ const MAIL_SOURCE_SECRET_MAX_LENGTH = 4096
+ const MAIL_AFF_CODE_MAX_LENGTH = 64
++const MAIL_PURCHASE_REMARK_PREFIX = '购买域名邮箱 - '
++const MAIL_RENEW_REMARK_PREFIX = '续费域名邮箱 '
++const MAIL_REFUND_REMARK_PREFIX = '管理员退订邮箱 - '
++const DAY_MS = 24 * 60 * 60 * 1000
+ 
+ function isPlainRecord(value: unknown): value is Record<string, unknown> {
+   return typeof value === 'object' && value !== null && !Array.isArray(value)
+ }
+ 
++function roundMailCurrency(value: number): number {
++  return Number(value.toFixed(2))
++}
++
++function getMailPaymentPeriodMs(remark: string | null, billingCycle: 'monthly' | 'yearly'): number {
++  if (remark?.startsWith(MAIL_RENEW_REMARK_PREFIX)) {
++    const months = Number(remark.slice(MAIL_RENEW_REMARK_PREFIX.length).match(/^(\d+) 个月/)?.[1])
++    if (Number.isSafeInteger(months) && months > 0) {
++      return billingCycle === 'yearly'
++        ? (months / 12) * 365 * DAY_MS
++        : months * 30 * DAY_MS
++    }
++  }
++
++  return billingCycle === 'monthly' ? 30 * DAY_MS : 365 * DAY_MS
++}
++
++async function getMailRefundableAmount(
++  tx: Prisma.TransactionClient,
++  subscription: {
++    userId: number
++    createdAt: Date
++    expiresAt: Date
++    billingCycle: 'monthly' | 'yearly'
++  },
++  now: Date
++): Promise<{ maxRefundable: number; remainingRefundable: number }> {
++  // 邮箱暂无独立计费表：以订阅创建时同一事务写入的购买 BalanceLog 作为流水起点。
++  const purchaseRecord = await tx.balanceLog.findFirst({
++    where: {
++      userId: subscription.userId,
++      type: 'consume',
++      remark: { startsWith: MAIL_PURCHASE_REMARK_PREFIX },
++      createdAt: { lte: subscription.createdAt }
++    },
++    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
++    select: { id: true }
++  })
++
++  if (!purchaseRecord) {
++    return { maxRefundable: 0, remainingRefundable: 0 }
++  }
++
++  const [paymentRecords, refundRecords] = await Promise.all([
++    tx.balanceLog.findMany({
++      where: {
++        userId: subscription.userId,
++        id: { gte: purchaseRecord.id },
++        type: 'consume',
++        OR: [
++          { remark: { startsWith: MAIL_PURCHASE_REMARK_PREFIX } },
++          { remark: { startsWith: MAIL_RENEW_REMARK_PREFIX } }
++        ]
++      },
++      orderBy: { id: 'asc' },
++      select: { amount: true, remark: true }
++    }),
++    tx.balanceLog.findMany({
++      where: {
++        userId: subscription.userId,
++        id: { gte: purchaseRecord.id },
++        type: 'refund',
++        remark: { startsWith: MAIL_REFUND_REMARK_PREFIX }
++      },
++      select: { amount: true }
++    })
++  ])
++
++  const totalPaid = paymentRecords.reduce((sum, record) => sum + Math.abs(Number(record.amount)), 0)
++  const totalRefunded = refundRecords.reduce((sum, record) => sum + Math.abs(Number(record.amount)), 0)
++  const maxRefundable = roundMailCurrency(Math.max(0, totalPaid - totalRefunded))
++
++  let remainingValue = 0
++  let periodEnd = new Date(subscription.expiresAt).getTime()
++  for (const record of [...paymentRecords].reverse()) {
++    const periodMs = getMailPaymentPeriodMs(record.remark, subscription.billingCycle)
++    const periodStart = periodEnd - periodMs
++    if (periodEnd > now.getTime()) {
++      const unusedRatio = Math.min(Math.max(periodEnd - now.getTime(), 0) / periodMs, 1)
++      remainingValue += Math.abs(Number(record.amount)) * unusedRatio
++    }
++    periodEnd = periodStart
++  }
++
++  return {
++    maxRefundable,
++    remainingRefundable: roundMailCurrency(Math.min(remainingValue, maxRefundable))
++  }
++}
++
+ function requireNumber(value: unknown, field: string): number {
+   if (typeof value !== 'number' || !Number.isFinite(value)) {
+     throw apiError(ErrorCode.VALIDATION_ERROR, `${field} 无效`)
+@@ -290,12 +384,22 @@ function normalizeMailAccountInput(input: MailAccountInput, options: {
+ 
+ function normalizeMailRenewMonths(value: unknown): number {
+   const months = requireSafeInteger(value, '续费月数')
+-  if (months < 1 || months > 12) {
+-    throw apiError(ErrorCode.VALIDATION_ERROR, '续费月数需为 1-12 的整数')
++  if (months < 1) {
++    throw apiError(ErrorCode.VALIDATION_ERROR, '续费月数需为正整数')
+   }
+   return months
+ }
+ 
++function validateMailRenewMonthsForBillingCycle(months: number, billingCycle: 'monthly' | 'yearly'): void {
++  const billingCycleMonths = billingCycle === 'yearly' ? 12 : 1
++  if (months % billingCycleMonths !== 0) {
++    throw apiError(ErrorCode.VALIDATION_ERROR, '年付套餐只能按年续费')
++  }
++  if (billingCycle === 'monthly' && months > 12) {
++    throw apiError(ErrorCode.VALIDATION_ERROR, '续费月数需为 1-12 的整数')
++  }
++}
++
+ function normalizeMailSubscriptionPurchaseInput(input: unknown): MailSubscriptionPurchaseInput {
+   if (!isPlainRecord(input)) {
+     throw apiError(ErrorCode.VALIDATION_ERROR, '请求参数无效')
+@@ -770,25 +874,7 @@ export default async function mailRoutes(fastify: FastifyInstance) {
+       return reply.code(404).send(apiError(ErrorCode.NOT_FOUND, '邮箱源不存在'))
+     }
+ 
+-    // 计算退款金额
+     let refundAmount = 0
+-    const planPrice = Number(subscription.plan.price)
+-
+-    if (refundType === 'full') {
+-      refundAmount = planPrice
+-    } else if (refundType === 'remaining') {
+-      const now = new Date()
+-      const expiresAt = new Date(subscription.expiresAt)
+-      if (expiresAt > now) {
+-        const totalMs = subscription.plan.billingCycle === 'monthly'
+-          ? 30 * 24 * 60 * 60 * 1000
+-          : 365 * 24 * 60 * 60 * 1000
+-        const remainingMs = expiresAt.getTime() - now.getTime()
+-        const ratio = Math.min(remainingMs / totalMs, 1)
+-        refundAmount = Number((planPrice * ratio).toFixed(2))
+-      }
+-      // 已过期则剩余价值为 0
+-    }
+ 
+     // 删除 CraneMail 域名。远端删除失败时不能删除本地订阅，否则会隐藏残留资源。
+     for (const domain of subscription.domains) {
+@@ -802,12 +888,27 @@ export default async function mailRoutes(fastify: FastifyInstance) {
+ 
+     // DB 事务：退款 + 删除订阅
+     await prisma.$transaction(async (tx) => {
+-      if (refundAmount > 0) {
++      if (refundType !== 'none') {
+         const balanceLocked = await tryAdvisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, subscription.user.id)
+         if (!balanceLocked) {
+           throw apiError(ErrorCode.OPERATION_NOT_ALLOWED, '用户余额正在处理，请稍后重试')
+         }
+ 
++        const refundable = await getMailRefundableAmount(tx, {
++          userId: subscription.user.id,
++          createdAt: subscription.createdAt,
++          expiresAt: subscription.expiresAt,
++          billingCycle: subscription.plan.billingCycle
++        }, new Date())
++        refundAmount = refundType === 'full'
++          ? refundable.maxRefundable
++          : refundable.remainingRefundable
++
++        if (refundAmount <= 0) {
++          await tx.mailSubscription.delete({ where: { id: subscriptionId } })
++          return
++        }
++
+         const currentUser = await tx.user.findUnique({
+           where: { id: subscription.user.id },
+           select: { balance: true }
+@@ -1024,12 +1125,6 @@ export default async function mailRoutes(fastify: FastifyInstance) {
+     const { planId, affCode: affCodeInput } = purchaseInput
+     const userId = request.user.id
+ 
+-    // 检查是否已有订阅
+-    const existing = await db.getUserMailSubscription(userId)
+-    if (existing) {
+-      return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您已有邮箱订阅，请续费或等待过期后再购买'))
+-    }
+-
+     // 获取方案
+     const plan = await db.getMailPlanById(planId)
+     if (!plan || !plan.enabled) {
+@@ -1041,6 +1136,14 @@ export default async function mailRoutes(fastify: FastifyInstance) {
+       return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '该邮箱源已停用'))
+     }
+ 
++    // 每个邮箱源只允许一份有效订阅，不同邮箱源可分别购买
++    const existing = await prisma.mailSubscription.findFirst({
++      where: { userId, sourceId: source.id, status: 'active' }
++    })
++    if (existing) {
++      return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您在该邮箱源已有有效订阅，请续费或等待过期后再购买'))
++    }
++
+     // 计算费用
+     const originalPrice = Number(plan.price)
+     let finalPrice = originalPrice
+@@ -1093,10 +1196,10 @@ export default async function mailRoutes(fastify: FastifyInstance) {
+       }
+ 
+       const existingInTx = await tx.mailSubscription.findFirst({
+-        where: { userId }
++        where: { userId, sourceId: source.id, status: 'active' }
+       })
+       if (existingInTx) {
+-        return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您已有邮箱订阅，请续费或等待过期后再购买') }
++        return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您在该邮箱源已有有效订阅，请续费或等待过期后再购买') }
+       }
+ 
+       const deductResult = await tx.user.updateMany({
+@@ -1221,6 +1324,11 @@ export default async function mailRoutes(fastify: FastifyInstance) {
+     }
+ 
+     const plan = subscription.plan
++    try {
++      validateMailRenewMonthsForBillingCycle(renewMonths, plan.billingCycle)
++    } catch (error) {
++      return reply.code(400).send(error)
++    }
+     const monthlyPrice = plan.billingCycle === 'monthly' 
+       ? Number(plan.price) 
+       : Number(plan.price) / 12
+@@ -1270,6 +1378,11 @@ export default async function mailRoutes(fastify: FastifyInstance) {
+       if (currentSubscription.status === 'suspended') {
+         return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '订阅已被暂停，无法续费') }
+       }
++      try {
++        validateMailRenewMonthsForBillingCycle(renewMonths, currentSubscription.plan.billingCycle)
++      } catch (error) {
++        return { error }
++      }
+ 
+       const deductResult = await tx.user.updateMany({
+         where: {
+warning: in the working copy of 'server/scripts/test-mail-subscription-cancel-guards.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/mail.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/scripts/test-mail-subscription-cancel-guards.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/mail.ts', LF will be replaced by CRLF the next time Git touches it
+
+diff --git a/server/scripts/test-mail-subscription-cancel-guards.ts b/server/scripts/test-mail-subscription-cancel-guards.ts
+index ab6b9b9e69002be06d9f72bab4521aa08be37b7e..f84e20a8669deca02943abbdf869c755248e3bde
+--- a/server/scripts/test-mail-subscription-cancel-guards.ts
++++ b/server/scripts/test-mail-subscription-cancel-guards.ts
+@@ -78,4 +78,21 @@
+   'mail subscription cancel balance log must use the normalized refund reason'
+ )
+ 
++const purchaseRouteSection = section(
++  source,
++  '// 购买订阅',
++  '// 续费订阅'
++)
++
++assert.ok(
++  purchaseRouteSection.includes("where: { userId, sourceId: source.id, status: 'active' }") &&
++    purchaseRouteSection.match(/where: \{ userId, sourceId: source\.id, status: 'active' \}/g)?.length === 2,
++  'mail subscription uniqueness must be enforced per mail source for active subscriptions before and inside the purchase transaction'
++)
++assert.ok(
++  !purchaseRouteSection.includes('db.getUserMailSubscription(userId)') &&
++    !purchaseRouteSection.includes('where: { userId }'),
++  'mail subscription purchase must not reject a user merely for having a subscription from another mail source'
++)
++
+ console.log('mail subscription cancel guard tests passed')
+diff --git a/server/src/routes/mail.ts b/server/src/routes/mail.ts
+index 30b358d06ac8cc96ce0118b756837ba1134de985..2cf645428d950549ad1bce435d3fbb0e45aa394e
+--- a/server/src/routes/mail.ts
++++ b/server/src/routes/mail.ts
+@@ -1125,12 +1125,6 @@
+     const { planId, affCode: affCodeInput } = purchaseInput
+     const userId = request.user.id
+ 
+-    // 检查是否已有订阅
+-    const existing = await db.getUserMailSubscription(userId)
+-    if (existing) {
+-      return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您已有邮箱订阅，请续费或等待过期后再购买'))
+-    }
+-
+     // 获取方案
+     const plan = await db.getMailPlanById(planId)
+     if (!plan || !plan.enabled) {
+@@ -1142,6 +1136,14 @@
+       return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '该邮箱源已停用'))
+     }
+ 
++    // 每个邮箱源只允许一份有效订阅，不同邮箱源可分别购买
++    const existing = await prisma.mailSubscription.findFirst({
++      where: { userId, sourceId: source.id, status: 'active' }
++    })
++    if (existing) {
++      return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您在该邮箱源已有有效订阅，请续费或等待过期后再购买'))
++    }
++
+     // 计算费用
+     const originalPrice = Number(plan.price)
+     let finalPrice = originalPrice
+@@ -1194,10 +1196,10 @@
+       }
+ 
+       const existingInTx = await tx.mailSubscription.findFirst({
+-        where: { userId }
++        where: { userId, sourceId: source.id, status: 'active' }
+       })
+       if (existingInTx) {
+-        return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您已有邮箱订阅，请续费或等待过期后再购买') }
++        return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您在该邮箱源已有有效订阅，请续费或等待过期后再购买') }
+       }
+ 
+       const deductResult = await tx.user.updateMany({
+
+codex
+补丁已落且 `git diff --check` 通过。改动只触及购买段的两层唯一性查询和现有守卫；`mail.ts` 中已有的退款/续费未提交改动保持原样，我没有改动。现在并行执行 server type-check 与规格指定的三组守卫。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'pnpm --filter server type-check' in C:\Users\Administrator\Desktop\payinces
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'pnpm --filter server test:mail-subscription-cancel-guards' in C:\Users\Administrator\Desktop\payinces
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'pnpm --filter server test:mail-list-query-guards' in C:\Users\Administrator\Desktop\payinces
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'pnpm --filter server test:mail-plan-financial-guards' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 2039ms:
+
+> server@1.3.7 test:mail-plan-financial-guards C:\Users\Administrator\Desktop\payinces\server
+> node --import tsx scripts/test-mail-plan-financial-guards.ts
+
+mail plan financial guard tests passed
+
+ succeeded in 2098ms:
+
+> server@1.3.7 test:mail-subscription-cancel-guards C:\Users\Administrator\Desktop\payinces\server
+> node --import tsx scripts/test-mail-subscription-cancel-guards.ts
+
+mail subscription cancel guard tests passed
+
+ succeeded in 2110ms:
+
+> server@1.3.7 test:mail-list-query-guards C:\Users\Administrator\Desktop\payinces\server
+> node --import tsx scripts/test-mail-list-query-guards.ts
+
+mail list query guard tests passed
+
+diff --git a/server/scripts/test-mail-subscription-cancel-guards.ts b/server/scripts/test-mail-subscription-cancel-guards.ts
+index ab6b9b9e69002be06d9f72bab4521aa08be37b7e..f84e20a8669deca02943abbdf869c755248e3bde
+--- a/server/scripts/test-mail-subscription-cancel-guards.ts
++++ b/server/scripts/test-mail-subscription-cancel-guards.ts
+@@ -78,4 +78,21 @@
+   'mail subscription cancel balance log must use the normalized refund reason'
+ )
+ 
++const purchaseRouteSection = section(
++  source,
++  '// 购买订阅',
++  '// 续费订阅'
++)
++
++assert.ok(
++  purchaseRouteSection.includes("where: { userId, sourceId: source.id, status: 'active' }") &&
++    purchaseRouteSection.match(/where: \{ userId, sourceId: source\.id, status: 'active' \}/g)?.length === 2,
++  'mail subscription uniqueness must be enforced per mail source for active subscriptions before and inside the purchase transaction'
++)
++assert.ok(
++  !purchaseRouteSection.includes('db.getUserMailSubscription(userId)') &&
++    !purchaseRouteSection.includes('where: { userId }'),
++  'mail subscription purchase must not reject a user merely for having a subscription from another mail source'
++)
++
+ console.log('mail subscription cancel guard tests passed')
+diff --git a/server/src/routes/mail.ts b/server/src/routes/mail.ts
+index 30b358d06ac8cc96ce0118b756837ba1134de985..2cf645428d950549ad1bce435d3fbb0e45aa394e
+--- a/server/src/routes/mail.ts
++++ b/server/src/routes/mail.ts
+@@ -1125,12 +1125,6 @@
+     const { planId, affCode: affCodeInput } = purchaseInput
+     const userId = request.user.id
+ 
+-    // 检查是否已有订阅
+-    const existing = await db.getUserMailSubscription(userId)
+-    if (existing) {
+-      return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您已有邮箱订阅，请续费或等待过期后再购买'))
+-    }
+-
+     // 获取方案
+     const plan = await db.getMailPlanById(planId)
+     if (!plan || !plan.enabled) {
+@@ -1142,6 +1136,14 @@
+       return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '该邮箱源已停用'))
+     }
+ 
++    // 每个邮箱源只允许一份有效订阅，不同邮箱源可分别购买
++    const existing = await prisma.mailSubscription.findFirst({
++      where: { userId, sourceId: source.id, status: 'active' }
++    })
++    if (existing) {
++      return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您在该邮箱源已有有效订阅，请续费或等待过期后再购买'))
++    }
++
+     // 计算费用
+     const originalPrice = Number(plan.price)
+     let finalPrice = originalPrice
+@@ -1194,10 +1196,10 @@
+       }
+ 
+       const existingInTx = await tx.mailSubscription.findFirst({
+-        where: { userId }
++        where: { userId, sourceId: source.id, status: 'active' }
+       })
+       if (existingInTx) {
+-        return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您已有邮箱订阅，请续费或等待过期后再购买') }
++        return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您在该邮箱源已有有效订阅，请续费或等待过期后再购买') }
+       }
+ 
+       const deductResult = await tx.user.updateMany({
+
+codex
+三组守卫已启动，type-check 仍在运行；我会等全部结束后再核对最终改动范围与结果。
+diff --git a/server/scripts/test-mail-subscription-cancel-guards.ts b/server/scripts/test-mail-subscription-cancel-guards.ts
+index ab6b9b9e69002be06d9f72bab4521aa08be37b7e..f84e20a8669deca02943abbdf869c755248e3bde
+--- a/server/scripts/test-mail-subscription-cancel-guards.ts
++++ b/server/scripts/test-mail-subscription-cancel-guards.ts
+@@ -78,4 +78,21 @@
+   'mail subscription cancel balance log must use the normalized refund reason'
+ )
+ 
++const purchaseRouteSection = section(
++  source,
++  '// 购买订阅',
++  '// 续费订阅'
++)
++
++assert.ok(
++  purchaseRouteSection.includes("where: { userId, sourceId: source.id, status: 'active' }") &&
++    purchaseRouteSection.match(/where: \{ userId, sourceId: source\.id, status: 'active' \}/g)?.length === 2,
++  'mail subscription uniqueness must be enforced per mail source for active subscriptions before and inside the purchase transaction'
++)
++assert.ok(
++  !purchaseRouteSection.includes('db.getUserMailSubscription(userId)') &&
++    !purchaseRouteSection.includes('where: { userId }'),
++  'mail subscription purchase must not reject a user merely for having a subscription from another mail source'
++)
++
+ console.log('mail subscription cancel guard tests passed')
+diff --git a/server/src/routes/mail.ts b/server/src/routes/mail.ts
+index 30b358d06ac8cc96ce0118b756837ba1134de985..2cf645428d950549ad1bce435d3fbb0e45aa394e
+--- a/server/src/routes/mail.ts
++++ b/server/src/routes/mail.ts
+@@ -1125,12 +1125,6 @@
+     const { planId, affCode: affCodeInput } = purchaseInput
+     const userId = request.user.id
+ 
+-    // 检查是否已有订阅
+-    const existing = await db.getUserMailSubscription(userId)
+-    if (existing) {
+-      return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您已有邮箱订阅，请续费或等待过期后再购买'))
+-    }
+-
+     // 获取方案
+     const plan = await db.getMailPlanById(planId)
+     if (!plan || !plan.enabled) {
+@@ -1142,6 +1136,14 @@
+       return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '该邮箱源已停用'))
+     }
+ 
++    // 每个邮箱源只允许一份有效订阅，不同邮箱源可分别购买
++    const existing = await prisma.mailSubscription.findFirst({
++      where: { userId, sourceId: source.id, status: 'active' }
++    })
++    if (existing) {
++      return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您在该邮箱源已有有效订阅，请续费或等待过期后再购买'))
++    }
++
+     // 计算费用
+     const originalPrice = Number(plan.price)
+     let finalPrice = originalPrice
+@@ -1194,10 +1196,10 @@
+       }
+ 
+       const existingInTx = await tx.mailSubscription.findFirst({
+-        where: { userId }
++        where: { userId, sourceId: source.id, status: 'active' }
+       })
+       if (existingInTx) {
+-        return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您已有邮箱订阅，请续费或等待过期后再购买') }
++        return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您在该邮箱源已有有效订阅，请续费或等待过期后再购买') }
+       }
+ 
+       const deductResult = await tx.user.updateMany({
+
+diff --git a/server/scripts/test-mail-subscription-cancel-guards.ts b/server/scripts/test-mail-subscription-cancel-guards.ts
+index ab6b9b9e69002be06d9f72bab4521aa08be37b7e..f84e20a8669deca02943abbdf869c755248e3bde
+--- a/server/scripts/test-mail-subscription-cancel-guards.ts
++++ b/server/scripts/test-mail-subscription-cancel-guards.ts
+@@ -78,4 +78,21 @@
+   'mail subscription cancel balance log must use the normalized refund reason'
+ )
+ 
++const purchaseRouteSection = section(
++  source,
++  '// 购买订阅',
++  '// 续费订阅'
++)
++
++assert.ok(
++  purchaseRouteSection.includes("where: { userId, sourceId: source.id, status: 'active' }") &&
++    purchaseRouteSection.match(/where: \{ userId, sourceId: source\.id, status: 'active' \}/g)?.length === 2,
++  'mail subscription uniqueness must be enforced per mail source for active subscriptions before and inside the purchase transaction'
++)
++assert.ok(
++  !purchaseRouteSection.includes('db.getUserMailSubscription(userId)') &&
++    !purchaseRouteSection.includes('where: { userId }'),
++  'mail subscription purchase must not reject a user merely for having a subscription from another mail source'
++)
++
+ console.log('mail subscription cancel guard tests passed')
+diff --git a/server/src/routes/mail.ts b/server/src/routes/mail.ts
+index 30b358d06ac8cc96ce0118b756837ba1134de985..2cf645428d950549ad1bce435d3fbb0e45aa394e
+--- a/server/src/routes/mail.ts
++++ b/server/src/routes/mail.ts
+@@ -1125,12 +1125,6 @@
+     const { planId, affCode: affCodeInput } = purchaseInput
+     const userId = request.user.id
+ 
+-    // 检查是否已有订阅
+-    const existing = await db.getUserMailSubscription(userId)
+-    if (existing) {
+-      return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您已有邮箱订阅，请续费或等待过期后再购买'))
+-    }
+-
+     // 获取方案
+     const plan = await db.getMailPlanById(planId)
+     if (!plan || !plan.enabled) {
+@@ -1142,6 +1136,14 @@
+       return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '该邮箱源已停用'))
+     }
+ 
++    // 每个邮箱源只允许一份有效订阅，不同邮箱源可分别购买
++    const existing = await prisma.mailSubscription.findFirst({
++      where: { userId, sourceId: source.id, status: 'active' }
++    })
++    if (existing) {
++      return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您在该邮箱源已有有效订阅，请续费或等待过期后再购买'))
++    }
++
+     // 计算费用
+     const originalPrice = Number(plan.price)
+     let finalPrice = originalPrice
+@@ -1194,10 +1196,10 @@
+       }
+ 
+       const existingInTx = await tx.mailSubscription.findFirst({
+-        where: { userId }
++        where: { userId, sourceId: source.id, status: 'active' }
+       })
+       if (existingInTx) {
+-        return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您已有邮箱订阅，请续费或等待过期后再购买') }
++        return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您在该邮箱源已有有效订阅，请续费或等待过期后再购买') }
+       }
+ 
+       const deductResult = await tx.user.updateMany({
+
+diff --git a/server/scripts/test-mail-subscription-cancel-guards.ts b/server/scripts/test-mail-subscription-cancel-guards.ts
+index ab6b9b9e69002be06d9f72bab4521aa08be37b7e..f84e20a8669deca02943abbdf869c755248e3bde
+--- a/server/scripts/test-mail-subscription-cancel-guards.ts
++++ b/server/scripts/test-mail-subscription-cancel-guards.ts
+@@ -78,4 +78,21 @@
+   'mail subscription cancel balance log must use the normalized refund reason'
+ )
+ 
++const purchaseRouteSection = section(
++  source,
++  '// 购买订阅',
++  '// 续费订阅'
++)
++
++assert.ok(
++  purchaseRouteSection.includes("where: { userId, sourceId: source.id, status: 'active' }") &&
++    purchaseRouteSection.match(/where: \{ userId, sourceId: source\.id, status: 'active' \}/g)?.length === 2,
++  'mail subscription uniqueness must be enforced per mail source for active subscriptions before and inside the purchase transaction'
++)
++assert.ok(
++  !purchaseRouteSection.includes('db.getUserMailSubscription(userId)') &&
++    !purchaseRouteSection.includes('where: { userId }'),
++  'mail subscription purchase must not reject a user merely for having a subscription from another mail source'
++)
++
+ console.log('mail subscription cancel guard tests passed')
+diff --git a/server/src/routes/mail.ts b/server/src/routes/mail.ts
+index 30b358d06ac8cc96ce0118b756837ba1134de985..2cf645428d950549ad1bce435d3fbb0e45aa394e
+--- a/server/src/routes/mail.ts
++++ b/server/src/routes/mail.ts
+@@ -1125,12 +1125,6 @@
+     const { planId, affCode: affCodeInput } = purchaseInput
+     const userId = request.user.id
+ 
+-    // 检查是否已有订阅
+-    const existing = await db.getUserMailSubscription(userId)
+-    if (existing) {
+-      return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您已有邮箱订阅，请续费或等待过期后再购买'))
+-    }
+-
+     // 获取方案
+     const plan = await db.getMailPlanById(planId)
+     if (!plan || !plan.enabled) {
+@@ -1142,6 +1136,14 @@
+       return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '该邮箱源已停用'))
+     }
+ 
++    // 每个邮箱源只允许一份有效订阅，不同邮箱源可分别购买
++    const existing = await prisma.mailSubscription.findFirst({
++      where: { userId, sourceId: source.id, status: 'active' }
++    })
++    if (existing) {
++      return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您在该邮箱源已有有效订阅，请续费或等待过期后再购买'))
++    }
++
+     // 计算费用
+     const originalPrice = Number(plan.price)
+     let finalPrice = originalPrice
+@@ -1194,10 +1196,10 @@
+       }
+ 
+       const existingInTx = await tx.mailSubscription.findFirst({
+-        where: { userId }
++        where: { userId, sourceId: source.id, status: 'active' }
+       })
+       if (existingInTx) {
+-        return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您已有邮箱订阅，请续费或等待过期后再购买') }
++        return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您在该邮箱源已有有效订阅，请续费或等待过期后再购买') }
+       }
+ 
+       const deductResult = await tx.user.updateMany({
+
+diff --git a/server/scripts/test-mail-subscription-cancel-guards.ts b/server/scripts/test-mail-subscription-cancel-guards.ts
+index ab6b9b9e69002be06d9f72bab4521aa08be37b7e..f84e20a8669deca02943abbdf869c755248e3bde
+--- a/server/scripts/test-mail-subscription-cancel-guards.ts
++++ b/server/scripts/test-mail-subscription-cancel-guards.ts
+@@ -78,4 +78,21 @@
+   'mail subscription cancel balance log must use the normalized refund reason'
+ )
+ 
++const purchaseRouteSection = section(
++  source,
++  '// 购买订阅',
++  '// 续费订阅'
++)
++
++assert.ok(
++  purchaseRouteSection.includes("where: { userId, sourceId: source.id, status: 'active' }") &&
++    purchaseRouteSection.match(/where: \{ userId, sourceId: source\.id, status: 'active' \}/g)?.length === 2,
++  'mail subscription uniqueness must be enforced per mail source for active subscriptions before and inside the purchase transaction'
++)
++assert.ok(
++  !purchaseRouteSection.includes('db.getUserMailSubscription(userId)') &&
++    !purchaseRouteSection.includes('where: { userId }'),
++  'mail subscription purchase must not reject a user merely for having a subscription from another mail source'
++)
++
+ console.log('mail subscription cancel guard tests passed')
+diff --git a/server/src/routes/mail.ts b/server/src/routes/mail.ts
+index 30b358d06ac8cc96ce0118b756837ba1134de985..2cf645428d950549ad1bce435d3fbb0e45aa394e
+--- a/server/src/routes/mail.ts
++++ b/server/src/routes/mail.ts
+@@ -1125,12 +1125,6 @@
+     const { planId, affCode: affCodeInput } = purchaseInput
+     const userId = request.user.id
+ 
+-    // 检查是否已有订阅
+-    const existing = await db.getUserMailSubscription(userId)
+-    if (existing) {
+-      return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您已有邮箱订阅，请续费或等待过期后再购买'))
+-    }
+-
+     // 获取方案
+     const plan = await db.getMailPlanById(planId)
+     if (!plan || !plan.enabled) {
+@@ -1142,6 +1136,14 @@
+       return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '该邮箱源已停用'))
+     }
+ 
++    // 每个邮箱源只允许一份有效订阅，不同邮箱源可分别购买
++    const existing = await prisma.mailSubscription.findFirst({
++      where: { userId, sourceId: source.id, status: 'active' }
++    })
++    if (existing) {
++      return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您在该邮箱源已有有效订阅，请续费或等待过期后再购买'))
++    }
++
+     // 计算费用
+     const originalPrice = Number(plan.price)
+     let finalPrice = originalPrice
+@@ -1194,10 +1196,10 @@
+       }
+ 
+       const existingInTx = await tx.mailSubscription.findFirst({
+-        where: { userId }
++        where: { userId, sourceId: source.id, status: 'active' }
+       })
+       if (existingInTx) {
+-        return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您已有邮箱订阅，请续费或等待过期后再购买') }
++        return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您在该邮箱源已有有效订阅，请续费或等待过期后再购买') }
+       }
+ 
+       const deductResult = await tx.user.updateMany({
+
+diff --git a/server/scripts/test-mail-subscription-cancel-guards.ts b/server/scripts/test-mail-subscription-cancel-guards.ts
+index ab6b9b9e69002be06d9f72bab4521aa08be37b7e..f84e20a8669deca02943abbdf869c755248e3bde
+--- a/server/scripts/test-mail-subscription-cancel-guards.ts
++++ b/server/scripts/test-mail-subscription-cancel-guards.ts
+@@ -78,4 +78,21 @@
+   'mail subscription cancel balance log must use the normalized refund reason'
+ )
+ 
++const purchaseRouteSection = section(
++  source,
++  '// 购买订阅',
++  '// 续费订阅'
++)
++
++assert.ok(
++  purchaseRouteSection.includes("where: { userId, sourceId: source.id, status: 'active' }") &&
++    purchaseRouteSection.match(/where: \{ userId, sourceId: source\.id, status: 'active' \}/g)?.length === 2,
++  'mail subscription uniqueness must be enforced per mail source for active subscriptions before and inside the purchase transaction'
++)
++assert.ok(
++  !purchaseRouteSection.includes('db.getUserMailSubscription(userId)') &&
++    !purchaseRouteSection.includes('where: { userId }'),
++  'mail subscription purchase must not reject a user merely for having a subscription from another mail source'
++)
++
+ console.log('mail subscription cancel guard tests passed')
+diff --git a/server/src/routes/mail.ts b/server/src/routes/mail.ts
+index 30b358d06ac8cc96ce0118b756837ba1134de985..2cf645428d950549ad1bce435d3fbb0e45aa394e
+--- a/server/src/routes/mail.ts
++++ b/server/src/routes/mail.ts
+@@ -1125,12 +1125,6 @@
+     const { planId, affCode: affCodeInput } = purchaseInput
+     const userId = request.user.id
+ 
+-    // 检查是否已有订阅
+-    const existing = await db.getUserMailSubscription(userId)
+-    if (existing) {
+-      return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您已有邮箱订阅，请续费或等待过期后再购买'))
+-    }
+-
+     // 获取方案
+     const plan = await db.getMailPlanById(planId)
+     if (!plan || !plan.enabled) {
+@@ -1142,6 +1136,14 @@
+       return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '该邮箱源已停用'))
+     }
+ 
++    // 每个邮箱源只允许一份有效订阅，不同邮箱源可分别购买
++    const existing = await prisma.mailSubscription.findFirst({
++      where: { userId, sourceId: source.id, status: 'active' }
++    })
++    if (existing) {
++      return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您在该邮箱源已有有效订阅，请续费或等待过期后再购买'))
++    }
++
+     // 计算费用
+     const originalPrice = Number(plan.price)
+     let finalPrice = originalPrice
+@@ -1194,10 +1196,10 @@
+       }
+ 
+       const existingInTx = await tx.mailSubscription.findFirst({
+-        where: { userId }
++        where: { userId, sourceId: source.id, status: 'active' }
+       })
+       if (existingInTx) {
+-        return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您已有邮箱订阅，请续费或等待过期后再购买') }
++        return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您在该邮箱源已有有效订阅，请续费或等待过期后再购买') }
+       }
+ 
+       const deductResult = await tx.user.updateMany({
+
+diff --git a/server/scripts/test-mail-subscription-cancel-guards.ts b/server/scripts/test-mail-subscription-cancel-guards.ts
+index ab6b9b9e69002be06d9f72bab4521aa08be37b7e..f84e20a8669deca02943abbdf869c755248e3bde
+--- a/server/scripts/test-mail-subscription-cancel-guards.ts
++++ b/server/scripts/test-mail-subscription-cancel-guards.ts
+@@ -78,4 +78,21 @@
+   'mail subscription cancel balance log must use the normalized refund reason'
+ )
+ 
++const purchaseRouteSection = section(
++  source,
++  '// 购买订阅',
++  '// 续费订阅'
++)
++
++assert.ok(
++  purchaseRouteSection.includes("where: { userId, sourceId: source.id, status: 'active' }") &&
++    purchaseRouteSection.match(/where: \{ userId, sourceId: source\.id, status: 'active' \}/g)?.length === 2,
++  'mail subscription uniqueness must be enforced per mail source for active subscriptions before and inside the purchase transaction'
++)
++assert.ok(
++  !purchaseRouteSection.includes('db.getUserMailSubscription(userId)') &&
++    !purchaseRouteSection.includes('where: { userId }'),
++  'mail subscription purchase must not reject a user merely for having a subscription from another mail source'
++)
++
+ console.log('mail subscription cancel guard tests passed')
+diff --git a/server/src/routes/mail.ts b/server/src/routes/mail.ts
+index 30b358d06ac8cc96ce0118b756837ba1134de985..2cf645428d950549ad1bce435d3fbb0e45aa394e
+--- a/server/src/routes/mail.ts
++++ b/server/src/routes/mail.ts
+@@ -1125,12 +1125,6 @@
+     const { planId, affCode: affCodeInput } = purchaseInput
+     const userId = request.user.id
+ 
+-    // 检查是否已有订阅
+-    const existing = await db.getUserMailSubscription(userId)
+-    if (existing) {
+-      return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您已有邮箱订阅，请续费或等待过期后再购买'))
+-    }
+-
+     // 获取方案
+     const plan = await db.getMailPlanById(planId)
+     if (!plan || !plan.enabled) {
+@@ -1142,6 +1136,14 @@
+       return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '该邮箱源已停用'))
+     }
+ 
++    // 每个邮箱源只允许一份有效订阅，不同邮箱源可分别购买
++    const existing = await prisma.mailSubscription.findFirst({
++      where: { userId, sourceId: source.id, status: 'active' }
++    })
++    if (existing) {
++      return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您在该邮箱源已有有效订阅，请续费或等待过期后再购买'))
++    }
++
+     // 计算费用
+     const originalPrice = Number(plan.price)
+     let finalPrice = originalPrice
+@@ -1194,10 +1196,10 @@
+       }
+ 
+       const existingInTx = await tx.mailSubscription.findFirst({
+-        where: { userId }
++        where: { userId, sourceId: source.id, status: 'active' }
+       })
+       if (existingInTx) {
+-        return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您已有邮箱订阅，请续费或等待过期后再购买') }
++        return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您在该邮箱源已有有效订阅，请续费或等待过期后再购买') }
+       }
+ 
+       const deductResult = await tx.user.updateMany({
+
+diff --git a/server/scripts/test-mail-subscription-cancel-guards.ts b/server/scripts/test-mail-subscription-cancel-guards.ts
+index ab6b9b9e69002be06d9f72bab4521aa08be37b7e..f84e20a8669deca02943abbdf869c755248e3bde
+--- a/server/scripts/test-mail-subscription-cancel-guards.ts
++++ b/server/scripts/test-mail-subscription-cancel-guards.ts
+@@ -78,4 +78,21 @@
+   'mail subscription cancel balance log must use the normalized refund reason'
+ )
+ 
++const purchaseRouteSection = section(
++  source,
++  '// 购买订阅',
++  '// 续费订阅'
++)
++
++assert.ok(
++  purchaseRouteSection.includes("where: { userId, sourceId: source.id, status: 'active' }") &&
++    purchaseRouteSection.match(/where: \{ userId, sourceId: source\.id, status: 'active' \}/g)?.length === 2,
++  'mail subscription uniqueness must be enforced per mail source for active subscriptions before and inside the purchase transaction'
++)
++assert.ok(
++  !purchaseRouteSection.includes('db.getUserMailSubscription(userId)') &&
++    !purchaseRouteSection.includes('where: { userId }'),
++  'mail subscription purchase must not reject a user merely for having a subscription from another mail source'
++)
++
+ console.log('mail subscription cancel guard tests passed')
+diff --git a/server/src/routes/mail.ts b/server/src/routes/mail.ts
+index 30b358d06ac8cc96ce0118b756837ba1134de985..2cf645428d950549ad1bce435d3fbb0e45aa394e
+--- a/server/src/routes/mail.ts
++++ b/server/src/routes/mail.ts
+@@ -1125,12 +1125,6 @@
+     const { planId, affCode: affCodeInput } = purchaseInput
+     const userId = request.user.id
+ 
+-    // 检查是否已有订阅
+-    const existing = await db.getUserMailSubscription(userId)
+-    if (existing) {
+-      return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您已有邮箱订阅，请续费或等待过期后再购买'))
+-    }
+-
+     // 获取方案
+     const plan = await db.getMailPlanById(planId)
+     if (!plan || !plan.enabled) {
+@@ -1142,6 +1136,14 @@
+       return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '该邮箱源已停用'))
+     }
+ 
++    // 每个邮箱源只允许一份有效订阅，不同邮箱源可分别购买
++    const existing = await prisma.mailSubscription.findFirst({
++      where: { userId, sourceId: source.id, status: 'active' }
++    })
++    if (existing) {
++      return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您在该邮箱源已有有效订阅，请续费或等待过期后再购买'))
++    }
++
+     // 计算费用
+     const originalPrice = Number(plan.price)
+     let finalPrice = originalPrice
+@@ -1194,10 +1196,10 @@
+       }
+ 
+       const existingInTx = await tx.mailSubscription.findFirst({
+-        where: { userId }
++        where: { userId, sourceId: source.id, status: 'active' }
+       })
+       if (existingInTx) {
+-        return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您已有邮箱订阅，请续费或等待过期后再购买') }
++        return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您在该邮箱源已有有效订阅，请续费或等待过期后再购买') }
+       }
+ 
+       const deductResult = await tx.user.updateMany({
+
+diff --git a/server/scripts/test-mail-subscription-cancel-guards.ts b/server/scripts/test-mail-subscription-cancel-guards.ts
+index ab6b9b9e69002be06d9f72bab4521aa08be37b7e..f84e20a8669deca02943abbdf869c755248e3bde
+--- a/server/scripts/test-mail-subscription-cancel-guards.ts
++++ b/server/scripts/test-mail-subscription-cancel-guards.ts
+@@ -78,4 +78,21 @@
+   'mail subscription cancel balance log must use the normalized refund reason'
+ )
+ 
++const purchaseRouteSection = section(
++  source,
++  '// 购买订阅',
++  '// 续费订阅'
++)
++
++assert.ok(
++  purchaseRouteSection.includes("where: { userId, sourceId: source.id, status: 'active' }") &&
++    purchaseRouteSection.match(/where: \{ userId, sourceId: source\.id, status: 'active' \}/g)?.length === 2,
++  'mail subscription uniqueness must be enforced per mail source for active subscriptions before and inside the purchase transaction'
++)
++assert.ok(
++  !purchaseRouteSection.includes('db.getUserMailSubscription(userId)') &&
++    !purchaseRouteSection.includes('where: { userId }'),
++  'mail subscription purchase must not reject a user merely for having a subscription from another mail source'
++)
++
+ console.log('mail subscription cancel guard tests passed')
+diff --git a/server/src/routes/mail.ts b/server/src/routes/mail.ts
+index 30b358d06ac8cc96ce0118b756837ba1134de985..2cf645428d950549ad1bce435d3fbb0e45aa394e
+--- a/server/src/routes/mail.ts
++++ b/server/src/routes/mail.ts
+@@ -1125,12 +1125,6 @@
+     const { planId, affCode: affCodeInput } = purchaseInput
+     const userId = request.user.id
+ 
+-    // 检查是否已有订阅
+-    const existing = await db.getUserMailSubscription(userId)
+-    if (existing) {
+-      return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您已有邮箱订阅，请续费或等待过期后再购买'))
+-    }
+-
+     // 获取方案
+     const plan = await db.getMailPlanById(planId)
+     if (!plan || !plan.enabled) {
+@@ -1142,6 +1136,14 @@
+       return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '该邮箱源已停用'))
+     }
+ 
++    // 每个邮箱源只允许一份有效订阅，不同邮箱源可分别购买
++    const existing = await prisma.mailSubscription.findFirst({
++      where: { userId, sourceId: source.id, status: 'active' }
++    })
++    if (existing) {
++      return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您在该邮箱源已有有效订阅，请续费或等待过期后再购买'))
++    }
++
+     // 计算费用
+     const originalPrice = Number(plan.price)
+     let finalPrice = originalPrice
+@@ -1194,10 +1196,10 @@
+       }
+ 
+       const existingInTx = await tx.mailSubscription.findFirst({
+-        where: { userId }
++        where: { userId, sourceId: source.id, status: 'active' }
+       })
+       if (existingInTx) {
+-        return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您已有邮箱订阅，请续费或等待过期后再购买') }
++        return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您在该邮箱源已有有效订阅，请续费或等待过期后再购买') }
+       }
+ 
+       const deductResult = await tx.user.updateMany({
+
+ succeeded in 37499ms:
+
+> server@1.3.7 type-check C:\Users\Administrator\Desktop\payinces\server
+> tsc --noEmit
+
+
+diff --git a/server/scripts/test-mail-subscription-cancel-guards.ts b/server/scripts/test-mail-subscription-cancel-guards.ts
+index ab6b9b9e69002be06d9f72bab4521aa08be37b7e..f84e20a8669deca02943abbdf869c755248e3bde
+--- a/server/scripts/test-mail-subscription-cancel-guards.ts
++++ b/server/scripts/test-mail-subscription-cancel-guards.ts
+@@ -78,4 +78,21 @@
+   'mail subscription cancel balance log must use the normalized refund reason'
+ )
+ 
++const purchaseRouteSection = section(
++  source,
++  '// 购买订阅',
++  '// 续费订阅'
++)
++
++assert.ok(
++  purchaseRouteSection.includes("where: { userId, sourceId: source.id, status: 'active' }") &&
++    purchaseRouteSection.match(/where: \{ userId, sourceId: source\.id, status: 'active' \}/g)?.length === 2,
++  'mail subscription uniqueness must be enforced per mail source for active subscriptions before and inside the purchase transaction'
++)
++assert.ok(
++  !purchaseRouteSection.includes('db.getUserMailSubscription(userId)') &&
++    !purchaseRouteSection.includes('where: { userId }'),
++  'mail subscription purchase must not reject a user merely for having a subscription from another mail source'
++)
++
+ console.log('mail subscription cancel guard tests passed')
+diff --git a/server/src/routes/mail.ts b/server/src/routes/mail.ts
+index 30b358d06ac8cc96ce0118b756837ba1134de985..2cf645428d950549ad1bce435d3fbb0e45aa394e
+--- a/server/src/routes/mail.ts
++++ b/server/src/routes/mail.ts
+@@ -1125,12 +1125,6 @@
+     const { planId, affCode: affCodeInput } = purchaseInput
+     const userId = request.user.id
+ 
+-    // 检查是否已有订阅
+-    const existing = await db.getUserMailSubscription(userId)
+-    if (existing) {
+-      return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您已有邮箱订阅，请续费或等待过期后再购买'))
+-    }
+-
+     // 获取方案
+     const plan = await db.getMailPlanById(planId)
+     if (!plan || !plan.enabled) {
+@@ -1142,6 +1136,14 @@
+       return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '该邮箱源已停用'))
+     }
+ 
++    // 每个邮箱源只允许一份有效订阅，不同邮箱源可分别购买
++    const existing = await prisma.mailSubscription.findFirst({
++      where: { userId, sourceId: source.id, status: 'active' }
++    })
++    if (existing) {
++      return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您在该邮箱源已有有效订阅，请续费或等待过期后再购买'))
++    }
++
+     // 计算费用
+     const originalPrice = Number(plan.price)
+     let finalPrice = originalPrice
+@@ -1194,10 +1196,10 @@
+       }
+ 
+       const existingInTx = await tx.mailSubscription.findFirst({
+-        where: { userId }
++        where: { userId, sourceId: source.id, status: 'active' }
+       })
+       if (existingInTx) {
+-        return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您已有邮箱订阅，请续费或等待过期后再购买') }
++        return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您在该邮箱源已有有效订阅，请续费或等待过期后再购买') }
+       }
+ 
+       const deductResult = await tx.user.updateMany({
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "Select-String -Path server\\src\\routes\\mail.ts -Pattern '每个邮箱源只允许|where: \\{ userId, sourceId: source.id|该邮箱源已有有效订阅' | Select-Object LineNumber,Line; Select-String -Path server\\scripts\\test-mail-subscription-cancel-guards.ts -Pattern 'purchaseRouteSection|uniqueness must be enforced per mail source|must not reject' | Select-Object LineNumber,Line; git diff --check -- server/src/routes/mail.ts server/scripts/test-mail-subscription-cancel-guards.ts; git status --short -- server/src/routes/mail.ts server/scripts/test-mail-subscription-cancel-guards.ts server/src/routes/transfers.ts server/prisma/schema.prisma server/package.json package.json" in C:\Users\Administrator\Desktop\payinces
+ succeeded in 668ms:
+
+ M package.json
+ M server/package.json
+ M server/prisma/schema.prisma
+ M server/scripts/test-mail-subscription-cancel-guards.ts
+ M server/src/routes/mail.ts
+ M server/src/routes/transfers.ts
+LineNumber Line                                                                                                        
+---------- ----                                                                                                        
+      1139     // 每个邮箱源只允许一份有效订阅，不同邮箱源可分别购买                                                                            
+      1141       where: { userId, sourceId: source.id, status: 'active' }                                              
+      1144       return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您在该邮箱源已有有效订阅，请续费或等待过期后再购买'))   
+      1199         where: { userId, sourceId: source.id, status: 'active' }                                            
+      1202         return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您在该邮箱源已有有效订阅，请续费或等待过期后再购买') }            
+        81 const purchaseRouteSection = section(                                                                       
+        88   purchaseRouteSection.includes("where: { userId, sourceId: source.id, status: 'active' }") &&              
+        89     purchaseRouteSection.match(/where: \{ userId, sourceId: source\.id, status: 'active' \}/g)?.length ==...
+        90   'mail subscription uniqueness must be enforced per mail source for active subscriptions before and insi...
+        93   !purchaseRouteSection.includes('db.getUserMailSubscription(userId)') &&                                   
+        94     !purchaseRouteSection.includes('where: { userId }'),                                                    
+        95   'mail subscription purchase must not reject a user merely for having a subscription from another mail s...
+
+
+warning: in the working copy of 'server/scripts/test-mail-subscription-cancel-guards.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/mail.ts', LF will be replaced by CRLF the next time Git touches it
+
+diff --git a/server/scripts/test-mail-subscription-cancel-guards.ts b/server/scripts/test-mail-subscription-cancel-guards.ts
+index ab6b9b9e69002be06d9f72bab4521aa08be37b7e..f84e20a8669deca02943abbdf869c755248e3bde
+--- a/server/scripts/test-mail-subscription-cancel-guards.ts
++++ b/server/scripts/test-mail-subscription-cancel-guards.ts
+@@ -78,4 +78,21 @@
+   'mail subscription cancel balance log must use the normalized refund reason'
+ )
+ 
++const purchaseRouteSection = section(
++  source,
++  '// 购买订阅',
++  '// 续费订阅'
++)
++
++assert.ok(
++  purchaseRouteSection.includes("where: { userId, sourceId: source.id, status: 'active' }") &&
++    purchaseRouteSection.match(/where: \{ userId, sourceId: source\.id, status: 'active' \}/g)?.length === 2,
++  'mail subscription uniqueness must be enforced per mail source for active subscriptions before and inside the purchase transaction'
++)
++assert.ok(
++  !purchaseRouteSection.includes('db.getUserMailSubscription(userId)') &&
++    !purchaseRouteSection.includes('where: { userId }'),
++  'mail subscription purchase must not reject a user merely for having a subscription from another mail source'
++)
++
+ console.log('mail subscription cancel guard tests passed')
+diff --git a/server/src/routes/mail.ts b/server/src/routes/mail.ts
+index 30b358d06ac8cc96ce0118b756837ba1134de985..2cf645428d950549ad1bce435d3fbb0e45aa394e
+--- a/server/src/routes/mail.ts
++++ b/server/src/routes/mail.ts
+@@ -1125,12 +1125,6 @@
+     const { planId, affCode: affCodeInput } = purchaseInput
+     const userId = request.user.id
+ 
+-    // 检查是否已有订阅
+-    const existing = await db.getUserMailSubscription(userId)
+-    if (existing) {
+-      return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您已有邮箱订阅，请续费或等待过期后再购买'))
+-    }
+-
+     // 获取方案
+     const plan = await db.getMailPlanById(planId)
+     if (!plan || !plan.enabled) {
+@@ -1142,6 +1136,14 @@
+       return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '该邮箱源已停用'))
+     }
+ 
++    // 每个邮箱源只允许一份有效订阅，不同邮箱源可分别购买
++    const existing = await prisma.mailSubscription.findFirst({
++      where: { userId, sourceId: source.id, status: 'active' }
++    })
++    if (existing) {
++      return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您在该邮箱源已有有效订阅，请续费或等待过期后再购买'))
++    }
++
+     // 计算费用
+     const originalPrice = Number(plan.price)
+     let finalPrice = originalPrice
+@@ -1194,10 +1196,10 @@
+       }
+ 
+       const existingInTx = await tx.mailSubscription.findFirst({
+-        where: { userId }
++        where: { userId, sourceId: source.id, status: 'active' }
+       })
+       if (existingInTx) {
+-        return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您已有邮箱订阅，请续费或等待过期后再购买') }
++        return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您在该邮箱源已有有效订阅，请续费或等待过期后再购买') }
+       }
+ 
+       const deductResult = await tx.user.updateMany({
+
+codex
+已完成 BF-9-04：在 [mail.ts](C:/Users/Administrator/Desktop/payinces/server/src/routes/mail.ts:1139) 将购买唯一性改为按 `userId + mailSourceId + active` 校验，事务内外双重防重；不同邮箱源允许分别购买。已在 [守卫](C:/Users/Administrator/Desktop/payinces/server/scripts/test-mail-subscription-cancel-guards.ts:81) 锁定该行为。Server type-check、`mail-subscription-cancel`、`mail-list-query`、`mail-plan-financial` 守卫全部通过。未改 DB/schema/package、transfers 或自动续费/过期自救逻辑，未 commit/push。
+diff --git a/server/scripts/test-mail-subscription-cancel-guards.ts b/server/scripts/test-mail-subscription-cancel-guards.ts
+index ab6b9b9e69002be06d9f72bab4521aa08be37b7e..f84e20a8669deca02943abbdf869c755248e3bde
+--- a/server/scripts/test-mail-subscription-cancel-guards.ts
++++ b/server/scripts/test-mail-subscription-cancel-guards.ts
+@@ -78,4 +78,21 @@
+   'mail subscription cancel balance log must use the normalized refund reason'
+ )
+ 
++const purchaseRouteSection = section(
++  source,
++  '// 购买订阅',
++  '// 续费订阅'
++)
++
++assert.ok(
++  purchaseRouteSection.includes("where: { userId, sourceId: source.id, status: 'active' }") &&
++    purchaseRouteSection.match(/where: \{ userId, sourceId: source\.id, status: 'active' \}/g)?.length === 2,
++  'mail subscription uniqueness must be enforced per mail source for active subscriptions before and inside the purchase transaction'
++)
++assert.ok(
++  !purchaseRouteSection.includes('db.getUserMailSubscription(userId)') &&
++    !purchaseRouteSection.includes('where: { userId }'),
++  'mail subscription purchase must not reject a user merely for having a subscription from another mail source'
++)
++
+ console.log('mail subscription cancel guard tests passed')
+diff --git a/server/src/routes/mail.ts b/server/src/routes/mail.ts
+index 30b358d06ac8cc96ce0118b756837ba1134de985..2cf645428d950549ad1bce435d3fbb0e45aa394e
+--- a/server/src/routes/mail.ts
++++ b/server/src/routes/mail.ts
+@@ -1125,12 +1125,6 @@
+     const { planId, affCode: affCodeInput } = purchaseInput
+     const userId = request.user.id
+ 
+-    // 检查是否已有订阅
+-    const existing = await db.getUserMailSubscription(userId)
+-    if (existing) {
+-      return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您已有邮箱订阅，请续费或等待过期后再购买'))
+-    }
+-
+     // 获取方案
+     const plan = await db.getMailPlanById(planId)
+     if (!plan || !plan.enabled) {
+@@ -1142,6 +1136,14 @@
+       return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '该邮箱源已停用'))
+     }
+ 
++    // 每个邮箱源只允许一份有效订阅，不同邮箱源可分别购买
++    const existing = await prisma.mailSubscription.findFirst({
++      where: { userId, sourceId: source.id, status: 'active' }
++    })
++    if (existing) {
++      return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您在该邮箱源已有有效订阅，请续费或等待过期后再购买'))
++    }
++
+     // 计算费用
+     const originalPrice = Number(plan.price)
+     let finalPrice = originalPrice
+@@ -1194,10 +1196,10 @@
+       }
+ 
+       const existingInTx = await tx.mailSubscription.findFirst({
+-        where: { userId }
++        where: { userId, sourceId: source.id, status: 'active' }
+       })
+       if (existingInTx) {
+-        return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您已有邮箱订阅，请续费或等待过期后再购买') }
++        return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您在该邮箱源已有有效订阅，请续费或等待过期后再购买') }
+       }
+ 
+       const deductResult = await tx.user.updateMany({
+
+tokens used
+62,783

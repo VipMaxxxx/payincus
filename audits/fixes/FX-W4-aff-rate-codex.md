@@ -1,0 +1,1 @@
+已完成波 4：新增 `aff_commission_rate`（默认 `0.05`，范围 `0~0.5`）和 `aff_discount_rate`（默认 `0.05`，范围 `0~0.95`）；新 AFF 码生成时读取当前配置并写入码自身字段，存量码及 FX-012/013 结算逻辑继续读取各码存储率。管理端已增加配置卡、范围校验和中英繁 i18n。server/client type-check、指定四项守卫、frontend-route、dist-boundary 及 user/admin 双端构建均通过。未修改 schema、迁移、mail、锁定表格，未 commit/push/发版；工作区中这些路径原有的并行改动保持不动。

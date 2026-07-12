@@ -1,0 +1,2517 @@
+OpenAI Codex v0.144.0-alpha.4
+--------
+workdir: C:\Users\Administrator\Desktop\payinces
+model: gpt-5.6-sol
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: high
+reasoning summaries: none
+session id: 019f53aa-b8f7-7f03-bec9-61f220369ae3
+--------
+user
+你是 PayIncus 前端工程师。先读 AGENTS.md §4(表格守卫红线,禁改守卫/禁 overflow-x-auto)。只改 client/src/views/admin/OrdersView.vue 恢复锁定表(移动卡+table-fixed),@click 不变。跑 test:order-center-guards 直到绿。不 commit。
+---
+# 表格漂移恢复:client/src/views/admin/OrdersView.vue(order-center-guards FAIL)
+
+## 硬约束(memory + AGENTS.md §4)
+锁定表只能"移动卡 + PC 定宽表(table-fixed/overflow-hidden,禁横滚)";禁 overflow-x-auto/min-w-[...]。**不许改/弱化守卫**,只改 .vue。
+
+## 修法(只改 client/src/views/admin/OrdersView.vue;不改守卫;不碰后端)
+1. 先只读 server/scripts/test-order-center-guards.ts 中该表确切断言(移动卡+桌面定宽表的 class/结构);client/src/views/admin/OrdersView.vue 当前表结构。
+2. 恢复:移动卡(block lg:hidden)+ 桌面定宽表(hidden overflow-hidden lg:block + table-fixed,列宽合计100%,允许换行),去 overflow-x-auto/min-w;功能/@click 100% 不变。
+3. 反复跑 test:order-center-guards 直到该表断言通过。
+
+## 验收
+test:order-center-guards 通过;test:frontend-route-guards、test:frontend-dist-boundary-guards、client type-check 通过。不 commit。
+
+codex
+我先按要求只读 `AGENTS.md`、订单中心守卫和当前 Vue 结构，确认守卫的精确 class/DOM 断言后，仅修改这一份 `.vue`；随后依次跑指定守卫和类型检查，不提交。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Content -Raw AGENTS.md; Get-Content -Raw server/scripts/test-order-center-guards.ts; Get-Content -Raw client/src/views/admin/OrdersView.vue' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 706ms:
+# PayIncus / Incudal â€” é¡¹ç›®ç»Ÿä¸€è§„çŸ©ï¼ˆAGENTS.mdï¼‰
+
+> æœ¬æ–‡ä»¶æ˜¯æœ¬ä»“åº“**æ‰€æœ‰ AI agentï¼ˆClaude Codeã€codex ç­‰ï¼‰çš„ç»Ÿä¸€å·¥ä½œè§„èŒƒ**ã€‚
+> `CLAUDE.md` é€šè¿‡ `@AGENTS.md` å¼•ç”¨æœ¬æ–‡ä»¶ â€”â€” Claude Code ä¸Ž codex è¯»åˆ°çš„æ˜¯**åŒä¸€å¥—è§„çŸ©**ï¼Œæ”¹è¿™ä¸€ä¸ªæ–‡ä»¶å³å¯ã€‚
+> æƒå¨è¿ç»´/å‘ç‰ˆäº‹å®žä»¥ä»“åº“æ ¹çš„ `OPERATIONS_HANDOFF.md`ï¼ˆæ“ä½œæ‰‹å†Œï¼‰ä¸Ž `HANDOFF.md`ï¼ˆç‰ˆæœ¬è¯æ®å°è´¦ï¼‰ä¸ºå‡†ã€‚
+
+---
+
+## 0. æ²Ÿé€šè¯­è¨€
+- ä¸Ž owner é»˜è®¤ç”¨**ä¸­æ–‡**æ²Ÿé€šã€‚
+
+## 1. è¿™æ˜¯ä»€ä¹ˆé¡¹ç›®
+**PayIncus**ï¼ˆå†…éƒ¨ä»£å· `incudal`ï¼‰â€”â€”å•†ç”¨ Incusï¼ˆLXC/KVMï¼‰NAT VPS å”®å–ä¸Žäº¤ä»˜å¹³å°ï¼Œ**çº¿ä¸Šè¿è¥ä¸­**ã€‚å½“å‰ç”Ÿäº§ç‰ˆæœ¬ **v1.3.7**ã€‚pnpm monorepoï¼š
+
+| ç›®å½• | æŠ€æœ¯æ ˆ / ä½œç”¨ |
+|------|----------------|
+| `client/` | Vue 3 + Vite SPAã€‚åŒç«¯æž„å»ºï¼ˆ`VITE_APP_ENTRY`ï¼‰â†’ `dist/user`ï¼ˆpay.payincus.comï¼‰+ `dist/admin`ï¼ˆadmin.payincus.comï¼‰ã€‚ä¸¤ç«¯ç‹¬ç«‹æºã€**ä¸å…±äº« cookie åŸŸ**ã€‚ |
+| `server/` | Fastify 5 + Prisma 7 + PostgreSQLï¼Œ~300 TS æ–‡ä»¶ã€~70 è·¯ç”±ã€~15 è°ƒåº¦/workerã€‚æ—  Redisï¼ˆç”¨ PG advisory lockï¼‰ã€‚ä¸‰å¥—é‰´æƒé¢ï¼šWeb çš„ JWT+refresh cookieã€Public API çš„ `pat_`/`poa_` tokenã€host agent çš„ HMACã€‚ |
+| `agent/` | Go å®¿ä¸» agentï¼Œåªè¯»ç›‘æŽ§ï¼ˆå¿ƒè·³/èµ„æº/å®žä¾‹æ€/æµé‡ï¼‰ï¼ŒHMAC ç­¾åï¼Œè‡ªå‡çº§ã€‚ |
+| å…¶å®ƒ | `docs-site/`ï¼ˆVitePressï¼‰ã€`deploy/`ï¼ˆsystemd+Nginxï¼‰ã€`scripts/`ï¼ˆå®‰è£…/æ ¡éªŒ/OTAï¼‰ã€`plugin-templates/`ã€`theme-templates/`ã€‚ |
+
+éƒ¨ç½²ï¼šä¸‰å±‚æ‹†åˆ†ï¼ˆuser / admin / ç§æœ‰åŽç«¯ `127.0.0.1:3001`ï¼‰ï¼Œè£…æœºæ ¹ `/opt/incudal`ï¼ŒåŽŸå­ OTAï¼ˆ`releases/<ver-ts>` + `current` è½¯é“¾ï¼‰+ è‡ªåŠ¨å›žæ»šã€‚
+
+---
+
+## 2. ðŸ”´ ç¡¬è§„çŸ©ï¼ˆä¸å¯åå•†ï¼Œè¿åå³äº‹æ•…ï¼‰
+
+1. **ä¸ç¢°ç”Ÿäº§**ï¼šæœªç» owner æ˜Žç¡®è¦æ±‚ï¼Œ**ç»ä¸** OTAã€å‘å¸ƒã€pushã€æ‰“ tagã€æ”¹ç”Ÿäº§çŽ¯å¢ƒã€‚
+2. **ä¸åšç ´åæ€§ git**ï¼šæœªç» owner æ˜Žç¡®è¦æ±‚ï¼Œ**ç»ä¸** `git reset`ã€`git checkout --`ã€å¼ºåˆ¶åˆ é™¤ã€æ¸…ç†æœªè·Ÿè¸ªæ–‡ä»¶ã€`git commit`/`git push`ã€‚
+3. **é«˜å±è·¯å¾„å…ˆè¯»åŽå†™**ï¼šæ”¹åŠ¨ä»¥ä¸‹ä»»ä¸€é¢†åŸŸï¼Œ**å¿…é¡»å…ˆè¯»ç›¸å…³ä»£ç  + å¯¹åº”å®ˆå«æµ‹è¯•**å†åŠ¨æ‰‹ï¼š
+   > é‰´æƒ Â· æ”¯ä»˜ Â· æƒé™ Â· é£ŽæŽ§ Â· èµ„æºäº¤ä»˜ Â· å…‘æ¢æµç¨‹ Â· å®žä¾‹åˆ›å»º Â· OTA
+4. **æ”¹åŠ¨æœ€å°åŒ–**ï¼šä¿® bug / å‘ç‰ˆæœŸé—´**ä¸åšå¤§èŒƒå›´é‡æž„**ï¼Œåªæ”¹å¿…è¦çš„ã€‚
+5. **ç»ä¸æ³„å¯†**ï¼šä»»ä½• commitã€handoffã€æ€»ç»“ã€æˆªå›¾ä¸­éƒ½**ä¸å¾—**å‡ºçŽ°å‡­è¯ / token / cookie / å¯†é’¥ã€‚
+6. **æœ¬åœ°è¿‡ â‰  ç”Ÿäº§éªŒè¯**ï¼šæœ¬åœ°é€šè¿‡ã€GitHub Actionsã€Release èµ„äº§ã€OTAã€çº¿ä¸Šå®žè¯æ˜¯**åˆ†å¼€çš„è¯æ®**ï¼Œä¸å¯æ··ä¸ºä¸€è°ˆã€‚
+7. **æ¯æ¬¡æ”¹åŠ¨å¿…é¡»è¿‡å¯¹åº”å®ˆå«**ï¼ˆè§ Â§4ï¼‰ï¼Œå¦åˆ™è§†ä¸º**æœªå®Œæˆ**ã€‚
+8. `RUN_DB_CHECKS=0 bash scripts/apply-online-update.sh <ver>` ä¼š**è·³è¿‡ DB/æ”¯ä»˜å°±ç»ªæ ¡éªŒ**ï¼Œä»…åœ¨ owner æ˜Žç¡®æ‰¹å‡†æ—¶ä½¿ç”¨ã€‚
+
+---
+
+## 3. æœ¬åœ°æ€Žä¹ˆè·‘
+
+- **çŽ¯å¢ƒ**ï¼šNode â‰¥ 20ã€pnpm 9.14.2ã€æœ¬åœ° PostgreSQL 16ã€‚
+- **è£…ä¾èµ–**ï¼š`pnpm install`
+- **ä¸€æŠŠèµ·å…¨éƒ¨ï¼ˆserver + user + adminï¼‰**ï¼š`pnpm dev`
+- **åˆ†å¼€èµ·**ï¼š
+  - åŽç«¯ï¼š`NODE_ENV=development JWT_SECRET=dev-secret-12345678 HOST=127.0.0.1 PORT=3001 pnpm --filter server exec tsx watch src/app.ts`
+  - ç”¨æˆ·å‰ç«¯ï¼š`pnpm dev:user`
+  - ç®¡ç†å‰ç«¯ï¼š`pnpm dev:admin`
+- **ç«¯å£**ï¼šåŽç«¯ API **3001** Â· ç”¨æˆ·å‰ç«¯ **3000** Â· ç®¡ç†å‰ç«¯ **3002**ï¼ˆå‰ç«¯ dev ç» proxy æ‰“åˆ° 3001ï¼‰ã€‚
+
+---
+
+## 4. ðŸ›¡ï¸ å®ˆå«æµ‹è¯•çºªå¾‹ï¼ˆæœ¬ä»“åº“çš„å‘½é—¨ï¼‰
+
+`server/package.json` é‡Œæœ‰ **200+ ä¸ªç‹¬ç«‹ `test-*-guards.ts`**ã€‚å®ƒä»¬æŠŠå…³é”®ä¸šåŠ¡/å‰ç«¯ç»“æž„â€œé’‰æ­»â€ï¼Œ`pnpm test` ä¼šè·‘å…¨å¥—ï¼ˆclient+server type-check + å…¨éƒ¨å®ˆå«ï¼‰ã€‚**ä»»ä½•æ”¹åŠ¨å¿…é¡»è®©ç›¸å…³å®ˆå«é€šè¿‡ã€‚**
+
+- **å…¨é‡**ï¼ˆæ…¢ï¼Œå‘ç‰ˆå‰è·‘ï¼‰ï¼š`pnpm test`
+- **å•ä¸ª**ï¼š`pnpm --filter server test:<guard-name>`
+- **å‰ç«¯æœ€å¸¸ç”¨ä¸‰ä¸ª**ï¼š
+  - `test:frontend-route-guards` â€”â€” è·¯ç”± / **è¡¨æ ¼å¸ƒå±€** / `@click` è·¯å¾„æ–­è¨€
+  - `test:frontend-dist-boundary-guards` â€”â€” åŒç«¯ dist è¾¹ç•Œ
+  - `test:frontend-i18n-keys` â€”â€” i18n key å®Œæ•´æ€§
+- **Go agent**ï¼š`pnpm test:agent`
+
+### âš ï¸ è¡¨æ ¼å¸ƒå±€å®ˆå«ï¼ˆæœ€å®¹æ˜“è¸©é›·ï¼‰
+ä¸€æ‰¹è¡¨è¢«å®ˆå«**é”å®š**ä¸ºâ€œ**ç§»åŠ¨å¡ + PC å®šå®½è¡¨ï¼ˆ`table-fixed` / `overflow-hidden`ï¼‰ï¼Œç»ä¸æ¨ªå‘æ»šåŠ¨**â€ï¼Œå¹¶**åå‘ç¦æ­¢** `overflow-x-auto` / `min-w-[...]` / åŽ»æŽ‰ `table-fixed`ã€‚
+- æƒ³ä¿®â€œå®½è¡¨æŒ¤åŽ‹â€æ—¶ï¼š**å…ˆåˆ¤æ–­è¯¥è¡¨æ˜¯å¦åœ¨å®ˆå«æ¸…å•é‡Œ**ã€‚é”å®šè¡¨**åªèƒ½åœ¨ `table-fixed` å†…å¹³è¡¡åˆ—å®½**ï¼ˆåˆ—å®½ç™¾åˆ†æ¯”åˆè®¡ = 100%ï¼‰+ å…è®¸å•å…ƒæ ¼æ¢è¡Œ + é ç§»åŠ¨å¡åº”å¯¹çª„å±ï¼›**ä¸èƒ½**æ”¹æˆæ¨ªå‘æ»šåŠ¨ã€‚
+- å—é”å®šçš„è¡¨ï¼ˆç”¨æˆ·ç«¯ï¼‰ï¼š`MyPackagesView`ã€`MyHostsView`ã€`TransfersView`ã€`OrdersView`ã€`InvitesView`ã€`FlashSalesView`ã€`HostingWalletView`ã€`InstancesView`ã€`LogsView`ã€`EntertainmentView`ï¼›ï¼ˆç®¡ç†ç«¯ï¼‰`admin/BillingView`ã€`admin/ImagesView`ã€`admin/HelpManageView`ã€`admin/MailView`ã€`admin/PluginCenterView`ï¼›ï¼ˆç»„ä»¶ï¼‰`HostPublicIpv4Tab`ã€`InstanceLogsTab`ã€`ConfigEditModal`ã€‚
+- æ”¹ä»»ä¸€å‰ç«¯æ–‡ä»¶åŽ**å¿…è·‘** `test:frontend-route-guards`ã€‚
+
+---
+
+## 5. æž„å»º / æ ¡éªŒå‘½ä»¤
+
+| ç›®çš„ | å‘½ä»¤ |
+|------|------|
+| æž„å»ºï¼ˆå« dist è¾¹ç•Œå®ˆå«ï¼‰| `pnpm build` |
+| åªæž„å»ºå‰ç«¯ / åŽç«¯ | `pnpm build:client` / `pnpm build:server` |
+| Lintï¼ˆæ£€æŸ¥ / è‡ªåŠ¨ä¿®ï¼‰| `pnpm lint` / `pnpm lint:fix` |
+| ç±»åž‹æ£€æŸ¥ | `pnpm --filter client type-check` Â· `pnpm --filter server type-check` |
+| å…¨å¥—å®ˆå« | `pnpm test` |
+| æ–‡æ¡£ç«™å¼€å‘ / æž„å»º | `pnpm docs:dev` / `pnpm docs:build` |
+
+---
+
+## 6. UI æ”¹åŠ¨çº¦æŸï¼ˆå•è‰²é‡åšè¿›è¡Œä¸­ï¼‰
+
+- **æ–¹å‘**ï¼šè‹¹æžœå¼**çº¯é»‘ç™½å•è‰²**ï¼ˆæµ…è‰²=ç™½åº•é»‘å­—ï¼Œæ·±è‰²=é»‘åº•ç™½å­—ï¼‰ï¼ŒåŽ»äºŒæ¬¡å…ƒ/å‰ç¥¥ç‰©/ç«‹ç»˜ã€‚çŠ¶æ€è‰²**åªä¿ç•™ç»¿/ç¥ç€/çº¢**ä¸‰ç§ï¼ˆè¿è¡Œ/å¾…å¤„ç†/å¤±è´¥ï¼‰ã€‚
+- **çº¢çº¿**ï¼šåªæ”¹**æ ·å¼ / å¸ƒå±€ / æ–‡æ¡ˆå±‚çº§**ï¼Œ**ä¸ç¢°**åŽç«¯æŽ¥å£ã€æƒé™ã€æ”¯ä»˜/è®¢å•/å®žä¾‹åˆ›å»º/OTA ç­‰ä¸šåŠ¡é€»è¾‘ä¸Žè·¯ç”±è¡Œä¸ºâ€”â€”**åŠŸèƒ½ 100% ä¸å˜**ã€‚
+- **é…è‰²èµ° token å±‚**ï¼ˆ`client/tailwind.config.js`ï¼‰ï¼šä¸€å †å½©è‰² ramp å·²æ˜ å°„åˆ°ä¸­æ€§ç°ï¼›`rose â†’ çœŸçº¢`ï¼ˆå±é™©/äºæŸè¯­ä¹‰ï¼‰**ä¿ç•™ä¸å¯ç°åŒ–**ï¼›æ¸¸æˆåŒ–æ¨¡å—ï¼ˆæˆå°±/ç­¾åˆ°/æŠ½å¥–/ç¨€æœ‰åº¦ï¼‰å½©è‰²**åˆ»æ„ä¿ç•™**ã€‚
+- `kawaii-cloud.css` **æ¸è¿›æ”¹é€ ã€ä¸é‡å†™**ï¼›å•é¡µåŽ»è‰²ç”¨é¡µé¢ `<style scoped>`ã€‚
+- åŠ¨æ•ˆå¯ç”¨ **GSAP**ï¼ˆå·²è£… gsap-skillsï¼Œè§ `.claude/skills/`ï¼‰ï¼›å°Šé‡ `prefers-reduced-motion`ã€‚
+
+---
+
+## 7. åä½œæ¨¡åž‹ï¼ˆClaude Code â‡„ codexï¼‰
+
+- **Claude Code = æŠ€æœ¯è´Ÿè´£äºº / é›†æˆæ–¹**ï¼šå®šæ ¹å› ã€åˆ‡ä»»åŠ¡ã€å†™è§„æ ¼ã€å®ˆä¸å˜é‡ã€å®¡ diffã€è·‘å®ˆå«ã€çœŸæœºéªŒè¯ã€ç®¡ gitï¼ˆ**ä»…åœ¨ owner åŒæ„æ—¶** commit / pushï¼‰ã€‚
+- **codex = å®žçŽ°å·¥äºº**ï¼šæŒ‰ Claude ç»™çš„è§„æ ¼å®žçŽ°æ”¹åŠ¨ï¼Œå°¤å…¶**ä½Ž/ä¸­å±ã€è‡ªåŒ…å«ã€å¯å¹¶è¡Œ**çš„å—ã€‚
+- **é£Žé™©åˆ†æ¡£**ï¼šé«˜å±è·¯å¾„ç”± Claude å®šæ ¹å›  + æ”¶ç´§è§„æ ¼ï¼›ä½Ž/ä¸­å± codex å¯ç«¯åˆ°ç«¯ä¿®ã€‚**ä»»ä½•ä¸€æ–¹æ”¹å®Œéƒ½è¦è·‘ç›¸å…³å®ˆå«ï¼ŒClaude ç»Ÿä¸€å®¡æŸ¥åŽæ‰è¿›å…¥ä¸‹ä¸€æ­¥ã€‚**
+- **é¿å…å†²çª**ï¼šåŒä¸€æ‰¹æ–‡ä»¶ä¸€æ¬¡åªè®©ä¸€ä¸ª agent æ”¹ã€‚
+
+---
+
+## 8. ä¸€ä¸ªæ”¹åŠ¨çš„ã€Œå®Œæˆã€å®šä¹‰
+
+1. ç›¸å…³ **type-check** é€šè¿‡ï¼›
+2. ç›¸å…³ **å®ˆå«æµ‹è¯•** é€šè¿‡ï¼›
+3. è‹¥åŠ¨å‰ç«¯ â†’ **åŒç«¯ build** é€šè¿‡ï¼›
+4. **çœŸæœºè·‘è¿‡**å—å½±å“æµç¨‹ï¼ˆä¸æ˜¯åªçœ‹æµ‹è¯•ï¼‰ï¼›
+5. **æŠ¥å‘Š**ï¼šæ”¹äº†å“ªäº›æ–‡ä»¶ / ä¸ºä»€ä¹ˆ / é£Žé™© / æ€Žä¹ˆéªŒè¯çš„ã€‚
+
+ä»¥ä¸Šä»»ä¸€æœªæ»¡è¶³ = **æœªå®Œæˆ**ã€‚
+
+import { strict as assert } from 'assert'
+import { readFileSync } from 'fs'
+import { resolve } from 'path'
+import { fileURLToPath } from 'url'
+
+const root = resolve(fileURLToPath(new URL('../..', import.meta.url)))
+const ordersRoute = readFileSync(resolve(root, 'server/src/routes/orders.ts'), 'utf8')
+const app = readFileSync(resolve(root, 'server/src/app.ts'), 'utf8')
+const userRouter = readFileSync(resolve(root, 'client/src/router/user.ts'), 'utf8')
+const adminRouter = readFileSync(resolve(root, 'client/src/router/admin.ts'), 'utf8')
+const userNav = readFileSync(resolve(root, 'client/src/config/side-nav-items-user.ts'), 'utf8')
+const adminNav = readFileSync(resolve(root, 'client/src/config/side-nav-items-admin.ts'), 'utf8')
+const userApi = readFileSync(resolve(root, 'client/src/api/index.ts'), 'utf8')
+const adminApi = readFileSync(resolve(root, 'client/src/api/admin.ts'), 'utf8')
+
+assert.ok(app.includes("import orderRoutes from './routes/orders.js'"), 'app must import order routes')
+assert.ok(app.includes('await fastify.register(orderRoutes)'), 'app must register order routes')
+
+assert.ok(ordersRoute.includes("'/api/orders'"), 'user order list API route missing')
+assert.ok(ordersRoute.includes("'/api/orders/:type/:id'"), 'user order detail API route missing')
+assert.ok(ordersRoute.includes("'/api/admin/orders'"), 'admin order list API route missing')
+assert.ok(ordersRoute.includes("'/api/admin/orders/:type/:id'"), 'admin order detail API route missing')
+assert.ok(ordersRoute.includes('preHandler: [fastify.authenticateUser]'), 'user order routes must require user auth')
+assert.ok(ordersRoute.includes('preHandler: [fastify.authenticateAdmin]'), 'admin order routes must require admin auth')
+
+assert.ok(ordersRoute.includes('prisma.rechargeRecord.findMany'), 'orders must aggregate recharge records')
+assert.ok(ordersRoute.includes('prisma.instanceBillingRecord.findMany'), 'orders must aggregate instance billing records')
+assert.ok(ordersRoute.includes('where: { id, userId: request.user.id }'), 'user detail routes must scope records by owner')
+assert.ok(ordersRoute.includes('parsePageSize') && ordersRoute.includes('MAX_PAGE_SIZE = 100'), 'order list must clamp page size')
+assert.ok(!ordersRoute.includes('callbackData'), 'order API must not expose raw payment callback payloads')
+assert.ok(!ordersRoute.includes('providerConfigSnapshot'), 'order API must not expose provider config snapshots')
+
+assert.ok(userRouter.includes("path: '/orders'"), 'user router must expose /orders')
+assert.ok(userRouter.includes("component: () => import('@/views/OrdersView.vue')"), 'user router must lazy-load order page')
+assert.ok(adminRouter.includes("path: '/admin/orders'"), 'admin router must expose /admin/orders')
+assert.ok(adminRouter.includes("component: () => import('@/views/admin/OrdersView.vue')"), 'admin router must lazy-load admin order page')
+
+assert.ok(userNav.includes("path: '/orders'"), 'user sidebar must link to orders')
+assert.ok(adminNav.includes("path: '/admin/orders'"), 'admin sidebar must link to orders')
+assert.ok(userApi.includes("http.get('/orders'"), 'user API wrapper must include order list')
+assert.ok(userApi.includes("http.get(`/orders/${sourceType}/${sourceId}`)"), 'user API wrapper must include order detail')
+assert.ok(adminApi.includes("http.get('/admin/orders'"), 'admin API wrapper must include order list')
+assert.ok(adminApi.includes("http.get(`/admin/orders/${sourceType}/${sourceId}`)"), 'admin API wrapper must include order detail')
+assert.ok(adminApi.includes("http.post(`/admin/recharge/orders/${orderNo}/complete`, { tradeNo, actualAmount })"), 'admin API wrapper must reuse recharge manual-complete route with actual amount')
+assert.ok(adminApi.includes("http.post(`/admin/recharge/orders/${orderNo}/fail`, { reason })"), 'admin API wrapper must reuse recharge manual-fail route')
+assert.ok(adminApi.includes("http.post(`/balance/admin/${userId}/adjustment-requests`, data)"), 'admin API wrapper must create balance adjustment approval requests')
+assert.ok(adminApi.includes("http.post(`/balance/admin/adjustment-requests/${requestId}/approve`, { remark })"), 'admin API wrapper must approve balance adjustment requests')
+assert.ok(adminApi.includes("http.post(`/balance/admin/adjustment-requests/${requestId}/reject`, { remark })"), 'admin API wrapper must reject balance adjustment requests')
+
+const adminOrderView = readFileSync(resolve(root, 'client/src/views/admin/OrdersView.vue'), 'utf8')
+assert.ok(adminOrderView.includes('function completeRecharge()'), 'admin order center must expose manual recharge completion action')
+assert.ok(adminOrderView.includes('function failRecharge()'), 'admin order center must expose manual recharge failure action')
+assert.ok(adminOrderView.includes('function adjustBalance()'), 'admin order center must expose manual adjustment action')
+assert.ok(adminOrderView.includes('è°ƒè´¦åŽŸå› ') && adminOrderView.includes('å¤±è´¥åŽŸå› '), 'manual order actions must require visible reasons')
+assert.ok(adminOrderView.includes('api.admin.completeRechargeOrder') && adminOrderView.includes('api.admin.failRechargeOrder'), 'recharge order actions must reuse existing audited APIs')
+assert.ok(adminOrderView.includes('api.admin.createBalanceAdjustmentRequest'), 'order balance adjustment must create approval request instead of direct mutation')
+assert.ok(adminOrderView.includes('api.admin.approveBalanceAdjustmentRequest') && adminOrderView.includes('api.admin.rejectBalanceAdjustmentRequest'), 'order center must expose approval and rejection actions')
+assert.ok(!adminOrderView.includes('api.admin.adjustUserBalance'), 'order center must not directly mutate user balance from order detail')
+assert.ok(adminOrderView.includes('æäº¤è°ƒè´¦å®¡æ‰¹') && adminOrderView.includes('é€šè¿‡å¹¶æ‰§è¡Œ'), 'order center must use approval-oriented UI wording')
+assert.ok(
+  adminOrderView.match(/class="space-y-3 p-4 lg:hidden"/g)?.length === 2 &&
+    adminOrderView.match(/class="hidden overflow-hidden lg:block"/g)?.length === 2 &&
+    adminOrderView.includes('table class="w-full table-fixed divide-y divide-themed"') &&
+    adminOrderView.includes('table class="w-full table-fixed divide-y divide-themed"') &&
+    !adminOrderView.includes('v-else class="overflow-x-auto"') &&
+    !adminOrderView.includes('table class="min-w-full divide-y divide-themed"'),
+  'admin order center must render mobile cards and fixed desktop tables instead of horizontal table scrolling'
+)
+assert.ok(
+  adminOrderView.includes('@click="openDetail(order)"') &&
+    adminOrderView.includes('@click="rejectAdjustmentRequest(request)"') &&
+    adminOrderView.includes('@click="approveAdjustmentRequest(request)"') &&
+    adminOrderView.includes('@click="goPage(page - 1)"') &&
+    adminOrderView.includes('@click="goRequestPage(requestPage - 1)"'),
+  'responsive admin order center must preserve detail, approval, and pagination actions'
+)
+
+console.log('order center guards passed')
+
+<script setup lang="ts">
+import { computed, onMounted, ref } from 'vue'
+import api from '@/api/admin'
+
+type OrderSourceType = 'recharge' | 'instance_billing'
+type OrderOperationStatus = 'pending_review' | 'confirmed' | 'compensated' | 'closed'
+
+interface OrderOperationCase {
+  id: number
+  sourceType: OrderSourceType
+  sourceId: number
+  orderNo: string | null
+  userId: number
+  status: OrderOperationStatus
+  reason: string
+  result: string | null
+  refundAmount: number | null
+  providerSummary: Record<string, any> | null
+  createdBy: { id: number; username: string } | null
+  updatedBy: { id: number; username: string } | null
+  balanceAdjustmentRequestId: number | null
+  balanceAdjustmentRequest: BalanceAdjustmentRequest | null
+  createdAt: string
+  updatedAt: string
+}
+
+interface AdminOrderItem {
+  id: string
+  sourceType: OrderSourceType
+  sourceId: number
+  orderNo: string
+  title: string
+  status: string
+  rawStatus: string
+  amount: number
+  actualAmount: number | null
+  fee: number
+  userId: number
+  user: { id: number; username: string; email: string } | null
+  provider: { id: number; name: string; type: string } | null
+  providerStatusSummary: {
+    provider: { id: number; name: string; type: string } | null
+    rawStatus: string
+    paymentMethod: string | null
+    tradeNo: string | null
+    callbackAt: string | null
+  } | null
+  paymentMethod: string | null
+  tradeNo: string | null
+  failReason: string | null
+  instance: {
+    id: number
+    name: string
+    displayName: string | null
+    packagePlan?: { id: number; name: string; package?: { id: number; name: string } | null } | null
+  } | null
+  months: number | null
+  periodStart: string | null
+  periodEnd: string | null
+  remark: string | null
+  createdAt: string
+  completedAt: string | null
+  expiredAt: string | null
+  operationCase: OrderOperationCase | null
+}
+
+interface BalanceAdjustmentRequest {
+  id: number
+  userId: number
+  user: { id: number; username: string; email: string | null }
+  requestedBy: { id: number; username: string }
+  reviewedBy: { id: number; username: string } | null
+  amount: number
+  requestType: string
+  status: string
+  sourceType: string | null
+  sourceId: number | null
+  orderNo: string | null
+  reason: string
+  reviewRemark: string | null
+  balanceLogId: number | null
+  balanceLog: {
+    id: number
+    type: string
+    amount: number
+    balanceBefore: number
+    balanceAfter: number
+  } | null
+  createdAt: string
+  updatedAt: string
+  reviewedAt: string | null
+}
+
+const orders = ref<AdminOrderItem[]>([])
+const selectedOrder = ref<AdminOrderItem | null>(null)
+const adjustmentRequests = ref<BalanceAdjustmentRequest[]>([])
+const loading = ref(false)
+const requestLoading = ref(false)
+const detailLoading = ref(false)
+const error = ref('')
+const requestError = ref('')
+const page = ref(1)
+const pageSize = ref(10)
+const total = ref(0)
+const requestPage = ref(1)
+const requestPageSize = 7
+const requestTotal = ref(0)
+const requestStatus = ref('pending')
+const type = ref('')
+const status = ref('')
+const userId = ref('')
+const keyword = ref('')
+const createdFrom = ref('')
+const createdTo = ref('')
+const actionLoading = ref(false)
+const reviewLoadingId = ref<number | null>(null)
+const actionMessage = ref('')
+const actionError = ref('')
+const completeTradeNo = ref('')
+const completeActualAmount = ref('')
+const failReason = ref('')
+const adjustmentAmount = ref('')
+const adjustmentRemark = ref('')
+const operationStatus = ref<OrderOperationStatus>('pending_review')
+const operationReason = ref('')
+const operationResult = ref('')
+const operationRefundAmount = ref('')
+const operationCreateRefundRequest = ref(false)
+
+const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
+const requestTotalPages = computed(() => Math.max(1, Math.ceil(requestTotal.value / requestPageSize)))
+
+const typeOptions = [
+  { value: '', label: 'å…¨éƒ¨ç±»åž‹' },
+  { value: 'recharge', label: 'ä½™é¢å……å€¼' },
+  { value: 'instance_billing', label: 'å®žä¾‹è´¦å•' }
+]
+
+const statusOptions = computed(() => {
+  if (type.value === 'instance_billing') {
+    return [
+      { value: '', label: 'å…¨éƒ¨çŠ¶æ€' },
+      { value: 'newPurchase', label: 'æ–°è´­' },
+      { value: 'renew', label: 'ç»­è´¹' },
+      { value: 'upgrade', label: 'å‡çº§' },
+      { value: 'downgrade', label: 'é™çº§' },
+      { value: 'refund', label: 'é€€æ¬¾' },
+      { value: 'transfer_fee', label: 'è½¬ç§»æ‰‹ç»­è´¹' }
+    ]
+  }
+
+  return [
+    { value: '', label: 'å…¨éƒ¨çŠ¶æ€' },
+    { value: 'pending', label: 'å¾…æ”¯ä»˜' },
+    { value: 'paid', label: 'å¤„ç†ä¸­' },
+    { value: 'completed', label: 'å·²å®Œæˆ' },
+    { value: 'failed', label: 'å¤±è´¥' },
+    { value: 'cancelled', label: 'å·²å–æ¶ˆ' },
+    { value: 'refunded', label: 'å·²é€€æ¬¾' }
+  ]
+})
+
+const requestStatusOptions = [
+  { value: 'pending', label: 'å¾…å®¡æ ¸' },
+  { value: 'approved', label: 'å·²é€šè¿‡' },
+  { value: 'rejected', label: 'å·²é©³å›ž' },
+  { value: '', label: 'å…¨éƒ¨' }
+]
+
+const operationStatusOptions: Array<{ value: OrderOperationStatus; label: string }> = [
+  { value: 'pending_review', label: 'å¾…æ ¸æŸ¥' },
+  { value: 'confirmed', label: 'å·²ç¡®è®¤' },
+  { value: 'compensated', label: 'å·²è¡¥å¿' },
+  { value: 'closed', label: 'å·²å…³é—­' }
+]
+
+function formatMoney(value: number | null | undefined): string {
+  return `Â¥${Number(value || 0).toFixed(2)}`
+}
+
+function formatTime(value: string | null | undefined): string {
+  if (!value) return '-'
+  return new Date(value).toLocaleString('zh-CN', { hour12: false })
+}
+
+function statusLabel(order: AdminOrderItem): string {
+  const labels: Record<string, string> = {
+    completed: 'å·²å®Œæˆ',
+    pending: 'å¾…å¤„ç†',
+    failed: 'å¤±è´¥',
+    cancelled: 'å·²å–æ¶ˆ',
+    refunded: 'å·²é€€æ¬¾'
+  }
+  return labels[order.status] || order.rawStatus
+}
+
+function statusClass(statusValue: string): string {
+  if (statusValue === 'completed') return 'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-800'
+  if (statusValue === 'pending') return 'bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-300 dark:border-yellow-800'
+  if (statusValue === 'refunded') return 'bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700'
+  if (statusValue === 'failed' || statusValue === 'cancelled') return 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/10 dark:text-rose-300 dark:border-rose-500/20'
+  return 'bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700'
+}
+
+function operationStatusLabel(statusValue: string | null | undefined): string {
+  const labels: Record<string, string> = {
+    pending_review: 'å¾…æ ¸æŸ¥',
+    confirmed: 'å·²ç¡®è®¤',
+    compensated: 'å·²è¡¥å¿',
+    closed: 'å·²å…³é—­'
+  }
+  return statusValue ? labels[statusValue] || statusValue : 'æœªç™»è®°'
+}
+
+function operationStatusClass(statusValue: string | null | undefined): string {
+  if (statusValue === 'pending_review') return 'bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-300 dark:border-yellow-800'
+  if (statusValue === 'confirmed') return 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-300 dark:border-blue-500/20'
+  if (statusValue === 'compensated') return 'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-800'
+  if (statusValue === 'closed') return 'bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700'
+  return 'bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700'
+}
+
+function sourceLabel(sourceType: OrderSourceType): string {
+  return sourceType === 'recharge' ? 'å……å€¼è®¢å•' : 'å®žä¾‹è´¦å•'
+}
+
+function adjustmentTypeLabel(requestType: string): string {
+  return requestType === 'refund' ? 'é€€æ¬¾è¡¥å¿' : 'äººå·¥è°ƒè´¦'
+}
+
+function adjustmentStatusLabel(statusValue: string): string {
+  const labels: Record<string, string> = {
+    pending: 'å¾…å®¡æ ¸',
+    approved: 'å·²é€šè¿‡',
+    rejected: 'å·²é©³å›ž'
+  }
+  return labels[statusValue] || statusValue
+}
+
+function adjustmentStatusClass(statusValue: string): string {
+  if (statusValue === 'approved') return 'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-800'
+  if (statusValue === 'pending') return 'bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-300 dark:border-yellow-800'
+  if (statusValue === 'rejected') return 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/10 dark:text-rose-300 dark:border-rose-500/20'
+  return 'bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700'
+}
+
+const canCompleteRecharge = computed(() => {
+  return selectedOrder.value?.sourceType === 'recharge' && ['pending', 'paid'].includes(selectedOrder.value.rawStatus)
+})
+
+const canFailRecharge = computed(() => {
+  return selectedOrder.value?.sourceType === 'recharge' && ['pending', 'paid'].includes(selectedOrder.value.rawStatus)
+})
+
+const canAdjustBalance = computed(() => {
+  return Boolean(selectedOrder.value?.userId)
+})
+
+function instanceName(order: AdminOrderItem): string {
+  if (!order.instance) return '-'
+  return order.instance.displayName || order.instance.name
+}
+
+function parsedUserId(): number | undefined {
+  const trimmed = userId.value.trim()
+  if (!/^[1-9]\d*$/.test(trimmed)) return undefined
+  return Number(trimmed)
+}
+
+function syncOperationForm(order: AdminOrderItem) {
+  const operationCase = order.operationCase
+  operationStatus.value = operationCase?.status || 'pending_review'
+  operationReason.value = operationCase?.reason || (order.sourceType === 'recharge'
+    ? `å……å€¼è®¢å• ${order.orderNo} å¾…æ ¸æŸ¥`
+    : `å®žä¾‹è´¦å• ${order.orderNo} å¾…æ ¸æŸ¥`)
+  operationResult.value = operationCase?.result || ''
+  operationRefundAmount.value = operationCase?.refundAmount ? String(operationCase.refundAmount) : ''
+  operationCreateRefundRequest.value = false
+}
+
+const hasPendingRefundRequest = computed(() => {
+  const request = selectedOrder.value?.operationCase?.balanceAdjustmentRequest
+  return request?.requestType === 'refund' && request.status === 'pending'
+})
+
+async function loadOrders() {
+  loading.value = true
+  error.value = ''
+  try {
+    const res = await api.orders.list({
+      page: page.value,
+      pageSize: pageSize.value,
+      type: type.value || undefined,
+      status: status.value || undefined,
+      userId: parsedUserId(),
+      keyword: keyword.value.trim() || undefined,
+      createdFrom: createdFrom.value || undefined,
+      createdTo: createdTo.value || undefined
+    })
+    orders.value = res.orders as AdminOrderItem[]
+    total.value = res.total
+  } catch (err: any) {
+    error.value = err?.message || 'è®¢å•åŠ è½½å¤±è´¥'
+  } finally {
+    loading.value = false
+  }
+}
+
+async function loadAdjustmentRequests() {
+  requestLoading.value = true
+  requestError.value = ''
+  try {
+    const res = await api.admin.getBalanceAdjustmentRequests({
+      page: requestPage.value,
+      pageSize: requestPageSize,
+      status: requestStatus.value || undefined
+    })
+    adjustmentRequests.value = res.requests as BalanceAdjustmentRequest[]
+    requestTotal.value = res.total
+  } catch (err: any) {
+    requestError.value = err?.message || 'è°ƒè´¦å®¡æ‰¹ä»»åŠ¡åŠ è½½å¤±è´¥'
+  } finally {
+    requestLoading.value = false
+  }
+}
+
+async function openDetail(order: AdminOrderItem) {
+  selectedOrder.value = order
+  actionMessage.value = ''
+  actionError.value = ''
+  completeTradeNo.value = order.tradeNo || ''
+  completeActualAmount.value = order.actualAmount ? String(order.actualAmount) : ''
+  failReason.value = order.failReason || ''
+  adjustmentAmount.value = ''
+  adjustmentRemark.value = order.sourceType === 'recharge'
+    ? `è®¢å• ${order.orderNo} äººå·¥å¤„ç†`
+    : `è´¦å• ${order.orderNo} äººå·¥å¤„ç†`
+  syncOperationForm(order)
+  detailLoading.value = true
+  try {
+    const res = await api.orders.detail(order.sourceType, order.sourceId)
+    selectedOrder.value = res.order as AdminOrderItem
+    completeTradeNo.value = selectedOrder.value.tradeNo || ''
+    completeActualAmount.value = selectedOrder.value.actualAmount ? String(selectedOrder.value.actualAmount) : ''
+    syncOperationForm(selectedOrder.value)
+  } finally {
+    detailLoading.value = false
+  }
+}
+
+function parseActionAmount(value: string): number | null {
+  const trimmed = value.trim()
+  if (!trimmed) return null
+  if (!/^-?\d+(\.\d{1,2})?$/.test(trimmed)) return null
+  const parsed = Number(trimmed)
+  return Number.isFinite(parsed) && parsed !== 0 ? parsed : null
+}
+
+function parseOptionalPositiveAmount(value: string): number | undefined | null {
+  const trimmed = value.trim()
+  if (!trimmed) return undefined
+  if (!/^\d+(\.\d{1,2})?$/.test(trimmed)) return null
+  const parsed = Number(trimmed)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null
+}
+
+async function refreshSelectedOrder() {
+  if (!selectedOrder.value) return
+  const current = selectedOrder.value
+  const res = await api.orders.detail(current.sourceType, current.sourceId)
+  selectedOrder.value = res.order as AdminOrderItem
+  await loadOrders()
+}
+
+async function completeRecharge() {
+  if (!selectedOrder.value || !canCompleteRecharge.value) return
+  const actualAmount = parseOptionalPositiveAmount(completeActualAmount.value)
+  if (actualAmount === null) {
+    actionError.value = 'å®žé™…å…¥è´¦é‡‘é¢å¿…é¡»æ˜¯å¤§äºŽ 0 çš„é‡‘é¢ï¼Œæœ€å¤šä¸¤ä½å°æ•°'
+    return
+  }
+
+  actionLoading.value = true
+  actionMessage.value = ''
+  actionError.value = ''
+  try {
+    const result = await api.admin.completeRechargeOrder(
+      selectedOrder.value.orderNo,
+      completeTradeNo.value.trim() || undefined,
+      actualAmount
+    )
+    actionMessage.value = result.message || 'è®¢å•å·²æ‰‹åŠ¨å®Œæˆ'
+    await refreshSelectedOrder()
+  } catch (err: any) {
+    actionError.value = err?.message || 'æ‰‹åŠ¨å®Œæˆå¤±è´¥'
+  } finally {
+    actionLoading.value = false
+  }
+}
+
+async function failRecharge() {
+  if (!selectedOrder.value || !canFailRecharge.value) return
+  const reason = failReason.value.trim()
+  if (!reason) {
+    actionError.value = 'è¯·å¡«å†™å¤±è´¥åŽŸå› '
+    return
+  }
+
+  actionLoading.value = true
+  actionMessage.value = ''
+  actionError.value = ''
+  try {
+    const result = await api.admin.failRechargeOrder(selectedOrder.value.orderNo, reason)
+    actionMessage.value = result.message || 'è®¢å•å·²æ ‡è®°å¤±è´¥'
+    await refreshSelectedOrder()
+  } catch (err: any) {
+    actionError.value = err?.message || 'æ ‡è®°å¤±è´¥å¤±è´¥'
+  } finally {
+    actionLoading.value = false
+  }
+}
+
+async function adjustBalance() {
+  if (!selectedOrder.value || !canAdjustBalance.value) return
+  const amount = parseActionAmount(adjustmentAmount.value)
+  const remark = adjustmentRemark.value.trim()
+  if (amount === null) {
+    actionError.value = 'è°ƒè´¦é‡‘é¢å¿…é¡»æ˜¯éž 0 é‡‘é¢ï¼Œæœ€å¤šä¸¤ä½å°æ•°ï¼›é€€æ¬¾/è¡¥æ¬¾å¡«æ­£æ•°ï¼Œæ‰£æ¬¾å¡«è´Ÿæ•°'
+    return
+  }
+  if (!remark) {
+    actionError.value = 'è¯·å¡«å†™è°ƒè´¦åŽŸå› '
+    return
+  }
+
+  actionLoading.value = true
+  actionMessage.value = ''
+  actionError.value = ''
+  try {
+    const result = await api.admin.createBalanceAdjustmentRequest(selectedOrder.value.userId, {
+      amount,
+      reason: remark,
+      requestType: amount > 0 ? 'refund' : 'manual_adjust',
+      sourceType: selectedOrder.value.sourceType,
+      sourceId: selectedOrder.value.sourceId,
+      orderNo: selectedOrder.value.orderNo
+    })
+    actionMessage.value = `${result.message}ï¼š#${result.request.id}`
+    adjustmentAmount.value = ''
+    requestStatus.value = 'pending'
+    requestPage.value = 1
+    await loadAdjustmentRequests()
+    await refreshSelectedOrder()
+  } catch (err: any) {
+    actionError.value = err?.message || 'è°ƒè´¦ç”³è¯·æäº¤å¤±è´¥'
+  } finally {
+    actionLoading.value = false
+  }
+}
+
+async function saveOperationCase() {
+  if (!selectedOrder.value) return
+  const reason = operationReason.value.trim()
+  const result = operationResult.value.trim()
+  if (!reason) {
+    actionError.value = 'è¯·å¡«å†™è¿è¥å¤„ç†åŽŸå› '
+    return
+  }
+  const refundAmount = parseOptionalPositiveAmount(operationRefundAmount.value)
+  if (operationCreateRefundRequest.value && refundAmount === undefined) {
+    actionError.value = 'å‹¾é€‰é€€æ¬¾ç™»è®°æ—¶å¿…é¡»å¡«å†™é€€æ¬¾é‡‘é¢'
+    return
+  }
+  if (refundAmount === null) {
+    actionError.value = 'é€€æ¬¾é‡‘é¢å¿…é¡»æ˜¯å¤§äºŽ 0 çš„é‡‘é¢ï¼Œæœ€å¤šä¸¤ä½å°æ•°'
+    return
+  }
+  if (operationCreateRefundRequest.value && hasPendingRefundRequest.value) {
+    actionError.value = 'è¯¥è®¢å•å·²æœ‰å¾…å®¡æ ¸é€€æ¬¾å®¡æ‰¹ï¼Œä¸èƒ½é‡å¤ç™»è®°'
+    return
+  }
+
+  actionLoading.value = true
+  actionMessage.value = ''
+  actionError.value = ''
+  try {
+    const response = await api.orders.recordOperation(selectedOrder.value.sourceType, selectedOrder.value.sourceId, {
+      status: operationStatus.value,
+      reason,
+      result: result || undefined,
+      refundAmount,
+      createRefundRequest: operationCreateRefundRequest.value
+    })
+    actionMessage.value = response.message || 'è®¢å•è¿è¥å¤„ç†è®°å½•å·²ä¿å­˜'
+    operationCreateRefundRequest.value = false
+    requestStatus.value = 'pending'
+    requestPage.value = 1
+    await loadAdjustmentRequests()
+    await refreshSelectedOrder()
+  } catch (err: any) {
+    actionError.value = err?.message || 'è®¢å•è¿è¥å¤„ç†ä¿å­˜å¤±è´¥'
+  } finally {
+    actionLoading.value = false
+  }
+}
+
+async function approveAdjustmentRequest(request: BalanceAdjustmentRequest) {
+  if (request.status !== 'pending') return
+  reviewLoadingId.value = request.id
+  requestError.value = ''
+  try {
+    await api.admin.approveBalanceAdjustmentRequest(request.id, `è®¢å•ä¸­å¿ƒå®¡æ‰¹é€šè¿‡ #${request.id}`)
+    await loadAdjustmentRequests()
+    await loadOrders()
+  } catch (err: any) {
+    requestError.value = err?.message || 'å®¡æ‰¹é€šè¿‡å¤±è´¥'
+  } finally {
+    reviewLoadingId.value = null
+  }
+}
+
+async function rejectAdjustmentRequest(request: BalanceAdjustmentRequest) {
+  if (request.status !== 'pending') return
+  reviewLoadingId.value = request.id
+  requestError.value = ''
+  try {
+    await api.admin.rejectBalanceAdjustmentRequest(request.id, `è®¢å•ä¸­å¿ƒé©³å›ž #${request.id}`)
+    await loadAdjustmentRequests()
+  } catch (err: any) {
+    requestError.value = err?.message || 'é©³å›žå¤±è´¥'
+  } finally {
+    reviewLoadingId.value = null
+  }
+}
+
+function applyFilters() {
+  page.value = 1
+  void loadOrders()
+}
+
+function clearFilters() {
+  type.value = ''
+  status.value = ''
+  userId.value = ''
+  keyword.value = ''
+  createdFrom.value = ''
+  createdTo.value = ''
+  applyFilters()
+}
+
+function goPage(nextPage: number) {
+  if (nextPage < 1 || nextPage > totalPages.value || nextPage === page.value) return
+  page.value = nextPage
+  void loadOrders()
+}
+
+function applyRequestFilters() {
+  requestPage.value = 1
+  void loadAdjustmentRequests()
+}
+
+function goRequestPage(nextPage: number) {
+  if (nextPage < 1 || nextPage > requestTotalPages.value || nextPage === requestPage.value) return
+  requestPage.value = nextPage
+  void loadAdjustmentRequests()
+}
+
+onMounted(() => {
+  void loadOrders()
+  void loadAdjustmentRequests()
+})
+</script>
+
+<template>
+  <div class="kawaii-page space-y-5 animate-fade-in">
+    <header class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <div>
+        <h1 class="text-2xl font-semibold text-themed">è®¢å•ä¸­å¿ƒ</h1>
+        <p class="mt-1 text-sm text-themed-muted">ç»Ÿä¸€æŸ¥çœ‹å……å€¼è®¢å•ã€å®žä¾‹æ–°è´­ã€ç»­è´¹ã€å‡çº§å’Œé€€æ¬¾è´¦å•ã€‚</p>
+      </div>
+      <button class="btn btn-outline" :disabled="loading" @click="loadOrders">åˆ·æ–°</button>
+    </header>
+
+    <section class="rounded-lg border border-themed bg-themed-secondary p-4">
+      <div class="flex flex-wrap items-center gap-3">
+        <select v-model="type" class="input w-full sm:w-40" @change="status = ''; applyFilters()">
+          <option v-for="item in typeOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+        </select>
+        <select v-model="status" class="input w-full sm:w-40" @change="applyFilters">
+          <option v-for="item in statusOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+        </select>
+        <input v-model="userId" class="input w-full sm:w-36" placeholder="ç”¨æˆ· ID" @keyup.enter="applyFilters" />
+        <input v-model="keyword" class="input w-full sm:min-w-[220px] sm:flex-1" placeholder="è®¢å•å·ã€äº¤æ˜“å·ã€ç”¨æˆ·åã€å®žä¾‹å" @keyup.enter="applyFilters" />
+        <input v-model="createdFrom" class="input w-full sm:w-40" type="date" title="å¼€å§‹æ—¥æœŸ" @change="applyFilters" />
+        <input v-model="createdTo" class="input w-full sm:w-40" type="date" title="ç»“æŸæ—¥æœŸ" @change="applyFilters" />
+        <button class="btn btn-outline" @click="clearFilters">é‡ç½®</button>
+      </div>
+    </section>
+
+    <div v-if="error" class="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-300">{{ error }}</div>
+
+    <section class="overflow-hidden rounded-lg border border-themed bg-themed-secondary">
+      <div v-if="loading" class="p-8 text-center text-sm text-themed-muted">æ­£åœ¨åŠ è½½è®¢å•...</div>
+      <div v-else-if="orders.length === 0" class="p-8 text-center text-sm text-themed-muted">æš‚æ— è®¢å•è®°å½•</div>
+      <template v-else>
+        <div class="space-y-3 p-4 lg:hidden">
+          <button
+            v-for="order in orders"
+            :key="order.id"
+            type="button"
+            class="block w-full rounded-lg border border-themed bg-themed p-4 text-left text-sm transition hover:bg-themed-tertiary"
+            @click="openDetail(order)"
+          >
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <div class="font-semibold text-themed">{{ order.title }}</div>
+                <div class="mt-1 break-all text-xs text-themed-muted">{{ order.orderNo }}</div>
+              </div>
+              <span :class="['shrink-0 rounded-full border px-2 py-0.5 text-xs', statusClass(order.status)]">{{ statusLabel(order) }}</span>
+            </div>
+            <div class="mt-3 grid gap-2 text-xs text-themed-muted sm:grid-cols-2">
+              <div class="rounded-md bg-themed-secondary p-2">
+                <div class="text-themed-muted">ç”¨æˆ·</div>
+                <div class="mt-1 text-themed">{{ order.user?.username || `#${order.userId}` }}</div>
+                <div class="mt-1 break-all">{{ order.user?.email || '-' }}</div>
+              </div>
+              <div class="rounded-md bg-themed-secondary p-2">
+                <div class="text-themed-muted">é‡‘é¢</div>
+                <div class="mt-1 font-medium text-themed">{{ formatMoney(order.amount) }}</div>
+                <div class="mt-1">{{ sourceLabel(order.sourceType) }}</div>
+              </div>
+              <div class="rounded-md bg-themed-secondary p-2">
+                <div class="text-themed-muted">å…³è”å®žä¾‹</div>
+                <div class="mt-1 text-themed">{{ instanceName(order) }}</div>
+              </div>
+              <div class="rounded-md bg-themed-secondary p-2">
+                <div class="text-themed-muted">æ—¶é—´</div>
+                <div class="mt-1 text-themed">{{ formatTime(order.createdAt) }}</div>
+              </div>
+            </div>
+            <div v-if="order.operationCase" class="mt-3">
+              <span :class="['inline-flex rounded-full border px-2 py-0.5 text-xs', operationStatusClass(order.operationCase.status)]">
+                {{ operationStatusLabel(order.operationCase.status) }}
+              </span>
+            </div>
+          </button>
+        </div>
+        <div class="hidden overflow-x-auto lg:block">
+          <table class="w-full min-w-[900px] divide-y divide-themed">
+          <thead class="bg-themed-tertiary">
+            <tr class="text-left text-xs font-medium text-themed-muted">
+              <th class="px-4 py-3">è®¢å•</th>
+              <th class="px-4 py-3">ç”¨æˆ·</th>
+              <th class="px-4 py-3">ç±»åž‹</th>
+              <th class="px-4 py-3">é‡‘é¢</th>
+              <th class="px-4 py-3">çŠ¶æ€</th>
+              <th class="px-4 py-3">å…³è”å®žä¾‹</th>
+              <th class="px-4 py-3">æ—¶é—´</th>
+              <th class="px-4 py-3 text-right">æ“ä½œ</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-themed">
+            <tr v-for="order in orders" :key="order.id" class="text-sm">
+              <td class="px-4 py-3">
+                <div class="font-medium text-themed">{{ order.title }}</div>
+                <div class="text-xs text-themed-muted">{{ order.orderNo }}</div>
+              </td>
+              <td class="px-4 py-3">
+                <div class="text-themed">{{ order.user?.username || `#${order.userId}` }}</div>
+                <div class="text-xs text-themed-muted">{{ order.user?.email || '-' }}</div>
+              </td>
+              <td class="px-4 py-3 text-themed-muted">{{ sourceLabel(order.sourceType) }}</td>
+              <td class="px-4 py-3 font-medium text-themed">{{ formatMoney(order.amount) }}</td>
+              <td class="px-4 py-3">
+                <span :class="['inline-flex rounded-full border px-2 py-0.5 text-xs', statusClass(order.status)]">{{ statusLabel(order) }}</span>
+                <span
+                  v-if="order.operationCase"
+                  :class="['ml-2 inline-flex rounded-full border px-2 py-0.5 text-xs', operationStatusClass(order.operationCase.status)]"
+                >
+                  {{ operationStatusLabel(order.operationCase.status) }}
+                </span>
+              </td>
+              <td class="px-4 py-3 text-themed-muted">{{ instanceName(order) }}</td>
+              <td class="px-4 py-3 text-themed-muted">{{ formatTime(order.createdAt) }}</td>
+              <td class="px-4 py-3 text-right">
+                <button class="btn btn-sm btn-outline" @click="openDetail(order)">è¯¦æƒ…</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        </div>
+      </template>
+
+      <div class="flex items-center justify-between border-t border-themed px-4 py-3 text-sm text-themed-muted">
+        <span>å…± {{ total }} æ¡è®°å½•</span>
+        <div class="flex items-center gap-2">
+          <button class="btn btn-sm btn-outline" :disabled="page <= 1" @click="goPage(page - 1)">ä¸Šä¸€é¡µ</button>
+          <span>{{ page }} / {{ totalPages }}</span>
+          <button class="btn btn-sm btn-outline" :disabled="page >= totalPages" @click="goPage(page + 1)">ä¸‹ä¸€é¡µ</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="overflow-hidden rounded-lg border border-themed bg-themed-secondary">
+      <div class="flex flex-col gap-3 border-b border-themed p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 class="text-lg font-semibold text-themed">è°ƒè´¦å®¡æ‰¹</h2>
+          <p class="mt-1 text-sm text-themed-muted">è®¢å•é€€æ¬¾ã€è¡¥æ¬¾å’Œæ‰£æ¬¾å…ˆè¿›å…¥å®¡æ‰¹ä»»åŠ¡ï¼Œé€šè¿‡åŽæ‰ä¼šå†™å…¥ä½™é¢æ—¥å¿—ã€‚</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <select v-model="requestStatus" class="input w-32" @change="applyRequestFilters">
+            <option v-for="item in requestStatusOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+          </select>
+          <button class="btn btn-outline" :disabled="requestLoading" @click="loadAdjustmentRequests">åˆ·æ–°</button>
+        </div>
+      </div>
+
+      <div v-if="requestError" class="m-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-300">{{ requestError }}</div>
+      <div v-if="requestLoading" class="p-6 text-center text-sm text-themed-muted">æ­£åœ¨åŠ è½½å®¡æ‰¹ä»»åŠ¡...</div>
+      <div v-else-if="adjustmentRequests.length === 0" class="p-6 text-center text-sm text-themed-muted">æš‚æ— è°ƒè´¦å®¡æ‰¹ä»»åŠ¡</div>
+      <template v-else>
+        <div class="space-y-3 p-4 lg:hidden">
+          <div v-for="request in adjustmentRequests" :key="request.id" class="rounded-lg border border-themed bg-themed p-4 text-sm">
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <div class="font-semibold text-themed">#{{ request.id }} {{ adjustmentTypeLabel(request.requestType) }}</div>
+                <div class="mt-1 break-words text-xs text-themed-muted">{{ request.reason }}</div>
+              </div>
+              <span :class="['shrink-0 rounded-full border px-2 py-0.5 text-xs', adjustmentStatusClass(request.status)]">
+                {{ adjustmentStatusLabel(request.status) }}
+              </span>
+            </div>
+            <div class="mt-3 grid gap-2 text-xs text-themed-muted sm:grid-cols-2">
+              <div class="rounded-md bg-themed-secondary p-2">
+                <div class="text-themed-muted">ç”¨æˆ·</div>
+                <div class="mt-1 text-themed">{{ request.user.username }}</div>
+                <div class="mt-1">ç”³è¯·äºº {{ request.requestedBy.username }}</div>
+              </div>
+              <div class="rounded-md bg-themed-secondary p-2">
+                <div class="text-themed-muted">é‡‘é¢</div>
+                <div class="mt-1 font-medium" :class="request.amount >= 0 ? 'text-green-700 dark:text-green-300' : 'text-rose-700 dark:text-rose-300'">
+                  {{ request.amount >= 0 ? '+' : '' }}{{ formatMoney(request.amount) }}
+                </div>
+              </div>
+              <div class="rounded-md bg-themed-secondary p-2">
+                <div class="text-themed-muted">æ¥æº</div>
+                <div class="mt-1 text-themed">{{ request.orderNo || '-' }}</div>
+                <div class="mt-1">{{ request.sourceType || '-' }}</div>
+              </div>
+              <div class="rounded-md bg-themed-secondary p-2">
+                <div class="text-themed-muted">æ—¶é—´</div>
+                <div class="mt-1 text-themed">{{ formatTime(request.createdAt) }}</div>
+              </div>
+            </div>
+            <div class="mt-3 flex flex-wrap justify-end gap-2">
+              <template v-if="request.status === 'pending'">
+                <button class="btn btn-sm btn-outline text-rose-600 dark:text-rose-400" :disabled="reviewLoadingId === request.id" @click="rejectAdjustmentRequest(request)">é©³å›ž</button>
+                <button class="btn btn-sm btn-primary" :disabled="reviewLoadingId === request.id" @click="approveAdjustmentRequest(request)">é€šè¿‡å¹¶æ‰§è¡Œ</button>
+              </template>
+              <span v-else class="text-xs text-themed-muted">{{ request.reviewedBy?.username || '-' }}</span>
+            </div>
+          </div>
+        </div>
+        <div class="hidden overflow-x-auto lg:block">
+          <table class="w-full min-w-[900px] divide-y divide-themed">
+          <thead class="bg-themed-tertiary">
+            <tr class="text-left text-xs font-medium text-themed-muted">
+              <th class="px-4 py-3">ç”³è¯·</th>
+              <th class="px-4 py-3">ç”¨æˆ·</th>
+              <th class="px-4 py-3">é‡‘é¢</th>
+              <th class="px-4 py-3">æ¥æº</th>
+              <th class="px-4 py-3">çŠ¶æ€</th>
+              <th class="px-4 py-3">æ—¶é—´</th>
+              <th class="px-4 py-3 text-right">æ“ä½œ</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-themed">
+            <tr v-for="request in adjustmentRequests" :key="request.id" class="text-sm">
+              <td class="px-4 py-3">
+                <div class="font-medium text-themed">#{{ request.id }} {{ adjustmentTypeLabel(request.requestType) }}</div>
+                <div class="max-w-[260px] truncate text-xs text-themed-muted">{{ request.reason }}</div>
+              </td>
+              <td class="px-4 py-3">
+                <div class="text-themed">{{ request.user.username }}</div>
+                <div class="text-xs text-themed-muted">ç”³è¯·äºº {{ request.requestedBy.username }}</div>
+              </td>
+              <td class="px-4 py-3 font-medium" :class="request.amount >= 0 ? 'text-green-700 dark:text-green-300' : 'text-rose-700 dark:text-rose-300'">
+                {{ request.amount >= 0 ? '+' : '' }}{{ formatMoney(request.amount) }}
+              </td>
+              <td class="px-4 py-3 text-themed-muted">
+                <div>{{ request.orderNo || '-' }}</div>
+                <div class="text-xs">{{ request.sourceType || '-' }}</div>
+              </td>
+              <td class="px-4 py-3">
+                <span :class="['inline-flex rounded-full border px-2 py-0.5 text-xs', adjustmentStatusClass(request.status)]">
+                  {{ adjustmentStatusLabel(request.status) }}
+                </span>
+              </td>
+              <td class="px-4 py-3 text-themed-muted">{{ formatTime(request.createdAt) }}</td>
+              <td class="px-4 py-3 text-right">
+                <div v-if="request.status === 'pending'" class="flex justify-end gap-2">
+                  <button class="btn btn-sm btn-outline text-rose-600 dark:text-rose-400" :disabled="reviewLoadingId === request.id" @click="rejectAdjustmentRequest(request)">é©³å›ž</button>
+                  <button class="btn btn-sm btn-primary" :disabled="reviewLoadingId === request.id" @click="approveAdjustmentRequest(request)">é€šè¿‡å¹¶æ‰§è¡Œ</button>
+                </div>
+                <span v-else class="text-xs text-themed-muted">{{ request.reviewedBy?.username || '-' }}</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        </div>
+      </template>
+
+      <div class="flex items-center justify-between border-t border-themed px-4 py-3 text-sm text-themed-muted">
+        <span>å…± {{ requestTotal }} æ¡å®¡æ‰¹</span>
+        <div class="flex items-center gap-2">
+          <button class="btn btn-sm btn-outline" :disabled="requestPage <= 1" @click="goRequestPage(requestPage - 1)">ä¸Šä¸€é¡µ</button>
+          <span>{{ requestPage }} / {{ requestTotalPages }}</span>
+          <button class="btn btn-sm btn-outline" :disabled="requestPage >= requestTotalPages" @click="goRequestPage(requestPage + 1)">ä¸‹ä¸€é¡µ</button>
+        </div>
+      </div>
+    </section>
+
+    <div v-if="selectedOrder" class="fixed inset-0 z-50 flex justify-end bg-black/30" @click.self="selectedOrder = null">
+      <aside class="h-full w-full max-w-xl overflow-y-auto bg-themed p-6 shadow-xl">
+        <div class="flex items-start justify-between gap-4">
+          <div>
+            <h2 class="text-xl font-semibold text-themed">{{ selectedOrder.title }}</h2>
+            <p class="mt-1 text-sm text-themed-muted">{{ selectedOrder.orderNo }}</p>
+          </div>
+          <button class="btn btn-sm btn-outline" @click="selectedOrder = null">å…³é—­</button>
+        </div>
+
+        <div v-if="detailLoading" class="mt-6 text-sm text-themed-muted">æ­£åœ¨åŠ è½½è¯¦æƒ…...</div>
+        <dl v-else class="mt-6 grid gap-4 text-sm">
+          <div class="grid grid-cols-3 gap-3"><dt class="text-themed-muted">ç”¨æˆ·</dt><dd class="col-span-2 text-themed">{{ selectedOrder.user?.username || `#${selectedOrder.userId}` }}</dd></div>
+          <div class="grid grid-cols-3 gap-3"><dt class="text-themed-muted">çŠ¶æ€</dt><dd class="col-span-2 text-themed">{{ statusLabel(selectedOrder) }}</dd></div>
+          <div class="grid grid-cols-3 gap-3"><dt class="text-themed-muted">é‡‘é¢</dt><dd class="col-span-2 text-themed">{{ formatMoney(selectedOrder.amount) }}</dd></div>
+          <div class="grid grid-cols-3 gap-3"><dt class="text-themed-muted">å®žé™…åˆ°è´¦</dt><dd class="col-span-2 text-themed">{{ selectedOrder.actualAmount === null ? '-' : formatMoney(selectedOrder.actualAmount) }}</dd></div>
+          <div class="grid grid-cols-3 gap-3"><dt class="text-themed-muted">æ‰‹ç»­è´¹</dt><dd class="col-span-2 text-themed">{{ formatMoney(selectedOrder.fee) }}</dd></div>
+          <div class="grid grid-cols-3 gap-3"><dt class="text-themed-muted">æ”¯ä»˜æ¸ é“</dt><dd class="col-span-2 text-themed">{{ selectedOrder.provider?.name || selectedOrder.paymentMethod || '-' }}</dd></div>
+          <div v-if="selectedOrder.providerStatusSummary" class="grid grid-cols-3 gap-3">
+            <dt class="text-themed-muted">Provider æ‘˜è¦</dt>
+            <dd class="col-span-2 text-themed">
+              <div>åŽŸå§‹çŠ¶æ€ï¼š{{ selectedOrder.providerStatusSummary.rawStatus }}</div>
+              <div>äº¤æ˜“å·ï¼š{{ selectedOrder.providerStatusSummary.tradeNo || '-' }}</div>
+              <div>å›žè°ƒæ—¶é—´ï¼š{{ formatTime(selectedOrder.providerStatusSummary.callbackAt) }}</div>
+            </dd>
+          </div>
+          <div class="grid grid-cols-3 gap-3"><dt class="text-themed-muted">äº¤æ˜“å·</dt><dd class="col-span-2 break-all text-themed">{{ selectedOrder.tradeNo || '-' }}</dd></div>
+          <div class="grid grid-cols-3 gap-3"><dt class="text-themed-muted">å…³è”å®žä¾‹</dt><dd class="col-span-2 text-themed">{{ instanceName(selectedOrder) }}</dd></div>
+          <div class="grid grid-cols-3 gap-3"><dt class="text-themed-muted">è´¦æœŸ</dt><dd class="col-span-2 text-themed">{{ selectedOrder.months ? `${selectedOrder.months} ä¸ªæœˆ` : '-' }}</dd></div>
+          <div class="grid grid-cols-3 gap-3"><dt class="text-themed-muted">å¼€å§‹æ—¶é—´</dt><dd class="col-span-2 text-themed">{{ formatTime(selectedOrder.periodStart) }}</dd></div>
+          <div class="grid grid-cols-3 gap-3"><dt class="text-themed-muted">ç»“æŸæ—¶é—´</dt><dd class="col-span-2 text-themed">{{ formatTime(selectedOrder.periodEnd) }}</dd></div>
+          <div class="grid grid-cols-3 gap-3"><dt class="text-themed-muted">åˆ›å»ºæ—¶é—´</dt><dd class="col-span-2 text-themed">{{ formatTime(selectedOrder.createdAt) }}</dd></div>
+          <div class="grid grid-cols-3 gap-3"><dt class="text-themed-muted">å®Œæˆæ—¶é—´</dt><dd class="col-span-2 text-themed">{{ formatTime(selectedOrder.completedAt) }}</dd></div>
+          <div class="grid grid-cols-3 gap-3"><dt class="text-themed-muted">å¤±è´¥åŽŸå› </dt><dd class="col-span-2 text-themed">{{ selectedOrder.failReason || '-' }}</dd></div>
+          <div class="grid grid-cols-3 gap-3"><dt class="text-themed-muted">å¤‡æ³¨</dt><dd class="col-span-2 text-themed">{{ selectedOrder.remark || '-' }}</dd></div>
+        </dl>
+
+        <div v-if="actionMessage" class="mt-5 rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-700">{{ actionMessage }}</div>
+        <div v-if="actionError" class="mt-5 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-300">{{ actionError }}</div>
+
+        <section class="mt-6 border-t border-themed pt-5">
+          <div class="flex items-center justify-between gap-3">
+            <div>
+              <h3 class="text-base font-semibold text-themed">è®¢å•è¿è¥å¤„ç†</h3>
+              <p class="mt-1 text-sm text-themed-muted">ç™»è®°äº‰è®®çŠ¶æ€å’Œäººå·¥é€€æ¬¾ç”³è¯·ã€‚é€€æ¬¾ç™»è®°åªåˆ›å»ºè°ƒè´¦å®¡æ‰¹ï¼Œä¸ä¼šç›´æŽ¥ä¿®æ”¹ä½™é¢ã€‚</p>
+            </div>
+            <span :class="['shrink-0 rounded-full border px-2 py-0.5 text-xs', operationStatusClass(selectedOrder.operationCase?.status)]">
+              {{ operationStatusLabel(selectedOrder.operationCase?.status) }}
+            </span>
+          </div>
+
+          <div v-if="selectedOrder.operationCase" class="mt-4 rounded-lg border border-themed bg-themed-secondary p-3 text-sm">
+            <div class="grid gap-2 text-themed-muted">
+              <div>æœ€è¿‘å¤„ç†ï¼š{{ selectedOrder.operationCase.updatedBy?.username || selectedOrder.operationCase.createdBy?.username || '-' }} Â· {{ formatTime(selectedOrder.operationCase.updatedAt) }}</div>
+              <div>å¤„ç†åŽŸå› ï¼š<span class="text-themed">{{ selectedOrder.operationCase.reason }}</span></div>
+              <div v-if="selectedOrder.operationCase.result">å¤„ç†ç»“æžœï¼š<span class="text-themed">{{ selectedOrder.operationCase.result }}</span></div>
+              <div v-if="selectedOrder.operationCase.balanceAdjustmentRequest">
+                å…³è”å®¡æ‰¹ï¼š
+                <span class="text-themed">#{{ selectedOrder.operationCase.balanceAdjustmentRequest.id }} Â· {{ adjustmentTypeLabel(selectedOrder.operationCase.balanceAdjustmentRequest.requestType) }} Â· {{ adjustmentStatusLabel(selectedOrder.operationCase.balanceAdjustmentRequest.status) }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="mt-4 grid gap-3">
+            <label class="text-sm">
+              <span class="mb-1 block text-themed-muted">äº‰è®®çŠ¶æ€</span>
+              <select v-model="operationStatus" class="input" :disabled="actionLoading">
+                <option v-for="item in operationStatusOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+              </select>
+            </label>
+            <label class="text-sm">
+              <span class="mb-1 block text-themed-muted">å¤„ç†åŽŸå› </span>
+              <textarea v-model="operationReason" class="input min-h-[84px]" placeholder="å†™æ˜Žè®¢å•å¼‚å¸¸ã€æ ¸æŸ¥ä¾æ®æˆ–é€€æ¬¾åŽŸå› " :disabled="actionLoading" />
+            </label>
+            <label class="text-sm">
+              <span class="mb-1 block text-themed-muted">å¤„ç†ç»“æžœ</span>
+              <textarea v-model="operationResult" class="input min-h-[72px]" placeholder="å¯é€‰ï¼Œä¾‹å¦‚å·²è”ç³»ç”¨æˆ·ã€ç­‰å¾… provider å¯¹è´¦ã€å·²è¡¥å¿" :disabled="actionLoading" />
+            </label>
+            <label class="flex items-center gap-2 text-sm text-themed">
+              <input v-model="operationCreateRefundRequest" type="checkbox" :disabled="actionLoading || hasPendingRefundRequest" />
+              <span>åŒæ—¶ç™»è®°é€€æ¬¾å®¡æ‰¹</span>
+            </label>
+            <label class="text-sm">
+              <span class="mb-1 block text-themed-muted">é€€æ¬¾é‡‘é¢</span>
+              <input v-model="operationRefundAmount" class="input" placeholder="å‹¾é€‰é€€æ¬¾ç™»è®°æ—¶å¿…å¡«ï¼Œä¾‹å¦‚ 10.00" :disabled="actionLoading || !operationCreateRefundRequest" />
+            </label>
+            <p v-if="hasPendingRefundRequest" class="text-sm text-yellow-700">è¯¥è®¢å•å·²æœ‰å¾…å®¡æ ¸é€€æ¬¾å®¡æ‰¹ï¼Œéœ€å¤„ç†å®ŒæˆåŽæ‰èƒ½å†æ¬¡ç™»è®°ã€‚</p>
+            <button class="btn btn-primary justify-self-start" :disabled="actionLoading" @click="saveOperationCase">ä¿å­˜è¿è¥å¤„ç†</button>
+          </div>
+        </section>
+
+        <section v-if="selectedOrder.sourceType === 'recharge'" class="mt-6 border-t border-themed pt-5">
+          <h3 class="text-base font-semibold text-themed">å……å€¼è®¢å•å¤„ç†</h3>
+          <p class="mt-1 text-sm text-themed-muted">ä»…å¾…æ”¯ä»˜æˆ–å¤„ç†ä¸­è®¢å•å…è®¸äººå·¥å®Œæˆæˆ–æ ‡è®°å¤±è´¥ï¼Œå…¥è´¦ä»èµ°åŽŸæœ‰å……å€¼å®Œæˆé€»è¾‘ã€‚</p>
+          <div class="mt-4 grid gap-3">
+            <label class="text-sm">
+              <span class="mb-1 block text-themed-muted">äº¤æ˜“å·</span>
+              <input v-model="completeTradeNo" class="input" placeholder="å¯é€‰ï¼Œç¬¬ä¸‰æ–¹äº¤æ˜“å·æˆ–çº¿ä¸‹å‡­è¯å·" :disabled="!canCompleteRecharge || actionLoading" />
+            </label>
+            <label class="text-sm">
+              <span class="mb-1 block text-themed-muted">å®žé™…å…¥è´¦é‡‘é¢</span>
+              <input v-model="completeActualAmount" class="input" placeholder="ç•™ç©ºåˆ™æŒ‰è®¢å•é‡‘é¢å…¥è´¦" :disabled="!canCompleteRecharge || actionLoading" />
+            </label>
+            <div class="flex flex-wrap gap-2">
+              <button class="btn btn-primary" :disabled="!canCompleteRecharge || actionLoading" @click="completeRecharge">æ‰‹åŠ¨å®Œæˆå¹¶å…¥è´¦</button>
+            </div>
+            <label class="text-sm">
+              <span class="mb-1 block text-themed-muted">å¤±è´¥åŽŸå› </span>
+              <textarea v-model="failReason" class="input min-h-[84px]" placeholder="æ ‡è®°å¤±è´¥æ—¶å¿…é¡»å¡«å†™åŽŸå› " :disabled="!canFailRecharge || actionLoading" />
+            </label>
+            <button class="btn btn-outline justify-self-start text-rose-600 dark:text-rose-400" :disabled="!canFailRecharge || actionLoading" @click="failRecharge">æ ‡è®°å¤±è´¥</button>
+          </div>
+        </section>
+
+        <section class="mt-6 border-t border-themed pt-5">
+          <h3 class="text-base font-semibold text-themed">äººå·¥è°ƒè´¦ / é€€æ¬¾å®¡æ‰¹</h3>
+          <p class="mt-1 text-sm text-themed-muted">ç”¨äºŽè¡¥æ¬¾ã€é€€æ¬¾æˆ–æ‰£æ¬¾ã€‚æ­£æ•°å¢žåŠ ç”¨æˆ·ä½™é¢ï¼Œè´Ÿæ•°æ‰£å‡ç”¨æˆ·ä½™é¢ï¼›æäº¤åŽè¿›å…¥å®¡æ‰¹ä»»åŠ¡ï¼Œé€šè¿‡åŽæ‰ä¼šå†™å…¥ä½™é¢æ—¥å¿—ã€‚</p>
+          <div class="mt-4 grid gap-3">
+            <label class="text-sm">
+              <span class="mb-1 block text-themed-muted">è°ƒè´¦é‡‘é¢</span>
+              <input v-model="adjustmentAmount" class="input" placeholder="ä¾‹å¦‚ 10.00 æˆ– -5.00" :disabled="actionLoading" />
+            </label>
+            <label class="text-sm">
+              <span class="mb-1 block text-themed-muted">è°ƒè´¦åŽŸå› </span>
+              <textarea v-model="adjustmentRemark" class="input min-h-[84px]" placeholder="å¿…é¡»å†™æ˜Žè®¢å•ã€åŽŸå› å’Œå¤„ç†ç»“è®º" :disabled="actionLoading" />
+            </label>
+            <button class="btn btn-primary justify-self-start" :disabled="actionLoading" @click="adjustBalance">æäº¤è°ƒè´¦å®¡æ‰¹</button>
+          </div>
+        </section>
+      </aside>
+    </div>
+  </div>
+</template>
+
+
+codex
+已确认订单中心守卫要求两组完全一致的结构标记：移动端 `space-y-3 p-4 lg:hidden`、桌面端 `hidden overflow-hidden lg:block`，且桌面表必须是 `w-full table-fixed divide-y divide-themed`。当前第二张表明确漂移成横滚；我继续核对第一张表和各列内容后做最小补丁，并保持所有 `@click` 原样。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "rg -n -C 4 \"space-y-3 p-4 lg:hidden|hidden overflow|min-w-|<table|<th|@click=\\\"openDetail\" client/src/views/admin/OrdersView.vue; git diff -- client/src/views/admin/OrdersView.vue; git status --short" in C:\Users\Administrator\Desktop\payinces
+2026-07-12T00:12:19.412564Z ERROR codex_core::tools::router: error=Exit code: 1
+Wall time: 0.7 seconds
+Output:
+The string is missing the terminator: ".
+    + CategoryInfo          : ParserError: (:) [], ParentContainsErrorRecordException
+    + FullyQualifiedErrorId : TerminatorExpectedAtEndOfString
+ 
+
+ exited 1 in 713ms:
+The string is missing the terminator: ".
+    + CategoryInfo          : ParserError: (:) [], ParentContainsErrorRecordException
+    + FullyQualifiedErrorId : TerminatorExpectedAtEndOfString
+ 
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "rg -n -C 4 'space-y-3 p-4 lg:hidden|hidden overflow|min-w-|<table|<th|@click=\"openDetail' client/src/views/admin/OrdersView.vue
+git diff -- client/src/views/admin/OrdersView.vue
+git status --short" in C:\Users\Administrator\Desktop\payinces
+ succeeded in 774ms:
+ M client/src/components/instance/TrafficStats.vue
+ M client/src/components/plugins/PluginFrame.vue
+ M client/src/locales/en.ts
+ M client/src/locales/zh-CN.ts
+ M client/src/locales/zh-TW.ts
+ M client/src/utils/validation.ts
+ M client/src/views/InstanceDetailView.vue
+ M client/src/views/admin/DeliveryCenterView.vue
+ M client/src/views/admin/ResourceRiskView.vue
+ M client/src/views/resources/MyPackagesView.vue
+ M client/src/views/resources/PackageFormView.vue
+ M deploy/incudal-backend.service.example
+ M deploy/incudal-online-rollback@.service.example
+ M deploy/incudal-online-update@.service.example
+ M package.json
+ M scripts/install-panel.sh
+ M scripts/test-install-panel-guards.sh
+ M server/package.json
+ M server/prisma/schema.prisma
+ M server/scripts/test-admin-billing-route-id-guards.ts
+ M server/scripts/test-admin-entertainment-route-guards.ts
+ M server/scripts/test-admin-user-delete-resource-guards.ts
+ M server/scripts/test-aff-review-ui-guards.ts
+ M server/scripts/test-agent-report-state-guards.ts
+ M server/scripts/test-backup-task-race-guards.ts
+ M server/scripts/test-balance-adjustment-approval-guards.ts
+ M server/scripts/test-batch-config-route-guards.ts
+ M server/scripts/test-billing-expiry-delete.ts
+ M server/scripts/test-billing-expiry-race-guards.ts
+ M server/scripts/test-billing-query-guards.ts
+ M server/scripts/test-capacity-cost-guards.ts
+ M server/scripts/test-commercial-operations-overview-guards.ts
+ M server/scripts/test-delivery-center-guards.ts
+ M server/scripts/test-flash-sale-guards.ts
+ M server/scripts/test-frontend-i18n-keys.ts
+ M server/scripts/test-frontend-route-guards.ts
+ M server/scripts/test-gift-card-guards.ts
+ M server/scripts/test-host-resource-atomic-guards.ts
+ M server/scripts/test-hosting-balance-guards.ts
+ M server/scripts/test-instance-billing-route-id-guards.ts
+ M server/scripts/test-instance-create-failure-compensation.ts
+ M server/scripts/test-instance-delete-incus-order.ts
+ M server/scripts/test-instance-operation-conflict-guards.ts
+ M server/scripts/test-instance-quota-zero-guards.ts
+ M server/scripts/test-instance-recreate-consistency.ts
+ M server/scripts/test-instance-route-id-guards.ts
+ M server/scripts/test-ip-address-route-guards.ts
+ M server/scripts/test-log-sanitizer.ts
+ M server/scripts/test-mail-plan-financial-guards.ts
+ M server/scripts/test-mail-renewal-month-guards.ts
+ M server/scripts/test-order-payment-operations-guards.ts
+ M server/scripts/test-plan-bandwidth-limit-guards.ts
+ M server/scripts/test-plugin-client-boundary-guards.ts
+ M server/scripts/test-port-mapping-safety.ts
+ M server/scripts/test-proxy-site-route-id-guards.ts
+ M server/scripts/test-recharge-state-transitions.ts
+ M server/scripts/test-resource-pool-apply-consistency.ts
+ M server/scripts/test-resource-quota-bigint-guards.ts
+ M server/scripts/test-resource-risk-guards.ts
+ M server/scripts/test-risk-audit-guards.ts
+ M server/scripts/test-storage-outbound-guards.ts
+ M server/scripts/test-system-config-value-guards.ts
+ M server/scripts/test-system-update-guards.ts
+ M server/scripts/test-terminal-route-id-guards.ts
+ M server/scripts/test-terminal-saved-command-route-id-guards.ts
+ M server/scripts/test-traffic-collector-status-guard.ts
+ M server/scripts/test-traffic-notification-claim-guards.ts
+ M server/scripts/test-traffic-reset-locks.ts
+ M server/scripts/test-traffic-route-limit-guards.ts
+ M server/scripts/test-transfer-query-guards.ts
+ M server/scripts/test-trust-proxy-config.ts
+ M server/scripts/test-user-destroy-incus-order.ts
+ M server/scripts/test-vip-benefit-route-guards.ts
+ M server/src/app.ts
+ M server/src/db/aff.ts
+ M server/src/db/balance.ts
+ M server/src/db/billing-operations.ts
+ M server/src/db/gift-cards.ts
+ M server/src/db/hosts.ts
+ M server/src/db/instances.ts
+ M server/src/db/ipv6-subnets.ts
+ M server/src/db/lottery.ts
+ M server/src/db/resource-pool.ts
+ M server/src/db/terminal-saved-commands.ts
+ M server/src/db/traffic.ts
+ M server/src/db/users.ts
+ M server/src/lib/billing-calc.ts
+ M server/src/lib/caddy-client.ts
+ M server/src/lib/epay.ts
+ M server/src/lib/errors.ts
+ M server/src/lib/heleket.ts
+ M server/src/lib/log-sanitizer.ts
+ M server/src/lib/lottery-notifier.ts
+ M server/src/lib/lsky.ts
+ M server/src/lib/managed-instance-provision.ts
+ M server/src/lib/notifier.ts
+ M server/src/lib/outbound-security.ts
+ M server/src/lib/plugin-market-submission-scan.ts
+ M server/src/lib/redirect-validator.ts
+ M server/src/lib/terminal-proxy.ts
+ M server/src/lib/theme-market-submission-scan.ts
+ M server/src/lib/trust-proxy-config.ts
+ M server/src/routes/admin-billing.ts
+ M server/src/routes/admin-capacity-cost.ts
+ M server/src/routes/admin-delivery.ts
+ M server/src/routes/admin-entertainment.ts
+ M server/src/routes/admin-statistics.ts
+ M server/src/routes/batch-config.ts
+ M server/src/routes/gift-cards.ts
+ M server/src/routes/hosting.ts
+ M server/src/routes/instance-billing.ts
+ M server/src/routes/instance-destroy.ts
+ M server/src/routes/instances.ts
+ M server/src/routes/ip-addresses.ts
+ M server/src/routes/mail.ts
+ M server/src/routes/orders.ts
+ M server/src/routes/proxy-sites.ts
+ M server/src/routes/recharge.ts
+ M server/src/routes/resource-pool.ts
+ M server/src/routes/resource-risk.ts
+ M server/src/routes/system-config.ts
+ M server/src/routes/terminal.ts
+ M server/src/routes/tickets.ts
+ M server/src/routes/traffic.ts
+ M server/src/routes/transfers.ts
+ M server/src/routes/users.ts
+ M server/src/services/agent-instance-report.ts
+ M server/src/services/billing-scheduler.ts
+ M server/src/services/cranemail.ts
+ M server/src/services/flash-sales.ts
+ M server/src/services/instance-traffic-collector.ts
+ M server/src/services/resource-risk.ts
+ M server/src/services/smartermail.ts
+ M server/src/services/system-monitor.ts
+ M server/src/services/traffic-bandwidth.ts
+ M server/src/services/traffic-notifier.ts
+ M server/src/services/traffic-scheduler.ts
+ M server/src/services/traffic-utils.ts
+ M server/src/services/user-order-restrictions.ts
+ M server/src/services/vip-benefits.ts
+ M server/src/workers/restoreTaskWorker.ts
+?? AGENTS.md
+?? BEHAVIOR.md
+?? CLAUDE.md
+?? DEFECTS.md
+?? EXECUTION.md
+?? EXECUTION_LOG.md
+?? FIX_PLAN.md
+?? MAINTENANCE_PLAN.md
+?? artifacts/
+?? audits/
+?? deploy/incudal-online-task.sh.example
+?? deploy/incudal-ota-chown-wrapper.sh.example
+?? deploy/incudal-systemctl-wrapper.sh.example
+?? server/scripts/test-error-response-guards.ts
+?? server/scripts/test-redirect-validator-guards.ts
+?? server/scripts/test-safe-outbound-fetch-guards.ts
+?? skills-lock.json
+rg : The term 'rg' is not recognized as the name of a cmdlet, function, script file, or operable program. Check the 
+spelling of the name, or if a path was included, verify that the path is correct and try again.
+At line:2 char:1
++ rg -n -C 4 'space-y-3 p-4 lg:hidden|hidden overflow|min-w-|<table|<th ...
++ ~~
+    + CategoryInfo          : ObjectNotFound: (rg:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "Select-String -Path client/src/views/admin/OrdersView.vue -Pattern 'space-y-3 p-4 lg:hidden','hidden overflow','min-w-','<table','<th','@click=\"openDetail' -Context 3,3 | ForEach-Object { "'$_.ToString() }' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 611ms:
+  C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:590:          <option v-for="item in statusOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+  C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:591:        </select>
+  C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:592:        <input v-model="userId" class="input w-full sm:w-36" placeholder="用户 ID" @keyup.enter="applyFilters" />
+> C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:593:        <input v-model="keyword" class="input w-full sm:min-w-[220px] sm:flex-1" placeholder="订单号、交易号、用户名、实例名" @keyup.enter="applyFilters" />
+  C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:594:        <input v-model="createdFrom" class="input w-full sm:w-40" type="date" title="开始日期" @change="applyFilters" />
+  C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:595:        <input v-model="createdTo" class="input w-full sm:w-40" type="date" title="结束日期" @change="applyFilters" />
+  C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:596:        <button class="btn btn-outline" @click="clearFilters">重置</button>
+  C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:603:      <div v-if="loading" class="p-8 text-center text-sm text-themed-muted">正在加载订单...</div>
+  C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:604:      <div v-else-if="orders.length === 0" class="p-8 text-center text-sm text-themed-muted">暂无订单记录</div>
+  C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:605:      <template v-else>
+> C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:606:        <div class="space-y-3 p-4 lg:hidden">
+  C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:607:          <button
+  C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:608:            v-for="order in orders"
+  C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:609:            :key="order.id"
+  C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:610:            type="button"
+  C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:611:            class="block w-full rounded-lg border border-themed bg-themed p-4 text-left text-sm transition hover:bg-themed-tertiary"
+> C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:612:            @click="openDetail(order)"
+  C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:613:          >
+  C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:614:            <div class="flex items-start justify-between gap-3">
+> C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:615:              <div class="min-w-0">
+  C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:616:                <div class="font-semibold text-themed">{{ order.title }}</div>
+  C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:617:                <div class="mt-1 break-all text-xs text-themed-muted">{{ order.orderNo }}</div>
+  C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:618:              </div>
+  C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:645:            </div>
+  C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:646:          </button>
+  C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:647:        </div>
+> C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:648:        <div class="hidden overflow-x-auto lg:block">
+> C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:649:          <table class="w-full min-w-[900px] divide-y divide-themed">
+> C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:650:          <thead class="bg-themed-tertiary">
+  C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:651:            <tr class="text-left text-xs font-medium text-themed-muted">
+> C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:652:              <th class="px-4 py-3">订单</th>
+> C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:653:              <th class="px-4 py-3">用户</th>
+> C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:654:              <th class="px-4 py-3">类型</th>
+> C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:655:              <th class="px-4 py-3">金额</th>
+> C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:656:              <th class="px-4 py-3">状态</th>
+> C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:657:              <th class="px-4 py-3">关联实例</th>
+> C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:658:              <th class="px-4 py-3">时间</th>
+> C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:659:              <th class="px-4 py-3 text-right">操作</th>
+  C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:660:            </tr>
+  C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:661:          </thead>
+  C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:662:          <tbody class="divide-y divide-themed">
+  C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:683:              <td class="px-4 py-3 text-themed-muted">{{ instanceName(order) }}</td>
+  C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:684:              <td class="px-4 py-3 text-themed-muted">{{ formatTime(order.createdAt) }}</td>
+  C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:685:              <td class="px-4 py-3 text-right">
+> C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:686:                <button class="btn btn-sm btn-outline" @click="openDetail(order)">详情</button>
+  C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:687:              </td>
+  C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:688:            </tr>
+  C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:689:          </tbody>
+  C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:719:      <div v-if="requestLoading" class="p-6 text-center text-sm text-themed-muted">正在加载审批任务...</div>
+  C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:720:      <div v-else-if="adjustmentRequests.length === 0" class="p-6 text-center text-sm text-themed-muted">暂无调账审批任务</div>
+  C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:721:      <template v-else>
+> C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:722:        <div class="space-y-3 p-4 lg:hidden">
+  C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:723:          <div v-for="request in adjustmentRequests" :key="request.id" class="rounded-lg border border-themed bg-themed p-4 text-sm">
+  C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:724:            <div class="flex items-start justify-between gap-3">
+> C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:725:              <div class="min-w-0">
+  C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:726:                <div class="font-semibold text-themed">#{{ request.id }} {{ adjustmentTypeLabel(request.requestType) }}</div>
+  C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:727:                <div class="mt-1 break-words text-xs text-themed-muted">{{ request.reason }}</div>
+  C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:728:              </div>
+  C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:761:            </div>
+  C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:762:          </div>
+  C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:763:        </div>
+> C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:764:        <div class="hidden overflow-x-auto lg:block">
+> C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:765:          <table class="w-full min-w-[900px] divide-y divide-themed">
+> C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:766:          <thead class="bg-themed-tertiary">
+  C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:767:            <tr class="text-left text-xs font-medium text-themed-muted">
+> C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:768:              <th class="px-4 py-3">申请</th>
+> C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:769:              <th class="px-4 py-3">用户</th>
+> C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:770:              <th class="px-4 py-3">金额</th>
+> C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:771:              <th class="px-4 py-3">来源</th>
+> C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:772:              <th class="px-4 py-3">状态</th>
+> C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:773:              <th class="px-4 py-3">时间</th>
+> C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:774:              <th class="px-4 py-3 text-right">操作</th>
+  C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:775:            </tr>
+  C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:776:          </thead>
+  C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue:777:          <tbody class="divide-y divide-themed">
+
+apply patch
+patch: completed
+C:\Users\Administrator\Desktop\payinces\client\src\views\admin\OrdersView.vue
+diff --git a/client/src/views/admin/OrdersView.vue b/client/src/views/admin/OrdersView.vue
+index b5c92a81a67f9016c125a0fe56f8da3bc3a0a312..63a2ef32508af11cbddfed4926751aa5dde6e294
+--- a/client/src/views/admin/OrdersView.vue
++++ b/client/src/views/admin/OrdersView.vue
+@@ -645,22 +645,22 @@
+             </div>
+           </button>
+         </div>
+-        <div class="hidden overflow-x-auto lg:block">
+-          <table class="w-full min-w-[900px] divide-y divide-themed">
++        <div class="hidden overflow-hidden lg:block">
++          <table class="w-full table-fixed divide-y divide-themed">
+           <thead class="bg-themed-tertiary">
+             <tr class="text-left text-xs font-medium text-themed-muted">
+-              <th class="px-4 py-3">订单</th>
+-              <th class="px-4 py-3">用户</th>
+-              <th class="px-4 py-3">类型</th>
+-              <th class="px-4 py-3">金额</th>
+-              <th class="px-4 py-3">状态</th>
+-              <th class="px-4 py-3">关联实例</th>
+-              <th class="px-4 py-3">时间</th>
+-              <th class="px-4 py-3 text-right">操作</th>
++              <th class="w-[18%] px-4 py-3">订单</th>
++              <th class="w-[12%] px-4 py-3">用户</th>
++              <th class="w-[10%] px-4 py-3">类型</th>
++              <th class="w-[10%] px-4 py-3">金额</th>
++              <th class="w-[10%] px-4 py-3">状态</th>
++              <th class="w-[14%] px-4 py-3">关联实例</th>
++              <th class="w-[16%] px-4 py-3">时间</th>
++              <th class="w-[10%] px-4 py-3 text-right">操作</th>
+             </tr>
+           </thead>
+           <tbody class="divide-y divide-themed">
+-            <tr v-for="order in orders" :key="order.id" class="text-sm">
++            <tr v-for="order in orders" :key="order.id" class="text-sm [&>td]:break-words">
+               <td class="px-4 py-3">
+                 <div class="font-medium text-themed">{{ order.title }}</div>
+                 <div class="text-xs text-themed-muted">{{ order.orderNo }}</div>
+@@ -761,21 +761,21 @@
+             </div>
+           </div>
+         </div>
+-        <div class="hidden overflow-x-auto lg:block">
+-          <table class="w-full min-w-[900px] divide-y divide-themed">
++        <div class="hidden overflow-hidden lg:block">
++          <table class="w-full table-fixed divide-y divide-themed">
+           <thead class="bg-themed-tertiary">
+             <tr class="text-left text-xs font-medium text-themed-muted">
+-              <th class="px-4 py-3">申请</th>
+-              <th class="px-4 py-3">用户</th>
+-              <th class="px-4 py-3">金额</th>
+-              <th class="px-4 py-3">来源</th>
+-              <th class="px-4 py-3">状态</th>
+-              <th class="px-4 py-3">时间</th>
+-              <th class="px-4 py-3 text-right">操作</th>
++              <th class="w-[20%] px-4 py-3">申请</th>
++              <th class="w-[14%] px-4 py-3">用户</th>
++              <th class="w-[12%] px-4 py-3">金额</th>
++              <th class="w-[16%] px-4 py-3">来源</th>
++              <th class="w-[12%] px-4 py-3">状态</th>
++              <th class="w-[16%] px-4 py-3">时间</th>
++              <th class="w-[10%] px-4 py-3 text-right">操作</th>
+             </tr>
+           </thead>
+           <tbody class="divide-y divide-themed">
+-            <tr v-for="request in adjustmentRequests" :key="request.id" class="text-sm">
++            <tr v-for="request in adjustmentRequests" :key="request.id" class="text-sm [&>td]:break-words">
+               <td class="px-4 py-3">
+                 <div class="font-medium text-themed">#{{ request.id }} {{ adjustmentTypeLabel(request.requestType) }}</div>
+                 <div class="max-w-[260px] truncate text-xs text-themed-muted">{{ request.reason }}</div>
+
+diff --git a/client/src/views/admin/OrdersView.vue b/client/src/views/admin/OrdersView.vue
+index b5c92a81a67f9016c125a0fe56f8da3bc3a0a312..63a2ef32508af11cbddfed4926751aa5dde6e294
+--- a/client/src/views/admin/OrdersView.vue
++++ b/client/src/views/admin/OrdersView.vue
+@@ -645,22 +645,22 @@
+             </div>
+           </button>
+         </div>
+-        <div class="hidden overflow-x-auto lg:block">
+-          <table class="w-full min-w-[900px] divide-y divide-themed">
++        <div class="hidden overflow-hidden lg:block">
++          <table class="w-full table-fixed divide-y divide-themed">
+           <thead class="bg-themed-tertiary">
+             <tr class="text-left text-xs font-medium text-themed-muted">
+-              <th class="px-4 py-3">订单</th>
+-              <th class="px-4 py-3">用户</th>
+-              <th class="px-4 py-3">类型</th>
+-              <th class="px-4 py-3">金额</th>
+-              <th class="px-4 py-3">状态</th>
+-              <th class="px-4 py-3">关联实例</th>
+-              <th class="px-4 py-3">时间</th>
+-              <th class="px-4 py-3 text-right">操作</th>
++              <th class="w-[18%] px-4 py-3">订单</th>
++              <th class="w-[12%] px-4 py-3">用户</th>
++              <th class="w-[10%] px-4 py-3">类型</th>
++              <th class="w-[10%] px-4 py-3">金额</th>
++              <th class="w-[10%] px-4 py-3">状态</th>
++              <th class="w-[14%] px-4 py-3">关联实例</th>
++              <th class="w-[16%] px-4 py-3">时间</th>
++              <th class="w-[10%] px-4 py-3 text-right">操作</th>
+             </tr>
+           </thead>
+           <tbody class="divide-y divide-themed">
+-            <tr v-for="order in orders" :key="order.id" class="text-sm">
++            <tr v-for="order in orders" :key="order.id" class="text-sm [&>td]:break-words">
+               <td class="px-4 py-3">
+                 <div class="font-medium text-themed">{{ order.title }}</div>
+                 <div class="text-xs text-themed-muted">{{ order.orderNo }}</div>
+@@ -761,21 +761,21 @@
+             </div>
+           </div>
+         </div>
+-        <div class="hidden overflow-x-auto lg:block">
+-          <table class="w-full min-w-[900px] divide-y divide-themed">
++        <div class="hidden overflow-hidden lg:block">
++          <table class="w-full table-fixed divide-y divide-themed">
+           <thead class="bg-themed-tertiary">
+             <tr class="text-left text-xs font-medium text-themed-muted">
+-              <th class="px-4 py-3">申请</th>
+-              <th class="px-4 py-3">用户</th>
+-              <th class="px-4 py-3">金额</th>
+-              <th class="px-4 py-3">来源</th>
+-              <th class="px-4 py-3">状态</th>
+-              <th class="px-4 py-3">时间</th>
+-              <th class="px-4 py-3 text-right">操作</th>
++              <th class="w-[20%] px-4 py-3">申请</th>
++              <th class="w-[14%] px-4 py-3">用户</th>
++              <th class="w-[12%] px-4 py-3">金额</th>
++              <th class="w-[16%] px-4 py-3">来源</th>
++              <th class="w-[12%] px-4 py-3">状态</th>
++              <th class="w-[16%] px-4 py-3">时间</th>
++              <th class="w-[10%] px-4 py-3 text-right">操作</th>
+             </tr>
+           </thead>
+           <tbody class="divide-y divide-themed">
+-            <tr v-for="request in adjustmentRequests" :key="request.id" class="text-sm">
++            <tr v-for="request in adjustmentRequests" :key="request.id" class="text-sm [&>td]:break-words">
+               <td class="px-4 py-3">
+                 <div class="font-medium text-themed">#{{ request.id }} {{ adjustmentTypeLabel(request.requestType) }}</div>
+                 <div class="max-w-[260px] truncate text-xs text-themed-muted">{{ request.reason }}</div>
+
+codex
+最小补丁已落下：两张桌面表恢复 `overflow-hidden + table-fixed`，列宽分别按 100% 配平，并为单元格启用换行；移动卡和所有点击处理未改。现在先跑订单中心守卫，若有精确断言偏差会继续只调整该 Vue 文件。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'pnpm --filter server test:order-center-guards' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 1453ms:
+
+> server@1.3.7 test:order-center-guards C:\Users\Administrator\Desktop\payinces\server
+> node --import tsx scripts/test-order-center-guards.ts
+
+order center guards passed
+
+diff --git a/client/src/views/admin/OrdersView.vue b/client/src/views/admin/OrdersView.vue
+index b5c92a81a67f9016c125a0fe56f8da3bc3a0a312..63a2ef32508af11cbddfed4926751aa5dde6e294
+--- a/client/src/views/admin/OrdersView.vue
++++ b/client/src/views/admin/OrdersView.vue
+@@ -645,22 +645,22 @@
+             </div>
+           </button>
+         </div>
+-        <div class="hidden overflow-x-auto lg:block">
+-          <table class="w-full min-w-[900px] divide-y divide-themed">
++        <div class="hidden overflow-hidden lg:block">
++          <table class="w-full table-fixed divide-y divide-themed">
+           <thead class="bg-themed-tertiary">
+             <tr class="text-left text-xs font-medium text-themed-muted">
+-              <th class="px-4 py-3">订单</th>
+-              <th class="px-4 py-3">用户</th>
+-              <th class="px-4 py-3">类型</th>
+-              <th class="px-4 py-3">金额</th>
+-              <th class="px-4 py-3">状态</th>
+-              <th class="px-4 py-3">关联实例</th>
+-              <th class="px-4 py-3">时间</th>
+-              <th class="px-4 py-3 text-right">操作</th>
++              <th class="w-[18%] px-4 py-3">订单</th>
++              <th class="w-[12%] px-4 py-3">用户</th>
++              <th class="w-[10%] px-4 py-3">类型</th>
++              <th class="w-[10%] px-4 py-3">金额</th>
++              <th class="w-[10%] px-4 py-3">状态</th>
++              <th class="w-[14%] px-4 py-3">关联实例</th>
++              <th class="w-[16%] px-4 py-3">时间</th>
++              <th class="w-[10%] px-4 py-3 text-right">操作</th>
+             </tr>
+           </thead>
+           <tbody class="divide-y divide-themed">
+-            <tr v-for="order in orders" :key="order.id" class="text-sm">
++            <tr v-for="order in orders" :key="order.id" class="text-sm [&>td]:break-words">
+               <td class="px-4 py-3">
+                 <div class="font-medium text-themed">{{ order.title }}</div>
+                 <div class="text-xs text-themed-muted">{{ order.orderNo }}</div>
+@@ -761,21 +761,21 @@
+             </div>
+           </div>
+         </div>
+-        <div class="hidden overflow-x-auto lg:block">
+-          <table class="w-full min-w-[900px] divide-y divide-themed">
++        <div class="hidden overflow-hidden lg:block">
++          <table class="w-full table-fixed divide-y divide-themed">
+           <thead class="bg-themed-tertiary">
+             <tr class="text-left text-xs font-medium text-themed-muted">
+-              <th class="px-4 py-3">申请</th>
+-              <th class="px-4 py-3">用户</th>
+-              <th class="px-4 py-3">金额</th>
+-              <th class="px-4 py-3">来源</th>
+-              <th class="px-4 py-3">状态</th>
+-              <th class="px-4 py-3">时间</th>
+-              <th class="px-4 py-3 text-right">操作</th>
++              <th class="w-[20%] px-4 py-3">申请</th>
++              <th class="w-[14%] px-4 py-3">用户</th>
++              <th class="w-[12%] px-4 py-3">金额</th>
++              <th class="w-[16%] px-4 py-3">来源</th>
++              <th class="w-[12%] px-4 py-3">状态</th>
++              <th class="w-[16%] px-4 py-3">时间</th>
++              <th class="w-[10%] px-4 py-3 text-right">操作</th>
+             </tr>
+           </thead>
+           <tbody class="divide-y divide-themed">
+-            <tr v-for="request in adjustmentRequests" :key="request.id" class="text-sm">
++            <tr v-for="request in adjustmentRequests" :key="request.id" class="text-sm [&>td]:break-words">
+               <td class="px-4 py-3">
+                 <div class="font-medium text-themed">#{{ request.id }} {{ adjustmentTypeLabel(request.requestType) }}</div>
+                 <div class="max-w-[260px] truncate text-xs text-themed-muted">{{ request.reason }}</div>
+
+codex
+订单中心守卫已通过。接下来并行跑验收中的前端路由守卫、双端 dist 边界守卫和 client type-check；仓库已有大量与本任务无关的未提交改动，我会区分本次文件结果与外部失败，不触碰它们。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'pnpm --filter server test:frontend-route-guards' in C:\Users\Administrator\Desktop\payinces
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'pnpm --filter client type-check' in C:\Users\Administrator\Desktop\payinces
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'pnpm --filter server test:frontend-dist-boundary-guards' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 2407ms:
+
+> server@1.3.7 test:frontend-route-guards C:\Users\Administrator\Desktop\payinces\server
+> node --import tsx scripts/test-frontend-route-guards.ts
+
+frontend route guard tests passed
+
+ succeeded in 3500ms:
+
+> server@1.3.7 test:frontend-dist-boundary-guards C:\Users\Administrator\Desktop\payinces\server
+> node --import tsx scripts/test-frontend-dist-boundary-guards.ts
+
+frontend dist boundary guard tests passed
+
+diff --git a/client/src/views/admin/OrdersView.vue b/client/src/views/admin/OrdersView.vue
+index b5c92a81a67f9016c125a0fe56f8da3bc3a0a312..63a2ef32508af11cbddfed4926751aa5dde6e294
+--- a/client/src/views/admin/OrdersView.vue
++++ b/client/src/views/admin/OrdersView.vue
+@@ -645,22 +645,22 @@
+             </div>
+           </button>
+         </div>
+-        <div class="hidden overflow-x-auto lg:block">
+-          <table class="w-full min-w-[900px] divide-y divide-themed">
++        <div class="hidden overflow-hidden lg:block">
++          <table class="w-full table-fixed divide-y divide-themed">
+           <thead class="bg-themed-tertiary">
+             <tr class="text-left text-xs font-medium text-themed-muted">
+-              <th class="px-4 py-3">订单</th>
+-              <th class="px-4 py-3">用户</th>
+-              <th class="px-4 py-3">类型</th>
+-              <th class="px-4 py-3">金额</th>
+-              <th class="px-4 py-3">状态</th>
+-              <th class="px-4 py-3">关联实例</th>
+-              <th class="px-4 py-3">时间</th>
+-              <th class="px-4 py-3 text-right">操作</th>
++              <th class="w-[18%] px-4 py-3">订单</th>
++              <th class="w-[12%] px-4 py-3">用户</th>
++              <th class="w-[10%] px-4 py-3">类型</th>
++              <th class="w-[10%] px-4 py-3">金额</th>
++              <th class="w-[10%] px-4 py-3">状态</th>
++              <th class="w-[14%] px-4 py-3">关联实例</th>
++              <th class="w-[16%] px-4 py-3">时间</th>
++              <th class="w-[10%] px-4 py-3 text-right">操作</th>
+             </tr>
+           </thead>
+           <tbody class="divide-y divide-themed">
+-            <tr v-for="order in orders" :key="order.id" class="text-sm">
++            <tr v-for="order in orders" :key="order.id" class="text-sm [&>td]:break-words">
+               <td class="px-4 py-3">
+                 <div class="font-medium text-themed">{{ order.title }}</div>
+                 <div class="text-xs text-themed-muted">{{ order.orderNo }}</div>
+@@ -761,21 +761,21 @@
+             </div>
+           </div>
+         </div>
+-        <div class="hidden overflow-x-auto lg:block">
+-          <table class="w-full min-w-[900px] divide-y divide-themed">
++        <div class="hidden overflow-hidden lg:block">
++          <table class="w-full table-fixed divide-y divide-themed">
+           <thead class="bg-themed-tertiary">
+             <tr class="text-left text-xs font-medium text-themed-muted">
+-              <th class="px-4 py-3">申请</th>
+-              <th class="px-4 py-3">用户</th>
+-              <th class="px-4 py-3">金额</th>
+-              <th class="px-4 py-3">来源</th>
+-              <th class="px-4 py-3">状态</th>
+-              <th class="px-4 py-3">时间</th>
+-              <th class="px-4 py-3 text-right">操作</th>
++              <th class="w-[20%] px-4 py-3">申请</th>
++              <th class="w-[14%] px-4 py-3">用户</th>
++              <th class="w-[12%] px-4 py-3">金额</th>
++              <th class="w-[16%] px-4 py-3">来源</th>
++              <th class="w-[12%] px-4 py-3">状态</th>
++              <th class="w-[16%] px-4 py-3">时间</th>
++              <th class="w-[10%] px-4 py-3 text-right">操作</th>
+             </tr>
+           </thead>
+           <tbody class="divide-y divide-themed">
+-            <tr v-for="request in adjustmentRequests" :key="request.id" class="text-sm">
++            <tr v-for="request in adjustmentRequests" :key="request.id" class="text-sm [&>td]:break-words">
+               <td class="px-4 py-3">
+                 <div class="font-medium text-themed">#{{ request.id }} {{ adjustmentTypeLabel(request.requestType) }}</div>
+                 <div class="max-w-[260px] truncate text-xs text-themed-muted">{{ request.reason }}</div>
+
+diff --git a/client/src/views/admin/OrdersView.vue b/client/src/views/admin/OrdersView.vue
+index b5c92a81a67f9016c125a0fe56f8da3bc3a0a312..63a2ef32508af11cbddfed4926751aa5dde6e294
+--- a/client/src/views/admin/OrdersView.vue
++++ b/client/src/views/admin/OrdersView.vue
+@@ -645,22 +645,22 @@
+             </div>
+           </button>
+         </div>
+-        <div class="hidden overflow-x-auto lg:block">
+-          <table class="w-full min-w-[900px] divide-y divide-themed">
++        <div class="hidden overflow-hidden lg:block">
++          <table class="w-full table-fixed divide-y divide-themed">
+           <thead class="bg-themed-tertiary">
+             <tr class="text-left text-xs font-medium text-themed-muted">
+-              <th class="px-4 py-3">订单</th>
+-              <th class="px-4 py-3">用户</th>
+-              <th class="px-4 py-3">类型</th>
+-              <th class="px-4 py-3">金额</th>
+-              <th class="px-4 py-3">状态</th>
+-              <th class="px-4 py-3">关联实例</th>
+-              <th class="px-4 py-3">时间</th>
+-              <th class="px-4 py-3 text-right">操作</th>
++              <th class="w-[18%] px-4 py-3">订单</th>
++              <th class="w-[12%] px-4 py-3">用户</th>
++              <th class="w-[10%] px-4 py-3">类型</th>
++              <th class="w-[10%] px-4 py-3">金额</th>
++              <th class="w-[10%] px-4 py-3">状态</th>
++              <th class="w-[14%] px-4 py-3">关联实例</th>
++              <th class="w-[16%] px-4 py-3">时间</th>
++              <th class="w-[10%] px-4 py-3 text-right">操作</th>
+             </tr>
+           </thead>
+           <tbody class="divide-y divide-themed">
+-            <tr v-for="order in orders" :key="order.id" class="text-sm">
++            <tr v-for="order in orders" :key="order.id" class="text-sm [&>td]:break-words">
+               <td class="px-4 py-3">
+                 <div class="font-medium text-themed">{{ order.title }}</div>
+                 <div class="text-xs text-themed-muted">{{ order.orderNo }}</div>
+@@ -761,21 +761,21 @@
+             </div>
+           </div>
+         </div>
+-        <div class="hidden overflow-x-auto lg:block">
+-          <table class="w-full min-w-[900px] divide-y divide-themed">
++        <div class="hidden overflow-hidden lg:block">
++          <table class="w-full table-fixed divide-y divide-themed">
+           <thead class="bg-themed-tertiary">
+             <tr class="text-left text-xs font-medium text-themed-muted">
+-              <th class="px-4 py-3">申请</th>
+-              <th class="px-4 py-3">用户</th>
+-              <th class="px-4 py-3">金额</th>
+-              <th class="px-4 py-3">来源</th>
+-              <th class="px-4 py-3">状态</th>
+-              <th class="px-4 py-3">时间</th>
+-              <th class="px-4 py-3 text-right">操作</th>
++              <th class="w-[20%] px-4 py-3">申请</th>
++              <th class="w-[14%] px-4 py-3">用户</th>
++              <th class="w-[12%] px-4 py-3">金额</th>
++              <th class="w-[16%] px-4 py-3">来源</th>
++              <th class="w-[12%] px-4 py-3">状态</th>
++              <th class="w-[16%] px-4 py-3">时间</th>
++              <th class="w-[10%] px-4 py-3 text-right">操作</th>
+             </tr>
+           </thead>
+           <tbody class="divide-y divide-themed">
+-            <tr v-for="request in adjustmentRequests" :key="request.id" class="text-sm">
++            <tr v-for="request in adjustmentRequests" :key="request.id" class="text-sm [&>td]:break-words">
+               <td class="px-4 py-3">
+                 <div class="font-medium text-themed">#{{ request.id }} {{ adjustmentTypeLabel(request.requestType) }}</div>
+                 <div class="max-w-[260px] truncate text-xs text-themed-muted">{{ request.reason }}</div>
+
+diff --git a/client/src/views/admin/OrdersView.vue b/client/src/views/admin/OrdersView.vue
+index b5c92a81a67f9016c125a0fe56f8da3bc3a0a312..63a2ef32508af11cbddfed4926751aa5dde6e294
+--- a/client/src/views/admin/OrdersView.vue
++++ b/client/src/views/admin/OrdersView.vue
+@@ -645,22 +645,22 @@
+             </div>
+           </button>
+         </div>
+-        <div class="hidden overflow-x-auto lg:block">
+-          <table class="w-full min-w-[900px] divide-y divide-themed">
++        <div class="hidden overflow-hidden lg:block">
++          <table class="w-full table-fixed divide-y divide-themed">
+           <thead class="bg-themed-tertiary">
+             <tr class="text-left text-xs font-medium text-themed-muted">
+-              <th class="px-4 py-3">订单</th>
+-              <th class="px-4 py-3">用户</th>
+-              <th class="px-4 py-3">类型</th>
+-              <th class="px-4 py-3">金额</th>
+-              <th class="px-4 py-3">状态</th>
+-              <th class="px-4 py-3">关联实例</th>
+-              <th class="px-4 py-3">时间</th>
+-              <th class="px-4 py-3 text-right">操作</th>
++              <th class="w-[18%] px-4 py-3">订单</th>
++              <th class="w-[12%] px-4 py-3">用户</th>
++              <th class="w-[10%] px-4 py-3">类型</th>
++              <th class="w-[10%] px-4 py-3">金额</th>
++              <th class="w-[10%] px-4 py-3">状态</th>
++              <th class="w-[14%] px-4 py-3">关联实例</th>
++              <th class="w-[16%] px-4 py-3">时间</th>
++              <th class="w-[10%] px-4 py-3 text-right">操作</th>
+             </tr>
+           </thead>
+           <tbody class="divide-y divide-themed">
+-            <tr v-for="order in orders" :key="order.id" class="text-sm">
++            <tr v-for="order in orders" :key="order.id" class="text-sm [&>td]:break-words">
+               <td class="px-4 py-3">
+                 <div class="font-medium text-themed">{{ order.title }}</div>
+                 <div class="text-xs text-themed-muted">{{ order.orderNo }}</div>
+@@ -761,21 +761,21 @@
+             </div>
+           </div>
+         </div>
+-        <div class="hidden overflow-x-auto lg:block">
+-          <table class="w-full min-w-[900px] divide-y divide-themed">
++        <div class="hidden overflow-hidden lg:block">
++          <table class="w-full table-fixed divide-y divide-themed">
+           <thead class="bg-themed-tertiary">
+             <tr class="text-left text-xs font-medium text-themed-muted">
+-              <th class="px-4 py-3">申请</th>
+-              <th class="px-4 py-3">用户</th>
+-              <th class="px-4 py-3">金额</th>
+-              <th class="px-4 py-3">来源</th>
+-              <th class="px-4 py-3">状态</th>
+-              <th class="px-4 py-3">时间</th>
+-              <th class="px-4 py-3 text-right">操作</th>
++              <th class="w-[20%] px-4 py-3">申请</th>
++              <th class="w-[14%] px-4 py-3">用户</th>
++              <th class="w-[12%] px-4 py-3">金额</th>
++              <th class="w-[16%] px-4 py-3">来源</th>
++              <th class="w-[12%] px-4 py-3">状态</th>
++              <th class="w-[16%] px-4 py-3">时间</th>
++              <th class="w-[10%] px-4 py-3 text-right">操作</th>
+             </tr>
+           </thead>
+           <tbody class="divide-y divide-themed">
+-            <tr v-for="request in adjustmentRequests" :key="request.id" class="text-sm">
++            <tr v-for="request in adjustmentRequests" :key="request.id" class="text-sm [&>td]:break-words">
+               <td class="px-4 py-3">
+                 <div class="font-medium text-themed">#{{ request.id }} {{ adjustmentTypeLabel(request.requestType) }}</div>
+                 <div class="max-w-[260px] truncate text-xs text-themed-muted">{{ request.reason }}</div>
+
+diff --git a/client/src/views/admin/OrdersView.vue b/client/src/views/admin/OrdersView.vue
+index b5c92a81a67f9016c125a0fe56f8da3bc3a0a312..63a2ef32508af11cbddfed4926751aa5dde6e294
+--- a/client/src/views/admin/OrdersView.vue
++++ b/client/src/views/admin/OrdersView.vue
+@@ -645,22 +645,22 @@
+             </div>
+           </button>
+         </div>
+-        <div class="hidden overflow-x-auto lg:block">
+-          <table class="w-full min-w-[900px] divide-y divide-themed">
++        <div class="hidden overflow-hidden lg:block">
++          <table class="w-full table-fixed divide-y divide-themed">
+           <thead class="bg-themed-tertiary">
+             <tr class="text-left text-xs font-medium text-themed-muted">
+-              <th class="px-4 py-3">订单</th>
+-              <th class="px-4 py-3">用户</th>
+-              <th class="px-4 py-3">类型</th>
+-              <th class="px-4 py-3">金额</th>
+-              <th class="px-4 py-3">状态</th>
+-              <th class="px-4 py-3">关联实例</th>
+-              <th class="px-4 py-3">时间</th>
+-              <th class="px-4 py-3 text-right">操作</th>
++              <th class="w-[18%] px-4 py-3">订单</th>
++              <th class="w-[12%] px-4 py-3">用户</th>
++              <th class="w-[10%] px-4 py-3">类型</th>
++              <th class="w-[10%] px-4 py-3">金额</th>
++              <th class="w-[10%] px-4 py-3">状态</th>
++              <th class="w-[14%] px-4 py-3">关联实例</th>
++              <th class="w-[16%] px-4 py-3">时间</th>
++              <th class="w-[10%] px-4 py-3 text-right">操作</th>
+             </tr>
+           </thead>
+           <tbody class="divide-y divide-themed">
+-            <tr v-for="order in orders" :key="order.id" class="text-sm">
++            <tr v-for="order in orders" :key="order.id" class="text-sm [&>td]:break-words">
+               <td class="px-4 py-3">
+                 <div class="font-medium text-themed">{{ order.title }}</div>
+                 <div class="text-xs text-themed-muted">{{ order.orderNo }}</div>
+@@ -761,21 +761,21 @@
+             </div>
+           </div>
+         </div>
+-        <div class="hidden overflow-x-auto lg:block">
+-          <table class="w-full min-w-[900px] divide-y divide-themed">
++        <div class="hidden overflow-hidden lg:block">
++          <table class="w-full table-fixed divide-y divide-themed">
+           <thead class="bg-themed-tertiary">
+             <tr class="text-left text-xs font-medium text-themed-muted">
+-              <th class="px-4 py-3">申请</th>
+-              <th class="px-4 py-3">用户</th>
+-              <th class="px-4 py-3">金额</th>
+-              <th class="px-4 py-3">来源</th>
+-              <th class="px-4 py-3">状态</th>
+-              <th class="px-4 py-3">时间</th>
+-              <th class="px-4 py-3 text-right">操作</th>
++              <th class="w-[20%] px-4 py-3">申请</th>
++              <th class="w-[14%] px-4 py-3">用户</th>
++              <th class="w-[12%] px-4 py-3">金额</th>
++              <th class="w-[16%] px-4 py-3">来源</th>
++              <th class="w-[12%] px-4 py-3">状态</th>
++              <th class="w-[16%] px-4 py-3">时间</th>
++              <th class="w-[10%] px-4 py-3 text-right">操作</th>
+             </tr>
+           </thead>
+           <tbody class="divide-y divide-themed">
+-            <tr v-for="request in adjustmentRequests" :key="request.id" class="text-sm">
++            <tr v-for="request in adjustmentRequests" :key="request.id" class="text-sm [&>td]:break-words">
+               <td class="px-4 py-3">
+                 <div class="font-medium text-themed">#{{ request.id }} {{ adjustmentTypeLabel(request.requestType) }}</div>
+                 <div class="max-w-[260px] truncate text-xs text-themed-muted">{{ request.reason }}</div>
+
+diff --git a/client/src/views/admin/OrdersView.vue b/client/src/views/admin/OrdersView.vue
+index b5c92a81a67f9016c125a0fe56f8da3bc3a0a312..63a2ef32508af11cbddfed4926751aa5dde6e294
+--- a/client/src/views/admin/OrdersView.vue
++++ b/client/src/views/admin/OrdersView.vue
+@@ -645,22 +645,22 @@
+             </div>
+           </button>
+         </div>
+-        <div class="hidden overflow-x-auto lg:block">
+-          <table class="w-full min-w-[900px] divide-y divide-themed">
++        <div class="hidden overflow-hidden lg:block">
++          <table class="w-full table-fixed divide-y divide-themed">
+           <thead class="bg-themed-tertiary">
+             <tr class="text-left text-xs font-medium text-themed-muted">
+-              <th class="px-4 py-3">订单</th>
+-              <th class="px-4 py-3">用户</th>
+-              <th class="px-4 py-3">类型</th>
+-              <th class="px-4 py-3">金额</th>
+-              <th class="px-4 py-3">状态</th>
+-              <th class="px-4 py-3">关联实例</th>
+-              <th class="px-4 py-3">时间</th>
+-              <th class="px-4 py-3 text-right">操作</th>
++              <th class="w-[18%] px-4 py-3">订单</th>
++              <th class="w-[12%] px-4 py-3">用户</th>
++              <th class="w-[10%] px-4 py-3">类型</th>
++              <th class="w-[10%] px-4 py-3">金额</th>
++              <th class="w-[10%] px-4 py-3">状态</th>
++              <th class="w-[14%] px-4 py-3">关联实例</th>
++              <th class="w-[16%] px-4 py-3">时间</th>
++              <th class="w-[10%] px-4 py-3 text-right">操作</th>
+             </tr>
+           </thead>
+           <tbody class="divide-y divide-themed">
+-            <tr v-for="order in orders" :key="order.id" class="text-sm">
++            <tr v-for="order in orders" :key="order.id" class="text-sm [&>td]:break-words">
+               <td class="px-4 py-3">
+                 <div class="font-medium text-themed">{{ order.title }}</div>
+                 <div class="text-xs text-themed-muted">{{ order.orderNo }}</div>
+@@ -761,21 +761,21 @@
+             </div>
+           </div>
+         </div>
+-        <div class="hidden overflow-x-auto lg:block">
+-          <table class="w-full min-w-[900px] divide-y divide-themed">
++        <div class="hidden overflow-hidden lg:block">
++          <table class="w-full table-fixed divide-y divide-themed">
+           <thead class="bg-themed-tertiary">
+             <tr class="text-left text-xs font-medium text-themed-muted">
+-              <th class="px-4 py-3">申请</th>
+-              <th class="px-4 py-3">用户</th>
+-              <th class="px-4 py-3">金额</th>
+-              <th class="px-4 py-3">来源</th>
+-              <th class="px-4 py-3">状态</th>
+-              <th class="px-4 py-3">时间</th>
+-              <th class="px-4 py-3 text-right">操作</th>
++              <th class="w-[20%] px-4 py-3">申请</th>
++              <th class="w-[14%] px-4 py-3">用户</th>
++              <th class="w-[12%] px-4 py-3">金额</th>
++              <th class="w-[16%] px-4 py-3">来源</th>
++              <th class="w-[12%] px-4 py-3">状态</th>
++              <th class="w-[16%] px-4 py-3">时间</th>
++              <th class="w-[10%] px-4 py-3 text-right">操作</th>
+             </tr>
+           </thead>
+           <tbody class="divide-y divide-themed">
+-            <tr v-for="request in adjustmentRequests" :key="request.id" class="text-sm">
++            <tr v-for="request in adjustmentRequests" :key="request.id" class="text-sm [&>td]:break-words">
+               <td class="px-4 py-3">
+                 <div class="font-medium text-themed">#{{ request.id }} {{ adjustmentTypeLabel(request.requestType) }}</div>
+                 <div class="max-w-[260px] truncate text-xs text-themed-muted">{{ request.reason }}</div>
+
+diff --git a/client/src/views/admin/OrdersView.vue b/client/src/views/admin/OrdersView.vue
+index b5c92a81a67f9016c125a0fe56f8da3bc3a0a312..63a2ef32508af11cbddfed4926751aa5dde6e294
+--- a/client/src/views/admin/OrdersView.vue
++++ b/client/src/views/admin/OrdersView.vue
+@@ -645,22 +645,22 @@
+             </div>
+           </button>
+         </div>
+-        <div class="hidden overflow-x-auto lg:block">
+-          <table class="w-full min-w-[900px] divide-y divide-themed">
++        <div class="hidden overflow-hidden lg:block">
++          <table class="w-full table-fixed divide-y divide-themed">
+           <thead class="bg-themed-tertiary">
+             <tr class="text-left text-xs font-medium text-themed-muted">
+-              <th class="px-4 py-3">订单</th>
+-              <th class="px-4 py-3">用户</th>
+-              <th class="px-4 py-3">类型</th>
+-              <th class="px-4 py-3">金额</th>
+-              <th class="px-4 py-3">状态</th>
+-              <th class="px-4 py-3">关联实例</th>
+-              <th class="px-4 py-3">时间</th>
+-              <th class="px-4 py-3 text-right">操作</th>
++              <th class="w-[18%] px-4 py-3">订单</th>
++              <th class="w-[12%] px-4 py-3">用户</th>
++              <th class="w-[10%] px-4 py-3">类型</th>
++              <th class="w-[10%] px-4 py-3">金额</th>
++              <th class="w-[10%] px-4 py-3">状态</th>
++              <th class="w-[14%] px-4 py-3">关联实例</th>
++              <th class="w-[16%] px-4 py-3">时间</th>
++              <th class="w-[10%] px-4 py-3 text-right">操作</th>
+             </tr>
+           </thead>
+           <tbody class="divide-y divide-themed">
+-            <tr v-for="order in orders" :key="order.id" class="text-sm">
++            <tr v-for="order in orders" :key="order.id" class="text-sm [&>td]:break-words">
+               <td class="px-4 py-3">
+                 <div class="font-medium text-themed">{{ order.title }}</div>
+                 <div class="text-xs text-themed-muted">{{ order.orderNo }}</div>
+@@ -761,21 +761,21 @@
+             </div>
+           </div>
+         </div>
+-        <div class="hidden overflow-x-auto lg:block">
+-          <table class="w-full min-w-[900px] divide-y divide-themed">
++        <div class="hidden overflow-hidden lg:block">
++          <table class="w-full table-fixed divide-y divide-themed">
+           <thead class="bg-themed-tertiary">
+             <tr class="text-left text-xs font-medium text-themed-muted">
+-              <th class="px-4 py-3">申请</th>
+-              <th class="px-4 py-3">用户</th>
+-              <th class="px-4 py-3">金额</th>
+-              <th class="px-4 py-3">来源</th>
+-              <th class="px-4 py-3">状态</th>
+-              <th class="px-4 py-3">时间</th>
+-              <th class="px-4 py-3 text-right">操作</th>
++              <th class="w-[20%] px-4 py-3">申请</th>
++              <th class="w-[14%] px-4 py-3">用户</th>
++              <th class="w-[12%] px-4 py-3">金额</th>
++              <th class="w-[16%] px-4 py-3">来源</th>
++              <th class="w-[12%] px-4 py-3">状态</th>
++              <th class="w-[16%] px-4 py-3">时间</th>
++              <th class="w-[10%] px-4 py-3 text-right">操作</th>
+             </tr>
+           </thead>
+           <tbody class="divide-y divide-themed">
+-            <tr v-for="request in adjustmentRequests" :key="request.id" class="text-sm">
++            <tr v-for="request in adjustmentRequests" :key="request.id" class="text-sm [&>td]:break-words">
+               <td class="px-4 py-3">
+                 <div class="font-medium text-themed">#{{ request.id }} {{ adjustmentTypeLabel(request.requestType) }}</div>
+                 <div class="max-w-[260px] truncate text-xs text-themed-muted">{{ request.reason }}</div>
+
+diff --git a/client/src/views/admin/OrdersView.vue b/client/src/views/admin/OrdersView.vue
+index b5c92a81a67f9016c125a0fe56f8da3bc3a0a312..63a2ef32508af11cbddfed4926751aa5dde6e294
+--- a/client/src/views/admin/OrdersView.vue
++++ b/client/src/views/admin/OrdersView.vue
+@@ -645,22 +645,22 @@
+             </div>
+           </button>
+         </div>
+-        <div class="hidden overflow-x-auto lg:block">
+-          <table class="w-full min-w-[900px] divide-y divide-themed">
++        <div class="hidden overflow-hidden lg:block">
++          <table class="w-full table-fixed divide-y divide-themed">
+           <thead class="bg-themed-tertiary">
+             <tr class="text-left text-xs font-medium text-themed-muted">
+-              <th class="px-4 py-3">订单</th>
+-              <th class="px-4 py-3">用户</th>
+-              <th class="px-4 py-3">类型</th>
+-              <th class="px-4 py-3">金额</th>
+-              <th class="px-4 py-3">状态</th>
+-              <th class="px-4 py-3">关联实例</th>
+-              <th class="px-4 py-3">时间</th>
+-              <th class="px-4 py-3 text-right">操作</th>
++              <th class="w-[18%] px-4 py-3">订单</th>
++              <th class="w-[12%] px-4 py-3">用户</th>
++              <th class="w-[10%] px-4 py-3">类型</th>
++              <th class="w-[10%] px-4 py-3">金额</th>
++              <th class="w-[10%] px-4 py-3">状态</th>
++              <th class="w-[14%] px-4 py-3">关联实例</th>
++              <th class="w-[16%] px-4 py-3">时间</th>
++              <th class="w-[10%] px-4 py-3 text-right">操作</th>
+             </tr>
+           </thead>
+           <tbody class="divide-y divide-themed">
+-            <tr v-for="order in orders" :key="order.id" class="text-sm">
++            <tr v-for="order in orders" :key="order.id" class="text-sm [&>td]:break-words">
+               <td class="px-4 py-3">
+                 <div class="font-medium text-themed">{{ order.title }}</div>
+                 <div class="text-xs text-themed-muted">{{ order.orderNo }}</div>
+@@ -761,21 +761,21 @@
+             </div>
+           </div>
+         </div>
+-        <div class="hidden overflow-x-auto lg:block">
+-          <table class="w-full min-w-[900px] divide-y divide-themed">
++        <div class="hidden overflow-hidden lg:block">
++          <table class="w-full table-fixed divide-y divide-themed">
+           <thead class="bg-themed-tertiary">
+             <tr class="text-left text-xs font-medium text-themed-muted">
+-              <th class="px-4 py-3">申请</th>
+-              <th class="px-4 py-3">用户</th>
+-              <th class="px-4 py-3">金额</th>
+-              <th class="px-4 py-3">来源</th>
+-              <th class="px-4 py-3">状态</th>
+-              <th class="px-4 py-3">时间</th>
+-              <th class="px-4 py-3 text-right">操作</th>
++              <th class="w-[20%] px-4 py-3">申请</th>
++              <th class="w-[14%] px-4 py-3">用户</th>
++              <th class="w-[12%] px-4 py-3">金额</th>
++              <th class="w-[16%] px-4 py-3">来源</th>
++              <th class="w-[12%] px-4 py-3">状态</th>
++              <th class="w-[16%] px-4 py-3">时间</th>
++              <th class="w-[10%] px-4 py-3 text-right">操作</th>
+             </tr>
+           </thead>
+           <tbody class="divide-y divide-themed">
+-            <tr v-for="request in adjustmentRequests" :key="request.id" class="text-sm">
++            <tr v-for="request in adjustmentRequests" :key="request.id" class="text-sm [&>td]:break-words">
+               <td class="px-4 py-3">
+                 <div class="font-medium text-themed">#{{ request.id }} {{ adjustmentTypeLabel(request.requestType) }}</div>
+                 <div class="max-w-[260px] truncate text-xs text-themed-muted">{{ request.reason }}</div>
+
+ succeeded in 32916ms:
+
+> client@1.3.7 type-check C:\Users\Administrator\Desktop\payinces\client
+> vue-tsc --noEmit
+
+
+diff --git a/client/src/views/admin/OrdersView.vue b/client/src/views/admin/OrdersView.vue
+index b5c92a81a67f9016c125a0fe56f8da3bc3a0a312..63a2ef32508af11cbddfed4926751aa5dde6e294
+--- a/client/src/views/admin/OrdersView.vue
++++ b/client/src/views/admin/OrdersView.vue
+@@ -645,22 +645,22 @@
+             </div>
+           </button>
+         </div>
+-        <div class="hidden overflow-x-auto lg:block">
+-          <table class="w-full min-w-[900px] divide-y divide-themed">
++        <div class="hidden overflow-hidden lg:block">
++          <table class="w-full table-fixed divide-y divide-themed">
+           <thead class="bg-themed-tertiary">
+             <tr class="text-left text-xs font-medium text-themed-muted">
+-              <th class="px-4 py-3">订单</th>
+-              <th class="px-4 py-3">用户</th>
+-              <th class="px-4 py-3">类型</th>
+-              <th class="px-4 py-3">金额</th>
+-              <th class="px-4 py-3">状态</th>
+-              <th class="px-4 py-3">关联实例</th>
+-              <th class="px-4 py-3">时间</th>
+-              <th class="px-4 py-3 text-right">操作</th>
++              <th class="w-[18%] px-4 py-3">订单</th>
++              <th class="w-[12%] px-4 py-3">用户</th>
++              <th class="w-[10%] px-4 py-3">类型</th>
++              <th class="w-[10%] px-4 py-3">金额</th>
++              <th class="w-[10%] px-4 py-3">状态</th>
++              <th class="w-[14%] px-4 py-3">关联实例</th>
++              <th class="w-[16%] px-4 py-3">时间</th>
++              <th class="w-[10%] px-4 py-3 text-right">操作</th>
+             </tr>
+           </thead>
+           <tbody class="divide-y divide-themed">
+-            <tr v-for="order in orders" :key="order.id" class="text-sm">
++            <tr v-for="order in orders" :key="order.id" class="text-sm [&>td]:break-words">
+               <td class="px-4 py-3">
+                 <div class="font-medium text-themed">{{ order.title }}</div>
+                 <div class="text-xs text-themed-muted">{{ order.orderNo }}</div>
+@@ -761,21 +761,21 @@
+             </div>
+           </div>
+         </div>
+-        <div class="hidden overflow-x-auto lg:block">
+-          <table class="w-full min-w-[900px] divide-y divide-themed">
++        <div class="hidden overflow-hidden lg:block">
++          <table class="w-full table-fixed divide-y divide-themed">
+           <thead class="bg-themed-tertiary">
+             <tr class="text-left text-xs font-medium text-themed-muted">
+-              <th class="px-4 py-3">申请</th>
+-              <th class="px-4 py-3">用户</th>
+-              <th class="px-4 py-3">金额</th>
+-              <th class="px-4 py-3">来源</th>
+-              <th class="px-4 py-3">状态</th>
+-              <th class="px-4 py-3">时间</th>
+-              <th class="px-4 py-3 text-right">操作</th>
++              <th class="w-[20%] px-4 py-3">申请</th>
++              <th class="w-[14%] px-4 py-3">用户</th>
++              <th class="w-[12%] px-4 py-3">金额</th>
++              <th class="w-[16%] px-4 py-3">来源</th>
++              <th class="w-[12%] px-4 py-3">状态</th>
++              <th class="w-[16%] px-4 py-3">时间</th>
++              <th class="w-[10%] px-4 py-3 text-right">操作</th>
+             </tr>
+           </thead>
+           <tbody class="divide-y divide-themed">
+-            <tr v-for="request in adjustmentRequests" :key="request.id" class="text-sm">
++            <tr v-for="request in adjustmentRequests" :key="request.id" class="text-sm [&>td]:break-words">
+               <td class="px-4 py-3">
+                 <div class="font-medium text-themed">#{{ request.id }} {{ adjustmentTypeLabel(request.requestType) }}</div>
+                 <div class="max-w-[260px] truncate text-xs text-themed-muted">{{ request.reason }}</div>
+
+codex
+三项验收均已通过。最后我只审阅本文件 diff，确认改动仅限表格布局 class/列宽、没有改动任何 `@click` 或业务代码，也确认未产生提交。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'git diff --check -- client/src/views/admin/OrdersView.vue
+git diff -- client/src/views/admin/OrdersView.vue
+git status --short -- client/src/views/admin/OrdersView.vue' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 626ms:
+diff --git a/client/src/views/admin/OrdersView.vue b/client/src/views/admin/OrdersView.vue
+index b5c92a8..63a2ef3 100644
+--- a/client/src/views/admin/OrdersView.vue
++++ b/client/src/views/admin/OrdersView.vue
+@@ -645,22 +645,22 @@ onMounted(() => {
+             </div>
+           </button>
+         </div>
+-        <div class="hidden overflow-x-auto lg:block">
+-          <table class="w-full min-w-[900px] divide-y divide-themed">
++        <div class="hidden overflow-hidden lg:block">
++          <table class="w-full table-fixed divide-y divide-themed">
+           <thead class="bg-themed-tertiary">
+             <tr class="text-left text-xs font-medium text-themed-muted">
+-              <th class="px-4 py-3">订单</th>
+-              <th class="px-4 py-3">用户</th>
+-              <th class="px-4 py-3">类型</th>
+-              <th class="px-4 py-3">金额</th>
+-              <th class="px-4 py-3">状态</th>
+-              <th class="px-4 py-3">关联实例</th>
+-              <th class="px-4 py-3">时间</th>
+-              <th class="px-4 py-3 text-right">操作</th>
++              <th class="w-[18%] px-4 py-3">订单</th>
++              <th class="w-[12%] px-4 py-3">用户</th>
++              <th class="w-[10%] px-4 py-3">类型</th>
++              <th class="w-[10%] px-4 py-3">金额</th>
++              <th class="w-[10%] px-4 py-3">状态</th>
++              <th class="w-[14%] px-4 py-3">关联实例</th>
++              <th class="w-[16%] px-4 py-3">时间</th>
++              <th class="w-[10%] px-4 py-3 text-right">操作</th>
+             </tr>
+           </thead>
+           <tbody class="divide-y divide-themed">
+-            <tr v-for="order in orders" :key="order.id" class="text-sm">
++            <tr v-for="order in orders" :key="order.id" class="text-sm [&>td]:break-words">
+               <td class="px-4 py-3">
+                 <div class="font-medium text-themed">{{ order.title }}</div>
+                 <div class="text-xs text-themed-muted">{{ order.orderNo }}</div>
+@@ -761,21 +761,21 @@ onMounted(() => {
+             </div>
+           </div>
+         </div>
+-        <div class="hidden overflow-x-auto lg:block">
+-          <table class="w-full min-w-[900px] divide-y divide-themed">
++        <div class="hidden overflow-hidden lg:block">
++          <table class="w-full table-fixed divide-y divide-themed">
+           <thead class="bg-themed-tertiary">
+             <tr class="text-left text-xs font-medium text-themed-muted">
+-              <th class="px-4 py-3">申请</th>
+-              <th class="px-4 py-3">用户</th>
+-              <th class="px-4 py-3">金额</th>
+-              <th class="px-4 py-3">来源</th>
+-              <th class="px-4 py-3">状态</th>
+-              <th class="px-4 py-3">时间</th>
+-              <th class="px-4 py-3 text-right">操作</th>
++              <th class="w-[20%] px-4 py-3">申请</th>
++              <th class="w-[14%] px-4 py-3">用户</th>
++              <th class="w-[12%] px-4 py-3">金额</th>
++              <th class="w-[16%] px-4 py-3">来源</th>
++              <th class="w-[12%] px-4 py-3">状态</th>
++              <th class="w-[16%] px-4 py-3">时间</th>
++              <th class="w-[10%] px-4 py-3 text-right">操作</th>
+             </tr>
+           </thead>
+           <tbody class="divide-y divide-themed">
+-            <tr v-for="request in adjustmentRequests" :key="request.id" class="text-sm">
++            <tr v-for="request in adjustmentRequests" :key="request.id" class="text-sm [&>td]:break-words">
+               <td class="px-4 py-3">
+                 <div class="font-medium text-themed">#{{ request.id }} {{ adjustmentTypeLabel(request.requestType) }}</div>
+                 <div class="max-w-[260px] truncate text-xs text-themed-muted">{{ request.reason }}</div>
+ M client/src/views/admin/OrdersView.vue
+warning: in the working copy of 'client/src/views/admin/OrdersView.vue', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'client/src/views/admin/OrdersView.vue', LF will be replaced by CRLF the next time Git touches it
+
+diff --git a/client/src/views/admin/OrdersView.vue b/client/src/views/admin/OrdersView.vue
+index b5c92a81a67f9016c125a0fe56f8da3bc3a0a312..63a2ef32508af11cbddfed4926751aa5dde6e294
+--- a/client/src/views/admin/OrdersView.vue
++++ b/client/src/views/admin/OrdersView.vue
+@@ -645,22 +645,22 @@
+             </div>
+           </button>
+         </div>
+-        <div class="hidden overflow-x-auto lg:block">
+-          <table class="w-full min-w-[900px] divide-y divide-themed">
++        <div class="hidden overflow-hidden lg:block">
++          <table class="w-full table-fixed divide-y divide-themed">
+           <thead class="bg-themed-tertiary">
+             <tr class="text-left text-xs font-medium text-themed-muted">
+-              <th class="px-4 py-3">订单</th>
+-              <th class="px-4 py-3">用户</th>
+-              <th class="px-4 py-3">类型</th>
+-              <th class="px-4 py-3">金额</th>
+-              <th class="px-4 py-3">状态</th>
+-              <th class="px-4 py-3">关联实例</th>
+-              <th class="px-4 py-3">时间</th>
+-              <th class="px-4 py-3 text-right">操作</th>
++              <th class="w-[18%] px-4 py-3">订单</th>
++              <th class="w-[12%] px-4 py-3">用户</th>
++              <th class="w-[10%] px-4 py-3">类型</th>
++              <th class="w-[10%] px-4 py-3">金额</th>
++              <th class="w-[10%] px-4 py-3">状态</th>
++              <th class="w-[14%] px-4 py-3">关联实例</th>
++              <th class="w-[16%] px-4 py-3">时间</th>
++              <th class="w-[10%] px-4 py-3 text-right">操作</th>
+             </tr>
+           </thead>
+           <tbody class="divide-y divide-themed">
+-            <tr v-for="order in orders" :key="order.id" class="text-sm">
++            <tr v-for="order in orders" :key="order.id" class="text-sm [&>td]:break-words">
+               <td class="px-4 py-3">
+                 <div class="font-medium text-themed">{{ order.title }}</div>
+                 <div class="text-xs text-themed-muted">{{ order.orderNo }}</div>
+@@ -761,21 +761,21 @@
+             </div>
+           </div>
+         </div>
+-        <div class="hidden overflow-x-auto lg:block">
+-          <table class="w-full min-w-[900px] divide-y divide-themed">
++        <div class="hidden overflow-hidden lg:block">
++          <table class="w-full table-fixed divide-y divide-themed">
+           <thead class="bg-themed-tertiary">
+             <tr class="text-left text-xs font-medium text-themed-muted">
+-              <th class="px-4 py-3">申请</th>
+-              <th class="px-4 py-3">用户</th>
+-              <th class="px-4 py-3">金额</th>
+-              <th class="px-4 py-3">来源</th>
+-              <th class="px-4 py-3">状态</th>
+-              <th class="px-4 py-3">时间</th>
+-              <th class="px-4 py-3 text-right">操作</th>
++              <th class="w-[20%] px-4 py-3">申请</th>
++              <th class="w-[14%] px-4 py-3">用户</th>
++              <th class="w-[12%] px-4 py-3">金额</th>
++              <th class="w-[16%] px-4 py-3">来源</th>
++              <th class="w-[12%] px-4 py-3">状态</th>
++              <th class="w-[16%] px-4 py-3">时间</th>
++              <th class="w-[10%] px-4 py-3 text-right">操作</th>
+             </tr>
+           </thead>
+           <tbody class="divide-y divide-themed">
+-            <tr v-for="request in adjustmentRequests" :key="request.id" class="text-sm">
++            <tr v-for="request in adjustmentRequests" :key="request.id" class="text-sm [&>td]:break-words">
+               <td class="px-4 py-3">
+                 <div class="font-medium text-themed">#{{ request.id }} {{ adjustmentTypeLabel(request.requestType) }}</div>
+                 <div class="max-w-[260px] truncate text-xs text-themed-muted">{{ request.reason }}</div>
+
+codex
+已完成，仅修改 [OrdersView.vue](C:/Users/Administrator/Desktop/payinces/client/src/views/admin/OrdersView.vue:648)。
+
+- 两张表恢复“移动卡 + PC 定宽表”
+- 桌面容器恢复 `hidden overflow-hidden lg:block`
+- 表格恢复 `w-full table-fixed`
+- 列宽均合计 100%，单元格允许换行
+- 移除表格横滚及 `min-w-[900px]`
+- 所有 `@click` 与业务逻辑保持不变
+- `git diff --check` 通过
+- 未 commit
+
+验收全部通过：
+
+- `test:order-center-guards`
+- `test:frontend-route-guards`
+- `test:frontend-dist-boundary-guards`
+- `client type-check`
+diff --git a/client/src/views/admin/OrdersView.vue b/client/src/views/admin/OrdersView.vue
+index b5c92a81a67f9016c125a0fe56f8da3bc3a0a312..63a2ef32508af11cbddfed4926751aa5dde6e294
+--- a/client/src/views/admin/OrdersView.vue
++++ b/client/src/views/admin/OrdersView.vue
+@@ -645,22 +645,22 @@
+             </div>
+           </button>
+         </div>
+-        <div class="hidden overflow-x-auto lg:block">
+-          <table class="w-full min-w-[900px] divide-y divide-themed">
++        <div class="hidden overflow-hidden lg:block">
++          <table class="w-full table-fixed divide-y divide-themed">
+           <thead class="bg-themed-tertiary">
+             <tr class="text-left text-xs font-medium text-themed-muted">
+-              <th class="px-4 py-3">订单</th>
+-              <th class="px-4 py-3">用户</th>
+-              <th class="px-4 py-3">类型</th>
+-              <th class="px-4 py-3">金额</th>
+-              <th class="px-4 py-3">状态</th>
+-              <th class="px-4 py-3">关联实例</th>
+-              <th class="px-4 py-3">时间</th>
+-              <th class="px-4 py-3 text-right">操作</th>
++              <th class="w-[18%] px-4 py-3">订单</th>
++              <th class="w-[12%] px-4 py-3">用户</th>
++              <th class="w-[10%] px-4 py-3">类型</th>
++              <th class="w-[10%] px-4 py-3">金额</th>
++              <th class="w-[10%] px-4 py-3">状态</th>
++              <th class="w-[14%] px-4 py-3">关联实例</th>
++              <th class="w-[16%] px-4 py-3">时间</th>
++              <th class="w-[10%] px-4 py-3 text-right">操作</th>
+             </tr>
+           </thead>
+           <tbody class="divide-y divide-themed">
+-            <tr v-for="order in orders" :key="order.id" class="text-sm">
++            <tr v-for="order in orders" :key="order.id" class="text-sm [&>td]:break-words">
+               <td class="px-4 py-3">
+                 <div class="font-medium text-themed">{{ order.title }}</div>
+                 <div class="text-xs text-themed-muted">{{ order.orderNo }}</div>
+@@ -761,21 +761,21 @@
+             </div>
+           </div>
+         </div>
+-        <div class="hidden overflow-x-auto lg:block">
+-          <table class="w-full min-w-[900px] divide-y divide-themed">
++        <div class="hidden overflow-hidden lg:block">
++          <table class="w-full table-fixed divide-y divide-themed">
+           <thead class="bg-themed-tertiary">
+             <tr class="text-left text-xs font-medium text-themed-muted">
+-              <th class="px-4 py-3">申请</th>
+-              <th class="px-4 py-3">用户</th>
+-              <th class="px-4 py-3">金额</th>
+-              <th class="px-4 py-3">来源</th>
+-              <th class="px-4 py-3">状态</th>
+-              <th class="px-4 py-3">时间</th>
+-              <th class="px-4 py-3 text-right">操作</th>
++              <th class="w-[20%] px-4 py-3">申请</th>
++              <th class="w-[14%] px-4 py-3">用户</th>
++              <th class="w-[12%] px-4 py-3">金额</th>
++              <th class="w-[16%] px-4 py-3">来源</th>
++              <th class="w-[12%] px-4 py-3">状态</th>
++              <th class="w-[16%] px-4 py-3">时间</th>
++              <th class="w-[10%] px-4 py-3 text-right">操作</th>
+             </tr>
+           </thead>
+           <tbody class="divide-y divide-themed">
+-            <tr v-for="request in adjustmentRequests" :key="request.id" class="text-sm">
++            <tr v-for="request in adjustmentRequests" :key="request.id" class="text-sm [&>td]:break-words">
+               <td class="px-4 py-3">
+                 <div class="font-medium text-themed">#{{ request.id }} {{ adjustmentTypeLabel(request.requestType) }}</div>
+                 <div class="max-w-[260px] truncate text-xs text-themed-muted">{{ request.reason }}</div>
+
+tokens used
+57,724

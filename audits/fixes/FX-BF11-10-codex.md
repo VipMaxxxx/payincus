@@ -1,0 +1,1 @@
+已完成 BF-11-10：`getHostTickets`、`getOwnerAllTickets` 改为完整候选集上计算 `needsReply/SLA`、过滤、稳定排序（ID 兜底），最后分页；`total/totalPages` 按过滤后结果计算。AI 队列移除过滤前 30 条限制，完整过滤后再取批次。已追加守卫；`ticket-query-guards`、`ai-ticket-context-guards`、server type-check、`git diff --check` 全部通过。未触碰 plugin/schema/package 的现有并行改动，未 commit/push/发版。

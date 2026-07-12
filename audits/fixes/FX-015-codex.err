@@ -1,0 +1,2261 @@
+OpenAI Codex v0.144.0-alpha.4
+--------
+workdir: C:\Users\Administrator\Desktop\payinces
+model: gpt-5.6-sol
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: high
+reasoning summaries: none
+session id: 019f52e2-8dc6-7b00-bb56-a7c91b9efb17
+--------
+user
+你是 PayIncus 实现工程师。先读 AGENTS.md(销毁/退款/托管高危,先读代码+守卫;不 commit/push/发版、不大重构)。严格按规格只改 instance-destroy.ts 回扣金额口径与守卫。不要碰 users.ts / hosting.ts(并行任务)。改完跑守卫报告。不要 commit。
+---
+# FX-015 规格：用户销毁托管实例的手续费实际归节点主人而非平台(E19 / BF-10-06)
+
+## owner 裁决(BEHAVIOR.md E19)
+用户销毁托管实例产生的手续费应归平台。
+
+## 根因
+server/src/routes/instance-destroy.ts:264-318 用户自助销毁:
+买家退款 = 剩余价值 R − 手续费 F;回扣节点主人时只扣 **post-fee 金额**(=退款额 R−F)。
+于是节点主人净留 = 已消费部分 + 手续费 F(手续费落节点主人口袋),而非平台。
+
+## 目标经济口径(修法核心)
+手续费 F 应归平台:对托管实例,回扣节点主人应扣**剩余价值全额 R(pre-fee)**,而非 post-fee 的 R−F。
+结果:节点主人被扣 R;买家拿回 R−F;平台净得 F(手续费)。非托管(官方节点)实例不涉及回扣,不受影响。
+
+## 修法（只改 server/src/routes/instance-destroy.ts;不碰 package.json)
+1. 先只读通读销毁退款段:定位剩余价值 R(pre-fee,即手续费扣除前的可退价值)、手续费 F、给买家的退款额(R−F)、以及 deductHostingBalance 当前传入的金额。
+2. 把 deductHostingBalance 回扣金额从"退款额(R−F)"改为"**剩余价值 R(pre-fee)**"。买家退款额(R−F)不变;仅节点主人回扣口径改为 pre-fee 全额,使手续费差额 F 留在平台。
+3. `error` 状态实例免手续费(F=0)的情形:此时 R−F=R,口径本就一致,保持。
+4. 与 FX-011(管理员退款回扣,admin-billing.ts)不冲突:那条不涉及销毁手续费。本条仅动 instance-destroy 用户自助销毁。E18(扣不满记欠款)是另一条 FX,本条不实现。
+
+## 加守卫
+在现有 server/scripts/test-user-destroy-incus-order.ts 或最贴近的销毁守卫追加断言:托管实例回扣节点主人用 pre-fee 剩余价值(手续费归平台)。不改 package.json。
+
+## 验收
+- pnpm --filter server type-check 通过;pnpm --filter server test:user-destroy-incus-order、test:hosting-balance-guards 通过。
+
+## 交付
+一段话:R/F/退款额各是哪个变量、回扣金额如何从 R−F 改为 R、守卫结果。不要 commit。
+
+codex
+我会严格限定在 `server/src/routes/instance-destroy.ts` 和现有销毁守卫文件：先通读退款/回扣代码与相关守卫，再做最小改动；不碰 `users.ts`、`hosting.ts`、package.json，也不 commit/push/发版。完成后跑指定 type-check 和两项守卫。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$files = @('"'AGENTS.md','server/src/routes/instance-destroy.ts','server/scripts/test-user-destroy-incus-order.ts'); foreach ("'$f in $files) { Write-Output "FILE: $f"; Get-Content -LiteralPath $f }' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 845ms:
+FILE: AGENTS.md
+# PayIncus / Incudal â€” é¡¹ç›®ç»Ÿä¸€è§„çŸ©ï¼ˆAGENTS.mdï¼‰
+
+> æœ¬æ–‡ä»¶æ˜¯æœ¬ä»“åº“**æ‰€æœ‰ AI agentï¼ˆClaude Codeã€codex ç­‰ï¼‰çš„ç»Ÿä¸€å·¥ä½œè§„èŒƒ**ã€‚
+> `CLAUDE.md` é€šè¿‡ `@AGENTS.md` å¼•ç”¨æœ¬æ–‡ä»¶ â€”â€” Claude Code ä¸Ž codex è¯»åˆ°çš„æ˜¯**åŒä¸€å¥—è§„çŸ©**ï¼Œæ”¹è¿™ä¸€ä¸ªæ–‡ä»¶å³å¯ã€‚
+> æƒå¨è¿ç»´/å‘ç‰ˆäº‹å®žä»¥ä»“åº“æ ¹çš„ `OPERATIONS_HANDOFF.md`ï¼ˆæ“ä½œæ‰‹å†Œï¼‰ä¸Ž `HANDOFF.md`ï¼ˆç‰ˆæœ¬è¯æ®å°è´¦ï¼‰ä¸ºå‡†ã€‚
+
+---
+
+## 0. æ²Ÿé€šè¯­è¨€
+- ä¸Ž owner é»˜è®¤ç”¨**ä¸­æ–‡**æ²Ÿé€šã€‚
+
+## 1. è¿™æ˜¯ä»€ä¹ˆé¡¹ç›®
+**PayIncus**ï¼ˆå†…éƒ¨ä»£å· `incudal`ï¼‰â€”â€”å•†ç”¨ Incusï¼ˆLXC/KVMï¼‰NAT VPS å”®å–ä¸Žäº¤ä»˜å¹³å°ï¼Œ**çº¿ä¸Šè¿è¥ä¸­**ã€‚å½“å‰ç”Ÿäº§ç‰ˆæœ¬ **v1.3.7**ã€‚pnpm monorepoï¼š
+
+| ç›®å½• | æŠ€æœ¯æ ˆ / ä½œç”¨ |
+|------|----------------|
+| `client/` | Vue 3 + Vite SPAã€‚åŒç«¯æž„å»ºï¼ˆ`VITE_APP_ENTRY`ï¼‰â†’ `dist/user`ï¼ˆpay.payincus.comï¼‰+ `dist/admin`ï¼ˆadmin.payincus.comï¼‰ã€‚ä¸¤ç«¯ç‹¬ç«‹æºã€**ä¸å…±äº« cookie åŸŸ**ã€‚ |
+| `server/` | Fastify 5 + Prisma 7 + PostgreSQLï¼Œ~300 TS æ–‡ä»¶ã€~70 è·¯ç”±ã€~15 è°ƒåº¦/workerã€‚æ—  Redisï¼ˆç”¨ PG advisory lockï¼‰ã€‚ä¸‰å¥—é‰´æƒé¢ï¼šWeb çš„ JWT+refresh cookieã€Public API çš„ `pat_`/`poa_` tokenã€host agent çš„ HMACã€‚ |
+| `agent/` | Go å®¿ä¸» agentï¼Œåªè¯»ç›‘æŽ§ï¼ˆå¿ƒè·³/èµ„æº/å®žä¾‹æ€/æµé‡ï¼‰ï¼ŒHMAC ç­¾åï¼Œè‡ªå‡çº§ã€‚ |
+| å…¶å®ƒ | `docs-site/`ï¼ˆVitePressï¼‰ã€`deploy/`ï¼ˆsystemd+Nginxï¼‰ã€`scripts/`ï¼ˆå®‰è£…/æ ¡éªŒ/OTAï¼‰ã€`plugin-templates/`ã€`theme-templates/`ã€‚ |
+
+éƒ¨ç½²ï¼šä¸‰å±‚æ‹†åˆ†ï¼ˆuser / admin / ç§æœ‰åŽç«¯ `127.0.0.1:3001`ï¼‰ï¼Œè£…æœºæ ¹ `/opt/incudal`ï¼ŒåŽŸå­ OTAï¼ˆ`releases/<ver-ts>` + `current` è½¯é“¾ï¼‰+ è‡ªåŠ¨å›žæ»šã€‚
+
+---
+
+## 2. ðŸ”´ ç¡¬è§„çŸ©ï¼ˆä¸å¯åå•†ï¼Œè¿åå³äº‹æ•…ï¼‰
+
+1. **ä¸ç¢°ç”Ÿäº§**ï¼šæœªç» owner æ˜Žç¡®è¦æ±‚ï¼Œ**ç»ä¸** OTAã€å‘å¸ƒã€pushã€æ‰“ tagã€æ”¹ç”Ÿäº§çŽ¯å¢ƒã€‚
+2. **ä¸åšç ´åæ€§ git**ï¼šæœªç» owner æ˜Žç¡®è¦æ±‚ï¼Œ**ç»ä¸** `git reset`ã€`git checkout --`ã€å¼ºåˆ¶åˆ é™¤ã€æ¸…ç†æœªè·Ÿè¸ªæ–‡ä»¶ã€`git commit`/`git push`ã€‚
+3. **é«˜å±è·¯å¾„å…ˆè¯»åŽå†™**ï¼šæ”¹åŠ¨ä»¥ä¸‹ä»»ä¸€é¢†åŸŸï¼Œ**å¿…é¡»å…ˆè¯»ç›¸å…³ä»£ç  + å¯¹åº”å®ˆå«æµ‹è¯•**å†åŠ¨æ‰‹ï¼š
+   > é‰´æƒ Â· æ”¯ä»˜ Â· æƒé™ Â· é£ŽæŽ§ Â· èµ„æºäº¤ä»˜ Â· å…‘æ¢æµç¨‹ Â· å®žä¾‹åˆ›å»º Â· OTA
+4. **æ”¹åŠ¨æœ€å°åŒ–**ï¼šä¿® bug / å‘ç‰ˆæœŸé—´**ä¸åšå¤§èŒƒå›´é‡æž„**ï¼Œåªæ”¹å¿…è¦çš„ã€‚
+5. **ç»ä¸æ³„å¯†**ï¼šä»»ä½• commitã€handoffã€æ€»ç»“ã€æˆªå›¾ä¸­éƒ½**ä¸å¾—**å‡ºçŽ°å‡­è¯ / token / cookie / å¯†é’¥ã€‚
+6. **æœ¬åœ°è¿‡ â‰  ç”Ÿäº§éªŒè¯**ï¼šæœ¬åœ°é€šè¿‡ã€GitHub Actionsã€Release èµ„äº§ã€OTAã€çº¿ä¸Šå®žè¯æ˜¯**åˆ†å¼€çš„è¯æ®**ï¼Œä¸å¯æ··ä¸ºä¸€è°ˆã€‚
+7. **æ¯æ¬¡æ”¹åŠ¨å¿…é¡»è¿‡å¯¹åº”å®ˆå«**ï¼ˆè§ Â§4ï¼‰ï¼Œå¦åˆ™è§†ä¸º**æœªå®Œæˆ**ã€‚
+8. `RUN_DB_CHECKS=0 bash scripts/apply-online-update.sh <ver>` ä¼š**è·³è¿‡ DB/æ”¯ä»˜å°±ç»ªæ ¡éªŒ**ï¼Œä»…åœ¨ owner æ˜Žç¡®æ‰¹å‡†æ—¶ä½¿ç”¨ã€‚
+
+---
+
+## 3. æœ¬åœ°æ€Žä¹ˆè·‘
+
+- **çŽ¯å¢ƒ**ï¼šNode â‰¥ 20ã€pnpm 9.14.2ã€æœ¬åœ° PostgreSQL 16ã€‚
+- **è£…ä¾èµ–**ï¼š`pnpm install`
+- **ä¸€æŠŠèµ·å…¨éƒ¨ï¼ˆserver + user + adminï¼‰**ï¼š`pnpm dev`
+- **åˆ†å¼€èµ·**ï¼š
+  - åŽç«¯ï¼š`NODE_ENV=development JWT_SECRET=dev-secret-12345678 HOST=127.0.0.1 PORT=3001 pnpm --filter server exec tsx watch src/app.ts`
+  - ç”¨æˆ·å‰ç«¯ï¼š`pnpm dev:user`
+  - ç®¡ç†å‰ç«¯ï¼š`pnpm dev:admin`
+- **ç«¯å£**ï¼šåŽç«¯ API **3001** Â· ç”¨æˆ·å‰ç«¯ **3000** Â· ç®¡ç†å‰ç«¯ **3002**ï¼ˆå‰ç«¯ dev ç» proxy æ‰“åˆ° 3001ï¼‰ã€‚
+
+---
+
+## 4. ðŸ›¡ï¸ å®ˆå«æµ‹è¯•çºªå¾‹ï¼ˆæœ¬ä»“åº“çš„å‘½é—¨ï¼‰
+
+`server/package.json` é‡Œæœ‰ **200+ ä¸ªç‹¬ç«‹ `test-*-guards.ts`**ã€‚å®ƒä»¬æŠŠå…³é”®ä¸šåŠ¡/å‰ç«¯ç»“æž„â€œé’‰æ­»â€ï¼Œ`pnpm test` ä¼šè·‘å…¨å¥—ï¼ˆclient+server type-check + å…¨éƒ¨å®ˆå«ï¼‰ã€‚**ä»»ä½•æ”¹åŠ¨å¿…é¡»è®©ç›¸å…³å®ˆå«é€šè¿‡ã€‚**
+
+- **å…¨é‡**ï¼ˆæ…¢ï¼Œå‘ç‰ˆå‰è·‘ï¼‰ï¼š`pnpm test`
+- **å•ä¸ª**ï¼š`pnpm --filter server test:<guard-name>`
+- **å‰ç«¯æœ€å¸¸ç”¨ä¸‰ä¸ª**ï¼š
+  - `test:frontend-route-guards` â€”â€” è·¯ç”± / **è¡¨æ ¼å¸ƒå±€** / `@click` è·¯å¾„æ–­è¨€
+  - `test:frontend-dist-boundary-guards` â€”â€” åŒç«¯ dist è¾¹ç•Œ
+  - `test:frontend-i18n-keys` â€”â€” i18n key å®Œæ•´æ€§
+- **Go agent**ï¼š`pnpm test:agent`
+
+### âš ï¸ è¡¨æ ¼å¸ƒå±€å®ˆå«ï¼ˆæœ€å®¹æ˜“è¸©é›·ï¼‰
+ä¸€æ‰¹è¡¨è¢«å®ˆå«**é”å®š**ä¸ºâ€œ**ç§»åŠ¨å¡ + PC å®šå®½è¡¨ï¼ˆ`table-fixed` / `overflow-hidden`ï¼‰ï¼Œç»ä¸æ¨ªå‘æ»šåŠ¨**â€ï¼Œå¹¶**åå‘ç¦æ­¢** `overflow-x-auto` / `min-w-[...]` / åŽ»æŽ‰ `table-fixed`ã€‚
+- æƒ³ä¿®â€œå®½è¡¨æŒ¤åŽ‹â€æ—¶ï¼š**å…ˆåˆ¤æ–­è¯¥è¡¨æ˜¯å¦åœ¨å®ˆå«æ¸…å•é‡Œ**ã€‚é”å®šè¡¨**åªèƒ½åœ¨ `table-fixed` å†…å¹³è¡¡åˆ—å®½**ï¼ˆåˆ—å®½ç™¾åˆ†æ¯”åˆè®¡ = 100%ï¼‰+ å…è®¸å•å…ƒæ ¼æ¢è¡Œ + é ç§»åŠ¨å¡åº”å¯¹çª„å±ï¼›**ä¸èƒ½**æ”¹æˆæ¨ªå‘æ»šåŠ¨ã€‚
+- å—é”å®šçš„è¡¨ï¼ˆç”¨æˆ·ç«¯ï¼‰ï¼š`MyPackagesView`ã€`MyHostsView`ã€`TransfersView`ã€`OrdersView`ã€`InvitesView`ã€`FlashSalesView`ã€`HostingWalletView`ã€`InstancesView`ã€`LogsView`ã€`EntertainmentView`ï¼›ï¼ˆç®¡ç†ç«¯ï¼‰`admin/BillingView`ã€`admin/ImagesView`ã€`admin/HelpManageView`ã€`admin/MailView`ã€`admin/PluginCenterView`ï¼›ï¼ˆç»„ä»¶ï¼‰`HostPublicIpv4Tab`ã€`InstanceLogsTab`ã€`ConfigEditModal`ã€‚
+- æ”¹ä»»ä¸€å‰ç«¯æ–‡ä»¶åŽ**å¿…è·‘** `test:frontend-route-guards`ã€‚
+
+---
+
+## 5. æž„å»º / æ ¡éªŒå‘½ä»¤
+
+| ç›®çš„ | å‘½ä»¤ |
+|------|------|
+| æž„å»ºï¼ˆå« dist è¾¹ç•Œå®ˆå«ï¼‰| `pnpm build` |
+| åªæž„å»ºå‰ç«¯ / åŽç«¯ | `pnpm build:client` / `pnpm build:server` |
+| Lintï¼ˆæ£€æŸ¥ / è‡ªåŠ¨ä¿®ï¼‰| `pnpm lint` / `pnpm lint:fix` |
+| ç±»åž‹æ£€æŸ¥ | `pnpm --filter client type-check` Â· `pnpm --filter server type-check` |
+| å…¨å¥—å®ˆå« | `pnpm test` |
+| æ–‡æ¡£ç«™å¼€å‘ / æž„å»º | `pnpm docs:dev` / `pnpm docs:build` |
+
+---
+
+## 6. UI æ”¹åŠ¨çº¦æŸï¼ˆå•è‰²é‡åšè¿›è¡Œä¸­ï¼‰
+
+- **æ–¹å‘**ï¼šè‹¹æžœå¼**çº¯é»‘ç™½å•è‰²**ï¼ˆæµ…è‰²=ç™½åº•é»‘å­—ï¼Œæ·±è‰²=é»‘åº•ç™½å­—ï¼‰ï¼ŒåŽ»äºŒæ¬¡å…ƒ/å‰ç¥¥ç‰©/ç«‹ç»˜ã€‚çŠ¶æ€è‰²**åªä¿ç•™ç»¿/ç¥ç€/çº¢**ä¸‰ç§ï¼ˆè¿è¡Œ/å¾…å¤„ç†/å¤±è´¥ï¼‰ã€‚
+- **çº¢çº¿**ï¼šåªæ”¹**æ ·å¼ / å¸ƒå±€ / æ–‡æ¡ˆå±‚çº§**ï¼Œ**ä¸ç¢°**åŽç«¯æŽ¥å£ã€æƒé™ã€æ”¯ä»˜/è®¢å•/å®žä¾‹åˆ›å»º/OTA ç­‰ä¸šåŠ¡é€»è¾‘ä¸Žè·¯ç”±è¡Œä¸ºâ€”â€”**åŠŸèƒ½ 100% ä¸å˜**ã€‚
+- **é…è‰²èµ° token å±‚**ï¼ˆ`client/tailwind.config.js`ï¼‰ï¼šä¸€å †å½©è‰² ramp å·²æ˜ å°„åˆ°ä¸­æ€§ç°ï¼›`rose â†’ çœŸçº¢`ï¼ˆå±é™©/äºæŸè¯­ä¹‰ï¼‰**ä¿ç•™ä¸å¯ç°åŒ–**ï¼›æ¸¸æˆåŒ–æ¨¡å—ï¼ˆæˆå°±/ç­¾åˆ°/æŠ½å¥–/ç¨€æœ‰åº¦ï¼‰å½©è‰²**åˆ»æ„ä¿ç•™**ã€‚
+- `kawaii-cloud.css` **æ¸è¿›æ”¹é€ ã€ä¸é‡å†™**ï¼›å•é¡µåŽ»è‰²ç”¨é¡µé¢ `<style scoped>`ã€‚
+- åŠ¨æ•ˆå¯ç”¨ **GSAP**ï¼ˆå·²è£… gsap-skillsï¼Œè§ `.claude/skills/`ï¼‰ï¼›å°Šé‡ `prefers-reduced-motion`ã€‚
+
+---
+
+## 7. åä½œæ¨¡åž‹ï¼ˆClaude Code â‡„ codexï¼‰
+
+- **Claude Code = æŠ€æœ¯è´Ÿè´£äºº / é›†æˆæ–¹**ï¼šå®šæ ¹å› ã€åˆ‡ä»»åŠ¡ã€å†™è§„æ ¼ã€å®ˆä¸å˜é‡ã€å®¡ diffã€è·‘å®ˆå«ã€çœŸæœºéªŒè¯ã€ç®¡ gitï¼ˆ**ä»…åœ¨ owner åŒæ„æ—¶** commit / pushï¼‰ã€‚
+- **codex = å®žçŽ°å·¥äºº**ï¼šæŒ‰ Claude ç»™çš„è§„æ ¼å®žçŽ°æ”¹åŠ¨ï¼Œå°¤å…¶**ä½Ž/ä¸­å±ã€è‡ªåŒ…å«ã€å¯å¹¶è¡Œ**çš„å—ã€‚
+- **é£Žé™©åˆ†æ¡£**ï¼šé«˜å±è·¯å¾„ç”± Claude å®šæ ¹å›  + æ”¶ç´§è§„æ ¼ï¼›ä½Ž/ä¸­å± codex å¯ç«¯åˆ°ç«¯ä¿®ã€‚**ä»»ä½•ä¸€æ–¹æ”¹å®Œéƒ½è¦è·‘ç›¸å…³å®ˆå«ï¼ŒClaude ç»Ÿä¸€å®¡æŸ¥åŽæ‰è¿›å…¥ä¸‹ä¸€æ­¥ã€‚**
+- **é¿å…å†²çª**ï¼šåŒä¸€æ‰¹æ–‡ä»¶ä¸€æ¬¡åªè®©ä¸€ä¸ª agent æ”¹ã€‚
+
+---
+
+## 8. ä¸€ä¸ªæ”¹åŠ¨çš„ã€Œå®Œæˆã€å®šä¹‰
+
+1. ç›¸å…³ **type-check** é€šè¿‡ï¼›
+2. ç›¸å…³ **å®ˆå«æµ‹è¯•** é€šè¿‡ï¼›
+3. è‹¥åŠ¨å‰ç«¯ â†’ **åŒç«¯ build** é€šè¿‡ï¼›
+4. **çœŸæœºè·‘è¿‡**å—å½±å“æµç¨‹ï¼ˆä¸æ˜¯åªçœ‹æµ‹è¯•ï¼‰ï¼›
+5. **æŠ¥å‘Š**ï¼šæ”¹äº†å“ªäº›æ–‡ä»¶ / ä¸ºä»€ä¹ˆ / é£Žé™© / æ€Žä¹ˆéªŒè¯çš„ã€‚
+
+ä»¥ä¸Šä»»ä¸€æœªæ»¡è¶³ = **æœªå®Œæˆ**ã€‚
+FILE: server/src/routes/instance-destroy.ts
+/**
+ * å®žä¾‹é”€æ¯ç›¸å…³è·¯ç”±
+ * å¤„ç†ç”¨æˆ·ç«¯å®žä¾‹é”€æ¯åŠŸèƒ½ï¼ˆå¸¦é€€æ¬¾ï¼‰
+ */
+
+import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
+import type { InstanceStatus } from '@prisma/client'
+import * as db from '../db/index.js'
+import { prisma } from '../db/prisma.js'
+import { createLog } from '../db/logs.js'
+import { apiError, ErrorCode } from '../lib/errors.js'
+import { sendHostManagedInstanceNotification, sendNotification } from '../lib/notifier.js'
+import { sendInstanceDestroyRefundEmail } from '../lib/mailer.js'
+import { sendReleaseNotification } from '../lib/release-notifier.js'
+import { collectTrafficForRunningInstance } from '../services/instance-traffic-collector.js'
+import {
+  INSTANCE_OPERATION_LOCK_NAMESPACE,
+  USER_BALANCE_LOCK_NAMESPACE,
+  USER_DESTROY_BILLING_LOCK_NAMESPACE,
+  advisoryTransactionLock,
+  tryAdvisoryTransactionLock
+} from '../db/advisory-locks.js'
+
+// é”€æ¯ä¸šåŠ¡è§„åˆ™å¸¸é‡
+const DESTROY_RULES = {
+  FEE_RATE: 0.10,                // æ‰‹ç»­è´¹çŽ‡ 10%ï¼ˆé¦–æ¬¡å…æ‰‹ç»­è´¹ï¼‰
+  MAX_PAID_DESTROY_MONTHLY_TRAFFIC: 5n * 1024n * 1024n * 1024n // 5 GiB
+}
+
+const DESTROY_TRAFFIC_LIMIT_REASON = 'å½“å‰æœˆæµé‡å‘¨æœŸæ— æ³•é”€æ¯ï¼Œå·²ç”¨æµé‡è¾¾åˆ°æˆ–è¶…è¿‡ 5G'
+const EXCHANGE_DESTROY_LOCK_REASON = 'å®žä¾‹å·²ä¸Šæž¶äº¤æ˜“æ‰€æˆ–å¤„äºŽäº¤æ˜“äº¤å‰²ä¸­ï¼Œä¸èƒ½é”€æ¯'
+
+interface BatchDestroyPreviewItem {
+  id: number
+  name: string
+  canDestroy: boolean
+  cannotDestroyReason: string
+  isFreeInstance: boolean
+  isFirstTime: boolean
+  feeWaiverEligible: boolean
+  refund: {
+    remainingDays: number
+    remainingValue: number
+    feeRate: number
+    feeAmount: number
+    refundAmount: number
+    destroyCount: number
+    maxRefundable: number
+  }
+  instance: {
+    id: number
+    name: string
+    hostName: string
+    planName: string | null
+  }
+}
+
+interface BatchDestroyResultItem {
+  id: number
+  name: string
+  success: boolean
+  skipped?: boolean
+  reason?: string
+  refundAmount?: number
+  feeAmount?: number
+  isFirstTime?: boolean
+  isFreeInstance?: boolean
+}
+
+const BATCH_HIDDEN_REASON = 'å®žä¾‹ä¸å­˜åœ¨æˆ–æ— æƒæ“ä½œ'
+
+function isExpiredAt(expiresAt: Date | null | undefined): boolean {
+  return !!expiresAt && expiresAt.getTime() <= Date.now()
+}
+
+function canUserDestroyExpiredSuspendedPaidInstance(instance: {
+  status: string
+  suspendReason?: string | null
+  packagePlanId?: number | null
+  expiresAt?: Date | null
+}): boolean {
+  return instance.status === 'suspended'
+    && instance.suspendReason === 'expired'
+    && !!instance.packagePlanId
+    && isExpiredAt(instance.expiresAt)
+}
+
+async function getExchangeDestroyLock(instanceId: number, client: any = prisma): Promise<{ reason: string; code: string } | null> {
+  const listing = await client.exchangeListing.findFirst({
+    where: {
+      instanceId,
+      status: { in: ['active', 'paused', 'locked', 'delivery_failed'] }
+    },
+    select: { id: true, status: true }
+  })
+  if (listing) {
+    return { reason: EXCHANGE_DESTROY_LOCK_REASON, code: 'EXCHANGE_INSTANCE_LOCKED' }
+  }
+
+  const order = await client.exchangeOrder.findFirst({
+    where: {
+      instanceId,
+      status: { in: ['escrowed', 'delivering', 'delivered', 'confirming', 'disputed', 'manual_review', 'failed'] }
+    },
+    select: { id: true, status: true }
+  })
+  if (order) {
+    return { reason: EXCHANGE_DESTROY_LOCK_REASON, code: 'EXCHANGE_ORDER_ACTIVE' }
+  }
+
+  return null
+}
+
+/**
+ * è®¡ç®—æ‰‹ç»­è´¹çŽ‡
+ * ç¬¬1æ¬¡ï¼š0%ï¼ˆé¦–æ¬¡å…æ‰‹ç»­è´¹ï¼‰
+ * ç¬¬2æ¬¡åŠä»¥åŽï¼š10%
+ */
+function calculateFeeRate(destroyCount: number): number {
+  if (destroyCount === 0) return 0 // é¦–æ¬¡å…æ‰‹ç»­è´¹
+  return DESTROY_RULES.FEE_RATE
+}
+
+function exceedsPaidDestroyTrafficLimit(monthlyTrafficUsed: bigint): boolean {
+  return monthlyTrafficUsed >= DESTROY_RULES.MAX_PAID_DESTROY_MONTHLY_TRAFFIC
+}
+
+async function getDestroyBlockingTask(instanceId: number, client: any = prisma): Promise<{
+  code: 'RESTORE_IN_PROGRESS' | 'UPLOAD_IN_PROGRESS' | 'TASK_IN_PROGRESS'
+  reason: string
+} | null> {
+  const [activeRestoreTask, activeUploadTask, activeInstanceTask] = await Promise.all([
+    client.restoreTask.findFirst({
+      where: {
+        instanceId,
+        status: { in: ['PENDING', 'PROCESSING'] }
+      },
+      select: { id: true }
+    }),
+    client.backupUploadTask.findFirst({
+      where: {
+        instanceId,
+        status: { in: ['PENDING', 'PROCESSING'] }
+      },
+      select: { id: true }
+    }),
+    client.instanceTask.findFirst({
+      where: {
+        instanceId,
+        status: { in: ['PENDING', 'PROCESSING'] }
+      },
+      select: { id: true }
+    })
+  ])
+
+  if (activeRestoreTask) {
+    return { code: 'RESTORE_IN_PROGRESS', reason: 'è¯¥å®žä¾‹æœ‰æ­£åœ¨è¿›è¡Œçš„æ¢å¤ä»»åŠ¡ï¼Œè¯·ç­‰å¾…å®Œæˆæˆ–å–æ¶ˆ' }
+  }
+  if (activeUploadTask) {
+    return { code: 'UPLOAD_IN_PROGRESS', reason: 'è¯¥å®žä¾‹æœ‰æ­£åœ¨è¿›è¡Œçš„å¤‡ä»½ä¸Šä¼ ä»»åŠ¡ï¼Œè¯·ç­‰å¾…å®Œæˆæˆ–å–æ¶ˆ' }
+  }
+  if (activeInstanceTask) {
+    return { code: 'TASK_IN_PROGRESS', reason: 'è¯¥å®žä¾‹æœ‰æ­£åœ¨è¿›è¡Œçš„æ“ä½œä»»åŠ¡ï¼Œè¯·ç­‰å¾…å®Œæˆ' }
+  }
+  return null
+}
+
+function roundMoney(value: number): number {
+  return Number(value.toFixed(2))
+}
+
+async function claimInstanceForUserDestroy(
+  instanceId: number,
+  userId: number,
+  currentStatus: InstanceStatus
+): Promise<boolean> {
+  return prisma.$transaction(async (tx) => {
+    const locked = await tryAdvisoryTransactionLock(tx, INSTANCE_OPERATION_LOCK_NAMESPACE, instanceId)
+    if (!locked) return false
+
+    const blockingTask = await getDestroyBlockingTask(instanceId, tx)
+    if (blockingTask) return false
+
+    const exchangeLock = await getExchangeDestroyLock(instanceId, tx)
+    if (exchangeLock) return false
+
+    const result = await tx.instance.updateMany({
+      where: {
+        id: instanceId,
+        userId,
+        status: currentStatus
+      },
+      data: { status: 'deleted' }
+    })
+
+    return result.count === 1
+  })
+}
+
+async function restoreClaimedInstanceStatus(
+  instanceId: number,
+  userId: number,
+  originalStatus: InstanceStatus
+): Promise<void> {
+  await prisma.instance.updateMany({
+    where: {
+      id: instanceId,
+      userId,
+      status: 'deleted'
+    },
+    data: { status: originalStatus }
+  })
+}
+
+async function deleteIncusInstanceForUserDestroy(
+  instance: {
+    id: number
+    hostId: number
+    incusId: string
+    status: string
+  },
+  logger: { warn: (...args: any[]) => void }
+): Promise<void> {
+  const host = await db.getHostById(instance.hostId)
+  if (!host) {
+    throw new Error('å®¿ä¸»æœºä¸å­˜åœ¨ï¼Œæ— æ³•åˆ é™¤å®žä¾‹')
+  }
+
+  const { getIncusClient, stopInstance, deleteInstance } = await import('../lib/incus/index.js')
+  const client = await getIncusClient(host)
+
+  if (instance.status === 'running') {
+    try {
+      await stopInstance(client, instance.incusId, true)
+    } catch (err) {
+      logger.warn(err, 'åœæ­¢å®žä¾‹å¤±è´¥ï¼Œç»§ç»­å°è¯•åˆ é™¤')
+    }
+  }
+
+  await deleteInstance(client, instance.incusId)
+}
+
+async function settleUserDestroyBilling(params: {
+  requestUserId: number
+  instance: {
+    id: number
+    userId: number
+    hostId: number
+    name: string
+  }
+  refundableValue: number
+  feeWaiver: boolean
+}): Promise<{ refundAmount: number; feeAmount: number; isFirstTime: boolean }> {
+  const { requestUserId, instance, refundableValue, feeWaiver } = params
+  const instanceId = instance.id
+
+  return await prisma.$transaction(async (tx) => {
+    await advisoryTransactionLock(tx, USER_DESTROY_BILLING_LOCK_NAMESPACE, requestUserId)
+
+    const destroyCount = await tx.userDestroyRecord.count({
+      where: { userId: requestUserId }
+    })
+    const isFirstTime = destroyCount === 0
+    let feeAmount = 0
+    if (!feeWaiver && !isFirstTime) {
+      feeAmount = roundMoney(refundableValue * calculateFeeRate(destroyCount))
+    }
+    const refundAmount = roundMoney(Math.max(0, refundableValue - feeAmount))
+
+    if (refundAmount > 0) {
+      await advisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, instance.userId)
+
+      const currentUser = await tx.user.findUnique({
+        where: { id: instance.userId },
+        select: { balance: true }
+      })
+      const oldBalance = Number(currentUser?.balance || 0)
+
+      const updatedUser = await tx.user.update({
+        where: { id: instance.userId },
+        data: { balance: { increment: refundAmount } },
+        select: { balance: true }
+      })
+      const newBalance = Number(updatedUser.balance)
+
+      const balanceLog = await tx.balanceLog.create({
+        data: {
+          userId: instance.userId,
+          type: 'refund',
+          amount: refundAmount,
+          balanceBefore: oldBalance,
+          balanceAfter: newBalance,
+          instanceId,
+          remark: `ç”¨æˆ·é”€æ¯å®žä¾‹é€€æ¬¾ï¼š${instance.name}${feeWaiver ? 'ï¼ˆå¼‚å¸¸å®žä¾‹å…æ‰‹ç»­è´¹ï¼‰' : feeAmount > 0 ? `ï¼ˆæ‰‹ç»­è´¹ Â¥${feeAmount.toFixed(2)}ï¼‰` : 'ï¼ˆé¦–æ¬¡é”€æ¯å…æ‰‹ç»­è´¹ï¼‰'}`
+        }
+      })
+
+      await tx.instanceBillingRecord.create({
+        data: {
+          instanceId,
+          userId: instance.userId,
+          type: 'refund',
+          amount: -refundAmount,
+          months: 0,
+          periodStart: new Date(),
+          periodEnd: new Date(),
+          balanceLogId: balanceLog.id,
+          remark: `ç”¨æˆ·é”€æ¯å®žä¾‹é€€æ¬¾${feeWaiver ? 'ï¼ˆå¼‚å¸¸å®žä¾‹å…æ‰‹ç»­è´¹ï¼‰' : feeAmount > 0 ? `ï¼ˆæ‰‹ç»­è´¹ Â¥${feeAmount.toFixed(2)}ï¼‰` : 'ï¼ˆé¦–æ¬¡é”€æ¯å…æ‰‹ç»­è´¹ï¼‰'}`
+        }
+      })
+
+      await db.deductHostingBalance(
+        instance.hostId,
+        refundAmount,
+        instanceId,
+        `ç”¨æˆ·é”€æ¯æ‰˜ç®¡å®žä¾‹é€€æ¬¾æ‰£é™¤ï¼š${instance.name}`,
+        tx
+      )
+    }
+
+    await tx.userDestroyRecord.create({
+      data: {
+        userId: requestUserId,
+        hostId: instance.hostId,
+        instanceId,
+        instanceName: instance.name,
+        refundAmount,
+        feeAmount,
+        isFirstTime
+      }
+    })
+
+    return { refundAmount, feeAmount, isFirstTime }
+  })
+}
+
+async function buildBatchDestroyPreviewItem(userId: number, instanceId: number): Promise<BatchDestroyPreviewItem> {
+  const instance = await prisma.instance.findUnique({
+    where: { id: instanceId },
+    include: {
+      host: { select: { id: true, name: true, userId: true } },
+      packagePlan: { select: { id: true, name: true } }
+    }
+  })
+
+  if (!instance) {
+    return {
+      id: instanceId,
+      name: `#${instanceId}`,
+      canDestroy: false,
+      cannotDestroyReason: BATCH_HIDDEN_REASON,
+      isFreeInstance: true,
+      isFirstTime: false,
+      feeWaiverEligible: false,
+      refund: {
+        remainingDays: 0,
+        remainingValue: 0,
+        feeRate: 0,
+        feeAmount: 0,
+        refundAmount: 0,
+        destroyCount: 0,
+        maxRefundable: 0
+      },
+      instance: {
+        id: instanceId,
+        name: `#${instanceId}`,
+        hostName: '-',
+        planName: null
+      }
+    }
+  }
+
+  if (instance.userId !== userId) {
+    return {
+      id: instanceId,
+      name: `#${instanceId}`,
+      canDestroy: false,
+      cannotDestroyReason: BATCH_HIDDEN_REASON,
+      isFreeInstance: true,
+      isFirstTime: false,
+      feeWaiverEligible: false,
+      refund: {
+        remainingDays: 0,
+        remainingValue: 0,
+        feeRate: 0,
+        feeAmount: 0,
+        refundAmount: 0,
+        destroyCount: 0,
+        maxRefundable: 0
+      },
+      instance: {
+        id: instanceId,
+        name: `#${instanceId}`,
+        hostName: '-',
+        planName: null
+      }
+    }
+  }
+
+  if (instance.status === 'deleted') {
+    return {
+      id: instance.id,
+      name: instance.name,
+      canDestroy: false,
+      cannotDestroyReason: 'å®žä¾‹å·²åˆ é™¤',
+      isFreeInstance: !instance.packagePlanId,
+      isFirstTime: false,
+      feeWaiverEligible: false,
+      refund: {
+        remainingDays: 0,
+        remainingValue: 0,
+        feeRate: 0,
+        feeAmount: 0,
+        refundAmount: 0,
+        destroyCount: 0,
+        maxRefundable: 0
+      },
+      instance: {
+        id: instance.id,
+        name: instance.name,
+        hostName: instance.host.name,
+        planName: instance.packagePlan?.name || null
+      }
+    }
+  }
+
+  if (instance.status === 'creating') {
+    return {
+      id: instance.id,
+      name: instance.name,
+      canDestroy: false,
+      cannotDestroyReason: 'å®žä¾‹æ­£åœ¨åˆ›å»ºä¸­ï¼Œæ— æ³•é”€æ¯',
+      isFreeInstance: !instance.packagePlanId,
+      isFirstTime: false,
+      feeWaiverEligible: false,
+      refund: {
+        remainingDays: 0,
+        remainingValue: 0,
+        feeRate: 0,
+        feeAmount: 0,
+        refundAmount: 0,
+        destroyCount: 0,
+        maxRefundable: 0
+      },
+      instance: {
+        id: instance.id,
+        name: instance.name,
+        hostName: instance.host.name,
+        planName: instance.packagePlan?.name || null
+      }
+    }
+  }
+
+  if (instance.status === 'suspended' && !canUserDestroyExpiredSuspendedPaidInstance(instance)) {
+    return {
+      id: instance.id,
+      name: instance.name,
+      canDestroy: false,
+      cannotDestroyReason: 'å®žä¾‹å·²è¢«å°åœï¼Œæ— æ³•é”€æ¯ï¼Œè¯·å…ˆè”ç³»ç®¡ç†å‘˜è§£å°',
+      isFreeInstance: !instance.packagePlanId,
+      isFirstTime: false,
+      feeWaiverEligible: false,
+      refund: {
+        remainingDays: 0,
+        remainingValue: 0,
+        feeRate: 0,
+        feeAmount: 0,
+        refundAmount: 0,
+        destroyCount: 0,
+        maxRefundable: 0
+      },
+      instance: {
+        id: instance.id,
+        name: instance.name,
+        hostName: instance.host.name,
+        planName: instance.packagePlan?.name || null
+      }
+    }
+  }
+
+  const isErrorState = instance.status === 'error'
+  const feeWaiver = isErrorState
+  const isFreeInstance = !instance.packagePlanId
+  const destroyRecords = await prisma.userDestroyRecord.findMany({
+    where: { userId },
+    orderBy: { destroyedAt: 'desc' }
+  })
+  let isFirstTime = destroyRecords.length === 0
+
+  let remainingValue = 0
+  let feeAmount = 0
+  let refundAmount = 0
+  let remainingDays = 0
+  let maxRefundable = 0
+  let refundableValue = 0
+  let currentFeeRate = feeWaiver ? 0 : calculateFeeRate(destroyRecords.length)
+  let canDestroy = true
+  let cannotDestroyReason = ''
+
+  if (!isFreeInstance && instance.expiresAt && instance.billingPrice && instance.billingCycle) {
+    const refundQuote = await db.calculateInstanceRemainingRefundQuote({
+      id: instance.id,
+      billingPrice: instance.billingPrice,
+      billingCycle: instance.billingCycle,
+      expiresAt: instance.expiresAt,
+      packagePlanId: instance.packagePlanId
+    })
+
+    if (refundQuote.isPaid) {
+      remainingDays = refundQuote.remainingDays
+      remainingValue = refundQuote.remainingValue
+      refundableValue = refundQuote.refundableValue
+      maxRefundable = refundQuote.maxRefundable
+      currentFeeRate = feeWaiver ? 0 : calculateFeeRate(destroyRecords.length)
+      if (!isFirstTime && !feeWaiver) {
+        feeAmount = Number((refundableValue * currentFeeRate).toFixed(2))
+      }
+      refundAmount = Number((refundableValue - feeAmount).toFixed(2))
+    }
+
+    if (
+      !canUserDestroyExpiredSuspendedPaidInstance(instance)
+      && exceedsPaidDestroyTrafficLimit(instance.monthlyTrafficUsed)
+    ) {
+      canDestroy = false
+      cannotDestroyReason = DESTROY_TRAFFIC_LIMIT_REASON
+    }
+  }
+
+  return {
+    id: instance.id,
+    name: instance.name,
+    canDestroy,
+    cannotDestroyReason,
+    isFreeInstance,
+    isFirstTime,
+    feeWaiverEligible: isErrorState,
+    refund: {
+      remainingDays,
+      remainingValue,
+      feeRate: currentFeeRate,
+      feeAmount,
+      refundAmount,
+      destroyCount: destroyRecords.length,
+      maxRefundable
+    },
+    instance: {
+      id: instance.id,
+      name: instance.name,
+      hostName: instance.host.name,
+      planName: instance.packagePlan?.name || null
+    }
+  }
+}
+
+async function executeDestroyForUser(
+  user: { id: number; username: string },
+  instanceId: number,
+  logger: { warn: (...args: any[]) => void; error: (...args: any[]) => void }
+): Promise<BatchDestroyResultItem> {
+  const instance = await prisma.instance.findUnique({
+    where: { id: instanceId },
+    include: {
+      user: { select: { id: true, username: true, balance: true, email: true } },
+      host: { select: { id: true, name: true, userId: true } }
+    }
+  })
+
+  if (!instance) {
+    return { id: instanceId, name: `#${instanceId}`, success: false, reason: BATCH_HIDDEN_REASON }
+  }
+
+  if (instance.userId !== user.id) {
+    return { id: instanceId, name: `#${instanceId}`, success: false, reason: BATCH_HIDDEN_REASON }
+  }
+
+  if (instance.status === 'deleted') {
+    return { id: instance.id, name: instance.name, success: false, skipped: true, reason: 'å®žä¾‹å·²åˆ é™¤' }
+  }
+
+  if (instance.status === 'creating') {
+    return { id: instance.id, name: instance.name, success: false, skipped: true, reason: 'å®žä¾‹æ­£åœ¨åˆ›å»ºä¸­ï¼Œæ— æ³•é”€æ¯' }
+  }
+
+  if (instance.status === 'suspended' && !canUserDestroyExpiredSuspendedPaidInstance(instance)) {
+    return { id: instance.id, name: instance.name, success: false, skipped: true, reason: 'å®žä¾‹å·²è¢«å°åœï¼Œæ— æ³•é”€æ¯ï¼Œè¯·å…ˆè”ç³»ç®¡ç†å‘˜è§£å°' }
+  }
+
+  const blockingTask = await getDestroyBlockingTask(instanceId)
+  if (blockingTask) {
+    return { id: instance.id, name: instance.name, success: false, skipped: true, reason: blockingTask.reason }
+  }
+
+  const exchangeLock = await getExchangeDestroyLock(instanceId)
+  if (exchangeLock) {
+    return { id: instance.id, name: instance.name, success: false, skipped: true, reason: exchangeLock.reason }
+  }
+
+  const isFreeInstance = !instance.packagePlanId
+  const destroyRecords = await prisma.userDestroyRecord.findMany({
+    where: { userId: user.id },
+    orderBy: { destroyedAt: 'desc' }
+  })
+  let isFirstTime = destroyRecords.length === 0
+  const feeWaiver = instance.status === 'error'
+
+  let currentMonthlyTrafficUsed = instance.monthlyTrafficUsed
+  if (!isFreeInstance && instance.status === 'running') {
+    const collectResult = await collectTrafficForRunningInstance(instanceId)
+    if (!collectResult.success) {
+      logger.warn({ instanceId, error: collectResult.error }, 'é”€æ¯å‰å³æ—¶é‡‡é›†æµé‡å¤±è´¥')
+    } else {
+      currentMonthlyTrafficUsed = collectResult.currentUsage
+    }
+  }
+
+  if (
+    !isFreeInstance
+    && !canUserDestroyExpiredSuspendedPaidInstance(instance)
+    && exceedsPaidDestroyTrafficLimit(currentMonthlyTrafficUsed)
+  ) {
+    return { id: instance.id, name: instance.name, success: false, skipped: true, reason: DESTROY_TRAFFIC_LIMIT_REASON }
+  }
+
+  let feeAmount = 0
+  let refundAmount = 0
+  let refundableValue = 0
+
+  if (!isFreeInstance && instance.expiresAt && instance.billingPrice && instance.billingCycle) {
+    const refundQuote = await db.calculateInstanceRemainingRefundQuote({
+      id: instanceId,
+      billingPrice: instance.billingPrice,
+      billingCycle: instance.billingCycle,
+      expiresAt: instance.expiresAt,
+      packagePlanId: instance.packagePlanId
+    })
+
+    if (refundQuote.isPaid) {
+      refundableValue = refundQuote.refundableValue
+      if (!feeWaiver) {
+        const currentFeeRate = calculateFeeRate(destroyRecords.length)
+        if (!isFirstTime) {
+          feeAmount = roundMoney(refundableValue * currentFeeRate)
+        }
+      }
+      refundAmount = roundMoney(Math.max(0, refundableValue - feeAmount))
+    }
+  }
+
+  const claimed = await claimInstanceForUserDestroy(instanceId, user.id, instance.status)
+  if (!claimed) {
+    return { id: instance.id, name: instance.name, success: false, skipped: true, reason: 'å®žä¾‹æ­£åœ¨é”€æ¯æˆ–å·²åˆ é™¤' }
+  }
+
+  try {
+    try {
+      await deleteIncusInstanceForUserDestroy(instance, logger)
+    } catch (incusErr) {
+      await restoreClaimedInstanceStatus(instanceId, user.id, instance.status)
+      throw incusErr
+    }
+
+    if (!isFreeInstance) {
+      const billingResult = await settleUserDestroyBilling({
+        requestUserId: user.id,
+        instance,
+        refundableValue,
+        feeWaiver
+      })
+      refundAmount = billingResult.refundAmount
+      feeAmount = billingResult.feeAmount
+      isFirstTime = billingResult.isFirstTime
+    }
+
+    const portMappings = await prisma.portMapping.findMany({ where: { instanceId } })
+
+    try {
+      await prisma.snapshot.deleteMany({ where: { instanceId } })
+      await prisma.backup.deleteMany({ where: { instanceId } })
+      await prisma.portMapping.deleteMany({ where: { instanceId } })
+      await prisma.proxySite.deleteMany({ where: { instanceId } })
+      await prisma.dailyTraffic.deleteMany({ where: { instanceId } })
+      await prisma.ipAddress.deleteMany({ where: { instanceId } })
+      await prisma.ipv6Subnet.deleteMany({ where: { instanceId } })
+      await prisma.restoreTask.deleteMany({ where: { instanceId, status: { in: ['COMPLETED', 'FAILED'] } } })
+      await prisma.backupUploadTask.deleteMany({ where: { instanceId, status: { in: ['COMPLETED', 'FAILED'] } } })
+      await prisma.instanceTask.deleteMany({ where: { instanceId, status: { in: ['COMPLETED', 'FAILED'] } } })
+      await prisma.instanceTransfer.updateMany({
+        where: { instanceId, status: 'pending' },
+        data: { status: 'cancelled', cancelledAt: new Date() }
+      })
+    } catch (cleanupErr) {
+      logger.warn(cleanupErr, 'æ¸…ç†å…³è”æ•°æ®å¤±è´¥')
+    }
+
+    const portMappingsCount = portMappings?.length || 0
+    await db.rollbackResources({
+      hostId: instance.hostId,
+      cpu: instance.cpu,
+      memory: instance.memory,
+      disk: instance.disk,
+      portCount: portMappingsCount
+    })
+
+    const usedResources = await db.calculateHostResourcesFromInstances(instance.hostId)
+    const actualPortsUsed = await prisma.portMapping.count({
+      where: {
+        instance: {
+          hostId: instance.hostId,
+          status: { not: 'deleted' }
+        }
+      }
+    })
+    await db.updateHostResources(instance.hostId, {
+      cpuUsed: usedResources.cpuUsed,
+      memoryUsed: usedResources.memoryUsed,
+      diskUsed: usedResources.diskUsed
+    })
+    await prisma.host.update({
+      where: { id: instance.hostId },
+      data: { natPortsUsedCount: actualPortsUsed }
+    })
+
+    await createLog(
+      user.id,
+      'billing',
+      'instance.user_destroy',
+      `User destroyed instance "${instance.name}" (Host: ${instance.host.name}, Refund: Â¥${refundAmount.toFixed(2)}, Fee: Â¥${feeAmount.toFixed(2)})`,
+      'success'
+    )
+
+    await sendNotification(user.id, 'instance_deleted_refunded', {
+      instanceName: instance.name,
+      refundAmount,
+      feeAmount,
+      isFreeInstance
+    })
+
+    if (!isFreeInstance && instance.user?.email) {
+      try {
+        await sendInstanceDestroyRefundEmail(instance.user.email, {
+          username: instance.user.username,
+          instanceName: instance.name,
+          refundAmount,
+          feeAmount,
+          refundType: 'ä½™é¢é€€æ¬¾',
+          isUserDestroy: true
+        })
+      } catch (emailErr) {
+        logger.warn(emailErr, 'å‘é€é”€æ¯é€€æ¬¾é‚®ä»¶å¤±è´¥')
+      }
+    }
+
+    sendHostManagedInstanceNotification(
+      instance.hostId,
+      'destroy',
+      {
+        username: user.username,
+        instanceName: instance.name,
+        refundAmount,
+        feeAmount
+      }
+    ).catch(err => {
+      logger.warn(err, 'å‘é€èŠ‚ç‚¹é”€æ¯é€šçŸ¥å¤±è´¥')
+    })
+
+    if (instance.packageId) {
+      sendReleaseNotification({
+        packageId: instance.packageId,
+        cpu: instance.cpu,
+        memory: instance.memory,
+        source: 'ç”¨æˆ·é”€æ¯å®žä¾‹'
+      }).catch(() => {})
+    }
+
+    return {
+      id: instance.id,
+      name: instance.name,
+      success: true,
+      refundAmount,
+      feeAmount,
+      isFirstTime,
+      isFreeInstance
+    }
+  } catch (error) {
+    logger.error(error, 'é”€æ¯å®žä¾‹å¤±è´¥')
+    return {
+      id: instance.id,
+      name: instance.name,
+      success: false,
+      reason: 'é”€æ¯å®žä¾‹å¤±è´¥'
+    }
+  }
+}
+
+export default async function instanceDestroyRoutes(fastify: FastifyInstance) {
+
+  fastify.post<{
+    Body: { instanceIds: number[] }
+  }>('/batch/destroy-info', {
+    onRequest: [fastify.authenticateUser],
+    config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
+    schema: {
+      body: {
+        type: 'object',
+        required: ['instanceIds'],
+        properties: {
+          instanceIds: {
+            type: 'array',
+            items: { type: 'integer' },
+            minItems: 1,
+            maxItems: 100
+          }
+        },
+        additionalProperties: false
+      }
+    }
+  }, async (request, reply) => {
+    const uniqueIds = Array.from(new Set(request.body.instanceIds)).filter(id => Number.isInteger(id))
+    if (uniqueIds.length === 0) {
+      return reply.code(400).send({ error: 'è¯·é€‰æ‹©è‡³å°‘ä¸€ä¸ªå®žä¾‹' })
+    }
+
+    const items = await Promise.all(uniqueIds.map(id => buildBatchDestroyPreviewItem(request.user.id, id)))
+    return { items }
+  })
+
+  fastify.post<{
+    Body: { instanceIds: number[] }
+  }>('/batch/destroy', {
+    onRequest: [fastify.authenticateUser],
+    config: { rateLimit: { max: 3, timeWindow: '1 minute' } },
+    schema: {
+      body: {
+        type: 'object',
+        required: ['instanceIds'],
+        properties: {
+          instanceIds: {
+            type: 'array',
+            items: { type: 'integer' },
+            minItems: 1,
+            maxItems: 100
+          }
+        },
+        additionalProperties: false
+      }
+    }
+  }, async (request, reply) => {
+    const uniqueIds = Array.from(new Set(request.body.instanceIds)).filter(id => Number.isInteger(id))
+    if (uniqueIds.length === 0) {
+      return reply.code(400).send({ error: 'è¯·é€‰æ‹©è‡³å°‘ä¸€ä¸ªå®žä¾‹' })
+    }
+
+    const userMeta = {
+      id: request.user.id,
+      username: request.user.username
+    }
+
+    const results: BatchDestroyResultItem[] = []
+    for (const instanceId of uniqueIds) {
+      const result = await executeDestroyForUser(userMeta, instanceId, request.log)
+      results.push(result)
+    }
+
+    const successCount = results.filter(item => item.success).length
+    const skippedCount = results.filter(item => item.skipped).length
+    const failedCount = results.length - successCount - skippedCount
+
+    await createLog(
+      request.user.id,
+      'billing',
+      'instance.batch_destroy',
+      `Batch destroy processed ${results.length} instance(s): success=${successCount}, skipped=${skippedCount}, failed=${failedCount}`,
+      failedCount > 0 ? 'warning' : 'success'
+    )
+
+    return {
+      message: successCount > 0 ? 'æ‰¹é‡é”€æ¯å·²å¤„ç†' : 'æ²¡æœ‰å®žä¾‹å®Œæˆé”€æ¯',
+      successCount,
+      skippedCount,
+      failedCount,
+      results
+    }
+  })
+
+  // ==================== èŽ·å–é”€æ¯é¢„è§ˆä¿¡æ¯ ====================
+  // GET /api/instances/:id/destroy-info
+  fastify.get<{ Params: { id: string }; Querystring: { feeWaiver?: string } }>('/:id/destroy-info', {
+    onRequest: [fastify.authenticate],
+    config: { rateLimit: { max: 30, timeWindow: '1 minute' } }
+  }, async (request: FastifyRequest<{ Params: { id: string }; Querystring: { feeWaiver?: string } }>, reply: FastifyReply) => {
+    const { user } = request
+    const instanceId = Number(request.params.id)
+
+    if (isNaN(instanceId)) {
+      return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
+    }
+
+    const instance = await prisma.instance.findUnique({
+      where: { id: instanceId },
+      include: {
+        host: { select: { id: true, name: true, userId: true } },
+        packagePlan: { select: { id: true, name: true } }
+      }
+    })
+
+    if (!instance) {
+      return reply.code(404).send(apiError(ErrorCode.INSTANCE_NOT_FOUND))
+    }
+
+    // åªæœ‰å®žä¾‹æ‰€æœ‰è€…å¯ä»¥é”€æ¯
+    if (instance.userId !== user.id) {
+      return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
+    }
+
+    // æ£€æŸ¥å®žä¾‹çŠ¶æ€
+    if (instance.status === 'deleted') {
+      return reply.code(400).send({ error: 'å®žä¾‹å·²åˆ é™¤', canDestroy: false })
+    }
+
+    if (instance.status === 'creating') {
+      return reply.code(400).send({ error: 'å®žä¾‹æ­£åœ¨åˆ›å»ºä¸­ï¼Œæ— æ³•é”€æ¯', canDestroy: false })
+    }
+
+    if (instance.status === 'suspended' && !canUserDestroyExpiredSuspendedPaidInstance(instance)) {
+      return reply.code(400).send({ error: 'å®žä¾‹å·²è¢«å°åœï¼Œæ— æ³•é”€æ¯ï¼Œè¯·å…ˆè”ç³»ç®¡ç†å‘˜è§£å°', canDestroy: false })
+    }
+
+    const exchangeLock = await getExchangeDestroyLock(instanceId)
+    if (exchangeLock) {
+      return reply.code(409).send({
+        error: exchangeLock.reason,
+        canDestroy: false,
+        code: exchangeLock.code
+      })
+    }
+
+    // å¼‚å¸¸å®žä¾‹å…æ‰‹ç»­è´¹
+    const isErrorState = instance.status === 'error'
+    const feeWaiver = request.query.feeWaiver === 'error' && isErrorState
+
+    // å…è´¹å®žä¾‹æ£€æŸ¥
+    const isFreeInstance = !instance.packagePlanId
+
+    // æŸ¥è¯¢ç”¨æˆ·é”€æ¯è®°å½•ï¼ˆä»…ä»˜è´¹å®žä¾‹é”€æ¯è®¡å…¥ï¼‰
+    const destroyRecords = await prisma.userDestroyRecord.findMany({
+      where: { userId: user.id },
+      orderBy: { destroyedAt: 'desc' }
+    })
+
+    // æ£€æŸ¥æ˜¯å¦é¦–æ¬¡é”€æ¯
+    let isFirstTime = destroyRecords.length === 0
+
+    // è®¡ç®—å‰©ä½™ä»·å€¼å’Œé€€æ¬¾é‡‘é¢
+    let remainingValue = 0
+    let feeAmount = 0
+    let refundAmount = 0
+    let remainingDays = 0
+    let maxRefundable = 0
+    let refundableValue = 0
+    let currentFeeRate = feeWaiver ? 0 : calculateFeeRate(destroyRecords.length)
+
+    if (!isFreeInstance && instance.expiresAt && instance.billingPrice && instance.billingCycle) {
+      const refundQuote = await db.calculateInstanceRemainingRefundQuote({
+        id: instanceId,
+        billingPrice: instance.billingPrice,
+        billingCycle: instance.billingCycle,
+        expiresAt: instance.expiresAt,
+        packagePlanId: instance.packagePlanId
+      })
+
+      if (refundQuote.isPaid) {
+        remainingDays = refundQuote.remainingDays
+        remainingValue = refundQuote.remainingValue
+        refundableValue = refundQuote.refundableValue
+        maxRefundable = refundQuote.maxRefundable
+
+        // è®¡ç®—æ‰‹ç»­è´¹ï¼ˆé¦–æ¬¡å…æ‰‹ç»­è´¹ï¼ŒåŽç»­å›ºå®š 10%ï¼›å¼‚å¸¸å®žä¾‹å…æ‰‹ç»­è´¹ï¼‰
+        currentFeeRate = feeWaiver ? 0 : calculateFeeRate(destroyRecords.length)
+        if (!isFirstTime && !feeWaiver) {
+          feeAmount = Number((refundableValue * currentFeeRate).toFixed(2))
+        }
+
+        // å®žé™…é€€æ¬¾é‡‘é¢
+        refundAmount = Number((refundableValue - feeAmount).toFixed(2))
+      }
+    }
+
+    // åˆ¤æ–­æ˜¯å¦å¯ä»¥é”€æ¯ï¼ˆå·²ç§»é™¤å†·å´æœŸé™åˆ¶ï¼Œä»˜è´¹å®žä¾‹éšæ—¶å¯é”€æ¯ï¼‰
+    let canDestroy = true
+    let cannotDestroyReason = ''
+
+    if (
+      !isFreeInstance
+      && !canUserDestroyExpiredSuspendedPaidInstance(instance)
+      && exceedsPaidDestroyTrafficLimit(instance.monthlyTrafficUsed)
+    ) {
+      canDestroy = false
+      cannotDestroyReason = DESTROY_TRAFFIC_LIMIT_REASON
+    }
+
+    return {
+      canDestroy,
+      cannotDestroyReason,
+      isFreeInstance,
+      isFirstTime,
+      isErrorState,
+      feeWaiverEligible: isErrorState,
+      // é”€æ¯è§„åˆ™
+      rules: {
+        feeRate: feeWaiver ? 0 : DESTROY_RULES.FEE_RATE
+      },
+      // é€€æ¬¾é¢„è§ˆ
+      refund: {
+        remainingDays,
+        remainingValue,
+        feeRate: currentFeeRate,
+        feeAmount,
+        refundAmount,
+        destroyCount: destroyRecords.length,  // å·²é”€æ¯æ¬¡æ•°
+        maxRefundable  // é€€æ¬¾ä¸Šé™ï¼ˆåŸºäºŽåŽ†å²è´¦å•ï¼‰
+      },
+      // å®žä¾‹ä¿¡æ¯
+      instance: {
+        id: instance.id,
+        name: instance.name,
+        hostName: instance.host.name,
+        planName: instance.packagePlan?.name || null
+      }
+    }
+  })
+
+  // ==================== æ‰§è¡Œé”€æ¯ ====================
+  // POST /api/instances/:id/destroy
+  fastify.post<{ Params: { id: string }; Querystring: { feeWaiver?: string } }>('/:id/destroy', {
+    onRequest: [fastify.authenticate],
+    config: { rateLimit: { max: 5, timeWindow: '1 minute' } }
+  }, async (request: FastifyRequest<{ Params: { id: string }; Querystring: { feeWaiver?: string } }>, reply: FastifyReply) => {
+    const { user } = request
+    const instanceId = Number(request.params.id)
+
+    if (isNaN(instanceId)) {
+      return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
+    }
+
+    // èŽ·å–å®žä¾‹ä¿¡æ¯
+    const instance = await prisma.instance.findUnique({
+      where: { id: instanceId },
+      include: {
+        user: { select: { id: true, username: true, balance: true, email: true } },
+        host: { select: { id: true, name: true, userId: true } }
+      }
+    })
+
+    if (!instance) {
+      return reply.code(404).send(apiError(ErrorCode.INSTANCE_NOT_FOUND))
+    }
+
+    // åªæœ‰å®žä¾‹æ‰€æœ‰è€…å¯ä»¥é”€æ¯
+    if (instance.userId !== user.id) {
+      return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
+    }
+
+    // æ£€æŸ¥å®žä¾‹çŠ¶æ€
+    if (instance.status === 'deleted') {
+      return reply.code(400).send({ error: 'å®žä¾‹å·²åˆ é™¤' })
+    }
+
+    if (instance.status === 'creating') {
+      return reply.code(400).send({ error: 'å®žä¾‹æ­£åœ¨åˆ›å»ºä¸­ï¼Œæ— æ³•é”€æ¯' })
+    }
+
+    if (instance.status === 'suspended' && !canUserDestroyExpiredSuspendedPaidInstance(instance)) {
+      return reply.code(400).send({ error: 'å®žä¾‹å·²è¢«å°åœï¼Œæ— æ³•é”€æ¯ï¼Œè¯·å…ˆè”ç³»ç®¡ç†å‘˜è§£å°' })
+    }
+
+    const blockingTask = await getDestroyBlockingTask(instanceId)
+    if (blockingTask) {
+      return reply.code(409).send({
+        error: blockingTask.reason,
+        code: blockingTask.code
+      })
+    }
+
+    const exchangeLock = await getExchangeDestroyLock(instanceId)
+    if (exchangeLock) {
+      return reply.code(409).send({
+        error: exchangeLock.reason,
+        code: exchangeLock.code
+      })
+    }
+
+    // å…è´¹å®žä¾‹æ£€æŸ¥
+    const isFreeInstance = !instance.packagePlanId
+
+    // æŸ¥è¯¢ç”¨æˆ·é”€æ¯è®°å½•
+    const destroyRecords = await prisma.userDestroyRecord.findMany({
+      where: { userId: user.id },
+      orderBy: { destroyedAt: 'desc' }
+    })
+
+    let isFirstTime = destroyRecords.length === 0
+    // å·²ç§»é™¤å†·å´æœŸé™åˆ¶ï¼Œä»˜è´¹å®žä¾‹å¯éšæ—¶é”€æ¯
+
+    // å¼‚å¸¸å®žä¾‹å…æ‰‹ç»­è´¹
+    const isErrorState = instance.status === 'error'
+    const feeWaiver = request.query.feeWaiver === 'error' && isErrorState
+
+    let currentMonthlyTrafficUsed = instance.monthlyTrafficUsed
+
+    if (!isFreeInstance && instance.status === 'running') {
+      const collectResult = await collectTrafficForRunningInstance(instanceId)
+      if (!collectResult.success) {
+        request.log.warn({ instanceId, error: collectResult.error }, 'é”€æ¯å‰å³æ—¶é‡‡é›†æµé‡å¤±è´¥')
+      } else {
+        currentMonthlyTrafficUsed = collectResult.currentUsage
+      }
+    }
+
+    if (
+      !isFreeInstance
+      && !canUserDestroyExpiredSuspendedPaidInstance(instance)
+      && exceedsPaidDestroyTrafficLimit(currentMonthlyTrafficUsed)
+    ) {
+      return reply.code(400).send(apiError(
+        ErrorCode.INSTANCE_DESTROY_TRAFFIC_LIMIT_EXCEEDED,
+        DESTROY_TRAFFIC_LIMIT_REASON
+      ))
+    }
+
+    // è®¡ç®—é€€æ¬¾é‡‘é¢
+    let feeAmount = 0
+    let refundAmount = 0
+    let refundableValue = 0
+
+    if (!isFreeInstance && instance.expiresAt && instance.billingPrice && instance.billingCycle) {
+      const refundQuote = await db.calculateInstanceRemainingRefundQuote({
+        id: instanceId,
+        billingPrice: instance.billingPrice,
+        billingCycle: instance.billingCycle,
+        expiresAt: instance.expiresAt,
+        packagePlanId: instance.packagePlanId
+      })
+
+      if (refundQuote.isPaid) {
+        refundableValue = refundQuote.refundableValue
+
+        // å¼‚å¸¸å®žä¾‹å…æ‰‹ç»­è´¹ï¼Œå¦åˆ™æŒ‰æ­£å¸¸è§„åˆ™è®¡ç®—
+        if (!feeWaiver) {
+          const currentFeeRate = calculateFeeRate(destroyRecords.length)
+          if (!isFirstTime) {
+            feeAmount = roundMoney(refundableValue * currentFeeRate)
+          }
+        }
+
+        refundAmount = roundMoney(Math.max(0, refundableValue - feeAmount))
+      }
+    }
+
+    const claimed = await claimInstanceForUserDestroy(instanceId, user.id, instance.status)
+    if (!claimed) {
+      return reply.code(409).send({
+        error: 'å®žä¾‹æ­£åœ¨é”€æ¯æˆ–å·²åˆ é™¤',
+        code: 'INSTANCE_DESTROY_IN_PROGRESS'
+      })
+    }
+
+    try {
+      try {
+        await deleteIncusInstanceForUserDestroy(instance, request.log)
+      } catch (incusErr) {
+        await restoreClaimedInstanceStatus(instanceId, user.id, instance.status)
+        throw incusErr
+      }
+
+      if (!isFreeInstance) {
+        const billingResult = await settleUserDestroyBilling({
+          requestUserId: user.id,
+          instance,
+          refundableValue,
+          feeWaiver
+        })
+        refundAmount = billingResult.refundAmount
+        feeAmount = billingResult.feeAmount
+        isFirstTime = billingResult.isFirstTime
+      }
+
+      // 2. èŽ·å–ç«¯å£æ˜ å°„æ•°é‡ï¼ˆç”¨äºŽé‡Šæ”¾èµ„æºï¼‰
+      const portMappings = await prisma.portMapping.findMany({ where: { instanceId } })
+
+      // 3. æ¸…ç†å…³è”æ•°æ®
+      try {
+        await prisma.snapshot.deleteMany({ where: { instanceId } })
+        await prisma.backup.deleteMany({ where: { instanceId } })
+        await prisma.portMapping.deleteMany({ where: { instanceId } })
+        await prisma.proxySite.deleteMany({ where: { instanceId } })
+        await prisma.dailyTraffic.deleteMany({ where: { instanceId } })
+        await prisma.ipAddress.deleteMany({ where: { instanceId } })
+        await prisma.ipv6Subnet.deleteMany({ where: { instanceId } })
+        await prisma.restoreTask.deleteMany({ where: { instanceId, status: { in: ['COMPLETED', 'FAILED'] } } })
+        await prisma.backupUploadTask.deleteMany({ where: { instanceId, status: { in: ['COMPLETED', 'FAILED'] } } })
+        await prisma.instanceTask.deleteMany({ where: { instanceId, status: { in: ['COMPLETED', 'FAILED'] } } })
+        await prisma.instanceTransfer.updateMany({
+          where: { instanceId, status: 'pending' },
+          data: { status: 'cancelled', cancelledAt: new Date() }
+        })
+      } catch (cleanupErr) {
+        request.log.warn(cleanupErr, 'æ¸…ç†å…³è”æ•°æ®å¤±è´¥')
+      }
+
+      // 6. é‡Šæ”¾å®¿ä¸»æœºèµ„æº
+      const portMappingsCount = portMappings?.length || 0
+      await db.rollbackResources({
+        hostId: instance.hostId,
+        cpu: instance.cpu,
+        memory: instance.memory,
+        disk: instance.disk,
+        portCount: portMappingsCount
+      })
+
+      // é‡æ–°è®¡ç®—å®¿ä¸»æœºèµ„æºä½¿ç”¨é‡
+      const usedResources = await db.calculateHostResourcesFromInstances(instance.hostId)
+      const actualPortsUsed = await prisma.portMapping.count({
+        where: {
+          instance: {
+            hostId: instance.hostId,
+            status: { not: 'deleted' }
+          }
+        }
+      })
+      await db.updateHostResources(instance.hostId, {
+        cpuUsed: usedResources.cpuUsed,
+        memoryUsed: usedResources.memoryUsed,
+        diskUsed: usedResources.diskUsed
+      })
+      await prisma.host.update({
+        where: { id: instance.hostId },
+        data: { natPortsUsedCount: actualPortsUsed }
+      })
+
+      // 8. è®°å½•æ“ä½œæ—¥å¿—
+      await createLog(
+        user.id,
+        'billing',
+        'instance.user_destroy',
+        `User destroyed instance "${instance.name}" (Host: ${instance.host.name}, Refund: Â¥${refundAmount.toFixed(2)}, Fee: Â¥${feeAmount.toFixed(2)})`,
+        'success'
+      )
+
+      // 9. é€šçŸ¥ç”¨æˆ·
+      await sendNotification(user.id, 'instance_deleted_refunded', {
+        instanceName: instance.name,
+        refundAmount,
+        feeAmount,
+        isFreeInstance
+      })
+
+      if (!isFreeInstance && instance.user?.email) {
+        try {
+          await sendInstanceDestroyRefundEmail(instance.user.email, {
+            username: instance.user.username,
+            instanceName: instance.name,
+            refundAmount,
+            feeAmount,
+            refundType: 'ä½™é¢é€€æ¬¾',
+            isUserDestroy: true
+          })
+        } catch (emailErr) {
+          request.log.warn(emailErr, 'å‘é€é”€æ¯é€€æ¬¾é‚®ä»¶å¤±è´¥')
+        }
+      }
+
+      sendHostManagedInstanceNotification(
+        instance.hostId,
+        'destroy',
+        {
+          username: user.username,
+          instanceName: instance.name,
+          refundAmount,
+          feeAmount
+        }
+      ).catch(err => {
+        request.log.warn(err, 'å‘é€èŠ‚ç‚¹é”€æ¯é€šçŸ¥å¤±è´¥')
+      })
+
+      // 10. å‘å¥—é¤ç»‘å®šçš„é€šçŸ¥æ¸ é“å‘é€"èµ„æºé‡Šæ”¾"é€šçŸ¥
+      if (instance.packageId) {
+        sendReleaseNotification({
+          packageId: instance.packageId,
+          cpu: instance.cpu,
+          memory: instance.memory,
+          source: 'ç”¨æˆ·é”€æ¯å®žä¾‹'
+        }).catch(() => {})
+      }
+
+      return {
+        success: true,
+        message: isFreeInstance
+          ? 'å®žä¾‹å·²é”€æ¯'
+          : `å®žä¾‹å·²é”€æ¯${refundAmount > 0 ? `ï¼Œå·²é€€æ¬¾ Â¥${refundAmount.toFixed(2)}` : ''}${feeAmount > 0 ? `ï¼ˆæ‰‹ç»­è´¹ Â¥${feeAmount.toFixed(2)}ï¼‰` : ''}`,
+        refundAmount,
+        feeAmount,
+        isFirstTime,
+        isFreeInstance
+      }
+    } catch (error) {
+      request.log.error(error, 'é”€æ¯å®žä¾‹å¤±è´¥')
+      return reply.code(500).send({ error: 'é”€æ¯å®žä¾‹å¤±è´¥' })
+    }
+  })
+}
+FILE: server/scripts/test-user-destroy-incus-order.ts
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+
+const source = readFileSync(resolve(__dirname, '../src/routes/instance-destroy.ts'), 'utf8')
+
+function section(startMarker: string, endMarker?: string): string {
+  const start = source.indexOf(startMarker)
+  assert.notEqual(start, -1, `missing start marker: ${startMarker}`)
+  const end = endMarker ? source.indexOf(endMarker, start + startMarker.length) : source.length
+  if (endMarker) assert.notEqual(end, -1, `missing end marker: ${endMarker}`)
+  return source.slice(start, end)
+}
+
+const helperSection = section(
+  'async function deleteIncusInstanceForUserDestroy(',
+  'async function settleUserDestroyBilling('
+)
+assert.ok(helperSection.includes('await stopInstance'), 'user destroy helper should stop running instances before delete')
+assert.ok(helperSection.includes('await deleteInstance'), 'user destroy helper must require Incus instance deletion')
+assert.ok(!helperSection.includes("logger.error(incusErr, 'Incus åˆ é™¤å®žä¾‹å¤±è´¥')"), 'helper must not swallow Incus delete failures')
+
+const batchSection = section(
+  'async function executeDestroyForUser(',
+  "fastify.post<{\n    Body: { instanceIds: number[] }"
+)
+const batchDeleteIndex = batchSection.indexOf('await deleteIncusInstanceForUserDestroy(instance, logger)')
+const batchBillingIndex = batchSection.indexOf('await settleUserDestroyBilling({')
+const batchCleanupIndex = batchSection.indexOf('await prisma.snapshot.deleteMany')
+assert.ok(batchDeleteIndex !== -1, 'batch user destroy must call strict Incus delete helper')
+assert.ok(batchBillingIndex !== -1, 'batch user destroy must still settle billing')
+assert.ok(batchCleanupIndex !== -1, 'batch user destroy must still clean database resources')
+assert.ok(batchDeleteIndex < batchBillingIndex, 'batch user destroy must delete Incus before billing/refund')
+assert.ok(batchDeleteIndex < batchCleanupIndex, 'batch user destroy must delete Incus before database cleanup')
+assert.ok(
+  batchSection.includes('await restoreClaimedInstanceStatus(instanceId, user.id, instance.status)'),
+  'batch user destroy must restore claimed DB status when Incus deletion fails'
+)
+
+const routeSection = section(
+  "fastify.post<{ Params: { id: string }; Querystring: { feeWaiver?: string } }>('/:id/destroy'"
+)
+const routeDeleteIndex = routeSection.indexOf('await deleteIncusInstanceForUserDestroy(instance, request.log)')
+const routeBillingIndex = routeSection.indexOf('await settleUserDestroyBilling({')
+const routeCleanupIndex = routeSection.indexOf('await prisma.snapshot.deleteMany')
+assert.ok(routeDeleteIndex !== -1, 'single user destroy must call strict Incus delete helper')
+assert.ok(routeBillingIndex !== -1, 'single user destroy must still settle billing')
+assert.ok(routeCleanupIndex !== -1, 'single user destroy must still clean database resources')
+assert.ok(routeDeleteIndex < routeBillingIndex, 'single user destroy must delete Incus before billing/refund')
+assert.ok(routeDeleteIndex < routeCleanupIndex, 'single user destroy must delete Incus before database cleanup')
+assert.ok(
+  routeSection.includes('await restoreClaimedInstanceStatus(instanceId, user.id, instance.status)'),
+  'single user destroy must restore claimed DB status when Incus deletion fails'
+)
+
+const billingSection = section(
+  'async function settleUserDestroyBilling(',
+  'async function buildBatchDestroyPreviewItem('
+)
+assert.ok(
+  billingSection.includes('await advisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, instance.userId)'),
+  'destroy refund should wait for the user balance lock instead of failing after Incus delete'
+)
+assert.ok(
+  !billingSection.includes('tryAdvisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, instance.userId)'),
+  'destroy refund should not use non-blocking balance lock'
+)
+
+console.log('user destroy Incus order tests passed')
+
+codex
+已确认实际结算集中在 `settleUserDestroyBilling`，单实例和批量销毁都复用它。刚才整文件输出被截断，我现在补读该函数完整上下文及 `hosting-balance` 守卫，确认现有锁、账单和欠款语义后再改。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'rg -n -C 90 "async function settleUserDestroyBilling|deductHostingBalance|refundableValue|refundAmount|feeAmount" server/src/routes/instance-destroy.ts; rg -n "hosting-balance-guards|deductHostingBalance" server/scripts server/package.json' in C:\Users\Administrator\Desktop\payinces
+2026-07-11T20:33:43.330153Z ERROR codex_core::tools::router: error=Exit code: 1
+Wall time: 0.7 seconds
+Output:
+rg : The term 'rg' is not recognized as the name of a cmdlet, function, script file, or operable program. Check the 
+spelling of the name, or if a path was included, verify that the path is correct and try again.
+At line:2 char:1
++ rg -n -C 90 "async function settleUserDestroyBilling|deductHostingBal ...
++ ~~
+    + CategoryInfo          : ObjectNotFound: (rg:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+rg : The term 'rg' is not recognized as the name of a cmdlet, function, script file, or operable program. Check the 
+spelling of the name, or if a path was included, verify that the path is correct and try again.
+At line:2 char:154
++ ... ndAmount|feeAmount" server/src/routes/instance-destroy.ts; rg -n "hos ...
++                                                                ~~
+    + CategoryInfo          : ObjectNotFound: (rg:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+
+ exited 1 in 672ms:
+rg : The term 'rg' is not recognized as the name of a cmdlet, function, script file, or operable program. Check the 
+spelling of the name, or if a path was included, verify that the path is correct and try again.
+At line:2 char:1
++ rg -n -C 90 "async function settleUserDestroyBilling|deductHostingBal ...
++ ~~
+    + CategoryInfo          : ObjectNotFound: (rg:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+rg : The term 'rg' is not recognized as the name of a cmdlet, function, script file, or operable program. Check the 
+spelling of the name, or if a path was included, verify that the path is correct and try again.
+At line:2 char:154
++ ... ndAmount|feeAmount" server/src/routes/instance-destroy.ts; rg -n "hos ...
++                                                                ~~
+    + CategoryInfo          : ObjectNotFound: (rg:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$route = '"'server/src/routes/instance-destroy.ts'; "'$lines = Get-Content -LiteralPath $route; $match = Select-String -LiteralPath $route -Pattern '"'async function settleUserDestroyBilling'; "'$start = [Math]::Max(0, $match.LineNumber - 5); $end = [Math]::Min($lines.Count - 1, $match.LineNumber + 150); for ($i = $start; $i -le $end; $i++) { '"'{0,5}: {1}' -f ("'$i + 1), $lines[$i] }; Write-Output '"'HOSTING GUARD FILES'; Get-ChildItem -LiteralPath server/scripts -File | Select-String -Pattern 'deductHostingBalance|hosting-balance' | ForEach-Object { '{0}:{1}:{2}' -f "'$_.Path, $_.LineNumber, $_.Line.Trim() }; Write-Output '"'PACKAGE SCRIPTS'; Select-String -LiteralPath server/package.json -Pattern 'user-destroy-incus-order|hosting-balance-guards' | ForEach-Object { "'$_.Line }' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 933ms:
+  239: 
+  240:   await deleteInstance(client, instance.incusId)
+  241: }
+  242: 
+  243: async function settleUserDestroyBilling(params: {
+  244:   requestUserId: number
+  245:   instance: {
+  246:     id: number
+  247:     userId: number
+  248:     hostId: number
+  249:     name: string
+  250:   }
+  251:   refundableValue: number
+  252:   feeWaiver: boolean
+  253: }): Promise<{ refundAmount: number; feeAmount: number; isFirstTime: boolean }> {
+  254:   const { requestUserId, instance, refundableValue, feeWaiver } = params
+  255:   const instanceId = instance.id
+  256: 
+  257:   return await prisma.$transaction(async (tx) => {
+  258:     await advisoryTransactionLock(tx, USER_DESTROY_BILLING_LOCK_NAMESPACE, requestUserId)
+  259: 
+  260:     const destroyCount = await tx.userDestroyRecord.count({
+  261:       where: { userId: requestUserId }
+  262:     })
+  263:     const isFirstTime = destroyCount === 0
+  264:     let feeAmount = 0
+  265:     if (!feeWaiver && !isFirstTime) {
+  266:       feeAmount = roundMoney(refundableValue * calculateFeeRate(destroyCount))
+  267:     }
+  268:     const refundAmount = roundMoney(Math.max(0, refundableValue - feeAmount))
+  269: 
+  270:     if (refundAmount > 0) {
+  271:       await advisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, instance.userId)
+  272: 
+  273:       const currentUser = await tx.user.findUnique({
+  274:         where: { id: instance.userId },
+  275:         select: { balance: true }
+  276:       })
+  277:       const oldBalance = Number(currentUser?.balance || 0)
+  278: 
+  279:       const updatedUser = await tx.user.update({
+  280:         where: { id: instance.userId },
+  281:         data: { balance: { increment: refundAmount } },
+  282:         select: { balance: true }
+  283:       })
+  284:       const newBalance = Number(updatedUser.balance)
+  285: 
+  286:       const balanceLog = await tx.balanceLog.create({
+  287:         data: {
+  288:           userId: instance.userId,
+  289:           type: 'refund',
+  290:           amount: refundAmount,
+  291:           balanceBefore: oldBalance,
+  292:           balanceAfter: newBalance,
+  293:           instanceId,
+  294:           remark: `ç”¨æˆ·é”€æ¯å®žä¾‹é€€æ¬¾ï¼š${instance.name}${feeWaiver ? 'ï¼ˆå¼‚å¸¸å®žä¾‹å…æ‰‹ç»­è´¹ï¼‰' : feeAmount > 0 ? `ï¼ˆæ‰‹ç»­è´¹ Â¥${feeAmount.toFixed(2)}ï¼‰` : 'ï¼ˆé¦–æ¬¡é”€æ¯å…æ‰‹ç»­è´¹ï¼‰'}`
+  295:         }
+  296:       })
+  297: 
+  298:       await tx.instanceBillingRecord.create({
+  299:         data: {
+  300:           instanceId,
+  301:           userId: instance.userId,
+  302:           type: 'refund',
+  303:           amount: -refundAmount,
+  304:           months: 0,
+  305:           periodStart: new Date(),
+  306:           periodEnd: new Date(),
+  307:           balanceLogId: balanceLog.id,
+  308:           remark: `ç”¨æˆ·é”€æ¯å®žä¾‹é€€æ¬¾${feeWaiver ? 'ï¼ˆå¼‚å¸¸å®žä¾‹å…æ‰‹ç»­è´¹ï¼‰' : feeAmount > 0 ? `ï¼ˆæ‰‹ç»­è´¹ Â¥${feeAmount.toFixed(2)}ï¼‰` : 'ï¼ˆé¦–æ¬¡é”€æ¯å…æ‰‹ç»­è´¹ï¼‰'}`
+  309:         }
+  310:       })
+  311: 
+  312:       await db.deductHostingBalance(
+  313:         instance.hostId,
+  314:         refundAmount,
+  315:         instanceId,
+  316:         `ç”¨æˆ·é”€æ¯æ‰˜ç®¡å®žä¾‹é€€æ¬¾æ‰£é™¤ï¼š${instance.name}`,
+  317:         tx
+  318:       )
+  319:     }
+  320: 
+  321:     await tx.userDestroyRecord.create({
+  322:       data: {
+  323:         userId: requestUserId,
+  324:         hostId: instance.hostId,
+  325:         instanceId,
+  326:         instanceName: instance.name,
+  327:         refundAmount,
+  328:         feeAmount,
+  329:         isFirstTime
+  330:       }
+  331:     })
+  332: 
+  333:     return { refundAmount, feeAmount, isFirstTime }
+  334:   })
+  335: }
+  336: 
+  337: async function buildBatchDestroyPreviewItem(userId: number, instanceId: number): Promise<BatchDestroyPreviewItem> {
+  338:   const instance = await prisma.instance.findUnique({
+  339:     where: { id: instanceId },
+  340:     include: {
+  341:       host: { select: { id: true, name: true, userId: true } },
+  342:       packagePlan: { select: { id: true, name: true } }
+  343:     }
+  344:   })
+  345: 
+  346:   if (!instance) {
+  347:     return {
+  348:       id: instanceId,
+  349:       name: `#${instanceId}`,
+  350:       canDestroy: false,
+  351:       cannotDestroyReason: BATCH_HIDDEN_REASON,
+  352:       isFreeInstance: true,
+  353:       isFirstTime: false,
+  354:       feeWaiverEligible: false,
+  355:       refund: {
+  356:         remainingDays: 0,
+  357:         remainingValue: 0,
+  358:         feeRate: 0,
+  359:         feeAmount: 0,
+  360:         refundAmount: 0,
+  361:         destroyCount: 0,
+  362:         maxRefundable: 0
+  363:       },
+  364:       instance: {
+  365:         id: instanceId,
+  366:         name: `#${instanceId}`,
+  367:         hostName: '-',
+  368:         planName: null
+  369:       }
+  370:     }
+  371:   }
+  372: 
+  373:   if (instance.userId !== userId) {
+  374:     return {
+  375:       id: instanceId,
+  376:       name: `#${instanceId}`,
+  377:       canDestroy: false,
+  378:       cannotDestroyReason: BATCH_HIDDEN_REASON,
+  379:       isFreeInstance: true,
+  380:       isFirstTime: false,
+  381:       feeWaiverEligible: false,
+  382:       refund: {
+  383:         remainingDays: 0,
+  384:         remainingValue: 0,
+  385:         feeRate: 0,
+  386:         feeAmount: 0,
+  387:         refundAmount: 0,
+  388:         destroyCount: 0,
+  389:         maxRefundable: 0
+  390:       },
+  391:       instance: {
+  392:         id: instanceId,
+  393:         name: `#${instanceId}`,
+  394:         hostName: '-',
+HOSTING GUARD FILES
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-admin-billing-route-id-guards.ts:68:manualRefundRoute.includes(`await db.deductHostingBalance(
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-admin-billing-route-id-guards.ts:79:deleteAndRefundRoute.includes(`await db.deductHostingBalance(
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-admin-route-guards.ts:244:'/:id/hosting-balance/logs',
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-admin-route-guards.ts:245:'/:id/hosting-balance/adjust'
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-frontend-route-guards.ts:500:'admin API client must not expose customer-only invite, friend, transfer, check-in, billing, VIP, resource-pool, AFF, mail, entertainment, or hosting-balance self-service modules'
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-hosting-balance-guards.ts:19:'admin hosting-balance adjustment must reject non-finite and oversized amounts'
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-hosting-balance-guards.ts:30:'admin hosting-balance adjustment must trim and bound audit reasons before persistence/logging'
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-hosting-balance-guards.ts:33:const hostingBalanceLogsStart = usersRouteSource.indexOf("}>('/:id/hosting-balance/logs'")
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-hosting-balance-guards.ts:34:assert.notEqual(hostingBalanceLogsStart, -1, 'hosting-balance logs route not found')
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-hosting-balance-guards.ts:36:assert.notEqual(hostingBalanceLogsEnd, -1, 'hosting-balance logs route end marker not found')
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-hosting-balance-guards.ts:44:'admin hosting-balance logs route must strictly parse pagination before Prisma skip/take'
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-hosting-balance-guards.ts:84:'hosting unfreeze job must acquire per-user hosting-balance locks in deterministic order'
+PACKAGE SCRIPTS
+    "test:hosting-balance-guards": "node --import tsx scripts/test-hosting-balance-guards.ts",
+    "test:user-destroy-incus-order": "node --import tsx scripts/test-user-destroy-incus-order.ts",
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "Get-Content -LiteralPath server/scripts/test-hosting-balance-guards.ts; Write-Output 'WORKTREE STATUS'; git status --short -- server/src/routes/instance-destroy.ts server/scripts/test-user-destroy-incus-order.ts server/scripts/test-hosting-balance-guards.ts server/src/routes/users.ts server/src/routes/hosting.ts" in C:\Users\Administrator\Desktop\payinces
+ succeeded in 585ms:
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import assert from 'node:assert/strict'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+
+const billingSource = readFileSync(resolve(__dirname, '../src/db/billing-operations.ts'), 'utf8')
+const schedulerSource = readFileSync(resolve(__dirname, '../src/services/hosting-scheduler.ts'), 'utf8')
+const hostingRouteSource = readFileSync(resolve(__dirname, '../src/routes/hosting.ts'), 'utf8')
+const usersRouteSource = readFileSync(resolve(__dirname, '../src/routes/users.ts'), 'utf8')
+
+assert.ok(
+  usersRouteSource.includes('!Number.isFinite(amount)') &&
+    usersRouteSource.includes('Amount must be a finite non-zero number') &&
+    usersRouteSource.includes('const MAX_HOSTING_BALANCE_ADJUST_AMOUNT = 99999999.99') &&
+    usersRouteSource.includes('Math.abs(amount) > MAX_HOSTING_BALANCE_ADJUST_AMOUNT'),
+  'admin hosting-balance adjustment must reject non-finite and oversized amounts'
+)
+
+assert.ok(
+  usersRouteSource.includes('const MAX_HOSTING_BALANCE_ADJUST_REASON_LENGTH = 500') &&
+    usersRouteSource.includes("const normalizedReason = typeof reason === 'string' ? reason.trim() : ''") &&
+    usersRouteSource.includes('normalizedReason.length > MAX_HOSTING_BALANCE_ADJUST_REASON_LENGTH') &&
+    usersRouteSource.includes('remark: `[Admin] ${normalizedReason}`') &&
+    usersRouteSource.includes('remark: `[Admin Frozen] ${normalizedReason}`') &&
+    usersRouteSource.includes('remark: `[Admin Frozen Deduct] ${normalizedReason} (Â¥${absAmount.toFixed(2)})`') &&
+    usersRouteSource.includes('reason=${normalizedReason}'),
+  'admin hosting-balance adjustment must trim and bound audit reasons before persistence/logging'
+)
+
+const hostingBalanceLogsStart = usersRouteSource.indexOf("}>('/:id/hosting-balance/logs'")
+assert.notEqual(hostingBalanceLogsStart, -1, 'hosting-balance logs route not found')
+const hostingBalanceLogsEnd = usersRouteSource.indexOf('// è°ƒæ•´ç”¨æˆ·æ‰˜ç®¡ä½™é¢ï¼ˆç®¡ç†å‘˜ï¼‰', hostingBalanceLogsStart)
+assert.notEqual(hostingBalanceLogsEnd, -1, 'hosting-balance logs route end marker not found')
+const hostingBalanceLogsRoute = usersRouteSource.slice(hostingBalanceLogsStart, hostingBalanceLogsEnd)
+
+assert.ok(
+  hostingBalanceLogsRoute.includes('const pageNum = parsePositiveIntegerQuery(page, 1)') &&
+    hostingBalanceLogsRoute.includes('const size = parseClampedPositiveIntegerQuery(pageSize, 20, 100)') &&
+    hostingBalanceLogsRoute.includes('const skip = (pageNum - 1) * size') &&
+    !hostingBalanceLogsRoute.includes('parseInt('),
+  'admin hosting-balance logs route must strictly parse pagination before Prisma skip/take'
+)
+
+assert.ok(
+  hostingRouteSource.includes('const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\\d*$/') &&
+    hostingRouteSource.includes('function parsePositiveRouteId(value: string): number | null') &&
+    hostingRouteSource.includes('Number.isSafeInteger(parsed)') &&
+    hostingRouteSource.includes('const blockedUserId = parsePositiveRouteId(request.params.userId)'),
+  'hosting block delete route must reject malformed, zero, and unsafe user IDs'
+)
+
+assert.ok(
+  hostingRouteSource.includes('function parsePositiveIntegerQuery(value: string | undefined, fallback: number): number') &&
+    hostingRouteSource.includes('function parseClampedPositiveIntegerQuery(value: string | undefined, fallback: number, max: number): number') &&
+    hostingRouteSource.includes('const safePageSize = parseClampedPositiveIntegerQuery(pageSize, 30, 100)') &&
+    hostingRouteSource.includes('const pageNum = parsePositiveIntegerQuery(page, 1)') &&
+    hostingRouteSource.includes('const safePageSize = parseClampedPositiveIntegerQuery(pageSize, 20, 100)') &&
+    hostingRouteSource.includes('const safeStatus = normalizeWithdrawalStatus(status)') &&
+    hostingRouteSource.includes('const safeActionType = normalizeHostingActionType(actionType)') &&
+    hostingRouteSource.includes('const searchTerm = normalizeSearch(search, 128)'),
+  'hosting logs and withdrawal routes must strictly parse pagination, cap search, and allowlist filters'
+)
+
+for (const forbiddenPattern of [
+  'Number(request.params.userId)',
+  'Number.isNaN(blockedUserId)',
+  'Number(page) || 1',
+  'Number(pageSize) ||',
+  'baseWhere.actionType = actionType',
+  'where.status = status'
+] as const) {
+  assert.ok(
+    !hostingRouteSource.includes(forbiddenPattern),
+    `hosting routes must not use loose parsing or raw enum filters: ${forbiddenPattern}`
+  )
+}
+
+assert.ok(
+  schedulerSource.includes('[...lockedAmounts.keys()].sort((a, b) => a - b)') &&
+    schedulerSource.includes('tryAdvisoryTransactionLock(tx, HOSTING_BALANCE_LOG_LOCK_NAMESPACE, userId)'),
+  'hosting unfreeze job must acquire per-user hosting-balance locks in deterministic order'
+)
+
+assert.ok(
+  billingSource.includes('tryAdvisoryTransactionLock(client, HOSTING_BALANCE_LOG_LOCK_NAMESPACE, hostOwnerId)') &&
+    billingSource.includes('tryAdvisoryTransactionLock(client, USER_BALANCE_LOCK_NAMESPACE, hostOwnerId)'),
+  'hosted instance destruction must lock both hosting balance and panel balance before deductions'
+)
+
+assert.ok(
+  billingSource.includes('const hostingBalanceUpdateResult = await client.user.updateMany({') &&
+    billingSource.includes('hostingBalance: { gte: deductFromAvailable }') &&
+    billingSource.includes("throw new Error('æ‰˜ç®¡ä½™é¢ä¸è¶³ï¼Œè¯·ç¨åŽé‡è¯•')"),
+  'hosted instance destruction must conditionally decrement available hosting balance'
+)
+
+assert.ok(
+  billingSource.includes('const balanceUpdateResult = await client.user.updateMany({') &&
+    billingSource.includes('balance: { gte: deductFromBalance }') &&
+    billingSource.includes("throw new Error('ä½™é¢ä¸è¶³ï¼Œè¯·ç¨åŽé‡è¯•')") &&
+    billingSource.includes('const updatedUser = await client.user.findUniqueOrThrow({'),
+  'hosted instance destruction must conditionally decrement panel balance before writing balance logs'
+)
+
+console.log('hosting balance guard checks passed')
+WORKTREE STATUS
+
+codex
+口径已核清：`refundableValue` 是受历史账单上限约束后的手续费前可退价值 R，`feeAmount` 是 F，`refundAmount` 是 `max(0, R-F)`；当前 `deductHostingBalance` 确实错误传了 `refundAmount`。我将只把该参数改为 `refundableValue`，并在现有销毁守卫中同时钉住“必须传 R、不得传 R−F”。
+apply patch
+patch: completed
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-user-destroy-incus-order.ts
+C:\Users\Administrator\Desktop\payinces\server\src\routes\instance-destroy.ts
+diff --git a/server/scripts/test-user-destroy-incus-order.ts b/server/scripts/test-user-destroy-incus-order.ts
+index 07679ff8b0f38bd8dd9ea3c6715094b2cfff62c8..9a19664cc8593c895b88c862cd1b91ce10f8ac4d
+--- a/server/scripts/test-user-destroy-incus-order.ts
++++ b/server/scripts/test-user-destroy-incus-order.ts
+@@ -69,5 +69,17 @@
+   !billingSection.includes('tryAdvisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, instance.userId)'),
+   'destroy refund should not use non-blocking balance lock'
+ )
++assert.ok(
++  billingSection.includes(`await db.deductHostingBalance(
++        instance.hostId,
++        refundableValue,`),
++  'host owner clawback must use the pre-fee refundable value so the destroy fee belongs to the platform'
++)
++assert.ok(
++  !billingSection.includes(`await db.deductHostingBalance(
++        instance.hostId,
++        refundAmount,`),
++  'host owner clawback must not use the post-fee buyer refund amount'
++)
+ 
+ console.log('user destroy Incus order tests passed')
+diff --git a/server/src/routes/instance-destroy.ts b/server/src/routes/instance-destroy.ts
+index 03d94c255395adc809066fbccfe6913b8ac2ec37..69ad41cff9ad9ab7454738769bcaa604bbcdd31b
+--- a/server/src/routes/instance-destroy.ts
++++ b/server/src/routes/instance-destroy.ts
+@@ -311,7 +311,7 @@
+ 
+       await db.deductHostingBalance(
+         instance.hostId,
+-        refundAmount,
++        refundableValue,
+         instanceId,
+         `用户销毁托管实例退款扣除：${instance.name}`,
+         tx
+
+diff --git a/server/scripts/test-user-destroy-incus-order.ts b/server/scripts/test-user-destroy-incus-order.ts
+index 07679ff8b0f38bd8dd9ea3c6715094b2cfff62c8..9a19664cc8593c895b88c862cd1b91ce10f8ac4d
+--- a/server/scripts/test-user-destroy-incus-order.ts
++++ b/server/scripts/test-user-destroy-incus-order.ts
+@@ -69,5 +69,17 @@
+   !billingSection.includes('tryAdvisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, instance.userId)'),
+   'destroy refund should not use non-blocking balance lock'
+ )
++assert.ok(
++  billingSection.includes(`await db.deductHostingBalance(
++        instance.hostId,
++        refundableValue,`),
++  'host owner clawback must use the pre-fee refundable value so the destroy fee belongs to the platform'
++)
++assert.ok(
++  !billingSection.includes(`await db.deductHostingBalance(
++        instance.hostId,
++        refundAmount,`),
++  'host owner clawback must not use the post-fee buyer refund amount'
++)
+ 
+ console.log('user destroy Incus order tests passed')
+diff --git a/server/src/routes/instance-destroy.ts b/server/src/routes/instance-destroy.ts
+index 03d94c255395adc809066fbccfe6913b8ac2ec37..69ad41cff9ad9ab7454738769bcaa604bbcdd31b
+--- a/server/src/routes/instance-destroy.ts
++++ b/server/src/routes/instance-destroy.ts
+@@ -311,7 +311,7 @@
+ 
+       await db.deductHostingBalance(
+         instance.hostId,
+-        refundAmount,
++        refundableValue,
+         instanceId,
+         `用户销毁托管实例退款扣除：${instance.name}`,
+         tx
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'git diff -- server/src/routes/instance-destroy.ts server/scripts/test-user-destroy-incus-order.ts; git status --short -- server/src/routes/instance-destroy.ts server/scripts/test-user-destroy-incus-order.ts server/src/routes/users.ts server/src/routes/hosting.ts server/package.json' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 537ms:
+diff --git a/server/scripts/test-user-destroy-incus-order.ts b/server/scripts/test-user-destroy-incus-order.ts
+index 07679ff..9a19664 100644
+--- a/server/scripts/test-user-destroy-incus-order.ts
++++ b/server/scripts/test-user-destroy-incus-order.ts
+@@ -69,5 +69,17 @@ assert.ok(
+   !billingSection.includes('tryAdvisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, instance.userId)'),
+   'destroy refund should not use non-blocking balance lock'
+ )
++assert.ok(
++  billingSection.includes(`await db.deductHostingBalance(
++        instance.hostId,
++        refundableValue,`),
++  'host owner clawback must use the pre-fee refundable value so the destroy fee belongs to the platform'
++)
++assert.ok(
++  !billingSection.includes(`await db.deductHostingBalance(
++        instance.hostId,
++        refundAmount,`),
++  'host owner clawback must not use the post-fee buyer refund amount'
++)
+ 
+ console.log('user destroy Incus order tests passed')
+diff --git a/server/src/routes/instance-destroy.ts b/server/src/routes/instance-destroy.ts
+index 03d94c2..69ad41c 100644
+--- a/server/src/routes/instance-destroy.ts
++++ b/server/src/routes/instance-destroy.ts
+@@ -311,7 +311,7 @@ async function settleUserDestroyBilling(params: {
+ 
+       await db.deductHostingBalance(
+         instance.hostId,
+-        refundAmount,
++        refundableValue,
+         instanceId,
+         `用户销毁托管实例退款扣除：${instance.name}`,
+         tx
+ M server/package.json
+ M server/scripts/test-user-destroy-incus-order.ts
+ M server/src/routes/instance-destroy.ts
+warning: in the working copy of 'server/scripts/test-user-destroy-incus-order.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/instance-destroy.ts', LF will be replaced by CRLF the next time Git touches it
+
+diff --git a/server/scripts/test-user-destroy-incus-order.ts b/server/scripts/test-user-destroy-incus-order.ts
+index 07679ff8b0f38bd8dd9ea3c6715094b2cfff62c8..9a19664cc8593c895b88c862cd1b91ce10f8ac4d
+--- a/server/scripts/test-user-destroy-incus-order.ts
++++ b/server/scripts/test-user-destroy-incus-order.ts
+@@ -69,5 +69,17 @@
+   !billingSection.includes('tryAdvisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, instance.userId)'),
+   'destroy refund should not use non-blocking balance lock'
+ )
++assert.ok(
++  billingSection.includes(`await db.deductHostingBalance(
++        instance.hostId,
++        refundableValue,`),
++  'host owner clawback must use the pre-fee refundable value so the destroy fee belongs to the platform'
++)
++assert.ok(
++  !billingSection.includes(`await db.deductHostingBalance(
++        instance.hostId,
++        refundAmount,`),
++  'host owner clawback must not use the post-fee buyer refund amount'
++)
+ 
+ console.log('user destroy Incus order tests passed')
+diff --git a/server/src/routes/instance-destroy.ts b/server/src/routes/instance-destroy.ts
+index 03d94c255395adc809066fbccfe6913b8ac2ec37..69ad41cff9ad9ab7454738769bcaa604bbcdd31b
+--- a/server/src/routes/instance-destroy.ts
++++ b/server/src/routes/instance-destroy.ts
+@@ -311,7 +311,7 @@
+ 
+       await db.deductHostingBalance(
+         instance.hostId,
+-        refundAmount,
++        refundableValue,
+         instanceId,
+         `用户销毁托管实例退款扣除：${instance.name}`,
+         tx
+
+codex
+最小 diff 已核对，仅两处目标文件；`server/package.json` 当前另有未提交改动，但不是本任务产生，我没有触碰。现在并行执行 server type-check、销毁守卫和 hosting balance 守卫。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'pnpm --filter server test:hosting-balance-guards' in C:\Users\Administrator\Desktop\payinces
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'pnpm --filter server test:user-destroy-incus-order' in C:\Users\Administrator\Desktop\payinces
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'pnpm --filter server type-check' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 1681ms:
+
+> server@1.3.7 test:user-destroy-incus-order C:\Users\Administrator\Desktop\payinces\server
+> node --import tsx scripts/test-user-destroy-incus-order.ts
+
+user destroy Incus order tests passed
+
+ succeeded in 1709ms:
+
+> server@1.3.7 test:hosting-balance-guards C:\Users\Administrator\Desktop\payinces\server
+> node --import tsx scripts/test-hosting-balance-guards.ts
+
+hosting balance guard checks passed
+
+diff --git a/server/scripts/test-user-destroy-incus-order.ts b/server/scripts/test-user-destroy-incus-order.ts
+index 07679ff8b0f38bd8dd9ea3c6715094b2cfff62c8..9a19664cc8593c895b88c862cd1b91ce10f8ac4d
+--- a/server/scripts/test-user-destroy-incus-order.ts
++++ b/server/scripts/test-user-destroy-incus-order.ts
+@@ -69,5 +69,17 @@
+   !billingSection.includes('tryAdvisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, instance.userId)'),
+   'destroy refund should not use non-blocking balance lock'
+ )
++assert.ok(
++  billingSection.includes(`await db.deductHostingBalance(
++        instance.hostId,
++        refundableValue,`),
++  'host owner clawback must use the pre-fee refundable value so the destroy fee belongs to the platform'
++)
++assert.ok(
++  !billingSection.includes(`await db.deductHostingBalance(
++        instance.hostId,
++        refundAmount,`),
++  'host owner clawback must not use the post-fee buyer refund amount'
++)
+ 
+ console.log('user destroy Incus order tests passed')
+diff --git a/server/src/routes/instance-destroy.ts b/server/src/routes/instance-destroy.ts
+index 03d94c255395adc809066fbccfe6913b8ac2ec37..69ad41cff9ad9ab7454738769bcaa604bbcdd31b
+--- a/server/src/routes/instance-destroy.ts
++++ b/server/src/routes/instance-destroy.ts
+@@ -311,7 +311,7 @@
+ 
+       await db.deductHostingBalance(
+         instance.hostId,
+-        refundAmount,
++        refundableValue,
+         instanceId,
+         `用户销毁托管实例退款扣除：${instance.name}`,
+         tx
+
+diff --git a/server/scripts/test-user-destroy-incus-order.ts b/server/scripts/test-user-destroy-incus-order.ts
+index 07679ff8b0f38bd8dd9ea3c6715094b2cfff62c8..9a19664cc8593c895b88c862cd1b91ce10f8ac4d
+--- a/server/scripts/test-user-destroy-incus-order.ts
++++ b/server/scripts/test-user-destroy-incus-order.ts
+@@ -69,5 +69,17 @@
+   !billingSection.includes('tryAdvisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, instance.userId)'),
+   'destroy refund should not use non-blocking balance lock'
+ )
++assert.ok(
++  billingSection.includes(`await db.deductHostingBalance(
++        instance.hostId,
++        refundableValue,`),
++  'host owner clawback must use the pre-fee refundable value so the destroy fee belongs to the platform'
++)
++assert.ok(
++  !billingSection.includes(`await db.deductHostingBalance(
++        instance.hostId,
++        refundAmount,`),
++  'host owner clawback must not use the post-fee buyer refund amount'
++)
+ 
+ console.log('user destroy Incus order tests passed')
+diff --git a/server/src/routes/instance-destroy.ts b/server/src/routes/instance-destroy.ts
+index 03d94c255395adc809066fbccfe6913b8ac2ec37..69ad41cff9ad9ab7454738769bcaa604bbcdd31b
+--- a/server/src/routes/instance-destroy.ts
++++ b/server/src/routes/instance-destroy.ts
+@@ -311,7 +311,7 @@
+ 
+       await db.deductHostingBalance(
+         instance.hostId,
+-        refundAmount,
++        refundableValue,
+         instanceId,
+         `用户销毁托管实例退款扣除：${instance.name}`,
+         tx
+
+ succeeded in 32577ms:
+
+> server@1.3.7 type-check C:\Users\Administrator\Desktop\payinces\server
+> tsc --noEmit
+
+
+diff --git a/server/scripts/test-user-destroy-incus-order.ts b/server/scripts/test-user-destroy-incus-order.ts
+index 07679ff8b0f38bd8dd9ea3c6715094b2cfff62c8..9a19664cc8593c895b88c862cd1b91ce10f8ac4d
+--- a/server/scripts/test-user-destroy-incus-order.ts
++++ b/server/scripts/test-user-destroy-incus-order.ts
+@@ -69,5 +69,17 @@
+   !billingSection.includes('tryAdvisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, instance.userId)'),
+   'destroy refund should not use non-blocking balance lock'
+ )
++assert.ok(
++  billingSection.includes(`await db.deductHostingBalance(
++        instance.hostId,
++        refundableValue,`),
++  'host owner clawback must use the pre-fee refundable value so the destroy fee belongs to the platform'
++)
++assert.ok(
++  !billingSection.includes(`await db.deductHostingBalance(
++        instance.hostId,
++        refundAmount,`),
++  'host owner clawback must not use the post-fee buyer refund amount'
++)
+ 
+ console.log('user destroy Incus order tests passed')
+diff --git a/server/src/routes/instance-destroy.ts b/server/src/routes/instance-destroy.ts
+index 03d94c255395adc809066fbccfe6913b8ac2ec37..69ad41cff9ad9ab7454738769bcaa604bbcdd31b
+--- a/server/src/routes/instance-destroy.ts
++++ b/server/src/routes/instance-destroy.ts
+@@ -311,7 +311,7 @@
+ 
+       await db.deductHostingBalance(
+         instance.hostId,
+-        refundAmount,
++        refundableValue,
+         instanceId,
+         `用户销毁托管实例退款扣除：${instance.name}`,
+         tx
+
+codex
+三项验收均已通过。最后做一次限定到这两个文件的 whitespace/diff 复核，确认测试没有产生额外改动，然后交付结论。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'git diff --check -- server/src/routes/instance-destroy.ts server/scripts/test-user-destroy-incus-order.ts; git status --short -- server/src/routes/instance-destroy.ts server/scripts/test-user-destroy-incus-order.ts server/src/routes/users.ts server/src/routes/hosting.ts server/package.json' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 481ms:
+ M server/package.json
+ M server/scripts/test-user-destroy-incus-order.ts
+ M server/src/routes/instance-destroy.ts
+warning: in the working copy of 'server/scripts/test-user-destroy-incus-order.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/instance-destroy.ts', LF will be replaced by CRLF the next time Git touches it
+
+diff --git a/server/scripts/test-user-destroy-incus-order.ts b/server/scripts/test-user-destroy-incus-order.ts
+index 07679ff8b0f38bd8dd9ea3c6715094b2cfff62c8..9a19664cc8593c895b88c862cd1b91ce10f8ac4d
+--- a/server/scripts/test-user-destroy-incus-order.ts
++++ b/server/scripts/test-user-destroy-incus-order.ts
+@@ -69,5 +69,17 @@
+   !billingSection.includes('tryAdvisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, instance.userId)'),
+   'destroy refund should not use non-blocking balance lock'
+ )
++assert.ok(
++  billingSection.includes(`await db.deductHostingBalance(
++        instance.hostId,
++        refundableValue,`),
++  'host owner clawback must use the pre-fee refundable value so the destroy fee belongs to the platform'
++)
++assert.ok(
++  !billingSection.includes(`await db.deductHostingBalance(
++        instance.hostId,
++        refundAmount,`),
++  'host owner clawback must not use the post-fee buyer refund amount'
++)
+ 
+ console.log('user destroy Incus order tests passed')
+diff --git a/server/src/routes/instance-destroy.ts b/server/src/routes/instance-destroy.ts
+index 03d94c255395adc809066fbccfe6913b8ac2ec37..69ad41cff9ad9ab7454738769bcaa604bbcdd31b
+--- a/server/src/routes/instance-destroy.ts
++++ b/server/src/routes/instance-destroy.ts
+@@ -311,7 +311,7 @@
+ 
+       await db.deductHostingBalance(
+         instance.hostId,
+-        refundAmount,
++        refundableValue,
+         instanceId,
+         `用户销毁托管实例退款扣除：${instance.name}`,
+         tx
+
+codex
+已完成 FX-015：在 [instance-destroy.ts](C:/Users/Administrator/Desktop/payinces/server/src/routes/instance-destroy.ts:243) 中，`refundableValue` = 手续费前剩余价值 R，`feeAmount` = 手续费 F，`refundAmount` = 买家退款额 R−F；托管余额回扣已由 `refundAmount` 改为 `refundableValue`，买家退款不变，F 归平台。销毁守卫已追加正反断言。`server type-check`、`test:user-destroy-incus-order`、`test:hosting-balance-guards` 全部通过，`git diff --check` 通过。未触碰 `users.ts`、`hosting.ts` 或 package.json（package.json 原有并行改动），未 commit。
+diff --git a/server/scripts/test-user-destroy-incus-order.ts b/server/scripts/test-user-destroy-incus-order.ts
+index 07679ff8b0f38bd8dd9ea3c6715094b2cfff62c8..9a19664cc8593c895b88c862cd1b91ce10f8ac4d
+--- a/server/scripts/test-user-destroy-incus-order.ts
++++ b/server/scripts/test-user-destroy-incus-order.ts
+@@ -69,5 +69,17 @@
+   !billingSection.includes('tryAdvisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, instance.userId)'),
+   'destroy refund should not use non-blocking balance lock'
+ )
++assert.ok(
++  billingSection.includes(`await db.deductHostingBalance(
++        instance.hostId,
++        refundableValue,`),
++  'host owner clawback must use the pre-fee refundable value so the destroy fee belongs to the platform'
++)
++assert.ok(
++  !billingSection.includes(`await db.deductHostingBalance(
++        instance.hostId,
++        refundAmount,`),
++  'host owner clawback must not use the post-fee buyer refund amount'
++)
+ 
+ console.log('user destroy Incus order tests passed')
+diff --git a/server/src/routes/instance-destroy.ts b/server/src/routes/instance-destroy.ts
+index 03d94c255395adc809066fbccfe6913b8ac2ec37..69ad41cff9ad9ab7454738769bcaa604bbcdd31b
+--- a/server/src/routes/instance-destroy.ts
++++ b/server/src/routes/instance-destroy.ts
+@@ -311,7 +311,7 @@
+ 
+       await db.deductHostingBalance(
+         instance.hostId,
+-        refundAmount,
++        refundableValue,
+         instanceId,
+         `用户销毁托管实例退款扣除：${instance.name}`,
+         tx
+
+tokens used
+30,026

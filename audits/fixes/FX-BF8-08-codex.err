@@ -1,0 +1,3395 @@
+OpenAI Codex v0.144.0-alpha.4
+--------
+workdir: C:\Users\Administrator\Desktop\payinces
+model: gpt-5.6-sol
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: high
+reasoning summaries: none
+session id: 019f53b3-9a39-7f21-93bd-653ea9cf67fa
+--------
+user
+你是 PayIncus 实现工程师。先读 AGENTS.md(资金/礼品卡高危,先读代码+守卫;不 commit/push/发版、不大重构;不改 schema/package)。严格按规格只改 db/gift-cards.ts(+必要 routes)+ 守卫:后台可用数/未兑余额统计按 status=active 且 expiresAt>now 实时排除过期卡。不碰 flash-sales/instances/GiftCardsView(并行/已恢复)。改完跑守卫报告,不 commit。
+---
+# BF-8-08 规格：礼品卡懒过期致后台可用数/未兑负债虚高(G-C 同意)
+
+## 裁决
+后台统计**实时按 expiresAt 排除已到期卡**。
+
+## 现状
+过期卡只有被尝试兑换才转 expired;后台 active 数与"未兑余额"只看 status 不看 expiresAt → 虚高。证据:gift-cards.ts(db):324、330、499。
+
+## 修法(只改 server/src/db/gift-cards.ts(+必要 routes)+ 守卫;不改 schema/package;不碰 flash-sales/instances(并行);不碰 GiftCardsView 前端(已恢复))
+1. 先只读:gift-cards.ts:324/330/499 的 active 计数与未兑余额聚合、expiresAt 字段、状态枚举。
+2. **实时排除过期**:后台"可用数/未兑负债"等统计查询**同时按 `status=active 且 (expiresAt 为空 或 expiresAt>now)`** 过滤;已过 expiresAt 的即使 status 仍是 active 也**不计入**可用/未兑。
+3. (可选)不强制把过期卡批量转 expired(懒转仍可保留),只保证**统计口径**实时正确;若顺手能在读时或调度把明显过期的转 expired 且低风险则可,但核心是统计过滤。
+4. 兑换路径既有"尝试兑换转 expired"保持。
+
+## 加守卫
+`test:gift-card-guards`/`test:gift-card-flow` 追加:后台统计按 expiresAt 实时排除过期卡。不改 package.json。
+
+## 不许动
+不碰 flash-sales/instances(并行)。不碰 GiftCardsView 前端。不改 schema/package。不 commit。
+
+## 验收
+type-check 通过;`test:gift-card-guards`、`test:gift-card-flow`、`test:financial-reconciliation-guards` 通过。交付一段话:改了哪些统计查询、过滤条件、守卫结果。
+
+codex
+我会严格按 BF-8-08 的范围处理：先只读礼品卡数据库实现与两组现有守卫，确认统计入口和状态/到期语义后再做最小改动；不会触碰 schema、package、前端、flash-sales、instances，也不会 commit/push/发版。完成后按指定三组守卫与 server type-check 验证。
+  → 只读 AGENTS.md、gift-cards.ts 统计/到期逻辑及现有礼品卡守卫
+  • 最小修改后台统计过滤并追加守卫断言
+  • 运行 server type-check 与三组指定守卫，复核变更范围
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Content -Raw AGENTS.md; Write-Output "`n--- git status ---"; git status --short; Write-Output "`n--- target files ---"; rg --files server | rg "gift-card|financial-reconciliation"' in C:\Users\Administrator\Desktop\payinces
+2026-07-12T00:22:03.415734Z ERROR codex_core::tools::router: error=Exit code: 1
+Wall time: 0.9 seconds
+Output:
+# PayIncus / Incudal â€” é¡¹ç›®ç»Ÿä¸€è§„çŸ©ï¼ˆAGENTS.mdï¼‰
+
+> æœ¬æ–‡ä»¶æ˜¯æœ¬ä»“åº“**æ‰€æœ‰ AI agentï¼ˆClaude Codeã€codex ç­‰ï¼‰çš„ç»Ÿä¸€å·¥ä½œè§„èŒƒ**ã€‚
+> `CLAUDE.md` é€šè¿‡ `@AGENTS.md` å¼•ç”¨æœ¬æ–‡ä»¶ â€”â€” Claude Code ä¸Ž codex è¯»åˆ°çš„æ˜¯**åŒä¸€å¥—è§„çŸ©**ï¼Œæ”¹è¿™ä¸€ä¸ªæ–‡ä»¶å³å¯ã€‚
+> æƒå¨è¿ç»´/å‘ç‰ˆäº‹å®žä»¥ä»“åº“æ ¹çš„ `OPERATIONS_HANDOFF.md`ï¼ˆæ“ä½œæ‰‹å†Œï¼‰ä¸Ž `HANDOFF.md`ï¼ˆç‰ˆæœ¬è¯æ®å°è´¦ï¼‰ä¸ºå‡†ã€‚
+
+---
+
+## 0. æ²Ÿé€šè¯­è¨€
+- ä¸Ž owner é»˜è®¤ç”¨**ä¸­æ–‡**æ²Ÿé€šã€‚
+
+## 1. è¿™æ˜¯ä»€ä¹ˆé¡¹ç›®
+**PayIncus**ï¼ˆå†…éƒ¨ä»£å· `incudal`ï¼‰â€”â€”å•†ç”¨ Incusï¼ˆLXC/KVMï¼‰NAT VPS å”®å–ä¸Žäº¤ä»˜å¹³å°ï¼Œ**çº¿ä¸Šè¿è¥ä¸­**ã€‚å½“å‰ç”Ÿäº§ç‰ˆæœ¬ **v1.3.7**ã€‚pnpm monorepoï¼š
+
+| ç›®å½• | æŠ€æœ¯æ ˆ / ä½œç”¨ |
+|------|----------------|
+| `client/` | Vue 3 + Vite SPAã€‚åŒç«¯æž„å»ºï¼ˆ`VITE_APP_ENTRY`ï¼‰â†’ `dist/user`ï¼ˆpay.payincus.comï¼‰+ `dist/admin`ï¼ˆadmin.payincus.comï¼‰ã€‚ä¸¤ç«¯ç‹¬ç«‹æºã€**ä¸å…±äº« cookie åŸŸ**ã€‚ |
+| `server/` | Fastify 5 + Prisma 7 + PostgreSQLï¼Œ~300 TS æ–‡ä»¶ã€~70 è·¯ç”±ã€~15 è°ƒåº¦/workerã€‚æ—  Redisï¼ˆç”¨ PG advisory lockï¼‰ã€‚ä¸‰å¥—é‰´æƒé¢ï¼šWeb çš„ JWT+refresh cookieã€Public API çš„ `pat_`/`poa_` tokenã€host agent çš„ HMACã€‚ |
+| `agent/` | Go å®¿ä¸» agentï¼Œåªè¯»ç›‘æŽ§ï¼ˆå¿ƒè·³/èµ„æº/å®žä¾‹æ€/æµé‡ï¼‰ï¼ŒHMAC ç­¾åï¼Œè‡ªå‡çº§ã€‚ |
+| å…¶å®ƒ | `docs-site/`ï¼ˆVitePressï¼‰ã€`deploy/`ï¼ˆsystemd+Nginxï¼‰ã€`scripts/`ï¼ˆå®‰è£…/æ ¡éªŒ/OTAï¼‰ã€`plugin-templates/`ã€`theme-templates/`ã€‚ |
+
+éƒ¨ç½²ï¼šä¸‰å±‚æ‹†åˆ†ï¼ˆuser / admin / ç§æœ‰åŽç«¯ `127.0.0.1:3001`ï¼‰ï¼Œè£…æœºæ ¹ `/opt/incudal`ï¼ŒåŽŸå­ OTAï¼ˆ`releases/<ver-ts>` + `current` è½¯é“¾ï¼‰+ è‡ªåŠ¨å›žæ»šã€‚
+
+---
+
+## 2. ðŸ”´ ç¡¬è§„çŸ©ï¼ˆä¸å¯åå•†ï¼Œè¿åå³äº‹æ•…ï¼‰
+
+1. **ä¸ç¢°ç”Ÿäº§**ï¼šæœªç» owner æ˜Žç¡®è¦æ±‚ï¼Œ**ç»ä¸** OTAã€å‘å¸ƒã€pushã€æ‰“ tagã€æ”¹ç”Ÿäº§çŽ¯å¢ƒã€‚
+2. **ä¸åšç ´åæ€§ git**ï¼šæœªç» owner æ˜Žç¡®è¦æ±‚ï¼Œ**ç»ä¸** `git reset`ã€`git checkout --`ã€å¼ºåˆ¶åˆ é™¤ã€æ¸…ç†æœªè·Ÿè¸ªæ–‡ä»¶ã€`git commit`/`git push`ã€‚
+3. **é«˜å±è·¯å¾„å…ˆè¯»åŽå†™**ï¼šæ”¹åŠ¨ä»¥ä¸‹ä»»ä¸€é¢†åŸŸï¼Œ**å¿…é¡»å…ˆè¯»ç›¸å…³ä»£ç  + å¯¹åº”å®ˆå«æµ‹è¯•**å†åŠ¨æ‰‹ï¼š
+   > é‰´æƒ Â· æ”¯ä»˜ Â· æƒé™ Â· é£ŽæŽ§ Â· èµ„æºäº¤ä»˜ Â· å…‘æ¢æµç¨‹ Â· å®žä¾‹åˆ›å»º Â· OTA
+4. **æ”¹åŠ¨æœ€å°åŒ–**ï¼šä¿® bug / å‘ç‰ˆæœŸé—´**ä¸åšå¤§èŒƒå›´é‡æž„**ï¼Œåªæ”¹å¿…è¦çš„ã€‚
+5. **ç»ä¸æ³„å¯†**ï¼šä»»ä½• commitã€handoffã€æ€»ç»“ã€æˆªå›¾ä¸­éƒ½**ä¸å¾—**å‡ºçŽ°å‡­è¯ / token / cookie / å¯†é’¥ã€‚
+6. **æœ¬åœ°è¿‡ â‰  ç”Ÿäº§éªŒè¯**ï¼šæœ¬åœ°é€šè¿‡ã€GitHub Actionsã€Release èµ„äº§ã€OTAã€çº¿ä¸Šå®žè¯æ˜¯**åˆ†å¼€çš„è¯æ®**ï¼Œä¸å¯æ··ä¸ºä¸€è°ˆã€‚
+7. **æ¯æ¬¡æ”¹åŠ¨å¿…é¡»è¿‡å¯¹åº”å®ˆå«**ï¼ˆè§ Â§4ï¼‰ï¼Œå¦åˆ™è§†ä¸º**æœªå®Œæˆ**ã€‚
+8. `RUN_DB_CHECKS=0 bash scripts/apply-online-update.sh <ver>` ä¼š**è·³è¿‡ DB/æ”¯ä»˜å°±ç»ªæ ¡éªŒ**ï¼Œä»…åœ¨ owner æ˜Žç¡®æ‰¹å‡†æ—¶ä½¿ç”¨ã€‚
+
+---
+
+## 3. æœ¬åœ°æ€Žä¹ˆè·‘
+
+- **çŽ¯å¢ƒ**ï¼šNode â‰¥ 20ã€pnpm 9.14.2ã€æœ¬åœ° PostgreSQL 16ã€‚
+- **è£…ä¾èµ–**ï¼š`pnpm install`
+- **ä¸€æŠŠèµ·å…¨éƒ¨ï¼ˆserver + user + adminï¼‰**ï¼š`pnpm dev`
+- **åˆ†å¼€èµ·**ï¼š
+  - åŽç«¯ï¼š`NODE_ENV=development JWT_SECRET=dev-secret-12345678 HOST=127.0.0.1 PORT=3001 pnpm --filter server exec tsx watch src/app.ts`
+  - ç”¨æˆ·å‰ç«¯ï¼š`pnpm dev:user`
+  - ç®¡ç†å‰ç«¯ï¼š`pnpm dev:admin`
+- **ç«¯å£**ï¼šåŽç«¯ API **3001** Â· ç”¨æˆ·å‰ç«¯ **3000** Â· ç®¡ç†å‰ç«¯ **3002**ï¼ˆå‰ç«¯ dev ç» proxy æ‰“åˆ° 3001ï¼‰ã€‚
+
+---
+
+## 4. ðŸ›¡ï¸ å®ˆå«æµ‹è¯•çºªå¾‹ï¼ˆæœ¬ä»“åº“çš„å‘½é—¨ï¼‰
+
+`server/package.json` é‡Œæœ‰ **200+ ä¸ªç‹¬ç«‹ `test-*-guards.ts`**ã€‚å®ƒä»¬æŠŠå…³é”®ä¸šåŠ¡/å‰ç«¯ç»“æž„â€œé’‰æ­»â€ï¼Œ`pnpm test` ä¼šè·‘å…¨å¥—ï¼ˆclient+server type-check + å…¨éƒ¨å®ˆå«ï¼‰ã€‚**ä»»ä½•æ”¹åŠ¨å¿…é¡»è®©ç›¸å…³å®ˆå«é€šè¿‡ã€‚**
+
+- **å…¨é‡**ï¼ˆæ…¢ï¼Œå‘ç‰ˆå‰è·‘ï¼‰ï¼š`pnpm test`
+- **å•ä¸ª**ï¼š`pnpm --filter server test:<guard-name>`
+- **å‰ç«¯æœ€å¸¸ç”¨ä¸‰ä¸ª**ï¼š
+  - `test:frontend-route-guards` â€”â€” è·¯ç”± / **è¡¨æ ¼å¸ƒå±€** / `@click` è·¯å¾„æ–­è¨€
+  - `test:frontend-dist-boundary-guards` â€”â€” åŒç«¯ dist è¾¹ç•Œ
+  - `test:frontend-i18n-keys` â€”â€” i18n key å®Œæ•´æ€§
+- **Go agent**ï¼š`pnpm test:agent`
+
+### âš ï¸ è¡¨æ ¼å¸ƒå±€å®ˆå«ï¼ˆæœ€å®¹æ˜“è¸©é›·ï¼‰
+ä¸€æ‰¹è¡¨è¢«å®ˆå«**é”å®š**ä¸ºâ€œ**ç§»åŠ¨å¡ + PC å®šå®½è¡¨ï¼ˆ`table-fixed` / `overflow-hidden`ï¼‰ï¼Œç»ä¸æ¨ªå‘æ»šåŠ¨**â€ï¼Œå¹¶**åå‘ç¦æ­¢** `overflow-x-auto` / `min-w-[...]` / åŽ»æŽ‰ `table-fixed`ã€‚
+- æƒ³ä¿®â€œå®½è¡¨æŒ¤åŽ‹â€æ—¶ï¼š**å…ˆåˆ¤æ–­è¯¥è¡¨æ˜¯å¦åœ¨å®ˆå«æ¸…å•é‡Œ**ã€‚é”å®šè¡¨**åªèƒ½åœ¨ `table-fixed` å†…å¹³è¡¡åˆ—å®½**ï¼ˆåˆ—å®½ç™¾åˆ†æ¯”åˆè®¡ = 100%ï¼‰+ å…è®¸å•å…ƒæ ¼æ¢è¡Œ + é ç§»åŠ¨å¡åº”å¯¹çª„å±ï¼›**ä¸èƒ½**æ”¹æˆæ¨ªå‘æ»šåŠ¨ã€‚
+- å—é”å®šçš„è¡¨ï¼ˆç”¨æˆ·ç«¯ï¼‰ï¼š`MyPackagesView`ã€`MyHostsView`ã€`TransfersView`ã€`OrdersView`ã€`InvitesView`ã€`FlashSalesView`ã€`HostingWalletView`ã€`InstancesView`ã€`LogsView`ã€`EntertainmentView`ï¼›ï¼ˆç®¡ç†ç«¯ï¼‰`admin/BillingView`ã€`admin/ImagesView`ã€`admin/HelpManageView`ã€`admin/MailView`ã€`admin/PluginCenterView`ï¼›ï¼ˆç»„ä»¶ï¼‰`HostPublicIpv4Tab`ã€`InstanceLogsTab`ã€`ConfigEditModal`ã€‚
+- æ”¹ä»»ä¸€å‰ç«¯æ–‡ä»¶åŽ**å¿…è·‘** `test:frontend-route-guards`ã€‚
+
+---
+
+## 5. æž„å»º / æ ¡éªŒå‘½ä»¤
+
+| ç›®çš„ | å‘½ä»¤ |
+|------|------|
+| æž„å»ºï¼ˆå« dist è¾¹ç•Œå®ˆå«ï¼‰| `pnpm build` |
+| åªæž„å»ºå‰ç«¯ / åŽç«¯ | `pnpm build:client` / `pnpm build:server` |
+| Lintï¼ˆæ£€æŸ¥ / è‡ªåŠ¨ä¿®ï¼‰| `pnpm lint` / `pnpm lint:fix` |
+| ç±»åž‹æ£€æŸ¥ | `pnpm --filter client type-check` Â· `pnpm --filter server type-check` |
+| å…¨å¥—å®ˆå« | `pnpm test` |
+| æ–‡æ¡£ç«™å¼€å‘ / æž„å»º | `pnpm docs:dev` / `pnpm docs:build` |
+
+---
+
+## 6. UI æ”¹åŠ¨çº¦æŸï¼ˆå•è‰²é‡åšè¿›è¡Œä¸­ï¼‰
+
+- **æ–¹å‘**ï¼šè‹¹æžœå¼**çº¯é»‘ç™½å•è‰²**ï¼ˆæµ…è‰²=ç™½åº•é»‘å­—ï¼Œæ·±è‰²=é»‘åº•ç™½å­—ï¼‰ï¼ŒåŽ»äºŒæ¬¡å…ƒ/å‰ç¥¥ç‰©/ç«‹ç»˜ã€‚çŠ¶æ€è‰²**åªä¿ç•™ç»¿/ç¥ç€/çº¢**ä¸‰ç§ï¼ˆè¿è¡Œ/å¾…å¤„ç†/å¤±è´¥ï¼‰ã€‚
+- **çº¢çº¿**ï¼šåªæ”¹**æ ·å¼ / å¸ƒå±€ / æ–‡æ¡ˆå±‚çº§**ï¼Œ**ä¸ç¢°**åŽç«¯æŽ¥å£ã€æƒé™ã€æ”¯ä»˜/è®¢å•/å®žä¾‹åˆ›å»º/OTA ç­‰ä¸šåŠ¡é€»è¾‘ä¸Žè·¯ç”±è¡Œä¸ºâ€”â€”**åŠŸèƒ½ 100% ä¸å˜**ã€‚
+- **é…è‰²èµ° token å±‚**ï¼ˆ`client/tailwind.config.js`ï¼‰ï¼šä¸€å †å½©è‰² ramp å·²æ˜ å°„åˆ°ä¸­æ€§ç°ï¼›`rose â†’ çœŸçº¢`ï¼ˆå±é™©/äºæŸè¯­ä¹‰ï¼‰**ä¿ç•™ä¸å¯ç°åŒ–**ï¼›æ¸¸æˆåŒ–æ¨¡å—ï¼ˆæˆå°±/ç­¾åˆ°/æŠ½å¥–/ç¨€æœ‰åº¦ï¼‰å½©è‰²**åˆ»æ„ä¿ç•™**ã€‚
+- `kawaii-cloud.css` **æ¸è¿›æ”¹é€ ã€ä¸é‡å†™**ï¼›å•é¡µåŽ»è‰²ç”¨é¡µé¢ `<style scoped>`ã€‚
+- åŠ¨æ•ˆå¯ç”¨ **GSAP**ï¼ˆå·²è£… gsap-skillsï¼Œè§ `.claude/skills/`ï¼‰ï¼›å°Šé‡ `prefers-reduced-motion`ã€‚
+
+---
+
+## 7. åä½œæ¨¡åž‹ï¼ˆClaude Code â‡„ codexï¼‰
+
+- **Claude Code = æŠ€æœ¯è´Ÿè´£äºº / é›†æˆæ–¹**ï¼šå®šæ ¹å› ã€åˆ‡ä»»åŠ¡ã€å†™è§„æ ¼ã€å®ˆä¸å˜é‡ã€å®¡ diffã€è·‘å®ˆå«ã€çœŸæœºéªŒè¯ã€ç®¡ gitï¼ˆ**ä»…åœ¨ owner åŒæ„æ—¶** commit / pushï¼‰ã€‚
+- **codex = å®žçŽ°å·¥äºº**ï¼šæŒ‰ Claude ç»™çš„è§„æ ¼å®žçŽ°æ”¹åŠ¨ï¼Œå°¤å…¶**ä½Ž/ä¸­å±ã€è‡ªåŒ…å«ã€å¯å¹¶è¡Œ**çš„å—ã€‚
+- **é£Žé™©åˆ†æ¡£**ï¼šé«˜å±è·¯å¾„ç”± Claude å®šæ ¹å›  + æ”¶ç´§è§„æ ¼ï¼›ä½Ž/ä¸­å± codex å¯ç«¯åˆ°ç«¯ä¿®ã€‚**ä»»ä½•ä¸€æ–¹æ”¹å®Œéƒ½è¦è·‘ç›¸å…³å®ˆå«ï¼ŒClaude ç»Ÿä¸€å®¡æŸ¥åŽæ‰è¿›å…¥ä¸‹ä¸€æ­¥ã€‚**
+- **é¿å…å†²çª**ï¼šåŒä¸€æ‰¹æ–‡ä»¶ä¸€æ¬¡åªè®©ä¸€ä¸ª agent æ”¹ã€‚
+
+---
+
+## 8. ä¸€ä¸ªæ”¹åŠ¨çš„ã€Œå®Œæˆã€å®šä¹‰
+
+1. ç›¸å…³ **type-check** é€šè¿‡ï¼›
+2. ç›¸å…³ **å®ˆå«æµ‹è¯•** é€šè¿‡ï¼›
+3. è‹¥åŠ¨å‰ç«¯ â†’ **åŒç«¯ build** é€šè¿‡ï¼›
+4. **çœŸæœºè·‘è¿‡**å—å½±å“æµç¨‹ï¼ˆä¸æ˜¯åªçœ‹æµ‹è¯•ï¼‰ï¼›
+5. **æŠ¥å‘Š**ï¼šæ”¹äº†å“ªäº›æ–‡ä»¶ / ä¸ºä»€ä¹ˆ / é£Žé™© / æ€Žä¹ˆéªŒè¯çš„ã€‚
+
+ä»¥ä¸Šä»»ä¸€æœªæ»¡è¶³ = **æœªå®Œæˆ**ã€‚
+
+
+--- git status ---
+ M client/src/components/instance/TrafficStats.vue
+ M client/src/components/plugins/PluginFrame.vue
+ M client/src/locales/en.ts
+ M client/src/locales/zh-CN.ts
+ M client/src/locales/zh-TW.ts
+ M client/src/utils/validation.ts
+ M client/src/views/GiftCardsView.vue
+ M client/src/views/InstanceDetailView.vue
+ M client/src/views/admin/DeliveryCenterView.vue
+ M client/src/views/admin/OAuthConfigView.vue
+ M client/src/views/admin/OrdersView.vue
+ M client/src/views/admin/ResourceRiskView.vue
+ M client/src/views/resources/MyPackagesView.vue
+ M client/src/views/resources/PackageFormView.vue
+ M deploy/incudal-backend.service.example
+ M deploy/incudal-online-rollback@.service.example
+ M deploy/incudal-online-update@.service.example
+ M package.json
+ M scripts/install-panel.sh
+ M scripts/test-install-panel-guards.sh
+ M server/package.json
+ M server/prisma/schema.prisma
+ M server/scripts/test-admin-billing-route-id-guards.ts
+ M server/scripts/test-admin-entertainment-route-guards.ts
+ M server/scripts/test-admin-user-delete-resource-guards.ts
+ M server/scripts/test-aff-review-ui-guards.ts
+ M server/scripts/test-agent-report-state-guards.ts
+ M server/scripts/test-backup-task-race-guards.ts
+ M server/scripts/test-balance-adjustment-approval-guards.ts
+ M server/scripts/test-batch-config-route-guards.ts
+ M server/scripts/test-billing-expiry-delete.ts
+ M server/scripts/test-billing-expiry-race-guards.ts
+ M server/scripts/test-billing-query-guards.ts
+ M server/scripts/test-capacity-cost-guards.ts
+ M server/scripts/test-commercial-operations-overview-guards.ts
+ M server/scripts/test-delivery-center-guards.ts
+ M server/scripts/test-flash-sale-guards.ts
+ M server/scripts/test-frontend-i18n-keys.ts
+ M server/scripts/test-frontend-route-guards.ts
+ M server/scripts/test-gift-card-guards.ts
+ M server/scripts/test-host-resource-atomic-guards.ts
+ M server/scripts/test-hosting-balance-guards.ts
+ M server/scripts/test-instance-billing-route-id-guards.ts
+ M server/scripts/test-instance-create-failure-compensation.ts
+ M server/scripts/test-instance-delete-incus-order.ts
+ M server/scripts/test-instance-operation-conflict-guards.ts
+ M server/scripts/test-instance-quota-zero-guards.ts
+ M server/scripts/test-instance-recreate-consistency.ts
+ M server/scripts/test-instance-route-id-guards.ts
+ M server/scripts/test-ip-address-route-guards.ts
+ M server/scripts/test-log-sanitizer.ts
+ M server/scripts/test-mail-plan-financial-guards.ts
+ M server/scripts/test-mail-renewal-month-guards.ts
+ M server/scripts/test-order-payment-operations-guards.ts
+ M server/scripts/test-plan-bandwidth-limit-guards.ts
+ M server/scripts/test-plugin-client-boundary-guards.ts
+ M server/scripts/test-port-mapping-safety.ts
+ M server/scripts/test-proxy-site-route-id-guards.ts
+ M server/scripts/test-recharge-state-transitions.ts
+ M server/scripts/test-resource-pool-apply-consistency.ts
+ M server/scripts/test-resource-quota-bigint-guards.ts
+ M server/scripts/test-resource-risk-guards.ts
+ M server/scripts/test-risk-audit-guards.ts
+ M server/scripts/test-storage-outbound-guards.ts
+ M server/scripts/test-system-config-value-guards.ts
+ M server/scripts/test-system-update-guards.ts
+ M server/scripts/test-terminal-route-id-guards.ts
+ M server/scripts/test-terminal-saved-command-route-id-guards.ts
+ M server/scripts/test-traffic-collector-status-guard.ts
+ M server/scripts/test-traffic-notification-claim-guards.ts
+ M server/scripts/test-traffic-reset-locks.ts
+ M server/scripts/test-traffic-route-limit-guards.ts
+ M server/scripts/test-transfer-query-guards.ts
+ M server/scripts/test-trust-proxy-config.ts
+ M server/scripts/test-user-destroy-incus-order.ts
+ M server/scripts/test-vip-benefit-route-guards.ts
+ M server/src/app.ts
+ M server/src/db/aff.ts
+ M server/src/db/balance.ts
+ M server/src/db/billing-operations.ts
+ M server/src/db/gift-cards.ts
+ M server/src/db/hosts.ts
+ M server/src/db/instances.ts
+ M server/src/db/ipv6-subnets.ts
+ M server/src/db/lottery.ts
+ M server/src/db/resource-pool.ts
+ M server/src/db/terminal-saved-commands.ts
+ M server/src/db/traffic.ts
+ M server/src/db/users.ts
+ M server/src/lib/billing-calc.ts
+ M server/src/lib/caddy-client.ts
+ M server/src/lib/epay.ts
+ M server/src/lib/errors.ts
+ M server/src/lib/heleket.ts
+ M server/src/lib/log-sanitizer.ts
+ M server/src/lib/lottery-notifier.ts
+ M server/src/lib/lsky.ts
+ M server/src/lib/managed-instance-provision.ts
+ M server/src/lib/notifier.ts
+ M server/src/lib/outbound-security.ts
+ M server/src/lib/plugin-market-submission-scan.ts
+ M server/src/lib/redirect-validator.ts
+ M server/src/lib/terminal-proxy.ts
+ M server/src/lib/theme-market-submission-scan.ts
+ M server/src/lib/trust-proxy-config.ts
+ M server/src/routes/admin-billing.ts
+ M server/src/routes/admin-capacity-cost.ts
+ M server/src/routes/admin-delivery.ts
+ M server/src/routes/admin-entertainment.ts
+ M server/src/routes/admin-statistics.ts
+ M server/src/routes/batch-config.ts
+ M server/src/routes/gift-cards.ts
+ M server/src/routes/hosting.ts
+ M server/src/routes/instance-billing.ts
+ M server/src/routes/instance-destroy.ts
+ M server/src/routes/instances.ts
+ M server/src/routes/ip-addresses.ts
+ M server/src/routes/mail.ts
+ M server/src/routes/orders.ts
+ M server/src/routes/proxy-sites.ts
+ M server/src/routes/recharge.ts
+ M server/src/routes/resource-pool.ts
+ M server/src/routes/resource-risk.ts
+ M server/src/routes/system-config.ts
+ M server/src/routes/terminal.ts
+ M server/src/routes/tickets.ts
+ M server/src/routes/traffic.ts
+ M server/src/routes/transfers.ts
+ M server/src/routes/users.ts
+ M server/src/services/agent-instance-report.ts
+ M server/src/services/billing-scheduler.ts
+ M server/src/services/cranemail.ts
+ M server/src/services/flash-sales.ts
+ M server/src/services/instance-traffic-collector.ts
+ M server/src/services/resource-risk.ts
+ M server/src/services/smartermail.ts
+ M server/src/services/system-monitor.ts
+ M server/src/services/traffic-bandwidth.ts
+ M server/src/services/traffic-notifier.ts
+ M server/src/services/traffic-scheduler.ts
+ M server/src/services/traffic-utils.ts
+ M server/src/services/user-order-restrictions.ts
+ M server/src/services/vip-benefits.ts
+ M server/src/workers/restoreTaskWorker.ts
+?? AGENTS.md
+?? BEHAVIOR.md
+?? CLAUDE.md
+?? DEFECTS.md
+?? EXECUTION.md
+?? EXECUTION_LOG.md
+?? FIX_PLAN.md
+?? MAINTENANCE_PLAN.md
+?? artifacts/
+?? audits/
+?? deploy/incudal-online-task.sh.example
+?? deploy/incudal-ota-chown-wrapper.sh.example
+?? deploy/incudal-systemctl-wrapper.sh.example
+?? server/scripts/test-error-response-guards.ts
+?? server/scripts/test-redirect-validator-guards.ts
+?? server/scripts/test-safe-outbound-fetch-guards.ts
+?? skills-lock.json
+
+--- target files ---
+rg : The term 'rg' is not recognized as the name of a cmdlet, function, script file, or operable program. Check the 
+spelling of the name, or if a path was included, verify that the path is correct and try again.
+At line:2 char:125
++ ... git status --short; Write-Output "`n--- target files ---"; rg --files ...
++                                                                ~~
+    + CategoryInfo          : ObjectNotFound: (rg:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+
+ exited 1 in 905ms:
+# PayIncus / Incudal â€” é¡¹ç›®ç»Ÿä¸€è§„çŸ©ï¼ˆAGENTS.mdï¼‰
+
+> æœ¬æ–‡ä»¶æ˜¯æœ¬ä»“åº“**æ‰€æœ‰ AI agentï¼ˆClaude Codeã€codex ç­‰ï¼‰çš„ç»Ÿä¸€å·¥ä½œè§„èŒƒ**ã€‚
+> `CLAUDE.md` é€šè¿‡ `@AGENTS.md` å¼•ç”¨æœ¬æ–‡ä»¶ â€”â€” Claude Code ä¸Ž codex è¯»åˆ°çš„æ˜¯**åŒä¸€å¥—è§„çŸ©**ï¼Œæ”¹è¿™ä¸€ä¸ªæ–‡ä»¶å³å¯ã€‚
+> æƒå¨è¿ç»´/å‘ç‰ˆäº‹å®žä»¥ä»“åº“æ ¹çš„ `OPERATIONS_HANDOFF.md`ï¼ˆæ“ä½œæ‰‹å†Œï¼‰ä¸Ž `HANDOFF.md`ï¼ˆç‰ˆæœ¬è¯æ®å°è´¦ï¼‰ä¸ºå‡†ã€‚
+
+---
+
+## 0. æ²Ÿé€šè¯­è¨€
+- ä¸Ž owner é»˜è®¤ç”¨**ä¸­æ–‡**æ²Ÿé€šã€‚
+
+## 1. è¿™æ˜¯ä»€ä¹ˆé¡¹ç›®
+**PayIncus**ï¼ˆå†…éƒ¨ä»£å· `incudal`ï¼‰â€”â€”å•†ç”¨ Incusï¼ˆLXC/KVMï¼‰NAT VPS å”®å–ä¸Žäº¤ä»˜å¹³å°ï¼Œ**çº¿ä¸Šè¿è¥ä¸­**ã€‚å½“å‰ç”Ÿäº§ç‰ˆæœ¬ **v1.3.7**ã€‚pnpm monorepoï¼š
+
+| ç›®å½• | æŠ€æœ¯æ ˆ / ä½œç”¨ |
+|------|----------------|
+| `client/` | Vue 3 + Vite SPAã€‚åŒç«¯æž„å»ºï¼ˆ`VITE_APP_ENTRY`ï¼‰â†’ `dist/user`ï¼ˆpay.payincus.comï¼‰+ `dist/admin`ï¼ˆadmin.payincus.comï¼‰ã€‚ä¸¤ç«¯ç‹¬ç«‹æºã€**ä¸å…±äº« cookie åŸŸ**ã€‚ |
+| `server/` | Fastify 5 + Prisma 7 + PostgreSQLï¼Œ~300 TS æ–‡ä»¶ã€~70 è·¯ç”±ã€~15 è°ƒåº¦/workerã€‚æ—  Redisï¼ˆç”¨ PG advisory lockï¼‰ã€‚ä¸‰å¥—é‰´æƒé¢ï¼šWeb çš„ JWT+refresh cookieã€Public API çš„ `pat_`/`poa_` tokenã€host agent çš„ HMACã€‚ |
+| `agent/` | Go å®¿ä¸» agentï¼Œåªè¯»ç›‘æŽ§ï¼ˆå¿ƒè·³/èµ„æº/å®žä¾‹æ€/æµé‡ï¼‰ï¼ŒHMAC ç­¾åï¼Œè‡ªå‡çº§ã€‚ |
+| å…¶å®ƒ | `docs-site/`ï¼ˆVitePressï¼‰ã€`deploy/`ï¼ˆsystemd+Nginxï¼‰ã€`scripts/`ï¼ˆå®‰è£…/æ ¡éªŒ/OTAï¼‰ã€`plugin-templates/`ã€`theme-templates/`ã€‚ |
+
+éƒ¨ç½²ï¼šä¸‰å±‚æ‹†åˆ†ï¼ˆuser / admin / ç§æœ‰åŽç«¯ `127.0.0.1:3001`ï¼‰ï¼Œè£…æœºæ ¹ `/opt/incudal`ï¼ŒåŽŸå­ OTAï¼ˆ`releases/<ver-ts>` + `current` è½¯é“¾ï¼‰+ è‡ªåŠ¨å›žæ»šã€‚
+
+---
+
+## 2. ðŸ”´ ç¡¬è§„çŸ©ï¼ˆä¸å¯åå•†ï¼Œè¿åå³äº‹æ•…ï¼‰
+
+1. **ä¸ç¢°ç”Ÿäº§**ï¼šæœªç» owner æ˜Žç¡®è¦æ±‚ï¼Œ**ç»ä¸** OTAã€å‘å¸ƒã€pushã€æ‰“ tagã€æ”¹ç”Ÿäº§çŽ¯å¢ƒã€‚
+2. **ä¸åšç ´åæ€§ git**ï¼šæœªç» owner æ˜Žç¡®è¦æ±‚ï¼Œ**ç»ä¸** `git reset`ã€`git checkout --`ã€å¼ºåˆ¶åˆ é™¤ã€æ¸…ç†æœªè·Ÿè¸ªæ–‡ä»¶ã€`git commit`/`git push`ã€‚
+3. **é«˜å±è·¯å¾„å…ˆè¯»åŽå†™**ï¼šæ”¹åŠ¨ä»¥ä¸‹ä»»ä¸€é¢†åŸŸï¼Œ**å¿…é¡»å…ˆè¯»ç›¸å…³ä»£ç  + å¯¹åº”å®ˆå«æµ‹è¯•**å†åŠ¨æ‰‹ï¼š
+   > é‰´æƒ Â· æ”¯ä»˜ Â· æƒé™ Â· é£ŽæŽ§ Â· èµ„æºäº¤ä»˜ Â· å…‘æ¢æµç¨‹ Â· å®žä¾‹åˆ›å»º Â· OTA
+4. **æ”¹åŠ¨æœ€å°åŒ–**ï¼šä¿® bug / å‘ç‰ˆæœŸé—´**ä¸åšå¤§èŒƒå›´é‡æž„**ï¼Œåªæ”¹å¿…è¦çš„ã€‚
+5. **ç»ä¸æ³„å¯†**ï¼šä»»ä½• commitã€handoffã€æ€»ç»“ã€æˆªå›¾ä¸­éƒ½**ä¸å¾—**å‡ºçŽ°å‡­è¯ / token / cookie / å¯†é’¥ã€‚
+6. **æœ¬åœ°è¿‡ â‰  ç”Ÿäº§éªŒè¯**ï¼šæœ¬åœ°é€šè¿‡ã€GitHub Actionsã€Release èµ„äº§ã€OTAã€çº¿ä¸Šå®žè¯æ˜¯**åˆ†å¼€çš„è¯æ®**ï¼Œä¸å¯æ··ä¸ºä¸€è°ˆã€‚
+7. **æ¯æ¬¡æ”¹åŠ¨å¿…é¡»è¿‡å¯¹åº”å®ˆå«**ï¼ˆè§ Â§4ï¼‰ï¼Œå¦åˆ™è§†ä¸º**æœªå®Œæˆ**ã€‚
+8. `RUN_DB_CHECKS=0 bash scripts/apply-online-update.sh <ver>` ä¼š**è·³è¿‡ DB/æ”¯ä»˜å°±ç»ªæ ¡éªŒ**ï¼Œä»…åœ¨ owner æ˜Žç¡®æ‰¹å‡†æ—¶ä½¿ç”¨ã€‚
+
+---
+
+## 3. æœ¬åœ°æ€Žä¹ˆè·‘
+
+- **çŽ¯å¢ƒ**ï¼šNode â‰¥ 20ã€pnpm 9.14.2ã€æœ¬åœ° PostgreSQL 16ã€‚
+- **è£…ä¾èµ–**ï¼š`pnpm install`
+- **ä¸€æŠŠèµ·å…¨éƒ¨ï¼ˆserver + user + adminï¼‰**ï¼š`pnpm dev`
+- **åˆ†å¼€èµ·**ï¼š
+  - åŽç«¯ï¼š`NODE_ENV=development JWT_SECRET=dev-secret-12345678 HOST=127.0.0.1 PORT=3001 pnpm --filter server exec tsx watch src/app.ts`
+  - ç”¨æˆ·å‰ç«¯ï¼š`pnpm dev:user`
+  - ç®¡ç†å‰ç«¯ï¼š`pnpm dev:admin`
+- **ç«¯å£**ï¼šåŽç«¯ API **3001** Â· ç”¨æˆ·å‰ç«¯ **3000** Â· ç®¡ç†å‰ç«¯ **3002**ï¼ˆå‰ç«¯ dev ç» proxy æ‰“åˆ° 3001ï¼‰ã€‚
+
+---
+
+## 4. ðŸ›¡ï¸ å®ˆå«æµ‹è¯•çºªå¾‹ï¼ˆæœ¬ä»“åº“çš„å‘½é—¨ï¼‰
+
+`server/package.json` é‡Œæœ‰ **200+ ä¸ªç‹¬ç«‹ `test-*-guards.ts`**ã€‚å®ƒä»¬æŠŠå…³é”®ä¸šåŠ¡/å‰ç«¯ç»“æž„â€œé’‰æ­»â€ï¼Œ`pnpm test` ä¼šè·‘å…¨å¥—ï¼ˆclient+server type-check + å…¨éƒ¨å®ˆå«ï¼‰ã€‚**ä»»ä½•æ”¹åŠ¨å¿…é¡»è®©ç›¸å…³å®ˆå«é€šè¿‡ã€‚**
+
+- **å…¨é‡**ï¼ˆæ…¢ï¼Œå‘ç‰ˆå‰è·‘ï¼‰ï¼š`pnpm test`
+- **å•ä¸ª**ï¼š`pnpm --filter server test:<guard-name>`
+- **å‰ç«¯æœ€å¸¸ç”¨ä¸‰ä¸ª**ï¼š
+  - `test:frontend-route-guards` â€”â€” è·¯ç”± / **è¡¨æ ¼å¸ƒå±€** / `@click` è·¯å¾„æ–­è¨€
+  - `test:frontend-dist-boundary-guards` â€”â€” åŒç«¯ dist è¾¹ç•Œ
+  - `test:frontend-i18n-keys` â€”â€” i18n key å®Œæ•´æ€§
+- **Go agent**ï¼š`pnpm test:agent`
+
+### âš ï¸ è¡¨æ ¼å¸ƒå±€å®ˆå«ï¼ˆæœ€å®¹æ˜“è¸©é›·ï¼‰
+ä¸€æ‰¹è¡¨è¢«å®ˆå«**é”å®š**ä¸ºâ€œ**ç§»åŠ¨å¡ + PC å®šå®½è¡¨ï¼ˆ`table-fixed` / `overflow-hidden`ï¼‰ï¼Œç»ä¸æ¨ªå‘æ»šåŠ¨**â€ï¼Œå¹¶**åå‘ç¦æ­¢** `overflow-x-auto` / `min-w-[...]` / åŽ»æŽ‰ `table-fixed`ã€‚
+- æƒ³ä¿®â€œå®½è¡¨æŒ¤åŽ‹â€æ—¶ï¼š**å…ˆåˆ¤æ–­è¯¥è¡¨æ˜¯å¦åœ¨å®ˆå«æ¸…å•é‡Œ**ã€‚é”å®šè¡¨**åªèƒ½åœ¨ `table-fixed` å†…å¹³è¡¡åˆ—å®½**ï¼ˆåˆ—å®½ç™¾åˆ†æ¯”åˆè®¡ = 100%ï¼‰+ å…è®¸å•å…ƒæ ¼æ¢è¡Œ + é ç§»åŠ¨å¡åº”å¯¹çª„å±ï¼›**ä¸èƒ½**æ”¹æˆæ¨ªå‘æ»šåŠ¨ã€‚
+- å—é”å®šçš„è¡¨ï¼ˆç”¨æˆ·ç«¯ï¼‰ï¼š`MyPackagesView`ã€`MyHostsView`ã€`TransfersView`ã€`OrdersView`ã€`InvitesView`ã€`FlashSalesView`ã€`HostingWalletView`ã€`InstancesView`ã€`LogsView`ã€`EntertainmentView`ï¼›ï¼ˆç®¡ç†ç«¯ï¼‰`admin/BillingView`ã€`admin/ImagesView`ã€`admin/HelpManageView`ã€`admin/MailView`ã€`admin/PluginCenterView`ï¼›ï¼ˆç»„ä»¶ï¼‰`HostPublicIpv4Tab`ã€`InstanceLogsTab`ã€`ConfigEditModal`ã€‚
+- æ”¹ä»»ä¸€å‰ç«¯æ–‡ä»¶åŽ**å¿…è·‘** `test:frontend-route-guards`ã€‚
+
+---
+
+## 5. æž„å»º / æ ¡éªŒå‘½ä»¤
+
+| ç›®çš„ | å‘½ä»¤ |
+|------|------|
+| æž„å»ºï¼ˆå« dist è¾¹ç•Œå®ˆå«ï¼‰| `pnpm build` |
+| åªæž„å»ºå‰ç«¯ / åŽç«¯ | `pnpm build:client` / `pnpm build:server` |
+| Lintï¼ˆæ£€æŸ¥ / è‡ªåŠ¨ä¿®ï¼‰| `pnpm lint` / `pnpm lint:fix` |
+| ç±»åž‹æ£€æŸ¥ | `pnpm --filter client type-check` Â· `pnpm --filter server type-check` |
+| å…¨å¥—å®ˆå« | `pnpm test` |
+| æ–‡æ¡£ç«™å¼€å‘ / æž„å»º | `pnpm docs:dev` / `pnpm docs:build` |
+
+---
+
+## 6. UI æ”¹åŠ¨çº¦æŸï¼ˆå•è‰²é‡åšè¿›è¡Œä¸­ï¼‰
+
+- **æ–¹å‘**ï¼šè‹¹æžœå¼**çº¯é»‘ç™½å•è‰²**ï¼ˆæµ…è‰²=ç™½åº•é»‘å­—ï¼Œæ·±è‰²=é»‘åº•ç™½å­—ï¼‰ï¼ŒåŽ»äºŒæ¬¡å…ƒ/å‰ç¥¥ç‰©/ç«‹ç»˜ã€‚çŠ¶æ€è‰²**åªä¿ç•™ç»¿/ç¥ç€/çº¢**ä¸‰ç§ï¼ˆè¿è¡Œ/å¾…å¤„ç†/å¤±è´¥ï¼‰ã€‚
+- **çº¢çº¿**ï¼šåªæ”¹**æ ·å¼ / å¸ƒå±€ / æ–‡æ¡ˆå±‚çº§**ï¼Œ**ä¸ç¢°**åŽç«¯æŽ¥å£ã€æƒé™ã€æ”¯ä»˜/è®¢å•/å®žä¾‹åˆ›å»º/OTA ç­‰ä¸šåŠ¡é€»è¾‘ä¸Žè·¯ç”±è¡Œä¸ºâ€”â€”**åŠŸèƒ½ 100% ä¸å˜**ã€‚
+- **é…è‰²èµ° token å±‚**ï¼ˆ`client/tailwind.config.js`ï¼‰ï¼šä¸€å †å½©è‰² ramp å·²æ˜ å°„åˆ°ä¸­æ€§ç°ï¼›`rose â†’ çœŸçº¢`ï¼ˆå±é™©/äºæŸè¯­ä¹‰ï¼‰**ä¿ç•™ä¸å¯ç°åŒ–**ï¼›æ¸¸æˆåŒ–æ¨¡å—ï¼ˆæˆå°±/ç­¾åˆ°/æŠ½å¥–/ç¨€æœ‰åº¦ï¼‰å½©è‰²**åˆ»æ„ä¿ç•™**ã€‚
+- `kawaii-cloud.css` **æ¸è¿›æ”¹é€ ã€ä¸é‡å†™**ï¼›å•é¡µåŽ»è‰²ç”¨é¡µé¢ `<style scoped>`ã€‚
+- åŠ¨æ•ˆå¯ç”¨ **GSAP**ï¼ˆå·²è£… gsap-skillsï¼Œè§ `.claude/skills/`ï¼‰ï¼›å°Šé‡ `prefers-reduced-motion`ã€‚
+
+---
+
+## 7. åä½œæ¨¡åž‹ï¼ˆClaude Code â‡„ codexï¼‰
+
+- **Claude Code = æŠ€æœ¯è´Ÿè´£äºº / é›†æˆæ–¹**ï¼šå®šæ ¹å› ã€åˆ‡ä»»åŠ¡ã€å†™è§„æ ¼ã€å®ˆä¸å˜é‡ã€å®¡ diffã€è·‘å®ˆå«ã€çœŸæœºéªŒè¯ã€ç®¡ gitï¼ˆ**ä»…åœ¨ owner åŒæ„æ—¶** commit / pushï¼‰ã€‚
+- **codex = å®žçŽ°å·¥äºº**ï¼šæŒ‰ Claude ç»™çš„è§„æ ¼å®žçŽ°æ”¹åŠ¨ï¼Œå°¤å…¶**ä½Ž/ä¸­å±ã€è‡ªåŒ…å«ã€å¯å¹¶è¡Œ**çš„å—ã€‚
+- **é£Žé™©åˆ†æ¡£**ï¼šé«˜å±è·¯å¾„ç”± Claude å®šæ ¹å›  + æ”¶ç´§è§„æ ¼ï¼›ä½Ž/ä¸­å± codex å¯ç«¯åˆ°ç«¯ä¿®ã€‚**ä»»ä½•ä¸€æ–¹æ”¹å®Œéƒ½è¦è·‘ç›¸å…³å®ˆå«ï¼ŒClaude ç»Ÿä¸€å®¡æŸ¥åŽæ‰è¿›å…¥ä¸‹ä¸€æ­¥ã€‚**
+- **é¿å…å†²çª**ï¼šåŒä¸€æ‰¹æ–‡ä»¶ä¸€æ¬¡åªè®©ä¸€ä¸ª agent æ”¹ã€‚
+
+---
+
+## 8. ä¸€ä¸ªæ”¹åŠ¨çš„ã€Œå®Œæˆã€å®šä¹‰
+
+1. ç›¸å…³ **type-check** é€šè¿‡ï¼›
+2. ç›¸å…³ **å®ˆå«æµ‹è¯•** é€šè¿‡ï¼›
+3. è‹¥åŠ¨å‰ç«¯ â†’ **åŒç«¯ build** é€šè¿‡ï¼›
+4. **çœŸæœºè·‘è¿‡**å—å½±å“æµç¨‹ï¼ˆä¸æ˜¯åªçœ‹æµ‹è¯•ï¼‰ï¼›
+5. **æŠ¥å‘Š**ï¼šæ”¹äº†å“ªäº›æ–‡ä»¶ / ä¸ºä»€ä¹ˆ / é£Žé™© / æ€Žä¹ˆéªŒè¯çš„ã€‚
+
+ä»¥ä¸Šä»»ä¸€æœªæ»¡è¶³ = **æœªå®Œæˆ**ã€‚
+
+
+--- git status ---
+ M client/src/components/instance/TrafficStats.vue
+ M client/src/components/plugins/PluginFrame.vue
+ M client/src/locales/en.ts
+ M client/src/locales/zh-CN.ts
+ M client/src/locales/zh-TW.ts
+ M client/src/utils/validation.ts
+ M client/src/views/GiftCardsView.vue
+ M client/src/views/InstanceDetailView.vue
+ M client/src/views/admin/DeliveryCenterView.vue
+ M client/src/views/admin/OAuthConfigView.vue
+ M client/src/views/admin/OrdersView.vue
+ M client/src/views/admin/ResourceRiskView.vue
+ M client/src/views/resources/MyPackagesView.vue
+ M client/src/views/resources/PackageFormView.vue
+ M deploy/incudal-backend.service.example
+ M deploy/incudal-online-rollback@.service.example
+ M deploy/incudal-online-update@.service.example
+ M package.json
+ M scripts/install-panel.sh
+ M scripts/test-install-panel-guards.sh
+ M server/package.json
+ M server/prisma/schema.prisma
+ M server/scripts/test-admin-billing-route-id-guards.ts
+ M server/scripts/test-admin-entertainment-route-guards.ts
+ M server/scripts/test-admin-user-delete-resource-guards.ts
+ M server/scripts/test-aff-review-ui-guards.ts
+ M server/scripts/test-agent-report-state-guards.ts
+ M server/scripts/test-backup-task-race-guards.ts
+ M server/scripts/test-balance-adjustment-approval-guards.ts
+ M server/scripts/test-batch-config-route-guards.ts
+ M server/scripts/test-billing-expiry-delete.ts
+ M server/scripts/test-billing-expiry-race-guards.ts
+ M server/scripts/test-billing-query-guards.ts
+ M server/scripts/test-capacity-cost-guards.ts
+ M server/scripts/test-commercial-operations-overview-guards.ts
+ M server/scripts/test-delivery-center-guards.ts
+ M server/scripts/test-flash-sale-guards.ts
+ M server/scripts/test-frontend-i18n-keys.ts
+ M server/scripts/test-frontend-route-guards.ts
+ M server/scripts/test-gift-card-guards.ts
+ M server/scripts/test-host-resource-atomic-guards.ts
+ M server/scripts/test-hosting-balance-guards.ts
+ M server/scripts/test-instance-billing-route-id-guards.ts
+ M server/scripts/test-instance-create-failure-compensation.ts
+ M server/scripts/test-instance-delete-incus-order.ts
+ M server/scripts/test-instance-operation-conflict-guards.ts
+ M server/scripts/test-instance-quota-zero-guards.ts
+ M server/scripts/test-instance-recreate-consistency.ts
+ M server/scripts/test-instance-route-id-guards.ts
+ M server/scripts/test-ip-address-route-guards.ts
+ M server/scripts/test-log-sanitizer.ts
+ M server/scripts/test-mail-plan-financial-guards.ts
+ M server/scripts/test-mail-renewal-month-guards.ts
+ M server/scripts/test-order-payment-operations-guards.ts
+ M server/scripts/test-plan-bandwidth-limit-guards.ts
+ M server/scripts/test-plugin-client-boundary-guards.ts
+ M server/scripts/test-port-mapping-safety.ts
+ M server/scripts/test-proxy-site-route-id-guards.ts
+ M server/scripts/test-recharge-state-transitions.ts
+ M server/scripts/test-resource-pool-apply-consistency.ts
+ M server/scripts/test-resource-quota-bigint-guards.ts
+ M server/scripts/test-resource-risk-guards.ts
+ M server/scripts/test-risk-audit-guards.ts
+ M server/scripts/test-storage-outbound-guards.ts
+ M server/scripts/test-system-config-value-guards.ts
+ M server/scripts/test-system-update-guards.ts
+ M server/scripts/test-terminal-route-id-guards.ts
+ M server/scripts/test-terminal-saved-command-route-id-guards.ts
+ M server/scripts/test-traffic-collector-status-guard.ts
+ M server/scripts/test-traffic-notification-claim-guards.ts
+ M server/scripts/test-traffic-reset-locks.ts
+ M server/scripts/test-traffic-route-limit-guards.ts
+ M server/scripts/test-transfer-query-guards.ts
+ M server/scripts/test-trust-proxy-config.ts
+ M server/scripts/test-user-destroy-incus-order.ts
+ M server/scripts/test-vip-benefit-route-guards.ts
+ M server/src/app.ts
+ M server/src/db/aff.ts
+ M server/src/db/balance.ts
+ M server/src/db/billing-operations.ts
+ M server/src/db/gift-cards.ts
+ M server/src/db/hosts.ts
+ M server/src/db/instances.ts
+ M server/src/db/ipv6-subnets.ts
+ M server/src/db/lottery.ts
+ M server/src/db/resource-pool.ts
+ M server/src/db/terminal-saved-commands.ts
+ M server/src/db/traffic.ts
+ M server/src/db/users.ts
+ M server/src/lib/billing-calc.ts
+ M server/src/lib/caddy-client.ts
+ M server/src/lib/epay.ts
+ M server/src/lib/errors.ts
+ M server/src/lib/heleket.ts
+ M server/src/lib/log-sanitizer.ts
+ M server/src/lib/lottery-notifier.ts
+ M server/src/lib/lsky.ts
+ M server/src/lib/managed-instance-provision.ts
+ M server/src/lib/notifier.ts
+ M server/src/lib/outbound-security.ts
+ M server/src/lib/plugin-market-submission-scan.ts
+ M server/src/lib/redirect-validator.ts
+ M server/src/lib/terminal-proxy.ts
+ M server/src/lib/theme-market-submission-scan.ts
+ M server/src/lib/trust-proxy-config.ts
+ M server/src/routes/admin-billing.ts
+ M server/src/routes/admin-capacity-cost.ts
+ M server/src/routes/admin-delivery.ts
+ M server/src/routes/admin-entertainment.ts
+ M server/src/routes/admin-statistics.ts
+ M server/src/routes/batch-config.ts
+ M server/src/routes/gift-cards.ts
+ M server/src/routes/hosting.ts
+ M server/src/routes/instance-billing.ts
+ M server/src/routes/instance-destroy.ts
+ M server/src/routes/instances.ts
+ M server/src/routes/ip-addresses.ts
+ M server/src/routes/mail.ts
+ M server/src/routes/orders.ts
+ M server/src/routes/proxy-sites.ts
+ M server/src/routes/recharge.ts
+ M server/src/routes/resource-pool.ts
+ M server/src/routes/resource-risk.ts
+ M server/src/routes/system-config.ts
+ M server/src/routes/terminal.ts
+ M server/src/routes/tickets.ts
+ M server/src/routes/traffic.ts
+ M server/src/routes/transfers.ts
+ M server/src/routes/users.ts
+ M server/src/services/agent-instance-report.ts
+ M server/src/services/billing-scheduler.ts
+ M server/src/services/cranemail.ts
+ M server/src/services/flash-sales.ts
+ M server/src/services/instance-traffic-collector.ts
+ M server/src/services/resource-risk.ts
+ M server/src/services/smartermail.ts
+ M server/src/services/system-monitor.ts
+ M server/src/services/traffic-bandwidth.ts
+ M server/src/services/traffic-notifier.ts
+ M server/src/services/traffic-scheduler.ts
+ M server/src/services/traffic-utils.ts
+ M server/src/services/user-order-restrictions.ts
+ M server/src/services/vip-benefits.ts
+ M server/src/workers/restoreTaskWorker.ts
+?? AGENTS.md
+?? BEHAVIOR.md
+?? CLAUDE.md
+?? DEFECTS.md
+?? EXECUTION.md
+?? EXECUTION_LOG.md
+?? FIX_PLAN.md
+?? MAINTENANCE_PLAN.md
+?? artifacts/
+?? audits/
+?? deploy/incudal-online-task.sh.example
+?? deploy/incudal-ota-chown-wrapper.sh.example
+?? deploy/incudal-systemctl-wrapper.sh.example
+?? server/scripts/test-error-response-guards.ts
+?? server/scripts/test-redirect-validator-guards.ts
+?? server/scripts/test-safe-outbound-fetch-guards.ts
+?? skills-lock.json
+
+--- target files ---
+rg : The term 'rg' is not recognized as the name of a cmdlet, function, script file, or operable program. Check the 
+spelling of the name, or if a path was included, verify that the path is correct and try again.
+At line:2 char:125
++ ... git status --short; Write-Output "`n--- target files ---"; rg --files ...
++                                                                ~~
+    + CategoryInfo          : ObjectNotFound: (rg:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+
+codex
+已确认工作树本来就有大量并行改动，而且目标 `gift-cards.ts` 与 `test-gift-card-guards.ts` 也已处于修改状态；我会先逐段审阅当前内容及现有 diff，只在不覆盖既有改动的前提下叠加本规格。当前环境没有 `rg`，后续用 PowerShell 的只读搜索替代。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$files = Get-ChildItem server -Recurse -File | Where-Object { $_.Name -match '"'gift-card|financial-reconciliation' }; "'$files | ForEach-Object { $_.FullName }; Write-Output "`n--- gift-cards diff ---"; git diff -- server/src/db/gift-cards.ts; Write-Output "`n--- gift guard diff ---"; git diff -- server/scripts/test-gift-card-guards.ts; Write-Output "`n--- relevant symbols ---"; Select-String -Path server/src/db/gift-cards.ts -Pattern '"'expiresAt|status|aggregate|count|sum' -Context 4,7" in C:\Users\Administrator\Desktop\payinces
+ succeeded in 1171ms:
+C:\Users\Administrator\Desktop\payinces\server\dist\db\gift-cards.d.ts
+C:\Users\Administrator\Desktop\payinces\server\dist\db\gift-cards.d.ts.map
+C:\Users\Administrator\Desktop\payinces\server\dist\db\gift-cards.js
+C:\Users\Administrator\Desktop\payinces\server\dist\db\gift-cards.js.map
+C:\Users\Administrator\Desktop\payinces\server\dist\routes\gift-cards.d.ts
+C:\Users\Administrator\Desktop\payinces\server\dist\routes\gift-cards.d.ts.map
+C:\Users\Administrator\Desktop\payinces\server\dist\routes\gift-cards.js
+C:\Users\Administrator\Desktop\payinces\server\dist\routes\gift-cards.js.map
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-financial-reconciliation-guards.ts
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-gift-card-flow.ts
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-gift-card-guards.ts
+C:\Users\Administrator\Desktop\payinces\server\src\db\gift-cards.ts
+C:\Users\Administrator\Desktop\payinces\server\src\routes\gift-cards.ts
+
+--- gift-cards diff ---
+diff --git a/server/src/db/gift-cards.ts b/server/src/db/gift-cards.ts
+index 221b1e0..50351f8 100644
+--- a/server/src/db/gift-cards.ts
++++ b/server/src/db/gift-cards.ts
+@@ -16,6 +16,7 @@ const GIFT_CARD_CODE_PREFIX = 'gc-'
+ const MAX_GIFT_CARD_BATCH_COUNT = 500
+ const MAX_GIFT_CARD_REMARK_LENGTH = 200
+ const MAX_GIFT_CARD_FACE_VALUE = 10000
++const MAX_GIFT_CARD_BATCH_FACE_VALUE = 100000
+ const MAX_GIFT_CARD_LIST_PAGE_SIZE = 100
+ 
+ export const GIFT_CARD_CONSTANTS = {
+@@ -23,7 +24,8 @@ export const GIFT_CARD_CONSTANTS = {
+   CODE_PREFIX: GIFT_CARD_CODE_PREFIX,
+   MAX_BATCH_COUNT: MAX_GIFT_CARD_BATCH_COUNT,
+   MAX_REMARK_LENGTH: MAX_GIFT_CARD_REMARK_LENGTH,
+-  MAX_FACE_VALUE: MAX_GIFT_CARD_FACE_VALUE
++  MAX_FACE_VALUE: MAX_GIFT_CARD_FACE_VALUE,
++  MAX_BATCH_FACE_VALUE: MAX_GIFT_CARD_BATCH_FACE_VALUE
+ } as const
+ 
+ export interface GiftCardCreateInput {
+@@ -113,11 +115,17 @@ async function createGiftCardInTransaction(
+   tx: Prisma.TransactionClient,
+   input: GiftCardCreateInput
+ ) {
++  const faceValue = toMoney(input.faceValue)
++  const balanceValue = toMoney(input.balanceValue)
++  if (faceValue <= 0 || balanceValue <= 0 || balanceValue > faceValue) {
++    throw new Error('GIFT_CARD_BALANCE_EXCEEDS_FACE_VALUE')
++  }
++
+   return tx.giftCard.create({
+     data: {
+       code: generateGiftCardCode(),
+-      faceValue: toDecimal(input.faceValue),
+-      balanceValue: toDecimal(input.balanceValue),
++      faceValue: toDecimal(faceValue),
++      balanceValue: toDecimal(balanceValue),
+       createdById: input.createdById ?? null,
+       ownerId: input.ownerId ?? null,
+       expiresAt: input.expiresAt ?? null,
+@@ -156,6 +164,9 @@ export async function createGiftCardBatch(
+   if (!Number.isSafeInteger(count) || count < 1 || count > MAX_GIFT_CARD_BATCH_COUNT) {
+     throw new Error('GIFT_CARD_BATCH_TOO_LARGE')
+   }
++  if (toMoney(input.faceValue) * count > MAX_GIFT_CARD_BATCH_FACE_VALUE) {
++    throw new Error('GIFT_CARD_BATCH_VALUE_TOO_LARGE')
++  }
+ 
+   for (let attempt = 0; attempt < 3; attempt++) {
+     try {
+@@ -382,11 +393,124 @@ export async function redeemGiftCard(code: string, userId: number): Promise<Gift
+   return result
+ }
+ 
+-export async function disableGiftCard(id: number) {
+-  return prisma.giftCard.updateMany({
+-    where: { id, status: 'active' },
+-    data: { status: 'disabled' }
++function giftCardRefundRemark(id: number): string {
++  return `Gift card cancellation refund [gift-card-refund:${id}]`
++}
++
++async function refundUserFundedGiftCard(
++  tx: Prisma.TransactionClient,
++  giftCard: { id: number; faceValue: unknown; createdById: number | null; ownerId: number | null }
++): Promise<number | null> {
++  const issuerId = giftCard.ownerId
++  if (issuerId === null || giftCard.createdById !== issuerId) return null
++
++  await advisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, issuerId)
++  const remark = giftCardRefundRemark(giftCard.id)
++  const existingRefund = await tx.balanceLog.findFirst({
++    where: { userId: issuerId, type: 'refund', remark },
++    select: { id: true }
++  })
++  if (existingRefund) {
++    const user = await tx.user.findUnique({ where: { id: issuerId }, select: { balance: true } })
++    return user ? toMoney(user.balance) : null
++  }
++
++  const user = await tx.user.findUnique({ where: { id: issuerId }, select: { balance: true } })
++  if (!user) throw new Error('USER_NOT_FOUND')
++
++  const amount = toMoney(giftCard.faceValue)
++  const balanceBefore = toMoney(user.balance)
++  // Keep the card state, balance mutation, and refund ledger in one transaction.
++  // This mirrors changeBalance's locked update + BalanceLog flow; calling its standalone
++  // transaction here would leave a partial-refund window between the two transactions.
++  const updatedUser = await tx.user.update({
++    where: { id: issuerId },
++    data: { balance: { increment: toDecimal(amount) } },
++    select: { balance: true }
++  })
++  const balanceAfter = toMoney(updatedUser.balance)
++
++  await tx.balanceLog.create({
++    data: {
++      userId: issuerId,
++      type: 'refund',
++      amount: toDecimal(amount),
++      balanceBefore: toDecimal(balanceBefore),
++      balanceAfter: toDecimal(balanceAfter),
++      remark
++    }
+   })
++
++  return balanceAfter
++}
++
++async function disableGiftCardWithRefund(id: number) {
++  return prisma.$transaction(async (tx) => {
++    const initial = await tx.giftCard.findUnique({ where: { id }, select: { id: true } })
++    if (!initial) return { count: 0 }
++
++    await advisoryTransactionLock(tx, GIFT_CARD_LOCK_NAMESPACE, id)
++    const giftCard = await tx.giftCard.findUnique({
++      where: { id },
++      select: { id: true, status: true, faceValue: true, createdById: true, ownerId: true }
++    })
++    if (!giftCard || giftCard.status !== 'active') return { count: 0 }
++
++    await refundUserFundedGiftCard(tx, giftCard)
++    const updated = await tx.giftCard.updateMany({
++      where: { id, status: 'active' },
++      data: { status: 'disabled' }
++    })
++    return { count: updated.count }
++  })
++}
++
++async function deleteGiftCardWithRefund(id: number) {
++  return prisma.$transaction(async (tx) => {
++    const initial = await tx.giftCard.findUnique({ where: { id }, select: { id: true } })
++    if (!initial) return { count: 0 }
++
++    await advisoryTransactionLock(tx, GIFT_CARD_LOCK_NAMESPACE, id)
++    const giftCard = await tx.giftCard.findUnique({
++      where: { id },
++      select: { id: true, status: true, faceValue: true, createdById: true, ownerId: true }
++    })
++    if (!giftCard || giftCard.status === 'used') return { count: 0 }
++
++    await refundUserFundedGiftCard(tx, giftCard)
++    const deleted = await tx.giftCard.deleteMany({
++      where: { id, status: { in: ['active', 'disabled', 'expired'] } }
++    })
++    return { count: deleted.count }
++  })
++}
++
++export async function revokeGiftCard(id: number, issuerId: number) {
++  return prisma.$transaction(async (tx) => {
++    const initial = await tx.giftCard.findUnique({ where: { id }, select: { id: true } })
++    if (!initial) throw new Error('GIFT_CARD_NOT_FOUND')
++
++    await advisoryTransactionLock(tx, GIFT_CARD_LOCK_NAMESPACE, id)
++    const giftCard = await tx.giftCard.findUnique({
++      where: { id },
++      select: { id: true, status: true, faceValue: true, createdById: true, ownerId: true }
++    })
++    if (!giftCard) throw new Error('GIFT_CARD_NOT_FOUND')
++    if (giftCard.createdById !== issuerId || giftCard.ownerId !== issuerId) {
++      throw new Error('GIFT_CARD_NOT_ISSUER')
++    }
++    if (giftCard.status === 'used') throw new Error('GIFT_CARD_USED')
++
++    const balanceAfter = await refundUserFundedGiftCard(tx, giftCard)
++    if (giftCard.status !== 'disabled') {
++      await tx.giftCard.update({ where: { id }, data: { status: 'disabled' } })
++    }
++    return { success: true, balanceAfter }
++  })
++}
++
++export async function disableGiftCard(id: number) {
++  return disableGiftCardWithRefund(id)
+ }
+ 
+ export async function enableGiftCard(id: number) {
+@@ -394,6 +518,7 @@ export async function enableGiftCard(id: number) {
+     where: {
+       id,
+       status: 'disabled',
++      ownerId: null,
+       OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }]
+     },
+     data: { status: 'active' }
+@@ -401,22 +526,23 @@ export async function enableGiftCard(id: number) {
+ }
+ 
+ export async function deleteGiftCard(id: number) {
+-  return prisma.giftCard.deleteMany({
+-    where: { id, status: { in: ['active', 'disabled', 'expired'] } }
+-  })
++  return deleteGiftCardWithRefund(id)
+ }
+ 
+ export async function batchDisableGiftCards(ids: number[]) {
+-  return prisma.giftCard.updateMany({
+-    where: { id: { in: ids }, status: 'active' },
+-    data: { status: 'disabled' }
+-  })
++  let count = 0
++  for (const id of [...ids].sort((a, b) => a - b)) {
++    count += (await disableGiftCardWithRefund(id)).count
++  }
++  return { count }
+ }
+ 
+ export async function batchDeleteGiftCards(ids: number[]) {
+-  return prisma.giftCard.deleteMany({
+-    where: { id: { in: ids }, status: { in: ['active', 'disabled', 'expired'] } }
+-  })
++  let count = 0
++  for (const id of [...ids].sort((a, b) => a - b)) {
++    count += (await deleteGiftCardWithRefund(id)).count
++  }
++  return { count }
+ }
+ 
+ export async function listGiftCardsByAdmin(options: GiftCardAdminListOptions) {
+
+--- gift guard diff ---
+diff --git a/server/scripts/test-gift-card-guards.ts b/server/scripts/test-gift-card-guards.ts
+index 43ea9dd..82863db 100644
+--- a/server/scripts/test-gift-card-guards.ts
++++ b/server/scripts/test-gift-card-guards.ts
+@@ -139,6 +139,52 @@ assert(
+   'admin gift card generation must rely on admin auth, explicit allowlist, and rate limits, not frontend Turnstile tokens'
+ )
+ 
++assert(
++  adminGenerateSection.includes('if (balanceValue > faceValue)') &&
++    adminBatchSection.includes('if (balanceValue > faceValue)') &&
++    route.includes("GIFT_CARD_BALANCE_EXCEEDS_FACE_VALUE") &&
++    db.includes('balanceValue > faceValue') &&
++    db.includes('MAX_GIFT_CARD_BATCH_FACE_VALUE') &&
++    adminBatchSection.includes('MAX_BATCH_FACE_VALUE'),
++  'gift card credited value must not exceed face value, and unfunded admin batches must have a total face-value cap'
++)
++
++const revokeSection = db.slice(
++  db.indexOf('export async function revokeGiftCard'),
++  db.indexOf('export async function disableGiftCard')
++)
++const refundSection = db.slice(
++  db.indexOf('async function refundUserFundedGiftCard'),
++  db.indexOf('async function disableGiftCardWithRefund')
++)
++
++assert(
++  route.includes("fastify.post('/user/:id/revoke'") &&
++    revokeSection.includes('giftCard.createdById !== issuerId') &&
++    revokeSection.includes('giftCard.ownerId !== issuerId') &&
++    revokeSection.includes("giftCard.status === 'used'") &&
++    revokeSection.includes('refundUserFundedGiftCard(tx, giftCard)') &&
++    revokeSection.includes("data: { status: 'disabled' }") &&
++    refundSection.includes('await advisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, issuerId)') &&
++    refundSection.includes("type: 'refund'") &&
++    refundSection.includes('increment: toDecimal(amount)') &&
++    db.includes('gift-card-refund:${id}') &&
++    refundSection.includes('existingRefund'),
++  'an issuer must be able to revoke an unredeemed balance-funded card and receive the original amount exactly once'
++)
++
++assert(
++  db.includes('async function disableGiftCardWithRefund') &&
++    db.includes('async function deleteGiftCardWithRefund') &&
++    db.includes('await refundUserFundedGiftCard(tx, giftCard)') &&
++    db.includes('return disableGiftCardWithRefund(id)') &&
++    db.includes('return deleteGiftCardWithRefund(id)') &&
++    db.includes('await disableGiftCardWithRefund(id)') &&
++    db.includes('await deleteGiftCardWithRefund(id)') &&
++    db.includes('ownerId: null'),
++  'admin disable/delete, including batch operations, must refund unredeemed user-funded cards and refunded cards must not be re-enabled'
++)
++
+ assert(
+   userRedeemSection.includes('onRequest: [fastify.authenticate]') &&
+     userRedeemSection.includes('preHandler: [turnstileRequired]') &&
+
+--- relevant symbols ---
+
+  server\src\db\gift-cards.ts:2: * 礼品卡兑换码数据访问层
+  server\src\db\gift-cards.ts:3: */
+  server\src\db\gift-cards.ts:4:
+  server\src\db\gift-cards.ts:5:import crypto from 'crypto'
+> server\src\db\gift-cards.ts:6:import { Prisma, type GiftCardStatus } from '@prisma/client'
+  server\src\db\gift-cards.ts:7:import { prisma } from './prisma.js'
+  server\src\db\gift-cards.ts:8:import {
+  server\src\db\gift-cards.ts:9:  GIFT_CARD_LOCK_NAMESPACE,
+  server\src\db\gift-cards.ts:10:  USER_BALANCE_LOCK_NAMESPACE,
+  server\src\db\gift-cards.ts:11:  advisoryTransactionLock
+  server\src\db\gift-cards.ts:12:} from './advisory-locks.js'
+  server\src\db\gift-cards.ts:13:
+  server\src\db\gift-cards.ts:14:const GIFT_CARD_RANDOM_LENGTH = 24
+  server\src\db\gift-cards.ts:15:const GIFT_CARD_CODE_PREFIX = 'gc-'
+> server\src\db\gift-cards.ts:16:const MAX_GIFT_CARD_BATCH_COUNT = 500
+  server\src\db\gift-cards.ts:17:const MAX_GIFT_CARD_REMARK_LENGTH = 200
+  server\src\db\gift-cards.ts:18:const MAX_GIFT_CARD_FACE_VALUE = 10000
+  server\src\db\gift-cards.ts:19:const MAX_GIFT_CARD_BATCH_FACE_VALUE = 100000
+  server\src\db\gift-cards.ts:20:const MAX_GIFT_CARD_LIST_PAGE_SIZE = 100
+  server\src\db\gift-cards.ts:21:
+  server\src\db\gift-cards.ts:22:export const GIFT_CARD_CONSTANTS = {
+  server\src\db\gift-cards.ts:23:  CODE_LENGTH: GIFT_CARD_RANDOM_LENGTH,
+  server\src\db\gift-cards.ts:24:  CODE_PREFIX: GIFT_CARD_CODE_PREFIX,
+> server\src\db\gift-cards.ts:25:  MAX_BATCH_COUNT: MAX_GIFT_CARD_BATCH_COUNT,
+  server\src\db\gift-cards.ts:26:  MAX_REMARK_LENGTH: MAX_GIFT_CARD_REMARK_LENGTH,
+  server\src\db\gift-cards.ts:27:  MAX_FACE_VALUE: MAX_GIFT_CARD_FACE_VALUE,
+  server\src\db\gift-cards.ts:28:  MAX_BATCH_FACE_VALUE: MAX_GIFT_CARD_BATCH_FACE_VALUE
+  server\src\db\gift-cards.ts:29:} as const
+  server\src\db\gift-cards.ts:30:
+  server\src\db\gift-cards.ts:31:export interface GiftCardCreateInput {
+  server\src\db\gift-cards.ts:32:  faceValue: number
+  server\src\db\gift-cards.ts:33:  balanceValue: number
+  server\src\db\gift-cards.ts:34:  createdById?: number | null
+  server\src\db\gift-cards.ts:35:  ownerId?: number | null
+> server\src\db\gift-cards.ts:36:  expiresAt?: Date | null
+  server\src\db\gift-cards.ts:37:  remark?: string
+  server\src\db\gift-cards.ts:38:  batchId?: string
+  server\src\db\gift-cards.ts:39:}
+  server\src\db\gift-cards.ts:40:
+  server\src\db\gift-cards.ts:41:export interface GiftCardAdminListOptions {
+  server\src\db\gift-cards.ts:42:  page?: number
+  server\src\db\gift-cards.ts:43:  pageSize?: number
+> server\src\db\gift-cards.ts:44:  status?: GiftCardStatus
+  server\src\db\gift-cards.ts:45:  batchId?: string
+  server\src\db\gift-cards.ts:46:  revealCode?: boolean
+  server\src\db\gift-cards.ts:47:}
+  server\src\db\gift-cards.ts:48:
+  server\src\db\gift-cards.ts:49:export interface GiftCardUserListOptions {
+  server\src\db\gift-cards.ts:50:  page?: number
+  server\src\db\gift-cards.ts:51:  pageSize?: number
+> server\src\db\gift-cards.ts:52:  status?: GiftCardStatus
+  server\src\db\gift-cards.ts:53:}
+  server\src\db\gift-cards.ts:54:
+  server\src\db\gift-cards.ts:55:export interface GiftCardBalanceResult {
+  server\src\db\gift-cards.ts:56:  balanceValue: number
+  server\src\db\gift-cards.ts:57:  balanceBefore: number
+  server\src\db\gift-cards.ts:58:  balanceAfter: number
+  server\src\db\gift-cards.ts:59:}
+  server\src\db\gift-cards.ts:127:      faceValue: toDecimal(faceValue),
+  server\src\db\gift-cards.ts:128:      balanceValue: toDecimal(balanceValue),
+  server\src\db\gift-cards.ts:129:      createdById: input.createdById ?? null,
+  server\src\db\gift-cards.ts:130:      ownerId: input.ownerId ?? null,
+> server\src\db\gift-cards.ts:131:      expiresAt: input.expiresAt ?? null,
+  server\src\db\gift-cards.ts:132:      remark: input.remark,
+  server\src\db\gift-cards.ts:133:      batchId: input.batchId
+  server\src\db\gift-cards.ts:134:    },
+  server\src\db\gift-cards.ts:135:    select: {
+  server\src\db\gift-cards.ts:136:      id: true,
+  server\src\db\gift-cards.ts:137:      code: true,
+  server\src\db\gift-cards.ts:138:      faceValue: true,
+  server\src\db\gift-cards.ts:139:      balanceValue: true,
+> server\src\db\gift-cards.ts:140:      status: true,
+> server\src\db\gift-cards.ts:141:      expiresAt: true,
+  server\src\db\gift-cards.ts:142:      batchId: true,
+  server\src\db\gift-cards.ts:143:      createdAt: true
+  server\src\db\gift-cards.ts:144:    }
+  server\src\db\gift-cards.ts:145:  })
+  server\src\db\gift-cards.ts:146:}
+  server\src\db\gift-cards.ts:147:
+  server\src\db\gift-cards.ts:148:export async function createGiftCard(input: GiftCardCreateInput) {
+  server\src\db\gift-cards.ts:157:  throw new Error('GIFT_CARD_CODE_COLLISION')
+  server\src\db\gift-cards.ts:158:}
+  server\src\db\gift-cards.ts:159:
+  server\src\db\gift-cards.ts:160:export async function createGiftCardBatch(
+> server\src\db\gift-cards.ts:161:  count: number,
+  server\src\db\gift-cards.ts:162:  input: Omit<GiftCardCreateInput, 'batchId'>
+  server\src\db\gift-cards.ts:163:) {
+> server\src\db\gift-cards.ts:164:  if (!Number.isSafeInteger(count) || count < 1 || count > 
+MAX_GIFT_CARD_BATCH_COUNT) {
+  server\src\db\gift-cards.ts:165:    throw new Error('GIFT_CARD_BATCH_TOO_LARGE')
+  server\src\db\gift-cards.ts:166:  }
+> server\src\db\gift-cards.ts:167:  if (toMoney(input.faceValue) * count > MAX_GIFT_CARD_BATCH_FACE_VALUE) {
+  server\src\db\gift-cards.ts:168:    throw new Error('GIFT_CARD_BATCH_VALUE_TOO_LARGE')
+  server\src\db\gift-cards.ts:169:  }
+  server\src\db\gift-cards.ts:170:
+  server\src\db\gift-cards.ts:171:  for (let attempt = 0; attempt < 3; attempt++) {
+  server\src\db\gift-cards.ts:172:    try {
+  server\src\db\gift-cards.ts:173:      return await prisma.$transaction(async (tx) => {
+  server\src\db\gift-cards.ts:174:        const batchId = generateBatchId()
+  server\src\db\gift-cards.ts:175:        const cards = []
+> server\src\db\gift-cards.ts:176:        for (let i = 0; i < count; i++) {
+  server\src\db\gift-cards.ts:177:          cards.push(await createGiftCardInTransaction(tx, { ...input, batchId }))
+  server\src\db\gift-cards.ts:178:        }
+  server\src\db\gift-cards.ts:179:        return {
+  server\src\db\gift-cards.ts:180:          codes: cards.map(card => serializeGiftCard(card, { revealCode: true })),
+  server\src\db\gift-cards.ts:181:          batchId,
+> server\src\db\gift-cards.ts:182:          count: cards.length
+  server\src\db\gift-cards.ts:183:        }
+  server\src\db\gift-cards.ts:184:      })
+  server\src\db\gift-cards.ts:185:    } catch (error) {
+  server\src\db\gift-cards.ts:186:      if (!isUniqueConstraintError(error) || attempt === 2) throw error
+  server\src\db\gift-cards.ts:187:    }
+  server\src\db\gift-cards.ts:188:  }
+  server\src\db\gift-cards.ts:189:  throw new Error('GIFT_CARD_CODE_COLLISION')
+  server\src\db\gift-cards.ts:210:        const updateResult = await tx.user.updateMany({
+  server\src\db\gift-cards.ts:211:          where: { id: input.userId, balance: { gte: amount } },
+  server\src\db\gift-cards.ts:212:          data: { balance: { decrement: toDecimal(amount) } }
+  server\src\db\gift-cards.ts:213:        })
+> server\src\db\gift-cards.ts:214:        if (updateResult.count !== 1) {
+  server\src\db\gift-cards.ts:215:          throw new Error('GIFT_CARD_INSUFFICIENT_BALANCE')
+  server\src\db\gift-cards.ts:216:        }
+  server\src\db\gift-cards.ts:217:
+  server\src\db\gift-cards.ts:218:        const updatedUser = await tx.user.findUnique({
+  server\src\db\gift-cards.ts:219:          where: { id: input.userId },
+  server\src\db\gift-cards.ts:220:          select: { balance: true }
+  server\src\db\gift-cards.ts:221:        })
+  server\src\db\gift-cards.ts:224:        const balanceAfter = toMoney(updatedUser.balance)
+  server\src\db\gift-cards.ts:225:        const balanceLog = await tx.balanceLog.create({
+  server\src\db\gift-cards.ts:226:          data: {
+  server\src\db\gift-cards.ts:227:            // 礼品卡是保值凭证（可转赠/他账兑换），发行扣款不是真实服务消费，
+> server\src\db\gift-cards.ts:228:            // 必须用独立类型，避免被 getUsersTotalConsumeMap 计入可兑换积分的消费额而被刷分。
+  server\src\db\gift-cards.ts:229:            userId: input.userId,
+  server\src\db\gift-cards.ts:230:            type: 'gift_card_issue',
+  server\src\db\gift-cards.ts:231:            amount: toDecimal(-amount),
+  server\src\db\gift-cards.ts:232:            balanceBefore: toDecimal(balanceBefore),
+  server\src\db\gift-cards.ts:233:            balanceAfter: toDecimal(balanceAfter),
+  server\src\db\gift-cards.ts:234:            remark: input.remark || '生成礼品卡'
+  server\src\db\gift-cards.ts:235:          }
+  server\src\db\gift-cards.ts:264:      id: true,
+  server\src\db\gift-cards.ts:265:      code: true,
+  server\src\db\gift-cards.ts:266:      faceValue: true,
+  server\src\db\gift-cards.ts:267:      balanceValue: true,
+> server\src\db\gift-cards.ts:268:      status: true,
+  server\src\db\gift-cards.ts:269:      createdById: true,
+  server\src\db\gift-cards.ts:270:      ownerId: true,
+  server\src\db\gift-cards.ts:271:      usedById: true,
+  server\src\db\gift-cards.ts:272:      usedAt: true,
+> server\src\db\gift-cards.ts:273:      expiresAt: true,
+  server\src\db\gift-cards.ts:274:      remark: true,
+  server\src\db\gift-cards.ts:275:      batchId: true,
+  server\src\db\gift-cards.ts:276:      createdAt: true,
+  server\src\db\gift-cards.ts:277:      createdBy: { select: { id: true, username: true } },
+  server\src\db\gift-cards.ts:278:      owner: { select: { id: true, username: true } },
+  server\src\db\gift-cards.ts:279:      usedBy: { select: { id: true, username: true } }
+  server\src\db\gift-cards.ts:280:    }
+  server\src\db\gift-cards.ts:289:      id: true,
+  server\src\db\gift-cards.ts:290:      code: true,
+  server\src\db\gift-cards.ts:291:      faceValue: true,
+  server\src\db\gift-cards.ts:292:      balanceValue: true,
+> server\src\db\gift-cards.ts:293:      status: true,
+  server\src\db\gift-cards.ts:294:      createdById: true,
+  server\src\db\gift-cards.ts:295:      ownerId: true,
+  server\src\db\gift-cards.ts:296:      usedById: true,
+  server\src\db\gift-cards.ts:297:      usedAt: true,
+> server\src\db\gift-cards.ts:298:      expiresAt: true,
+  server\src\db\gift-cards.ts:299:      remark: true,
+  server\src\db\gift-cards.ts:300:      batchId: true,
+  server\src\db\gift-cards.ts:301:      createdAt: true
+  server\src\db\gift-cards.ts:302:    }
+  server\src\db\gift-cards.ts:303:  })
+  server\src\db\gift-cards.ts:304:  return card ? serializeGiftCard(card, options) : null
+  server\src\db\gift-cards.ts:305:}
+  server\src\db\gift-cards.ts:321:      where: { id: initialGiftCard.id },
+  server\src\db\gift-cards.ts:322:      select: {
+  server\src\db\gift-cards.ts:323:        id: true,
+  server\src\db\gift-cards.ts:324:        code: true,
+> server\src\db\gift-cards.ts:325:        status: true,
+  server\src\db\gift-cards.ts:326:        balanceValue: true,
+> server\src\db\gift-cards.ts:327:        expiresAt: true,
+  server\src\db\gift-cards.ts:328:        ownerId: true
+  server\src\db\gift-cards.ts:329:      }
+  server\src\db\gift-cards.ts:330:    })
+  server\src\db\gift-cards.ts:331:
+  server\src\db\gift-cards.ts:332:    if (!giftCard) {
+  server\src\db\gift-cards.ts:333:      throw new Error('GIFT_CARD_NOT_FOUND')
+  server\src\db\gift-cards.ts:334:    }
+> server\src\db\gift-cards.ts:335:    if (giftCard.status !== 'active') {
+> server\src\db\gift-cards.ts:336:      throw new Error(giftCard.status === 'used' ? 'GIFT_CARD_USED' : 
+'GIFT_CARD_DISABLED')
+  server\src\db\gift-cards.ts:337:    }
+  server\src\db\gift-cards.ts:338:    if (giftCard.ownerId === userId) {
+  server\src\db\gift-cards.ts:339:      throw new Error('GIFT_CARD_SELF_REDEEM')
+  server\src\db\gift-cards.ts:340:    }
+> server\src\db\gift-cards.ts:341:    if (giftCard.expiresAt && giftCard.expiresAt < new Date()) {
+  server\src\db\gift-cards.ts:342:      const expired = await tx.giftCard.updateMany({
+> server\src\db\gift-cards.ts:343:        where: { id: giftCard.id, status: 'active' },
+> server\src\db\gift-cards.ts:344:        data: { status: 'expired' }
+  server\src\db\gift-cards.ts:345:      })
+> server\src\db\gift-cards.ts:346:      if (expired.count === 0) {
+  server\src\db\gift-cards.ts:347:        throw new Error('GIFT_CARD_USED')
+  server\src\db\gift-cards.ts:348:      }
+  server\src\db\gift-cards.ts:349:      return { error: 'GIFT_CARD_EXPIRED' }
+  server\src\db\gift-cards.ts:350:    }
+  server\src\db\gift-cards.ts:351:
+  server\src\db\gift-cards.ts:352:    const user = await tx.user.findUnique({
+  server\src\db\gift-cards.ts:353:      where: { id: userId },
+  server\src\db\gift-cards.ts:357:
+  server\src\db\gift-cards.ts:358:    const amount = toMoney(giftCard.balanceValue)
+  server\src\db\gift-cards.ts:359:    const balanceBefore = toMoney(user.balance)
+  server\src\db\gift-cards.ts:360:    const updated = await tx.giftCard.updateMany({
+> server\src\db\gift-cards.ts:361:      where: { id: giftCard.id, status: 'active' },
+> server\src\db\gift-cards.ts:362:      data: { status: 'used', usedById: userId, usedAt: new Date() }
+  server\src\db\gift-cards.ts:363:    })
+> server\src\db\gift-cards.ts:364:    if (updated.count !== 1) {
+  server\src\db\gift-cards.ts:365:      throw new Error('GIFT_CARD_USED')
+  server\src\db\gift-cards.ts:366:    }
+  server\src\db\gift-cards.ts:367:
+  server\src\db\gift-cards.ts:368:    const updatedUser = await tx.user.update({
+  server\src\db\gift-cards.ts:369:      where: { id: userId },
+  server\src\db\gift-cards.ts:370:      data: { balance: { increment: toDecimal(amount) } },
+  server\src\db\gift-cards.ts:371:      select: { balance: true }
+  server\src\db\gift-cards.ts:446:
+  server\src\db\gift-cards.ts:447:async function disableGiftCardWithRefund(id: number) {
+  server\src\db\gift-cards.ts:448:  return prisma.$transaction(async (tx) => {
+  server\src\db\gift-cards.ts:449:    const initial = await tx.giftCard.findUnique({ where: { id }, select: { id: true 
+} })
+> server\src\db\gift-cards.ts:450:    if (!initial) return { count: 0 }
+  server\src\db\gift-cards.ts:451:
+  server\src\db\gift-cards.ts:452:    await advisoryTransactionLock(tx, GIFT_CARD_LOCK_NAMESPACE, id)
+  server\src\db\gift-cards.ts:453:    const giftCard = await tx.giftCard.findUnique({
+  server\src\db\gift-cards.ts:454:      where: { id },
+> server\src\db\gift-cards.ts:455:      select: { id: true, status: true, faceValue: true, createdById: true, ownerId: 
+true }
+  server\src\db\gift-cards.ts:456:    })
+> server\src\db\gift-cards.ts:457:    if (!giftCard || giftCard.status !== 'active') return { count: 0 }
+  server\src\db\gift-cards.ts:458:
+  server\src\db\gift-cards.ts:459:    await refundUserFundedGiftCard(tx, giftCard)
+  server\src\db\gift-cards.ts:460:    const updated = await tx.giftCard.updateMany({
+> server\src\db\gift-cards.ts:461:      where: { id, status: 'active' },
+> server\src\db\gift-cards.ts:462:      data: { status: 'disabled' }
+  server\src\db\gift-cards.ts:463:    })
+> server\src\db\gift-cards.ts:464:    return { count: updated.count }
+  server\src\db\gift-cards.ts:465:  })
+  server\src\db\gift-cards.ts:466:}
+  server\src\db\gift-cards.ts:467:
+  server\src\db\gift-cards.ts:468:async function deleteGiftCardWithRefund(id: number) {
+  server\src\db\gift-cards.ts:469:  return prisma.$transaction(async (tx) => {
+  server\src\db\gift-cards.ts:470:    const initial = await tx.giftCard.findUnique({ where: { id }, select: { id: true 
+} })
+> server\src\db\gift-cards.ts:471:    if (!initial) return { count: 0 }
+  server\src\db\gift-cards.ts:472:
+  server\src\db\gift-cards.ts:473:    await advisoryTransactionLock(tx, GIFT_CARD_LOCK_NAMESPACE, id)
+  server\src\db\gift-cards.ts:474:    const giftCard = await tx.giftCard.findUnique({
+  server\src\db\gift-cards.ts:475:      where: { id },
+> server\src\db\gift-cards.ts:476:      select: { id: true, status: true, faceValue: true, createdById: true, ownerId: 
+true }
+  server\src\db\gift-cards.ts:477:    })
+> server\src\db\gift-cards.ts:478:    if (!giftCard || giftCard.status === 'used') return { count: 0 }
+  server\src\db\gift-cards.ts:479:
+  server\src\db\gift-cards.ts:480:    await refundUserFundedGiftCard(tx, giftCard)
+  server\src\db\gift-cards.ts:481:    const deleted = await tx.giftCard.deleteMany({
+> server\src\db\gift-cards.ts:482:      where: { id, status: { in: ['active', 'disabled', 'expired'] } }
+  server\src\db\gift-cards.ts:483:    })
+> server\src\db\gift-cards.ts:484:    return { count: deleted.count }
+  server\src\db\gift-cards.ts:485:  })
+  server\src\db\gift-cards.ts:486:}
+  server\src\db\gift-cards.ts:487:
+  server\src\db\gift-cards.ts:488:export async function revokeGiftCard(id: number, issuerId: number) {
+  server\src\db\gift-cards.ts:489:  return prisma.$transaction(async (tx) => {
+  server\src\db\gift-cards.ts:490:    const initial = await tx.giftCard.findUnique({ where: { id }, select: { id: true 
+} })
+  server\src\db\gift-cards.ts:491:    if (!initial) throw new Error('GIFT_CARD_NOT_FOUND')
+  server\src\db\gift-cards.ts:492:
+  server\src\db\gift-cards.ts:493:    await advisoryTransactionLock(tx, GIFT_CARD_LOCK_NAMESPACE, id)
+  server\src\db\gift-cards.ts:494:    const giftCard = await tx.giftCard.findUnique({
+  server\src\db\gift-cards.ts:495:      where: { id },
+> server\src\db\gift-cards.ts:496:      select: { id: true, status: true, faceValue: true, createdById: true, ownerId: 
+true }
+  server\src\db\gift-cards.ts:497:    })
+  server\src\db\gift-cards.ts:498:    if (!giftCard) throw new Error('GIFT_CARD_NOT_FOUND')
+  server\src\db\gift-cards.ts:499:    if (giftCard.createdById !== issuerId || giftCard.ownerId !== issuerId) {
+  server\src\db\gift-cards.ts:500:      throw new Error('GIFT_CARD_NOT_ISSUER')
+  server\src\db\gift-cards.ts:501:    }
+> server\src\db\gift-cards.ts:502:    if (giftCard.status === 'used') throw new Error('GIFT_CARD_USED')
+  server\src\db\gift-cards.ts:503:
+  server\src\db\gift-cards.ts:504:    const balanceAfter = await refundUserFundedGiftCard(tx, giftCard)
+> server\src\db\gift-cards.ts:505:    if (giftCard.status !== 'disabled') {
+> server\src\db\gift-cards.ts:506:      await tx.giftCard.update({ where: { id }, data: { status: 'disabled' } })
+  server\src\db\gift-cards.ts:507:    }
+  server\src\db\gift-cards.ts:508:    return { success: true, balanceAfter }
+  server\src\db\gift-cards.ts:509:  })
+  server\src\db\gift-cards.ts:510:}
+  server\src\db\gift-cards.ts:511:
+  server\src\db\gift-cards.ts:512:export async function disableGiftCard(id: number) {
+  server\src\db\gift-cards.ts:513:  return disableGiftCardWithRefund(id)
+  server\src\db\gift-cards.ts:516:export async function enableGiftCard(id: number) {
+  server\src\db\gift-cards.ts:517:  return prisma.giftCard.updateMany({
+  server\src\db\gift-cards.ts:518:    where: {
+  server\src\db\gift-cards.ts:519:      id,
+> server\src\db\gift-cards.ts:520:      status: 'disabled',
+  server\src\db\gift-cards.ts:521:      ownerId: null,
+> server\src\db\gift-cards.ts:522:      OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }]
+  server\src\db\gift-cards.ts:523:    },
+> server\src\db\gift-cards.ts:524:    data: { status: 'active' }
+  server\src\db\gift-cards.ts:525:  })
+  server\src\db\gift-cards.ts:526:}
+  server\src\db\gift-cards.ts:527:
+  server\src\db\gift-cards.ts:528:export async function deleteGiftCard(id: number) {
+  server\src\db\gift-cards.ts:529:  return deleteGiftCardWithRefund(id)
+  server\src\db\gift-cards.ts:530:}
+  server\src\db\gift-cards.ts:531:
+  server\src\db\gift-cards.ts:532:export async function batchDisableGiftCards(ids: number[]) {
+> server\src\db\gift-cards.ts:533:  let count = 0
+  server\src\db\gift-cards.ts:534:  for (const id of [...ids].sort((a, b) => a - b)) {
+> server\src\db\gift-cards.ts:535:    count += (await disableGiftCardWithRefund(id)).count
+  server\src\db\gift-cards.ts:536:  }
+> server\src\db\gift-cards.ts:537:  return { count }
+  server\src\db\gift-cards.ts:538:}
+  server\src\db\gift-cards.ts:539:
+  server\src\db\gift-cards.ts:540:export async function batchDeleteGiftCards(ids: number[]) {
+> server\src\db\gift-cards.ts:541:  let count = 0
+  server\src\db\gift-cards.ts:542:  for (const id of [...ids].sort((a, b) => a - b)) {
+> server\src\db\gift-cards.ts:543:    count += (await deleteGiftCardWithRefund(id)).count
+  server\src\db\gift-cards.ts:544:  }
+> server\src\db\gift-cards.ts:545:  return { count }
+  server\src\db\gift-cards.ts:546:}
+  server\src\db\gift-cards.ts:547:
+  server\src\db\gift-cards.ts:548:export async function listGiftCardsByAdmin(options: GiftCardAdminListOptions) {
+  server\src\db\gift-cards.ts:549:  const page = clampPage(options.page)
+  server\src\db\gift-cards.ts:550:  const pageSize = clampPageSize(options.pageSize)
+  server\src\db\gift-cards.ts:551:  const where: Prisma.GiftCardWhereInput = {
+> server\src\db\gift-cards.ts:552:    ...(options.status ? { status: options.status } : {}),
+  server\src\db\gift-cards.ts:553:    ...(options.batchId ? { batchId: options.batchId } : {})
+  server\src\db\gift-cards.ts:554:  }
+  server\src\db\gift-cards.ts:555:
+  server\src\db\gift-cards.ts:556:  const [total, records] = await Promise.all([
+> server\src\db\gift-cards.ts:557:    prisma.giftCard.count({ where }),
+  server\src\db\gift-cards.ts:558:    prisma.giftCard.findMany({
+  server\src\db\gift-cards.ts:559:      where,
+  server\src\db\gift-cards.ts:560:      select: {
+  server\src\db\gift-cards.ts:561:        id: true,
+  server\src\db\gift-cards.ts:562:        code: true,
+  server\src\db\gift-cards.ts:563:        faceValue: true,
+  server\src\db\gift-cards.ts:564:        balanceValue: true,
+> server\src\db\gift-cards.ts:565:        status: true,
+> server\src\db\gift-cards.ts:566:        expiresAt: true,
+  server\src\db\gift-cards.ts:567:        remark: true,
+  server\src\db\gift-cards.ts:568:        batchId: true,
+  server\src\db\gift-cards.ts:569:        createdAt: true,
+  server\src\db\gift-cards.ts:570:        usedAt: true,
+  server\src\db\gift-cards.ts:571:        createdBy: { select: { id: true, username: true } },
+  server\src\db\gift-cards.ts:572:        owner: { select: { id: true, username: true } },
+  server\src\db\gift-cards.ts:573:        usedBy: { select: { id: true, username: true } }
+  server\src\db\gift-cards.ts:590:  const page = clampPage(options.page)
+  server\src\db\gift-cards.ts:591:  const pageSize = clampPageSize(options.pageSize)
+  server\src\db\gift-cards.ts:592:  const where: Prisma.GiftCardWhereInput = {
+  server\src\db\gift-cards.ts:593:    OR: [{ ownerId: userId }, { createdById: userId }, { usedById: userId }],
+> server\src\db\gift-cards.ts:594:    ...(options.status ? { status: options.status } : {})
+  server\src\db\gift-cards.ts:595:  }
+  server\src\db\gift-cards.ts:596:
+  server\src\db\gift-cards.ts:597:  const [total, records] = await Promise.all([
+> server\src\db\gift-cards.ts:598:    prisma.giftCard.count({ where }),
+  server\src\db\gift-cards.ts:599:    prisma.giftCard.findMany({
+  server\src\db\gift-cards.ts:600:      where,
+  server\src\db\gift-cards.ts:601:      select: {
+  server\src\db\gift-cards.ts:602:        id: true,
+  server\src\db\gift-cards.ts:603:        code: true,
+  server\src\db\gift-cards.ts:604:        faceValue: true,
+  server\src\db\gift-cards.ts:605:        balanceValue: true,
+> server\src\db\gift-cards.ts:606:        status: true,
+> server\src\db\gift-cards.ts:607:        expiresAt: true,
+  server\src\db\gift-cards.ts:608:        createdAt: true,
+  server\src\db\gift-cards.ts:609:        usedAt: true
+  server\src\db\gift-cards.ts:610:      },
+  server\src\db\gift-cards.ts:611:      orderBy: { createdAt: 'desc' },
+  server\src\db\gift-cards.ts:612:      skip: (page - 1) * pageSize,
+  server\src\db\gift-cards.ts:613:      take: pageSize
+  server\src\db\gift-cards.ts:614:    })
+  server\src\db\gift-cards.ts:623:}
+  server\src\db\gift-cards.ts:624:
+  server\src\db\gift-cards.ts:625:export async function getGiftCardStats() {
+  server\src\db\gift-cards.ts:626:  const [total, active, used, disabled, expired, outstandingValue, redeemedValue] = 
+await Promise.all([
+> server\src\db\gift-cards.ts:627:    prisma.giftCard.count(),
+> server\src\db\gift-cards.ts:628:    prisma.giftCard.count({ where: { status: 'active' } }),
+> server\src\db\gift-cards.ts:629:    prisma.giftCard.count({ where: { status: 'used' } }),
+> server\src\db\gift-cards.ts:630:    prisma.giftCard.count({ where: { status: 'disabled' } }),
+> server\src\db\gift-cards.ts:631:    prisma.giftCard.count({ where: { status: 'expired' } }),
+> server\src\db\gift-cards.ts:632:    prisma.giftCard.aggregate({
+> server\src\db\gift-cards.ts:633:      _sum: { balanceValue: true },
+> server\src\db\gift-cards.ts:634:      where: { status: { in: ['active', 'disabled'] } }
+  server\src\db\gift-cards.ts:635:    }),
+> server\src\db\gift-cards.ts:636:    prisma.giftCard.aggregate({
+> server\src\db\gift-cards.ts:637:      _sum: { balanceValue: true },
+> server\src\db\gift-cards.ts:638:      where: { status: 'used' }
+  server\src\db\gift-cards.ts:639:    })
+  server\src\db\gift-cards.ts:640:  ])
+  server\src\db\gift-cards.ts:641:
+  server\src\db\gift-cards.ts:642:  return {
+  server\src\db\gift-cards.ts:643:    total,
+  server\src\db\gift-cards.ts:644:    active,
+  server\src\db\gift-cards.ts:645:    used,
+  server\src\db\gift-cards.ts:646:    disabled,
+  server\src\db\gift-cards.ts:647:    expired,
+> server\src\db\gift-cards.ts:648:    outstandingValue: toMoney(outstandingValue._sum.balanceValue),
+> server\src\db\gift-cards.ts:649:    totalRedeemedValue: toMoney(redeemedValue._sum.balanceValue)
+  server\src\db\gift-cards.ts:650:  }
+  server\src\db\gift-cards.ts:651:}
+
+
+warning: in the working copy of 'server/src/db/gift-cards.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/scripts/test-gift-card-guards.ts', LF will be replaced by CRLF the next time Git touches it
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Write-Output "--- db stats/list/redeem ---"; $db = Get-Content server/src/db/gift-cards.ts; $db[300..390]; $db[540..650]; Write-Output "`n--- route stats consumers ---"; Select-String -Path server/src/routes/gift-cards.ts,server/src/**/*.ts -Pattern '"'getGiftCardStats|outstandingValue|totalRedeemedValue' -Context 3,5; Write-Output \""'`n--- status enum/schema ---"; Select-String -Path server/prisma/schema.prisma -Pattern '"'enum GiftCardStatus|model GiftCard' -Context 0,24; Write-Output \""'`n--- gift-card guards full ---"; Get-Content -Raw server/scripts/test-gift-card-guards.ts; Write-Output "`n--- gift-card flow full ---"; Get-Content -Raw server/scripts/test-gift-card-flow.ts; Write-Output "`n--- financial reconciliation guard full ---"; Get-Content -Raw server/scripts/test-financial-reconciliation-guards.ts; Write-Output "`n--- scripts names ---"; Select-String -Path server/package.json -Pattern '"'test:gift-card|test:financial-reconciliation'" in C:\Users\Administrator\Desktop\payinces
+ succeeded in 1193ms:
+--- db stats/list/redeem ---
+      createdAt: true
+    }
+  })
+  return card ? serializeGiftCard(card, options) : null
+}
+
+export async function redeemGiftCard(code: string, userId: number): Promise<GiftCardBalanceResult> {
+  const result = await prisma.$transaction(async (tx): Promise<GiftCardRedeemTransactionResult> => {
+    const initialGiftCard = await tx.giftCard.findUnique({
+      where: { code },
+      select: { id: true }
+    })
+    if (!initialGiftCard) {
+      throw new Error('GIFT_CARD_NOT_FOUND')
+    }
+
+    await advisoryTransactionLock(tx, GIFT_CARD_LOCK_NAMESPACE, initialGiftCard.id)
+    await advisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, userId)
+
+    const giftCard = await tx.giftCard.findUnique({
+      where: { id: initialGiftCard.id },
+      select: {
+        id: true,
+        code: true,
+        status: true,
+        balanceValue: true,
+        expiresAt: true,
+        ownerId: true
+      }
+    })
+
+    if (!giftCard) {
+      throw new Error('GIFT_CARD_NOT_FOUND')
+    }
+    if (giftCard.status !== 'active') {
+      throw new Error(giftCard.status === 'used' ? 'GIFT_CARD_USED' : 'GIFT_CARD_DISABLED')
+    }
+    if (giftCard.ownerId === userId) {
+      throw new Error('GIFT_CARD_SELF_REDEEM')
+    }
+    if (giftCard.expiresAt && giftCard.expiresAt < new Date()) {
+      const expired = await tx.giftCard.updateMany({
+        where: { id: giftCard.id, status: 'active' },
+        data: { status: 'expired' }
+      })
+      if (expired.count === 0) {
+        throw new Error('GIFT_CARD_USED')
+      }
+      return { error: 'GIFT_CARD_EXPIRED' }
+    }
+
+    const user = await tx.user.findUnique({
+      where: { id: userId },
+      select: { balance: true }
+    })
+    if (!user) throw new Error('USER_NOT_FOUND')
+
+    const amount = toMoney(giftCard.balanceValue)
+    const balanceBefore = toMoney(user.balance)
+    const updated = await tx.giftCard.updateMany({
+      where: { id: giftCard.id, status: 'active' },
+      data: { status: 'used', usedById: userId, usedAt: new Date() }
+    })
+    if (updated.count !== 1) {
+      throw new Error('GIFT_CARD_USED')
+    }
+
+    const updatedUser = await tx.user.update({
+      where: { id: userId },
+      data: { balance: { increment: toDecimal(amount) } },
+      select: { balance: true }
+    })
+    const balanceAfter = toMoney(updatedUser.balance)
+
+    await tx.balanceLog.create({
+      data: {
+        userId,
+        type: 'gift',
+        amount: toDecimal(amount),
+        balanceBefore: toDecimal(balanceBefore),
+        balanceAfter: toDecimal(balanceAfter),
+        remark: `ç¤¼å“å¡å…‘æ¢ï¼š${maskGiftCardCode(giftCard.code)}`
+      }
+    })
+
+    return { balanceValue: amount, balanceBefore, balanceAfter }
+  })
+
+  if ('error' in result) {
+    throw new Error(result.error)
+  }
+  let count = 0
+  for (const id of [...ids].sort((a, b) => a - b)) {
+    count += (await deleteGiftCardWithRefund(id)).count
+  }
+  return { count }
+}
+
+export async function listGiftCardsByAdmin(options: GiftCardAdminListOptions) {
+  const page = clampPage(options.page)
+  const pageSize = clampPageSize(options.pageSize)
+  const where: Prisma.GiftCardWhereInput = {
+    ...(options.status ? { status: options.status } : {}),
+    ...(options.batchId ? { batchId: options.batchId } : {})
+  }
+
+  const [total, records] = await Promise.all([
+    prisma.giftCard.count({ where }),
+    prisma.giftCard.findMany({
+      where,
+      select: {
+        id: true,
+        code: true,
+        faceValue: true,
+        balanceValue: true,
+        status: true,
+        expiresAt: true,
+        remark: true,
+        batchId: true,
+        createdAt: true,
+        usedAt: true,
+        createdBy: { select: { id: true, username: true } },
+        owner: { select: { id: true, username: true } },
+        usedBy: { select: { id: true, username: true } }
+      },
+      orderBy: { createdAt: 'desc' },
+      skip: (page - 1) * pageSize,
+      take: pageSize
+    })
+  ])
+
+  return {
+    records: records.map(record => serializeGiftCard(record, { revealCode: options.revealCode === true })),
+    total,
+    page,
+    pageSize
+  }
+}
+
+export async function listGiftCardsByUser(userId: number, options: GiftCardUserListOptions) {
+  const page = clampPage(options.page)
+  const pageSize = clampPageSize(options.pageSize)
+  const where: Prisma.GiftCardWhereInput = {
+    OR: [{ ownerId: userId }, { createdById: userId }, { usedById: userId }],
+    ...(options.status ? { status: options.status } : {})
+  }
+
+  const [total, records] = await Promise.all([
+    prisma.giftCard.count({ where }),
+    prisma.giftCard.findMany({
+      where,
+      select: {
+        id: true,
+        code: true,
+        faceValue: true,
+        balanceValue: true,
+        status: true,
+        expiresAt: true,
+        createdAt: true,
+        usedAt: true
+      },
+      orderBy: { createdAt: 'desc' },
+      skip: (page - 1) * pageSize,
+      take: pageSize
+    })
+  ])
+
+  return {
+    records: records.map(record => serializeGiftCard(record, { revealCode: true })),
+    total,
+    page,
+    pageSize
+  }
+}
+
+export async function getGiftCardStats() {
+  const [total, active, used, disabled, expired, outstandingValue, redeemedValue] = await Promise.all([
+    prisma.giftCard.count(),
+    prisma.giftCard.count({ where: { status: 'active' } }),
+    prisma.giftCard.count({ where: { status: 'used' } }),
+    prisma.giftCard.count({ where: { status: 'disabled' } }),
+    prisma.giftCard.count({ where: { status: 'expired' } }),
+    prisma.giftCard.aggregate({
+      _sum: { balanceValue: true },
+      where: { status: { in: ['active', 'disabled'] } }
+    }),
+    prisma.giftCard.aggregate({
+      _sum: { balanceValue: true },
+      where: { status: 'used' }
+    })
+  ])
+
+  return {
+    total,
+    active,
+    used,
+    disabled,
+    expired,
+    outstandingValue: toMoney(outstandingValue._sum.balanceValue),
+    totalRedeemedValue: toMoney(redeemedValue._sum.balanceValue)
+  }
+}
+
+--- route stats consumers ---
+
+  server\src\routes\gift-cards.ts:321:  fastify.get('/admin/stats', {
+  server\src\routes\gift-cards.ts:322:    onRequest: [fastify.authenticate, fastify.requireAdmin, 
+requireGiftCardManager]
+  server\src\routes\gift-cards.ts:323:  }, async () => {
+> server\src\routes\gift-cards.ts:324:    return giftCardDb.getGiftCardStats()
+  server\src\routes\gift-cards.ts:325:  })
+  server\src\routes\gift-cards.ts:326:
+  server\src\routes\gift-cards.ts:327:  // 启用兑换码
+  server\src\routes\gift-cards.ts:328:  fastify.patch('/admin/:id/enable', {
+  server\src\routes\gift-cards.ts:329:    onRequest: [fastify.authenticate, fastify.requireAdmin, 
+requireGiftCardManager],
+  server\src\db\gift-cards.ts:622:  }
+  server\src\db\gift-cards.ts:623:}
+  server\src\db\gift-cards.ts:624:
+> server\src\db\gift-cards.ts:625:export async function getGiftCardStats() {
+> server\src\db\gift-cards.ts:626:  const [total, active, used, disabled, expired, outstandingValue, redeemedValue] = 
+await Promise.all([
+  server\src\db\gift-cards.ts:627:    prisma.giftCard.count(),
+  server\src\db\gift-cards.ts:628:    prisma.giftCard.count({ where: { status: 'active' } }),
+  server\src\db\gift-cards.ts:629:    prisma.giftCard.count({ where: { status: 'used' } }),
+  server\src\db\gift-cards.ts:630:    prisma.giftCard.count({ where: { status: 'disabled' } }),
+  server\src\db\gift-cards.ts:631:    prisma.giftCard.count({ where: { status: 'expired' } }),
+  server\src\db\gift-cards.ts:645:    used,
+  server\src\db\gift-cards.ts:646:    disabled,
+  server\src\db\gift-cards.ts:647:    expired,
+> server\src\db\gift-cards.ts:648:    outstandingValue: toMoney(outstandingValue._sum.balanceValue),
+> server\src\db\gift-cards.ts:649:    totalRedeemedValue: toMoney(redeemedValue._sum.balanceValue)
+  server\src\db\gift-cards.ts:650:  }
+  server\src\db\gift-cards.ts:651:}
+  server\src\routes\gift-cards.ts:321:  fastify.get('/admin/stats', {
+  server\src\routes\gift-cards.ts:322:    onRequest: [fastify.authenticate, fastify.requireAdmin, 
+requireGiftCardManager]
+  server\src\routes\gift-cards.ts:323:  }, async () => {
+> server\src\routes\gift-cards.ts:324:    return giftCardDb.getGiftCardStats()
+  server\src\routes\gift-cards.ts:325:  })
+  server\src\routes\gift-cards.ts:326:
+  server\src\routes\gift-cards.ts:327:  // 启用兑换码
+  server\src\routes\gift-cards.ts:328:  fastify.patch('/admin/:id/enable', {
+  server\src\routes\gift-cards.ts:329:    onRequest: [fastify.authenticate, fastify.requireAdmin, 
+requireGiftCardManager],
+
+--- status enum/schema ---
+> server\prisma\schema.prisma:5043:enum GiftCardStatus {
+  server\prisma\schema.prisma:5044:  active
+  server\prisma\schema.prisma:5045:  used
+  server\prisma\schema.prisma:5046:  disabled
+  server\prisma\schema.prisma:5047:  expired
+  server\prisma\schema.prisma:5048:}
+  server\prisma\schema.prisma:5049:
+> server\prisma\schema.prisma:5050:model GiftCard {
+  server\prisma\schema.prisma:5051:  id           Int            @id @default(autoincrement())
+  server\prisma\schema.prisma:5052:  code         String         @unique                        // gc- 前缀 + 24 位 
+base64url 随机字符
+  server\prisma\schema.prisma:5053:  faceValue    Decimal        @map("face_value") @db.Decimal(10, 2)  // 面值（CNY）
+  server\prisma\schema.prisma:5054:  balanceValue Decimal        @map("balance_value") @db.Decimal(10, 2) // 充值到账金额
+  server\prisma\schema.prisma:5055:  status       GiftCardStatus @default(active)
+  server\prisma\schema.prisma:5056:  createdById  Int?           @map("created_by_id")    // 创建者（null=管理员控制台生成）
+  server\prisma\schema.prisma:5057:  ownerId      Int?           @map("owner_id")         // 持有者（用户用余额生成时有值）
+  server\prisma\schema.prisma:5058:  usedById     Int?           @map("used_by_id")       // 兑换使用者
+  server\prisma\schema.prisma:5059:  usedAt       DateTime?      @map("used_at")
+  server\prisma\schema.prisma:5060:  expiresAt    DateTime?      @map("expires_at")       // 过期时间，null=永不过期
+  server\prisma\schema.prisma:5061:  remark       String?
+  server\prisma\schema.prisma:5062:  batchId      String?        @map("batch_id")         // 批量生成批次
+  server\prisma\schema.prisma:5063:  createdAt    DateTime       @default(now()) @map("created_at")
+  server\prisma\schema.prisma:5064:
+  server\prisma\schema.prisma:5065:  createdBy User?  @relation("GiftCardsCreated", fields: [createdById], references: 
+[id])
+  server\prisma\schema.prisma:5066:  owner     User?  @relation("GiftCardsOwner", fields: [ownerId], references: [id])
+  server\prisma\schema.prisma:5067:  usedBy    User?  @relation("GiftCardsUsedBy", fields: [usedById], references: 
+[id])
+  server\prisma\schema.prisma:5068:
+  server\prisma\schema.prisma:5069:  @@index([status])
+  server\prisma\schema.prisma:5070:  @@index([batchId])
+  server\prisma\schema.prisma:5071:  @@index([createdById])
+  server\prisma\schema.prisma:5072:  @@index([ownerId])
+  server\prisma\schema.prisma:5073:  @@index([usedById])
+  server\prisma\schema.prisma:5074:  @@map("gift_cards")
+
+--- gift-card guards full ---
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const root = resolve(__dirname, '../..')
+const read = (path: string) => readFileSync(resolve(root, path), 'utf8')
+
+const schema = read('server/prisma/schema.prisma')
+const migration = read('server/prisma/migrations/20260625210000_add_gift_cards/migration.sql')
+const locks = read('server/src/db/advisory-locks.ts')
+const db = read('server/src/db/gift-cards.ts')
+const route = read('server/src/routes/gift-cards.ts')
+const app = read('server/src/app.ts')
+const clientApi = read('client/src/api/index.ts')
+const adminApi = read('client/src/api/admin.ts')
+const clientTypes = read('client/src/types/api.ts')
+const userRouter = read('client/src/router/user.ts')
+const adminRouter = read('client/src/router/admin.ts')
+const userView = read('client/src/views/GiftCardsView.vue')
+const adminView = read('client/src/views/admin/GiftCardsView.vue')
+const turnstileWidget = read('client/src/components/TurnstileWidget.vue')
+const userNav = read('client/src/config/side-nav-items-user.ts')
+const adminNav = read('client/src/config/side-nav-items-admin.ts')
+const zhLocale = read('client/src/locales/zh-CN.ts')
+const enLocale = read('client/src/locales/en.ts')
+const twLocale = read('client/src/locales/zh-TW.ts')
+const serverPackage = read('server/package.json')
+const rootPackage = read('package.json')
+const giftCardIssueEnumMigration = read('server/prisma/migrations/20260709000000_add_gift_card_issue_balance_log_type/migration.sql')
+const giftCardIssueReclassifyMigration = read('server/prisma/migrations/20260709000100_reclassify_gift_card_issue_history/migration.sql')
+
+assert(
+  schema.includes('model GiftCard') &&
+    schema.includes('enum GiftCardStatus') &&
+    schema.includes('giftCardsCreated') &&
+    schema.includes('giftCardsOwned') &&
+    schema.includes('giftCardsUsed') &&
+    migration.includes('CREATE TYPE "GiftCardStatus"') &&
+    migration.includes('CREATE TABLE "gift_cards"') &&
+    migration.includes('CREATE UNIQUE INDEX "gift_cards_code_key"'),
+  'gift card schema and migration must persist code status, ownership, usage, batch, and user relations'
+)
+
+// ç¤¼å“å¡å‘è¡Œå¿…é¡»ä½¿ç”¨ç‹¬ç«‹çš„ gift_card_issue è´¦æœ¬ç±»åž‹ï¼ˆé¿å…è¢«è®¡å…¥å¯å…‘æ¢æ¶ˆè´¹é¢è€Œè¢«åˆ·ç§¯åˆ†ï¼‰
+assert(
+  schema.includes('gift_card_issue') &&
+    giftCardIssueEnumMigration.includes("ALTER TYPE \"BalanceLogType\" ADD VALUE IF NOT EXISTS 'gift_card_issue'"),
+  'BalanceLogType must define a dedicated gift_card_issue enum value via migration'
+)
+
+// åŽ†å²é‡åˆ†ç±»è¿ç§»å¿…é¡»ä½¿ç”¨æ”¶ç´§åŽçš„ç»“æž„åŒ–å…³è”ï¼ˆcreated_by_id AND owner_id AND face_value AND ç´§æ—¶é—´çª—ï¼‰ï¼Œ
+// é¿å…æŠŠåŒæœŸåŒé‡‘é¢çš„æ­£å¸¸æ¶ˆè´¹è¯¯åˆ¤ä¸ºâ€œç”¨ä½™é¢ç”Ÿæˆç¤¼å“å¡â€ï¼Œå¹¶åœ¨è¿ç§»æ—¶æ‰“å°å—å½±å“è¡Œæ•°ä¾¿äºŽæ ¸å¯¹ã€‚
+assert(
+  giftCardIssueReclassifyMigration.includes(`SET "type" = 'gift_card_issue'`) &&
+    giftCardIssueReclassifyMigration.includes(`bl."type" = 'consume'`) &&
+    giftCardIssueReclassifyMigration.includes(`gc."created_by_id" = bl."user_id"`) &&
+    giftCardIssueReclassifyMigration.includes(`gc."owner_id" = bl."user_id"`) &&
+    giftCardIssueReclassifyMigration.includes(`gc."face_value" = (-bl."amount")`) &&
+    giftCardIssueReclassifyMigration.includes(`INTERVAL '10 seconds'`) &&
+    giftCardIssueReclassifyMigration.includes('RAISE NOTICE'),
+  'gift_card_issue history reclassification must correlate on created_by_id AND owner_id AND face_value AND a tight time window, and log an affected-row count'
+)
+
+assert(
+  locks.includes('export const GIFT_CARD_LOCK_NAMESPACE') &&
+    db.includes('await advisoryTransactionLock(tx, GIFT_CARD_LOCK_NAMESPACE, initialGiftCard.id)') &&
+    db.includes('await advisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, userId)') &&
+    db.includes('await advisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, input.userId)'),
+  'gift card balance and redeem flows must use advisory locks for card state and user balance'
+)
+
+const userGenerateSection = db.slice(
+  db.indexOf('export async function generateGiftCardFromBalance'),
+  db.indexOf('export async function findGiftCardByCode')
+)
+
+assert(
+  userGenerateSection.includes('where: { id: input.userId, balance: { gte: amount } }') &&
+    userGenerateSection.includes("type: 'gift_card_issue'") &&
+    userGenerateSection.includes('amount: toDecimal(-amount)') &&
+    userGenerateSection.includes('createGiftCardInTransaction(tx') &&
+    !route.includes('const result = await prisma.$transaction') &&
+    !route.includes('data: { balance: { decrement: faceValue } }'),
+  'user-generated gift cards must deduct balance atomically in the DB layer and create a balance log in the same transaction'
+)
+
+const redeemSection = db.slice(
+  db.indexOf('export async function redeemGiftCard'),
+  db.indexOf('export async function disableGiftCard')
+)
+
+assert(
+  redeemSection.includes("if (giftCard.ownerId === userId)") &&
+    redeemSection.includes("throw new Error('GIFT_CARD_SELF_REDEEM')") &&
+    redeemSection.includes("where: { id: giftCard.id, status: 'active' }") &&
+    redeemSection.includes("return { error: 'GIFT_CARD_EXPIRED' }") &&
+    db.includes("if ('error' in result)") &&
+    redeemSection.includes("type: 'gift'") &&
+    redeemSection.includes('maskGiftCardCode(giftCard.code)'),
+  'gift card redemption must reject self redemption, persist expired status, claim active codes atomically, credit balance, and avoid logging full codes'
+)
+
+assert(
+  route.includes('function requireGiftCardManager') &&
+    route.includes('PAYINCUS_GIFT_CARD_ADMIN_IDS') &&
+    route.includes('requireGiftCardManager]') &&
+    route.includes('normalizeIdList') &&
+    db.includes('maskGiftCardCode(code)') &&
+    db.includes('revealCode: options.revealCode === true'),
+  'admin gift card routes must require an explicit production allowlist, normalize batch IDs, and mask list codes by default'
+)
+
+const adminGenerateSection = route.slice(
+  route.indexOf("fastify.post('/admin/generate'"),
+  route.indexOf('// æ‰¹é‡ç”Ÿæˆå…‘æ¢ç ')
+)
+const adminBatchSection = route.slice(
+  route.indexOf("fastify.post('/admin/batch'"),
+  route.indexOf('// ç®¡ç†å‘˜åˆ—è¡¨')
+)
+const userRedeemSection = route.slice(
+  route.indexOf("fastify.post('/user/redeem'"),
+  route.indexOf('// ç”¨æˆ·ç”¨ä½™é¢ç”Ÿæˆå…‘æ¢ç ')
+)
+const userGenerateRouteSection = route.slice(
+  route.indexOf("fastify.post('/user/generate'"),
+  route.indexOf('// ç”¨æˆ·æŸ¥çœ‹è‡ªå·±çš„å…‘æ¢ç ')
+)
+
+assert(
+  adminGenerateSection.includes('requireGiftCardManager') &&
+    adminBatchSection.includes('requireGiftCardManager') &&
+    !adminGenerateSection.includes('turnstileRequired') &&
+    !adminBatchSection.includes('turnstileRequired') &&
+    !adminView.includes('useTurnstile') &&
+    !adminView.includes('turnstileToken'),
+  'admin gift card generation must rely on admin auth, explicit allowlist, and rate limits, not frontend Turnstile tokens'
+)
+
+assert(
+  adminGenerateSection.includes('if (balanceValue > faceValue)') &&
+    adminBatchSection.includes('if (balanceValue > faceValue)') &&
+    route.includes("GIFT_CARD_BALANCE_EXCEEDS_FACE_VALUE") &&
+    db.includes('balanceValue > faceValue') &&
+    db.includes('MAX_GIFT_CARD_BATCH_FACE_VALUE') &&
+    adminBatchSection.includes('MAX_BATCH_FACE_VALUE'),
+  'gift card credited value must not exceed face value, and unfunded admin batches must have a total face-value cap'
+)
+
+const revokeSection = db.slice(
+  db.indexOf('export async function revokeGiftCard'),
+  db.indexOf('export async function disableGiftCard')
+)
+const refundSection = db.slice(
+  db.indexOf('async function refundUserFundedGiftCard'),
+  db.indexOf('async function disableGiftCardWithRefund')
+)
+
+assert(
+  route.includes("fastify.post('/user/:id/revoke'") &&
+    revokeSection.includes('giftCard.createdById !== issuerId') &&
+    revokeSection.includes('giftCard.ownerId !== issuerId') &&
+    revokeSection.includes("giftCard.status === 'used'") &&
+    revokeSection.includes('refundUserFundedGiftCard(tx, giftCard)') &&
+    revokeSection.includes("data: { status: 'disabled' }") &&
+    refundSection.includes('await advisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, issuerId)') &&
+    refundSection.includes("type: 'refund'") &&
+    refundSection.includes('increment: toDecimal(amount)') &&
+    db.includes('gift-card-refund:${id}') &&
+    refundSection.includes('existingRefund'),
+  'an issuer must be able to revoke an unredeemed balance-funded card and receive the original amount exactly once'
+)
+
+assert(
+  db.includes('async function disableGiftCardWithRefund') &&
+    db.includes('async function deleteGiftCardWithRefund') &&
+    db.includes('await refundUserFundedGiftCard(tx, giftCard)') &&
+    db.includes('return disableGiftCardWithRefund(id)') &&
+    db.includes('return deleteGiftCardWithRefund(id)') &&
+    db.includes('await disableGiftCardWithRefund(id)') &&
+    db.includes('await deleteGiftCardWithRefund(id)') &&
+    db.includes('ownerId: null'),
+  'admin disable/delete, including batch operations, must refund unredeemed user-funded cards and refunded cards must not be re-enabled'
+)
+
+assert(
+  userRedeemSection.includes('onRequest: [fastify.authenticate]') &&
+    userRedeemSection.includes('preHandler: [turnstileRequired]') &&
+    userGenerateRouteSection.includes('onRequest: [fastify.authenticate]') &&
+    userGenerateRouteSection.includes('preHandler: [turnstileRequired]') &&
+    !userRedeemSection.includes('onRequest: [fastify.authenticate, turnstileRequired]') &&
+    !userGenerateRouteSection.includes('onRequest: [fastify.authenticate, turnstileRequired]') &&
+    userView.includes("import TurnstileWidget from '@/components/TurnstileWidget.vue'") &&
+    userView.includes('api.systemConfig.getPublic()') &&
+    userView.includes('const isTurnstileChallengeAvailable = computed<boolean>(() => turnstileEnabled.value && Boolean(turnstileSiteKey.value))') &&
+    userView.includes('if (!isTurnstileChallengeAvailable.value) return undefined') &&
+    userView.includes('if (isTurnstileChallengeAvailable.value && !token)') &&
+    userView.includes('v-if="isTurnstileChallengeAvailable"') &&
+    userView.includes('v-model="turnstileToken"') &&
+    userView.includes('turnstileRef.value?.getToken?.()') &&
+    userView.includes('input[name="cf-turnstile-response"]') &&
+    userView.includes('@verify="onTurnstileVerify"') &&
+    turnstileWidget.includes("@update:model-value=\"onVerify\"") &&
+    turnstileWidget.includes('@expired="onExpire"') &&
+    userView.includes("t('giftCards.toast.turnstileRequired')") &&
+    zhLocale.includes("turnstileRequired: 'è¯·å…ˆå®ŒæˆäººæœºéªŒè¯'") &&
+    enLocale.includes("turnstileRequired: 'Complete verification first'") &&
+    twLocale.includes("turnstileRequired: 'è«‹å…ˆå®Œæˆäººæ©Ÿé©—è­‰'"),
+  'user gift card redemption and balance-funded generation must keep visible Turnstile protection after body parsing and reliably submit the widget token'
+)
+
+assert(
+  app.includes("await fastify.register(giftCardsRoutes, { prefix: '/api/gift-cards' })") &&
+    clientTypes.includes('export interface GiftCardRecord') &&
+    clientApi.includes('giftCards:') &&
+    clientApi.includes("http.post('/gift-cards/user/redeem'") &&
+    clientApi.includes("http.post('/gift-cards/user/generate'") &&
+    clientApi.includes("http.get('/gift-cards/user/mine'") &&
+    adminApi.includes('giftCards:') &&
+    adminApi.includes("http.post('/gift-cards/admin/generate'") &&
+    adminApi.includes("http.post('/gift-cards/admin/batch'") &&
+    userRouter.includes("path: '/gift-cards'") &&
+	    adminRouter.includes("path: '/admin/gift-cards'") &&
+	    userNav.includes("path: '/gift-cards'") &&
+	    adminNav.includes("path: '/admin/gift-cards'") &&
+	    userView.includes('TurnstileWidget') &&
+	    userView.includes("t('giftCards.redeemTitle')") &&
+	    userView.includes('class="mt-5 space-y-3 lg:hidden"') &&
+	    userView.includes('class="mt-5 hidden overflow-hidden lg:block"') &&
+	    userView.includes('class="w-full table-fixed text-sm"') &&
+	    userView.includes('class="block truncate"') &&
+	    userView.includes('@click="toggleCodeReveal(card)"') &&
+	    userView.includes('@click="copyCode(card.code)"') &&
+	    !userView.includes('class="w-full min-w-[860px] table-fixed text-sm"') &&
+	    zhLocale.includes("redeemTitle: 'å…‘æ¢ç¤¼å“å¡'") &&
+	    adminView.includes("t('giftCardsAdmin.description')") &&
+	    adminView.includes('class="mt-5 space-y-3 lg:hidden"') &&
+	    adminView.includes('class="mt-5 hidden overflow-hidden lg:block"') &&
+	    adminView.includes('class="w-full table-fixed text-sm"') &&
+	    adminView.includes('@change="toggleSelected(card.id, ($event.target as HTMLInputElement).checked)"') &&
+	    adminView.includes('@click="updateCardStatus(card)"') &&
+	    adminView.includes('@click="deleteCard(card)"') &&
+	    zhLocale.includes('PAYINCUS_GIFT_CARD_ADMIN_IDS') &&
+	    adminView.includes("t('giftCardsAdmin.revealCode')") &&
+	    zhLocale.includes("revealCode: 'æ˜¾ç¤ºå®Œæ•´å…‘æ¢ç '") &&
+	    serverPackage.includes('"test:gift-card-guards"') &&
+	    rootPackage.includes('pnpm --filter server test:gift-card-guards'),
+  'gift card routes, client pages, API wrappers, nav entries, and guard script must be wired into the platform'
+)
+
+console.log('gift card guard checks passed')
+
+
+--- gift-card flow full ---
+import assert from 'node:assert/strict'
+import crypto from 'node:crypto'
+import { prisma, closePrismaDatabase } from '../src/db/prisma.js'
+import * as giftCards from '../src/db/gift-cards.js'
+
+if (process.env.NODE_ENV === 'production' && process.env.ALLOW_GIFT_CARD_FLOW_TEST !== '1') {
+  throw new Error('Refusing to run gift card flow test in production without ALLOW_GIFT_CARD_FLOW_TEST=1')
+}
+
+const runId = `giftcard_flow_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`
+const ownerUsername = `${runId}_owner`
+const recipientUsername = `${runId}_recipient`
+
+async function giftCardTableExists(): Promise<boolean> {
+  const result = await prisma.$queryRaw<Array<{ exists: boolean }>>`
+    SELECT EXISTS (
+      SELECT 1
+      FROM information_schema.tables
+      WHERE table_schema = current_schema()
+        AND table_name = 'gift_cards'
+    ) AS "exists"
+  `
+  return result[0]?.exists === true
+}
+
+async function expectError(action: () => Promise<unknown>, message: string): Promise<void> {
+  await assert.rejects(action, (error) => {
+    return error instanceof Error && error.message === message
+  })
+}
+
+async function cleanup(): Promise<void> {
+  if (!(await giftCardTableExists())) return
+
+  const users = await prisma.user.findMany({
+    where: { username: { in: [ownerUsername, recipientUsername] } },
+    select: { id: true }
+  })
+  const userIds = users.map(user => user.id)
+
+  await prisma.giftCard.deleteMany({
+    where: {
+      OR: [
+        { remark: { startsWith: runId } },
+        { batchId: { startsWith: runId } },
+        { createdById: { in: userIds } },
+        { ownerId: { in: userIds } },
+        { usedById: { in: userIds } }
+      ]
+    }
+  })
+
+  if (userIds.length > 0) {
+    await prisma.user.deleteMany({ where: { id: { in: userIds } } })
+  }
+}
+
+async function main(): Promise<void> {
+  assert.equal(
+    await giftCardTableExists(),
+    true,
+    'gift_cards table is missing; apply Prisma migrations before running the gift card flow test'
+  )
+
+  await cleanup()
+
+  const [owner, recipient] = await Promise.all([
+    prisma.user.create({
+      data: {
+        username: ownerUsername,
+        email: `${ownerUsername}@example.test`,
+        passwordHash: 'gift-card-flow-test',
+        balance: 100
+      },
+      select: { id: true }
+    }),
+    prisma.user.create({
+      data: {
+        username: recipientUsername,
+        email: `${recipientUsername}@example.test`,
+        passwordHash: 'gift-card-flow-test',
+        balance: 0
+      },
+      select: { id: true }
+    })
+  ])
+
+  const adminCard = await giftCards.createGiftCard({
+    faceValue: 12.34,
+    balanceValue: 12.34,
+    remark: `${runId}:admin-single`
+  })
+  assert.match(adminCard.code, /^gc-[A-Za-z0-9_-]{24}$/)
+  assert.equal(adminCard.status, 'active')
+
+  const disabled = await giftCards.disableGiftCard(adminCard.id)
+  assert.equal(disabled.count, 1)
+  await expectError(() => giftCards.redeemGiftCard(adminCard.code, recipient.id), 'GIFT_CARD_DISABLED')
+
+  const enabled = await giftCards.enableGiftCard(adminCard.id)
+  assert.equal(enabled.count, 1)
+
+  const redeemed = await giftCards.redeemGiftCard(adminCard.code, recipient.id)
+  assert.equal(redeemed.balanceValue, 12.34)
+  assert.equal(redeemed.balanceBefore, 0)
+  assert.equal(redeemed.balanceAfter, 12.34)
+  await expectError(() => giftCards.redeemGiftCard(adminCard.code, recipient.id), 'GIFT_CARD_USED')
+
+  const redeemedCard = await giftCards.findGiftCardByCode(adminCard.code)
+  assert.equal(redeemedCard?.status, 'used')
+  assert.equal(redeemedCard?.usedById, recipient.id)
+  assert.ok(redeemedCard?.usedAt)
+
+  const recipientCards = await giftCards.listGiftCardsByUser(recipient.id, { page: 1, pageSize: 20 })
+  assert.ok(
+    recipientCards.records.some(card => card.id === adminCard.id && card.status === 'used'),
+    'redeemed admin-created cards must be visible in the recipient gift card list'
+  )
+
+  const userGenerated = await giftCards.generateGiftCardFromBalance({
+    userId: owner.id,
+    faceValue: 20,
+    remark: `${runId}:user-generated`
+  })
+  assert.equal(userGenerated.balanceBefore, 100)
+  assert.equal(userGenerated.balanceAfter, 80)
+  assert.equal(userGenerated.giftCard.status, 'active')
+  assert.equal(userGenerated.giftCard.ownerId, undefined)
+
+  const userGeneratedCard = await giftCards.findGiftCardByCode(userGenerated.giftCard.code)
+  assert.equal(userGeneratedCard?.ownerId, owner.id)
+  assert.equal(userGeneratedCard?.createdById, owner.id)
+
+  await expectError(() => giftCards.redeemGiftCard(userGenerated.giftCard.code, owner.id), 'GIFT_CARD_SELF_REDEEM')
+
+  const userGeneratedRedeem = await giftCards.redeemGiftCard(userGenerated.giftCard.code, recipient.id)
+  assert.equal(userGeneratedRedeem.balanceValue, 20)
+  assert.equal(userGeneratedRedeem.balanceBefore, 12.34)
+  assert.equal(userGeneratedRedeem.balanceAfter, 32.34)
+
+  const ownerCards = await giftCards.listGiftCardsByUser(owner.id, { page: 1, pageSize: 20 })
+  assert.ok(ownerCards.records.some(card => card.id === userGenerated.giftCard.id))
+
+  await expectError(
+    () => giftCards.generateGiftCardFromBalance({ userId: owner.id, faceValue: 1000, remark: `${runId}:insufficient` }),
+    'GIFT_CARD_INSUFFICIENT_BALANCE'
+  )
+
+  const batch = await giftCards.createGiftCardBatch(2, {
+    faceValue: 3,
+    balanceValue: 3,
+    remark: `${runId}:admin-batch`
+  })
+  assert.equal(batch.count, 2)
+  assert.equal(new Set(batch.codes.map(card => card.code)).size, 2)
+
+  const batchList = await giftCards.listGiftCardsByAdmin({ page: 1, pageSize: 10, batchId: batch.batchId, revealCode: true })
+  assert.equal(batchList.total, 2)
+  assert.ok(batchList.records.every(card => card.code.startsWith('gc-')))
+
+  const batchDisable = await giftCards.batchDisableGiftCards(batch.codes.map(card => card.id))
+  assert.equal(batchDisable.count, 2)
+
+  const expiredCard = await giftCards.createGiftCard({
+    faceValue: 1,
+    balanceValue: 1,
+    expiresAt: new Date(Date.now() - 60_000),
+    remark: `${runId}:expired`
+  })
+  await expectError(() => giftCards.redeemGiftCard(expiredCard.code, recipient.id), 'GIFT_CARD_EXPIRED')
+  const expiredAfterRedeem = await giftCards.findGiftCardByCode(expiredCard.code)
+  assert.equal(expiredAfterRedeem?.status, 'expired')
+
+  const recipientAfter = await prisma.user.findUniqueOrThrow({
+    where: { id: recipient.id },
+    select: { balance: true }
+  })
+  assert.equal(Number(recipientAfter.balance), 32.34)
+
+  const ownerAfter = await prisma.user.findUniqueOrThrow({
+    where: { id: owner.id },
+    select: { balance: true }
+  })
+  assert.equal(Number(ownerAfter.balance), 80)
+
+  console.log('gift card flow checks passed')
+}
+
+try {
+  await main()
+} finally {
+  await cleanup()
+  await closePrismaDatabase()
+}
+
+
+--- financial reconciliation guard full ---
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import { dirname, resolve } from 'node:path'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+const root = resolve(__dirname, '..')
+const repoRoot = resolve(root, '..')
+
+const schema = readFileSync(resolve(root, 'prisma/schema.prisma'), 'utf8')
+const migration = readFileSync(resolve(root, 'prisma/migrations/20260624214500_add_financial_reconciliation/migration.sql'), 'utf8')
+const refundLifecycleMigration = readFileSync(resolve(root, 'prisma/migrations/20260627093000_add_recharge_refund_reconciliation_item/migration.sql'), 'utf8')
+const adminBillingRoute = readFileSync(resolve(root, 'src/routes/admin-billing.ts'), 'utf8')
+const adminApi = readFileSync(resolve(repoRoot, 'client/src/api/admin.ts'), 'utf8')
+const userApi = readFileSync(resolve(repoRoot, 'client/src/api/index.ts'), 'utf8')
+const billingView = readFileSync(resolve(repoRoot, 'client/src/views/admin/BillingView.vue'), 'utf8')
+const exportRoute = adminBillingRoute.slice(
+  adminBillingRoute.indexOf("'/api/admin/billing/reconciliation/export'"),
+  adminBillingRoute.indexOf('// ==================== ç®¡ç†å‘˜å°åœ/è§£å° ====================')
+)
+
+assert.ok(schema.includes('enum FinancialReconciliationStatus'), 'schema must define reconciliation status enum')
+assert.ok(schema.includes('normal') && schema.includes('discrepancy') && schema.includes('confirmed') && schema.includes('ignored'), 'reconciliation statuses must cover lifecycle')
+assert.ok(schema.includes('enum FinancialReconciliationItemType'), 'schema must define reconciliation item types')
+assert.ok(schema.includes('model FinancialReconciliationRun'), 'schema must define daily reconciliation run')
+assert.ok(schema.includes('model FinancialReconciliationItem'), 'schema must define reconciliation item')
+assert.ok(schema.includes('recharge_refund_lifecycle_issue'), 'schema must support recharge refund lifecycle differences')
+assert.ok(schema.includes('@@unique([date])'), 'one reconciliation run per business date is required')
+assert.ok(schema.includes('@@unique([runId, itemKey])'), 'reconciliation items must be idempotent per run')
+assert.ok(schema.includes('amount          Decimal?'), 'reconciliation item amount must use Decimal')
+
+assert.ok(migration.includes('CREATE TYPE "FinancialReconciliationStatus"'), 'migration must create status enum')
+assert.ok(migration.includes('CREATE TABLE "financial_reconciliation_runs"'), 'migration must create run table')
+assert.ok(migration.includes('CREATE TABLE "financial_reconciliation_items"'), 'migration must create item table')
+assert.ok(migration.includes('financial_reconciliation_runs_date_key'), 'migration must enforce one run per date')
+assert.ok(migration.includes('financial_reconciliation_items_run_id_item_key_key'), 'migration must enforce idempotent items')
+assert.ok(migration.includes('ON DELETE CASCADE'), 'items should be removed with their run')
+assert.ok(migration.includes('ON DELETE SET NULL'), 'handler/user references should preserve reconciliation history')
+assert.ok(refundLifecycleMigration.includes("ADD VALUE 'recharge_refund_lifecycle_issue'"), 'migration must add recharge refund lifecycle item type')
+
+assert.ok(adminBillingRoute.includes("'/api/admin/billing/reconciliation'"), 'view reconciliation route missing')
+assert.ok(adminBillingRoute.includes("'/api/admin/billing/reconciliation/run'"), 'run reconciliation route missing')
+assert.ok(adminBillingRoute.includes("'/api/admin/billing/reconciliation/items/:id'"), 'item handling route missing')
+assert.ok(adminBillingRoute.includes("'/api/admin/billing/reconciliation/export'"), 'CSV export route missing')
+assert.ok(adminBillingRoute.includes('onRequest: [app.authenticate, app.requireAdmin]'), 'reconciliation admin routes must keep the admin guard')
+assert.ok(adminBillingRoute.includes('canViewFinancialReconciliation'), 'read permission entrypoint missing')
+assert.ok(adminBillingRoute.includes('canManageFinancialReconciliation'), 'write permission entrypoint missing')
+assert.ok(adminBillingRoute.includes('FINANCE_READONLY'), 'write routes must preserve read-only finance boundary')
+assert.ok(adminBillingRoute.includes('financialReconciliationRun.upsert'), 'rerun must upsert the daily run')
+assert.ok(adminBillingRoute.includes('financialReconciliationItem.upsert'), 'rerun must upsert stable difference items')
+assert.ok(adminBillingRoute.includes('itemKey'), 'difference detection must use stable item keys')
+assert.ok(adminBillingRoute.includes("status: 'discrepancy'") && adminBillingRoute.includes('deleteMany'), 'rerun must avoid duplicate stale open differences')
+assert.ok(adminBillingRoute.includes('recharge_missing_balance_log'), 'must detect completed recharge without balance log')
+assert.ok(adminBillingRoute.includes('orphan_balance_log'), 'must detect balance log without business source')
+assert.ok(adminBillingRoute.includes('delivered_instance_missing_billing'), 'must detect delivered paid instance without billing')
+assert.ok(adminBillingRoute.includes('approved_adjustment_missing_balance_log'), 'must detect approved adjustment without balance log')
+assert.ok(adminBillingRoute.includes('rechargeRefundRequest.findMany'), 'must include recharge refund requests in daily reconciliation')
+assert.ok(adminBillingRoute.includes('recharge_refund_lifecycle_issue'), 'must detect recharge refund lifecycle issues')
+assert.ok(adminBillingRoute.includes('pending_stale'), 'must detect stale pending recharge refund requests')
+assert.ok(adminBillingRoute.includes('processing_stale'), 'must detect stale processing recharge refund requests')
+assert.ok(adminBillingRoute.includes('missing_failed_refund_restore_log'), 'must detect failed refund requests missing restore balance logs')
+assert.ok(adminBillingRoute.includes("'/api/admin/billing/recharge-refunds'"), 'admin billing must expose original-route refund request list')
+assert.ok(adminBillingRoute.includes('listRechargeRefundRequests'), 'admin refund workbench must use the shared refund request query')
+assert.ok(adminBillingRoute.includes("'/api/admin/billing/recharge-refunds/:id/retry'"), 'admin refund workbench must preserve retry/sync route')
+assert.ok(exportRoute.includes('maskExportIdentifier'), 'CSV export must mask sensitive identifiers')
+assert.ok(exportRoute.includes('text/csv; charset=utf-8'), 'CSV export must return csv content type')
+assert.ok(!exportRoute.includes('callbackData') && !exportRoute.includes('providerConfigSnapshot'), 'reconciliation export must not select raw callback or provider snapshots')
+assert.ok(!exportRoute.includes('adminPassword') && !exportRoute.includes('token'), 'reconciliation export must not expose passwords or tokens')
+
+assert.ok(adminApi.includes('FinancialReconciliationRun'), 'admin API must expose typed reconciliation run')
+assert.ok(adminApi.includes('recharge_refund_lifecycle_issue'), 'admin API must type recharge refund reconciliation differences')
+assert.ok(adminApi.includes('getFinancialReconciliation'), 'admin API must expose reconciliation read')
+assert.ok(adminApi.includes('runFinancialReconciliation'), 'admin API must expose reconciliation run')
+assert.ok(adminApi.includes('updateFinancialReconciliationItem'), 'admin API must expose item handling')
+assert.ok(adminApi.includes('exportFinancialReconciliationCsv'), 'admin API must download CSV with auth')
+assert.ok(adminApi.includes("responseType: 'blob'"), 'CSV download must use authenticated blob request')
+assert.ok(adminApi.includes('RechargeRefundRequest'), 'admin API must expose typed recharge refund requests')
+assert.ok(adminApi.includes('getRechargeRefundRequests'), 'admin API must expose refund workbench list')
+assert.ok(adminApi.includes('createRechargeRefund'), 'admin API must expose original-route refund creation')
+assert.ok(adminApi.includes('retryRechargeRefund'), 'admin API must expose refund retry/sync action')
+assert.ok(!userApi.includes('reconciliation'), 'user API must not expose financial reconciliation')
+
+assert.ok(billingView.includes("'reconciliation'"), 'admin billing UI must include reconciliation tab')
+assert.ok(billingView.includes("'refundRequests'"), 'admin billing UI must include original-route refund tab')
+assert.ok(billingView.includes('refundWorkbenchTitle'), 'admin UI must render original-route refund workbench')
+assert.ok(billingView.includes('loadRefundRequests'), 'admin UI must load original-route refund requests')
+assert.ok(billingView.includes('canCreateOriginalRefund'), 'admin UI must only expose original-route refund creation when supported')
+assert.ok(billingView.includes('openCreateOriginalRefund'), 'admin UI must open original-route refund creation dialog')
+assert.ok(billingView.includes('submitCreateOriginalRefund'), 'admin UI must submit original-route refund creation')
+assert.ok(billingView.includes('retryRechargeRefund'), 'admin UI must retry/sync original-route refunds')
+assert.ok(billingView.includes('æ—¥å¯¹è´¦å·¥ä½œå°'), 'admin UI must render reconciliation workspace')
+assert.ok(billingView.includes('runFinancialReconciliation'), 'admin UI must run reconciliation')
+assert.ok(billingView.includes('saveReconciliationItem'), 'admin UI must handle difference status')
+assert.ok(billingView.includes('exportFinancialReconciliation'), 'admin UI must expose CSV export')
+assert.ok(billingView.includes('å¯¼å‡ºå†…å®¹å·²è„±æ•'), 'admin UI must state export redaction boundary')
+
+console.log('financial reconciliation guards passed')
+
+
+--- scripts names ---
+server\package.json:68:    "test:gift-card-guards": "node --import tsx scripts/test-gift-card-guards.ts",
+server\package.json:69:    "test:gift-card-flow": "node --import tsx scripts/test-gift-card-flow.ts",
+server\package.json:138:    "test:financial-reconciliation-guards": "node --import tsx 
+scripts/test-financial-reconciliation-guards.ts",
+
+
+
+codex
+只读结论：后台 `/admin/stats` 唯一调用 `getGiftCardStats()`；问题集中在其中两条查询——`active` 仅按状态计数，`outstandingValue` 还把 `active + disabled` 全部聚合。状态枚举为 `active/used/disabled/expired`，`expiresAt` 可空；兑换路径已有“发现到期后懒转 `expired`”逻辑，将保持不变。接下来会让两条统计共用同一实时条件：`status: 'active'` 且 `expiresAt IS NULL OR expiresAt > now`。
+apply patch
+patch: completed
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-gift-card-flow.ts
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-gift-card-guards.ts
+C:\Users\Administrator\Desktop\payinces\server\src\db\gift-cards.ts
+diff --git a/server/scripts/test-gift-card-flow.ts b/server/scripts/test-gift-card-flow.ts
+index 7f86c1686d607ddd88a590e953149467b7001a69..42fbce9191e9f95aff33e97a62e73a4a7315318b
+--- a/server/scripts/test-gift-card-flow.ts
++++ b/server/scripts/test-gift-card-flow.ts
+@@ -161,12 +161,17 @@
+   const batchDisable = await giftCards.batchDisableGiftCards(batch.codes.map(card => card.id))
+   assert.equal(batchDisable.count, 2)
+ 
++  const statsBeforeExpiredCard = await giftCards.getGiftCardStats()
+   const expiredCard = await giftCards.createGiftCard({
+     faceValue: 1,
+     balanceValue: 1,
+     expiresAt: new Date(Date.now() - 60_000),
+     remark: `${runId}:expired`
+   })
++  const statsWithLazyExpiredCard = await giftCards.getGiftCardStats()
++  assert.equal(statsWithLazyExpiredCard.active, statsBeforeExpiredCard.active)
++  assert.equal(statsWithLazyExpiredCard.outstandingValue, statsBeforeExpiredCard.outstandingValue)
++
+   await expectError(() => giftCards.redeemGiftCard(expiredCard.code, recipient.id), 'GIFT_CARD_EXPIRED')
+   const expiredAfterRedeem = await giftCards.findGiftCardByCode(expiredCard.code)
+   assert.equal(expiredAfterRedeem?.status, 'expired')
+diff --git a/server/scripts/test-gift-card-guards.ts b/server/scripts/test-gift-card-guards.ts
+index 82863db9d916b0775f25284d66c77ee017cc19a1..30b55fedf093ebaaea293f1936307f49cb236869
+--- a/server/scripts/test-gift-card-guards.ts
++++ b/server/scripts/test-gift-card-guards.ts
+@@ -102,6 +102,18 @@
+   'gift card redemption must reject self redemption, persist expired status, claim active codes atomically, credit balance, and avoid logging full codes'
+ )
+ 
++const statsSection = db.slice(db.indexOf('export async function getGiftCardStats'))
++
++assert(
++  statsSection.includes('const now = new Date()') &&
++    statsSection.includes("status: 'active'") &&
++    statsSection.includes('OR: [{ expiresAt: null }, { expiresAt: { gt: now } }]') &&
++    statsSection.includes('prisma.giftCard.count({ where: liveActiveWhere })') &&
++    statsSection.includes('where: liveActiveWhere') &&
++    !statsSection.includes("status: { in: ['active', 'disabled'] }"),
++  'admin gift card active count and outstanding balance must exclude expired cards in real time'
++)
++
+ assert(
+   route.includes('function requireGiftCardManager') &&
+     route.includes('PAYINCUS_GIFT_CARD_ADMIN_IDS') &&
+diff --git a/server/src/db/gift-cards.ts b/server/src/db/gift-cards.ts
+index 50351f8cbdfa227154dd438f01fcb320c1ea2773..0b01a09a979cc7823788dbfd19d2e13d58d605f4
+--- a/server/src/db/gift-cards.ts
++++ b/server/src/db/gift-cards.ts
+@@ -623,15 +623,21 @@
+ }
+ 
+ export async function getGiftCardStats() {
++  const now = new Date()
++  const liveActiveWhere: Prisma.GiftCardWhereInput = {
++    status: 'active',
++    OR: [{ expiresAt: null }, { expiresAt: { gt: now } }]
++  }
++
+   const [total, active, used, disabled, expired, outstandingValue, redeemedValue] = await Promise.all([
+     prisma.giftCard.count(),
+-    prisma.giftCard.count({ where: { status: 'active' } }),
++    prisma.giftCard.count({ where: liveActiveWhere }),
+     prisma.giftCard.count({ where: { status: 'used' } }),
+     prisma.giftCard.count({ where: { status: 'disabled' } }),
+     prisma.giftCard.count({ where: { status: 'expired' } }),
+     prisma.giftCard.aggregate({
+       _sum: { balanceValue: true },
+-      where: { status: { in: ['active', 'disabled'] } }
++      where: liveActiveWhere
+     }),
+     prisma.giftCard.aggregate({
+       _sum: { balanceValue: true },
+
+diff --git a/server/scripts/test-gift-card-flow.ts b/server/scripts/test-gift-card-flow.ts
+index 7f86c1686d607ddd88a590e953149467b7001a69..42fbce9191e9f95aff33e97a62e73a4a7315318b
+--- a/server/scripts/test-gift-card-flow.ts
++++ b/server/scripts/test-gift-card-flow.ts
+@@ -161,12 +161,17 @@
+   const batchDisable = await giftCards.batchDisableGiftCards(batch.codes.map(card => card.id))
+   assert.equal(batchDisable.count, 2)
+ 
++  const statsBeforeExpiredCard = await giftCards.getGiftCardStats()
+   const expiredCard = await giftCards.createGiftCard({
+     faceValue: 1,
+     balanceValue: 1,
+     expiresAt: new Date(Date.now() - 60_000),
+     remark: `${runId}:expired`
+   })
++  const statsWithLazyExpiredCard = await giftCards.getGiftCardStats()
++  assert.equal(statsWithLazyExpiredCard.active, statsBeforeExpiredCard.active)
++  assert.equal(statsWithLazyExpiredCard.outstandingValue, statsBeforeExpiredCard.outstandingValue)
++
+   await expectError(() => giftCards.redeemGiftCard(expiredCard.code, recipient.id), 'GIFT_CARD_EXPIRED')
+   const expiredAfterRedeem = await giftCards.findGiftCardByCode(expiredCard.code)
+   assert.equal(expiredAfterRedeem?.status, 'expired')
+diff --git a/server/scripts/test-gift-card-guards.ts b/server/scripts/test-gift-card-guards.ts
+index 82863db9d916b0775f25284d66c77ee017cc19a1..30b55fedf093ebaaea293f1936307f49cb236869
+--- a/server/scripts/test-gift-card-guards.ts
++++ b/server/scripts/test-gift-card-guards.ts
+@@ -102,6 +102,18 @@
+   'gift card redemption must reject self redemption, persist expired status, claim active codes atomically, credit balance, and avoid logging full codes'
+ )
+ 
++const statsSection = db.slice(db.indexOf('export async function getGiftCardStats'))
++
++assert(
++  statsSection.includes('const now = new Date()') &&
++    statsSection.includes("status: 'active'") &&
++    statsSection.includes('OR: [{ expiresAt: null }, { expiresAt: { gt: now } }]') &&
++    statsSection.includes('prisma.giftCard.count({ where: liveActiveWhere })') &&
++    statsSection.includes('where: liveActiveWhere') &&
++    !statsSection.includes("status: { in: ['active', 'disabled'] }"),
++  'admin gift card active count and outstanding balance must exclude expired cards in real time'
++)
++
+ assert(
+   route.includes('function requireGiftCardManager') &&
+     route.includes('PAYINCUS_GIFT_CARD_ADMIN_IDS') &&
+diff --git a/server/src/db/gift-cards.ts b/server/src/db/gift-cards.ts
+index 50351f8cbdfa227154dd438f01fcb320c1ea2773..0b01a09a979cc7823788dbfd19d2e13d58d605f4
+--- a/server/src/db/gift-cards.ts
++++ b/server/src/db/gift-cards.ts
+@@ -623,15 +623,21 @@
+ }
+ 
+ export async function getGiftCardStats() {
++  const now = new Date()
++  const liveActiveWhere: Prisma.GiftCardWhereInput = {
++    status: 'active',
++    OR: [{ expiresAt: null }, { expiresAt: { gt: now } }]
++  }
++
+   const [total, active, used, disabled, expired, outstandingValue, redeemedValue] = await Promise.all([
+     prisma.giftCard.count(),
+-    prisma.giftCard.count({ where: { status: 'active' } }),
++    prisma.giftCard.count({ where: liveActiveWhere }),
+     prisma.giftCard.count({ where: { status: 'used' } }),
+     prisma.giftCard.count({ where: { status: 'disabled' } }),
+     prisma.giftCard.count({ where: { status: 'expired' } }),
+     prisma.giftCard.aggregate({
+       _sum: { balanceValue: true },
+-      where: { status: { in: ['active', 'disabled'] } }
++      where: liveActiveWhere
+     }),
+     prisma.giftCard.aggregate({
+       _sum: { balanceValue: true },
+
+已完成高危路径的代码与守卫只读审查，并按规格对唯一后台统计入口做了最小修改。
+  ✓ 只读 AGENTS.md、gift-cards.ts 统计/到期逻辑及现有礼品卡守卫
+  ✓ 最小修改后台统计过滤并追加守卫断言
+  → 运行 server type-check 与三组指定守卫，复核变更范围
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'git diff --check -- server/src/db/gift-cards.ts server/scripts/test-gift-card-guards.ts server/scripts/test-gift-card-flow.ts; Write-Output "--- targeted diff ---"; git diff -U8 -- server/src/db/gift-cards.ts server/scripts/test-gift-card-guards.ts server/scripts/test-gift-card-flow.ts' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 682ms:
+--- targeted diff ---
+diff --git a/server/scripts/test-gift-card-flow.ts b/server/scripts/test-gift-card-flow.ts
+index 7f86c16..42fbce9 100644
+--- a/server/scripts/test-gift-card-flow.ts
++++ b/server/scripts/test-gift-card-flow.ts
+@@ -156,22 +156,27 @@ async function main(): Promise<void> {
+ 
+   const batchList = await giftCards.listGiftCardsByAdmin({ page: 1, pageSize: 10, batchId: batch.batchId, revealCode: true })
+   assert.equal(batchList.total, 2)
+   assert.ok(batchList.records.every(card => card.code.startsWith('gc-')))
+ 
+   const batchDisable = await giftCards.batchDisableGiftCards(batch.codes.map(card => card.id))
+   assert.equal(batchDisable.count, 2)
+ 
++  const statsBeforeExpiredCard = await giftCards.getGiftCardStats()
+   const expiredCard = await giftCards.createGiftCard({
+     faceValue: 1,
+     balanceValue: 1,
+     expiresAt: new Date(Date.now() - 60_000),
+     remark: `${runId}:expired`
+   })
++  const statsWithLazyExpiredCard = await giftCards.getGiftCardStats()
++  assert.equal(statsWithLazyExpiredCard.active, statsBeforeExpiredCard.active)
++  assert.equal(statsWithLazyExpiredCard.outstandingValue, statsBeforeExpiredCard.outstandingValue)
++
+   await expectError(() => giftCards.redeemGiftCard(expiredCard.code, recipient.id), 'GIFT_CARD_EXPIRED')
+   const expiredAfterRedeem = await giftCards.findGiftCardByCode(expiredCard.code)
+   assert.equal(expiredAfterRedeem?.status, 'expired')
+ 
+   const recipientAfter = await prisma.user.findUniqueOrThrow({
+     where: { id: recipient.id },
+     select: { balance: true }
+   })
+diff --git a/server/scripts/test-gift-card-guards.ts b/server/scripts/test-gift-card-guards.ts
+index 43ea9dd..30b55fe 100644
+--- a/server/scripts/test-gift-card-guards.ts
++++ b/server/scripts/test-gift-card-guards.ts
+@@ -97,16 +97,28 @@ assert(
+     redeemSection.includes("where: { id: giftCard.id, status: 'active' }") &&
+     redeemSection.includes("return { error: 'GIFT_CARD_EXPIRED' }") &&
+     db.includes("if ('error' in result)") &&
+     redeemSection.includes("type: 'gift'") &&
+     redeemSection.includes('maskGiftCardCode(giftCard.code)'),
+   'gift card redemption must reject self redemption, persist expired status, claim active codes atomically, credit balance, and avoid logging full codes'
+ )
+ 
++const statsSection = db.slice(db.indexOf('export async function getGiftCardStats'))
++
++assert(
++  statsSection.includes('const now = new Date()') &&
++    statsSection.includes("status: 'active'") &&
++    statsSection.includes('OR: [{ expiresAt: null }, { expiresAt: { gt: now } }]') &&
++    statsSection.includes('prisma.giftCard.count({ where: liveActiveWhere })') &&
++    statsSection.includes('where: liveActiveWhere') &&
++    !statsSection.includes("status: { in: ['active', 'disabled'] }"),
++  'admin gift card active count and outstanding balance must exclude expired cards in real time'
++)
++
+ assert(
+   route.includes('function requireGiftCardManager') &&
+     route.includes('PAYINCUS_GIFT_CARD_ADMIN_IDS') &&
+     route.includes('requireGiftCardManager]') &&
+     route.includes('normalizeIdList') &&
+     db.includes('maskGiftCardCode(code)') &&
+     db.includes('revealCode: options.revealCode === true'),
+   'admin gift card routes must require an explicit production allowlist, normalize batch IDs, and mask list codes by default'
+@@ -134,16 +146,62 @@ assert(
+     adminBatchSection.includes('requireGiftCardManager') &&
+     !adminGenerateSection.includes('turnstileRequired') &&
+     !adminBatchSection.includes('turnstileRequired') &&
+     !adminView.includes('useTurnstile') &&
+     !adminView.includes('turnstileToken'),
+   'admin gift card generation must rely on admin auth, explicit allowlist, and rate limits, not frontend Turnstile tokens'
+ )
+ 
++assert(
++  adminGenerateSection.includes('if (balanceValue > faceValue)') &&
++    adminBatchSection.includes('if (balanceValue > faceValue)') &&
++    route.includes("GIFT_CARD_BALANCE_EXCEEDS_FACE_VALUE") &&
++    db.includes('balanceValue > faceValue') &&
++    db.includes('MAX_GIFT_CARD_BATCH_FACE_VALUE') &&
++    adminBatchSection.includes('MAX_BATCH_FACE_VALUE'),
++  'gift card credited value must not exceed face value, and unfunded admin batches must have a total face-value cap'
++)
++
++const revokeSection = db.slice(
++  db.indexOf('export async function revokeGiftCard'),
++  db.indexOf('export async function disableGiftCard')
++)
++const refundSection = db.slice(
++  db.indexOf('async function refundUserFundedGiftCard'),
++  db.indexOf('async function disableGiftCardWithRefund')
++)
++
++assert(
++  route.includes("fastify.post('/user/:id/revoke'") &&
++    revokeSection.includes('giftCard.createdById !== issuerId') &&
++    revokeSection.includes('giftCard.ownerId !== issuerId') &&
++    revokeSection.includes("giftCard.status === 'used'") &&
++    revokeSection.includes('refundUserFundedGiftCard(tx, giftCard)') &&
++    revokeSection.includes("data: { status: 'disabled' }") &&
++    refundSection.includes('await advisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, issuerId)') &&
++    refundSection.includes("type: 'refund'") &&
++    refundSection.includes('increment: toDecimal(amount)') &&
++    db.includes('gift-card-refund:${id}') &&
++    refundSection.includes('existingRefund'),
++  'an issuer must be able to revoke an unredeemed balance-funded card and receive the original amount exactly once'
++)
++
++assert(
++  db.includes('async function disableGiftCardWithRefund') &&
++    db.includes('async function deleteGiftCardWithRefund') &&
++    db.includes('await refundUserFundedGiftCard(tx, giftCard)') &&
++    db.includes('return disableGiftCardWithRefund(id)') &&
++    db.includes('return deleteGiftCardWithRefund(id)') &&
++    db.includes('await disableGiftCardWithRefund(id)') &&
++    db.includes('await deleteGiftCardWithRefund(id)') &&
++    db.includes('ownerId: null'),
++  'admin disable/delete, including batch operations, must refund unredeemed user-funded cards and refunded cards must not be re-enabled'
++)
++
+ assert(
+   userRedeemSection.includes('onRequest: [fastify.authenticate]') &&
+     userRedeemSection.includes('preHandler: [turnstileRequired]') &&
+     userGenerateRouteSection.includes('onRequest: [fastify.authenticate]') &&
+     userGenerateRouteSection.includes('preHandler: [turnstileRequired]') &&
+     !userRedeemSection.includes('onRequest: [fastify.authenticate, turnstileRequired]') &&
+     !userGenerateRouteSection.includes('onRequest: [fastify.authenticate, turnstileRequired]') &&
+     userView.includes("import TurnstileWidget from '@/components/TurnstileWidget.vue'") &&
+diff --git a/server/src/db/gift-cards.ts b/server/src/db/gift-cards.ts
+index 221b1e0..0b01a09 100644
+--- a/server/src/db/gift-cards.ts
++++ b/server/src/db/gift-cards.ts
+@@ -11,24 +11,26 @@ import {
+   advisoryTransactionLock
+ } from './advisory-locks.js'
+ 
+ const GIFT_CARD_RANDOM_LENGTH = 24
+ const GIFT_CARD_CODE_PREFIX = 'gc-'
+ const MAX_GIFT_CARD_BATCH_COUNT = 500
+ const MAX_GIFT_CARD_REMARK_LENGTH = 200
+ const MAX_GIFT_CARD_FACE_VALUE = 10000
++const MAX_GIFT_CARD_BATCH_FACE_VALUE = 100000
+ const MAX_GIFT_CARD_LIST_PAGE_SIZE = 100
+ 
+ export const GIFT_CARD_CONSTANTS = {
+   CODE_LENGTH: GIFT_CARD_RANDOM_LENGTH,
+   CODE_PREFIX: GIFT_CARD_CODE_PREFIX,
+   MAX_BATCH_COUNT: MAX_GIFT_CARD_BATCH_COUNT,
+   MAX_REMARK_LENGTH: MAX_GIFT_CARD_REMARK_LENGTH,
+-  MAX_FACE_VALUE: MAX_GIFT_CARD_FACE_VALUE
++  MAX_FACE_VALUE: MAX_GIFT_CARD_FACE_VALUE,
++  MAX_BATCH_FACE_VALUE: MAX_GIFT_CARD_BATCH_FACE_VALUE
+ } as const
+ 
+ export interface GiftCardCreateInput {
+   faceValue: number
+   balanceValue: number
+   createdById?: number | null
+   ownerId?: number | null
+   expiresAt?: Date | null
+@@ -108,21 +110,27 @@ function serializeGiftCard<T extends { faceValue: unknown; balanceValue: unknown
+     balanceValue: toMoney(record.balanceValue)
+   }
+ }
+ 
+ async function createGiftCardInTransaction(
+   tx: Prisma.TransactionClient,
+   input: GiftCardCreateInput
+ ) {
++  const faceValue = toMoney(input.faceValue)
++  const balanceValue = toMoney(input.balanceValue)
++  if (faceValue <= 0 || balanceValue <= 0 || balanceValue > faceValue) {
++    throw new Error('GIFT_CARD_BALANCE_EXCEEDS_FACE_VALUE')
++  }
++
+   return tx.giftCard.create({
+     data: {
+       code: generateGiftCardCode(),
+-      faceValue: toDecimal(input.faceValue),
+-      balanceValue: toDecimal(input.balanceValue),
++      faceValue: toDecimal(faceValue),
++      balanceValue: toDecimal(balanceValue),
+       createdById: input.createdById ?? null,
+       ownerId: input.ownerId ?? null,
+       expiresAt: input.expiresAt ?? null,
+       remark: input.remark,
+       batchId: input.batchId
+     },
+     select: {
+       id: true,
+@@ -151,16 +159,19 @@ export async function createGiftCard(input: GiftCardCreateInput) {
+ 
+ export async function createGiftCardBatch(
+   count: number,
+   input: Omit<GiftCardCreateInput, 'batchId'>
+ ) {
+   if (!Number.isSafeInteger(count) || count < 1 || count > MAX_GIFT_CARD_BATCH_COUNT) {
+     throw new Error('GIFT_CARD_BATCH_TOO_LARGE')
+   }
++  if (toMoney(input.faceValue) * count > MAX_GIFT_CARD_BATCH_FACE_VALUE) {
++    throw new Error('GIFT_CARD_BATCH_VALUE_TOO_LARGE')
++  }
+ 
+   for (let attempt = 0; attempt < 3; attempt++) {
+     try {
+       return await prisma.$transaction(async (tx) => {
+         const batchId = generateBatchId()
+         const cards = []
+         for (let i = 0; i < count; i++) {
+           cards.push(await createGiftCardInTransaction(tx, { ...input, batchId }))
+@@ -377,51 +388,166 @@ export async function redeemGiftCard(code: string, userId: number): Promise<Gift
+ 
+   if ('error' in result) {
+     throw new Error(result.error)
+   }
+ 
+   return result
+ }
+ 
+-export async function disableGiftCard(id: number) {
+-  return prisma.giftCard.updateMany({
+-    where: { id, status: 'active' },
+-    data: { status: 'disabled' }
++function giftCardRefundRemark(id: number): string {
++  return `Gift card cancellation refund [gift-card-refund:${id}]`
++}
++
++async function refundUserFundedGiftCard(
++  tx: Prisma.TransactionClient,
++  giftCard: { id: number; faceValue: unknown; createdById: number | null; ownerId: number | null }
++): Promise<number | null> {
++  const issuerId = giftCard.ownerId
++  if (issuerId === null || giftCard.createdById !== issuerId) return null
++
++  await advisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, issuerId)
++  const remark = giftCardRefundRemark(giftCard.id)
++  const existingRefund = await tx.balanceLog.findFirst({
++    where: { userId: issuerId, type: 'refund', remark },
++    select: { id: true }
++  })
++  if (existingRefund) {
++    const user = await tx.user.findUnique({ where: { id: issuerId }, select: { balance: true } })
++    return user ? toMoney(user.balance) : null
++  }
++
++  const user = await tx.user.findUnique({ where: { id: issuerId }, select: { balance: true } })
++  if (!user) throw new Error('USER_NOT_FOUND')
++
++  const amount = toMoney(giftCard.faceValue)
++  const balanceBefore = toMoney(user.balance)
++  // Keep the card state, balance mutation, and refund ledger in one transaction.
++  // This mirrors changeBalance's locked update + BalanceLog flow; calling its standalone
++  // transaction here would leave a partial-refund window between the two transactions.
++  const updatedUser = await tx.user.update({
++    where: { id: issuerId },
++    data: { balance: { increment: toDecimal(amount) } },
++    select: { balance: true }
+   })
++  const balanceAfter = toMoney(updatedUser.balance)
++
++  await tx.balanceLog.create({
++    data: {
++      userId: issuerId,
++      type: 'refund',
++      amount: toDecimal(amount),
++      balanceBefore: toDecimal(balanceBefore),
++      balanceAfter: toDecimal(balanceAfter),
++      remark
++    }
++  })
++
++  return balanceAfter
++}
++
++async function disableGiftCardWithRefund(id: number) {
++  return prisma.$transaction(async (tx) => {
++    const initial = await tx.giftCard.findUnique({ where: { id }, select: { id: true } })
++    if (!initial) return { count: 0 }
++
++    await advisoryTransactionLock(tx, GIFT_CARD_LOCK_NAMESPACE, id)
++    const giftCard = await tx.giftCard.findUnique({
++      where: { id },
++      select: { id: true, status: true, faceValue: true, createdById: true, ownerId: true }
++    })
++    if (!giftCard || giftCard.status !== 'active') return { count: 0 }
++
++    await refundUserFundedGiftCard(tx, giftCard)
++    const updated = await tx.giftCard.updateMany({
++      where: { id, status: 'active' },
++      data: { status: 'disabled' }
++    })
++    return { count: updated.count }
++  })
++}
++
++async function deleteGiftCardWithRefund(id: number) {
++  return prisma.$transaction(async (tx) => {
++    const initial = await tx.giftCard.findUnique({ where: { id }, select: { id: true } })
++    if (!initial) return { count: 0 }
++
++    await advisoryTransactionLock(tx, GIFT_CARD_LOCK_NAMESPACE, id)
++    const giftCard = await tx.giftCard.findUnique({
++      where: { id },
++      select: { id: true, status: true, faceValue: true, createdById: true, ownerId: true }
++    })
++    if (!giftCard || giftCard.status === 'used') return { count: 0 }
++
++    await refundUserFundedGiftCard(tx, giftCard)
++    const deleted = await tx.giftCard.deleteMany({
++      where: { id, status: { in: ['active', 'disabled', 'expired'] } }
++    })
++    return { count: deleted.count }
++  })
++}
++
++export async function revokeGiftCard(id: number, issuerId: number) {
++  return prisma.$transaction(async (tx) => {
++    const initial = await tx.giftCard.findUnique({ where: { id }, select: { id: true } })
++    if (!initial) throw new Error('GIFT_CARD_NOT_FOUND')
++
++    await advisoryTransactionLock(tx, GIFT_CARD_LOCK_NAMESPACE, id)
++    const giftCard = await tx.giftCard.findUnique({
++      where: { id },
++      select: { id: true, status: true, faceValue: true, createdById: true, ownerId: true }
++    })
++    if (!giftCard) throw new Error('GIFT_CARD_NOT_FOUND')
++    if (giftCard.createdById !== issuerId || giftCard.ownerId !== issuerId) {
++      throw new Error('GIFT_CARD_NOT_ISSUER')
++    }
++    if (giftCard.status === 'used') throw new Error('GIFT_CARD_USED')
++
++    const balanceAfter = await refundUserFundedGiftCard(tx, giftCard)
++    if (giftCard.status !== 'disabled') {
++      await tx.giftCard.update({ where: { id }, data: { status: 'disabled' } })
++    }
++    return { success: true, balanceAfter }
++  })
++}
++
++export async function disableGiftCard(id: number) {
++  return disableGiftCardWithRefund(id)
+ }
+ 
+ export async function enableGiftCard(id: number) {
+   return prisma.giftCard.updateMany({
+     where: {
+       id,
+       status: 'disabled',
++      ownerId: null,
+       OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }]
+     },
+     data: { status: 'active' }
+   })
+ }
+ 
+ export async function deleteGiftCard(id: number) {
+-  return prisma.giftCard.deleteMany({
+-    where: { id, status: { in: ['active', 'disabled', 'expired'] } }
+-  })
++  return deleteGiftCardWithRefund(id)
+ }
+ 
+ export async function batchDisableGiftCards(ids: number[]) {
+-  return prisma.giftCard.updateMany({
+-    where: { id: { in: ids }, status: 'active' },
+-    data: { status: 'disabled' }
+-  })
++  let count = 0
++  for (const id of [...ids].sort((a, b) => a - b)) {
++    count += (await disableGiftCardWithRefund(id)).count
++  }
++  return { count }
+ }
+ 
+ export async function batchDeleteGiftCards(ids: number[]) {
+-  return prisma.giftCard.deleteMany({
+-    where: { id: { in: ids }, status: { in: ['active', 'disabled', 'expired'] } }
+-  })
++  let count = 0
++  for (const id of [...ids].sort((a, b) => a - b)) {
++    count += (await deleteGiftCardWithRefund(id)).count
++  }
++  return { count }
+ }
+ 
+ export async function listGiftCardsByAdmin(options: GiftCardAdminListOptions) {
+   const page = clampPage(options.page)
+   const pageSize = clampPageSize(options.pageSize)
+   const where: Prisma.GiftCardWhereInput = {
+     ...(options.status ? { status: options.status } : {}),
+     ...(options.batchId ? { batchId: options.batchId } : {})
+@@ -492,25 +618,31 @@ export async function listGiftCardsByUser(userId: number, options: GiftCardUserL
+     records: records.map(record => serializeGiftCard(record, { revealCode: true })),
+     total,
+     page,
+     pageSize
+   }
+ }
+ 
+ export async function getGiftCardStats() {
++  const now = new Date()
++  const liveActiveWhere: Prisma.GiftCardWhereInput = {
++    status: 'active',
++    OR: [{ expiresAt: null }, { expiresAt: { gt: now } }]
++  }
++
+   const [total, active, used, disabled, expired, outstandingValue, redeemedValue] = await Promise.all([
+     prisma.giftCard.count(),
+-    prisma.giftCard.count({ where: { status: 'active' } }),
++    prisma.giftCard.count({ where: liveActiveWhere }),
+     prisma.giftCard.count({ where: { status: 'used' } }),
+     prisma.giftCard.count({ where: { status: 'disabled' } }),
+     prisma.giftCard.count({ where: { status: 'expired' } }),
+     prisma.giftCard.aggregate({
+       _sum: { balanceValue: true },
+-      where: { status: { in: ['active', 'disabled'] } }
++      where: liveActiveWhere
+     }),
+     prisma.giftCard.aggregate({
+       _sum: { balanceValue: true },
+       where: { status: 'used' }
+     })
+   ])
+ 
+   return {
+warning: in the working copy of 'server/scripts/test-gift-card-flow.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/scripts/test-gift-card-guards.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/db/gift-cards.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/scripts/test-gift-card-flow.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/scripts/test-gift-card-guards.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/db/gift-cards.ts', LF will be replaced by CRLF the next time Git touches it
+
+diff --git a/server/scripts/test-gift-card-flow.ts b/server/scripts/test-gift-card-flow.ts
+index 7f86c1686d607ddd88a590e953149467b7001a69..42fbce9191e9f95aff33e97a62e73a4a7315318b
+--- a/server/scripts/test-gift-card-flow.ts
++++ b/server/scripts/test-gift-card-flow.ts
+@@ -161,12 +161,17 @@
+   const batchDisable = await giftCards.batchDisableGiftCards(batch.codes.map(card => card.id))
+   assert.equal(batchDisable.count, 2)
+ 
++  const statsBeforeExpiredCard = await giftCards.getGiftCardStats()
+   const expiredCard = await giftCards.createGiftCard({
+     faceValue: 1,
+     balanceValue: 1,
+     expiresAt: new Date(Date.now() - 60_000),
+     remark: `${runId}:expired`
+   })
++  const statsWithLazyExpiredCard = await giftCards.getGiftCardStats()
++  assert.equal(statsWithLazyExpiredCard.active, statsBeforeExpiredCard.active)
++  assert.equal(statsWithLazyExpiredCard.outstandingValue, statsBeforeExpiredCard.outstandingValue)
++
+   await expectError(() => giftCards.redeemGiftCard(expiredCard.code, recipient.id), 'GIFT_CARD_EXPIRED')
+   const expiredAfterRedeem = await giftCards.findGiftCardByCode(expiredCard.code)
+   assert.equal(expiredAfterRedeem?.status, 'expired')
+diff --git a/server/scripts/test-gift-card-guards.ts b/server/scripts/test-gift-card-guards.ts
+index 82863db9d916b0775f25284d66c77ee017cc19a1..30b55fedf093ebaaea293f1936307f49cb236869
+--- a/server/scripts/test-gift-card-guards.ts
++++ b/server/scripts/test-gift-card-guards.ts
+@@ -102,6 +102,18 @@
+   'gift card redemption must reject self redemption, persist expired status, claim active codes atomically, credit balance, and avoid logging full codes'
+ )
+ 
++const statsSection = db.slice(db.indexOf('export async function getGiftCardStats'))
++
++assert(
++  statsSection.includes('const now = new Date()') &&
++    statsSection.includes("status: 'active'") &&
++    statsSection.includes('OR: [{ expiresAt: null }, { expiresAt: { gt: now } }]') &&
++    statsSection.includes('prisma.giftCard.count({ where: liveActiveWhere })') &&
++    statsSection.includes('where: liveActiveWhere') &&
++    !statsSection.includes("status: { in: ['active', 'disabled'] }"),
++  'admin gift card active count and outstanding balance must exclude expired cards in real time'
++)
++
+ assert(
+   route.includes('function requireGiftCardManager') &&
+     route.includes('PAYINCUS_GIFT_CARD_ADMIN_IDS') &&
+diff --git a/server/src/db/gift-cards.ts b/server/src/db/gift-cards.ts
+index 50351f8cbdfa227154dd438f01fcb320c1ea2773..0b01a09a979cc7823788dbfd19d2e13d58d605f4
+--- a/server/src/db/gift-cards.ts
++++ b/server/src/db/gift-cards.ts
+@@ -623,15 +623,21 @@
+ }
+ 
+ export async function getGiftCardStats() {
++  const now = new Date()
++  const liveActiveWhere: Prisma.GiftCardWhereInput = {
++    status: 'active',
++    OR: [{ expiresAt: null }, { expiresAt: { gt: now } }]
++  }
++
+   const [total, active, used, disabled, expired, outstandingValue, redeemedValue] = await Promise.all([
+     prisma.giftCard.count(),
+-    prisma.giftCard.count({ where: { status: 'active' } }),
++    prisma.giftCard.count({ where: liveActiveWhere }),
+     prisma.giftCard.count({ where: { status: 'used' } }),
+     prisma.giftCard.count({ where: { status: 'disabled' } }),
+     prisma.giftCard.count({ where: { status: 'expired' } }),
+     prisma.giftCard.aggregate({
+       _sum: { balanceValue: true },
+-      where: { status: { in: ['active', 'disabled'] } }
++      where: liveActiveWhere
+     }),
+     prisma.giftCard.aggregate({
+       _sum: { balanceValue: true },
+
+codex
+实现与守卫已落地，且 `git diff --check` 通过。现在并行运行 server type-check、礼品卡静态守卫、礼品卡数据库流程、财务对账守卫；其中流程测试需要本地 PostgreSQL 与已迁移的 `gift_cards` 表，若环境缺失我会明确区分“实现失败”和“环境阻塞”。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'pnpm --filter server test:gift-card-flow' in C:\Users\Administrator\Desktop\payinces
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'pnpm --filter server test:gift-card-guards' in C:\Users\Administrator\Desktop\payinces
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'pnpm --filter server test:financial-reconciliation-guards' in C:\Users\Administrator\Desktop\payinces
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'pnpm --filter server type-check' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 2037ms:
+
+> server@1.3.7 test:financial-reconciliation-guards C:\Users\Administrator\Desktop\payinces\server
+> node --import tsx scripts/test-financial-reconciliation-guards.ts
+
+financial reconciliation guards passed
+
+ succeeded in 2112ms:
+
+> server@1.3.7 test:gift-card-guards C:\Users\Administrator\Desktop\payinces\server
+> node --import tsx scripts/test-gift-card-guards.ts
+
+gift card guard checks passed
+
+ succeeded in 3547ms:
+
+> server@1.3.7 test:gift-card-flow C:\Users\Administrator\Desktop\payinces\server
+> node --import tsx scripts/test-gift-card-flow.ts
+
+gift card flow checks passed
+
+diff --git a/server/scripts/test-gift-card-flow.ts b/server/scripts/test-gift-card-flow.ts
+index 7f86c1686d607ddd88a590e953149467b7001a69..42fbce9191e9f95aff33e97a62e73a4a7315318b
+--- a/server/scripts/test-gift-card-flow.ts
++++ b/server/scripts/test-gift-card-flow.ts
+@@ -161,12 +161,17 @@
+   const batchDisable = await giftCards.batchDisableGiftCards(batch.codes.map(card => card.id))
+   assert.equal(batchDisable.count, 2)
+ 
++  const statsBeforeExpiredCard = await giftCards.getGiftCardStats()
+   const expiredCard = await giftCards.createGiftCard({
+     faceValue: 1,
+     balanceValue: 1,
+     expiresAt: new Date(Date.now() - 60_000),
+     remark: `${runId}:expired`
+   })
++  const statsWithLazyExpiredCard = await giftCards.getGiftCardStats()
++  assert.equal(statsWithLazyExpiredCard.active, statsBeforeExpiredCard.active)
++  assert.equal(statsWithLazyExpiredCard.outstandingValue, statsBeforeExpiredCard.outstandingValue)
++
+   await expectError(() => giftCards.redeemGiftCard(expiredCard.code, recipient.id), 'GIFT_CARD_EXPIRED')
+   const expiredAfterRedeem = await giftCards.findGiftCardByCode(expiredCard.code)
+   assert.equal(expiredAfterRedeem?.status, 'expired')
+diff --git a/server/scripts/test-gift-card-guards.ts b/server/scripts/test-gift-card-guards.ts
+index 82863db9d916b0775f25284d66c77ee017cc19a1..30b55fedf093ebaaea293f1936307f49cb236869
+--- a/server/scripts/test-gift-card-guards.ts
++++ b/server/scripts/test-gift-card-guards.ts
+@@ -102,6 +102,18 @@
+   'gift card redemption must reject self redemption, persist expired status, claim active codes atomically, credit balance, and avoid logging full codes'
+ )
+ 
++const statsSection = db.slice(db.indexOf('export async function getGiftCardStats'))
++
++assert(
++  statsSection.includes('const now = new Date()') &&
++    statsSection.includes("status: 'active'") &&
++    statsSection.includes('OR: [{ expiresAt: null }, { expiresAt: { gt: now } }]') &&
++    statsSection.includes('prisma.giftCard.count({ where: liveActiveWhere })') &&
++    statsSection.includes('where: liveActiveWhere') &&
++    !statsSection.includes("status: { in: ['active', 'disabled'] }"),
++  'admin gift card active count and outstanding balance must exclude expired cards in real time'
++)
++
+ assert(
+   route.includes('function requireGiftCardManager') &&
+     route.includes('PAYINCUS_GIFT_CARD_ADMIN_IDS') &&
+diff --git a/server/src/db/gift-cards.ts b/server/src/db/gift-cards.ts
+index 50351f8cbdfa227154dd438f01fcb320c1ea2773..0b01a09a979cc7823788dbfd19d2e13d58d605f4
+--- a/server/src/db/gift-cards.ts
++++ b/server/src/db/gift-cards.ts
+@@ -623,15 +623,21 @@
+ }
+ 
+ export async function getGiftCardStats() {
++  const now = new Date()
++  const liveActiveWhere: Prisma.GiftCardWhereInput = {
++    status: 'active',
++    OR: [{ expiresAt: null }, { expiresAt: { gt: now } }]
++  }
++
+   const [total, active, used, disabled, expired, outstandingValue, redeemedValue] = await Promise.all([
+     prisma.giftCard.count(),
+-    prisma.giftCard.count({ where: { status: 'active' } }),
++    prisma.giftCard.count({ where: liveActiveWhere }),
+     prisma.giftCard.count({ where: { status: 'used' } }),
+     prisma.giftCard.count({ where: { status: 'disabled' } }),
+     prisma.giftCard.count({ where: { status: 'expired' } }),
+     prisma.giftCard.aggregate({
+       _sum: { balanceValue: true },
+-      where: { status: { in: ['active', 'disabled'] } }
++      where: liveActiveWhere
+     }),
+     prisma.giftCard.aggregate({
+       _sum: { balanceValue: true },
+
+diff --git a/server/scripts/test-gift-card-flow.ts b/server/scripts/test-gift-card-flow.ts
+index 7f86c1686d607ddd88a590e953149467b7001a69..42fbce9191e9f95aff33e97a62e73a4a7315318b
+--- a/server/scripts/test-gift-card-flow.ts
++++ b/server/scripts/test-gift-card-flow.ts
+@@ -161,12 +161,17 @@
+   const batchDisable = await giftCards.batchDisableGiftCards(batch.codes.map(card => card.id))
+   assert.equal(batchDisable.count, 2)
+ 
++  const statsBeforeExpiredCard = await giftCards.getGiftCardStats()
+   const expiredCard = await giftCards.createGiftCard({
+     faceValue: 1,
+     balanceValue: 1,
+     expiresAt: new Date(Date.now() - 60_000),
+     remark: `${runId}:expired`
+   })
++  const statsWithLazyExpiredCard = await giftCards.getGiftCardStats()
++  assert.equal(statsWithLazyExpiredCard.active, statsBeforeExpiredCard.active)
++  assert.equal(statsWithLazyExpiredCard.outstandingValue, statsBeforeExpiredCard.outstandingValue)
++
+   await expectError(() => giftCards.redeemGiftCard(expiredCard.code, recipient.id), 'GIFT_CARD_EXPIRED')
+   const expiredAfterRedeem = await giftCards.findGiftCardByCode(expiredCard.code)
+   assert.equal(expiredAfterRedeem?.status, 'expired')
+diff --git a/server/scripts/test-gift-card-guards.ts b/server/scripts/test-gift-card-guards.ts
+index 82863db9d916b0775f25284d66c77ee017cc19a1..30b55fedf093ebaaea293f1936307f49cb236869
+--- a/server/scripts/test-gift-card-guards.ts
++++ b/server/scripts/test-gift-card-guards.ts
+@@ -102,6 +102,18 @@
+   'gift card redemption must reject self redemption, persist expired status, claim active codes atomically, credit balance, and avoid logging full codes'
+ )
+ 
++const statsSection = db.slice(db.indexOf('export async function getGiftCardStats'))
++
++assert(
++  statsSection.includes('const now = new Date()') &&
++    statsSection.includes("status: 'active'") &&
++    statsSection.includes('OR: [{ expiresAt: null }, { expiresAt: { gt: now } }]') &&
++    statsSection.includes('prisma.giftCard.count({ where: liveActiveWhere })') &&
++    statsSection.includes('where: liveActiveWhere') &&
++    !statsSection.includes("status: { in: ['active', 'disabled'] }"),
++  'admin gift card active count and outstanding balance must exclude expired cards in real time'
++)
++
+ assert(
+   route.includes('function requireGiftCardManager') &&
+     route.includes('PAYINCUS_GIFT_CARD_ADMIN_IDS') &&
+diff --git a/server/src/db/gift-cards.ts b/server/src/db/gift-cards.ts
+index 50351f8cbdfa227154dd438f01fcb320c1ea2773..0b01a09a979cc7823788dbfd19d2e13d58d605f4
+--- a/server/src/db/gift-cards.ts
++++ b/server/src/db/gift-cards.ts
+@@ -623,15 +623,21 @@
+ }
+ 
+ export async function getGiftCardStats() {
++  const now = new Date()
++  const liveActiveWhere: Prisma.GiftCardWhereInput = {
++    status: 'active',
++    OR: [{ expiresAt: null }, { expiresAt: { gt: now } }]
++  }
++
+   const [total, active, used, disabled, expired, outstandingValue, redeemedValue] = await Promise.all([
+     prisma.giftCard.count(),
+-    prisma.giftCard.count({ where: { status: 'active' } }),
++    prisma.giftCard.count({ where: liveActiveWhere }),
+     prisma.giftCard.count({ where: { status: 'used' } }),
+     prisma.giftCard.count({ where: { status: 'disabled' } }),
+     prisma.giftCard.count({ where: { status: 'expired' } }),
+     prisma.giftCard.aggregate({
+       _sum: { balanceValue: true },
+-      where: { status: { in: ['active', 'disabled'] } }
++      where: liveActiveWhere
+     }),
+     prisma.giftCard.aggregate({
+       _sum: { balanceValue: true },
+
+diff --git a/server/scripts/test-gift-card-flow.ts b/server/scripts/test-gift-card-flow.ts
+index 7f86c1686d607ddd88a590e953149467b7001a69..42fbce9191e9f95aff33e97a62e73a4a7315318b
+--- a/server/scripts/test-gift-card-flow.ts
++++ b/server/scripts/test-gift-card-flow.ts
+@@ -161,12 +161,17 @@
+   const batchDisable = await giftCards.batchDisableGiftCards(batch.codes.map(card => card.id))
+   assert.equal(batchDisable.count, 2)
+ 
++  const statsBeforeExpiredCard = await giftCards.getGiftCardStats()
+   const expiredCard = await giftCards.createGiftCard({
+     faceValue: 1,
+     balanceValue: 1,
+     expiresAt: new Date(Date.now() - 60_000),
+     remark: `${runId}:expired`
+   })
++  const statsWithLazyExpiredCard = await giftCards.getGiftCardStats()
++  assert.equal(statsWithLazyExpiredCard.active, statsBeforeExpiredCard.active)
++  assert.equal(statsWithLazyExpiredCard.outstandingValue, statsBeforeExpiredCard.outstandingValue)
++
+   await expectError(() => giftCards.redeemGiftCard(expiredCard.code, recipient.id), 'GIFT_CARD_EXPIRED')
+   const expiredAfterRedeem = await giftCards.findGiftCardByCode(expiredCard.code)
+   assert.equal(expiredAfterRedeem?.status, 'expired')
+diff --git a/server/scripts/test-gift-card-guards.ts b/server/scripts/test-gift-card-guards.ts
+index 82863db9d916b0775f25284d66c77ee017cc19a1..30b55fedf093ebaaea293f1936307f49cb236869
+--- a/server/scripts/test-gift-card-guards.ts
++++ b/server/scripts/test-gift-card-guards.ts
+@@ -102,6 +102,18 @@
+   'gift card redemption must reject self redemption, persist expired status, claim active codes atomically, credit balance, and avoid logging full codes'
+ )
+ 
++const statsSection = db.slice(db.indexOf('export async function getGiftCardStats'))
++
++assert(
++  statsSection.includes('const now = new Date()') &&
++    statsSection.includes("status: 'active'") &&
++    statsSection.includes('OR: [{ expiresAt: null }, { expiresAt: { gt: now } }]') &&
++    statsSection.includes('prisma.giftCard.count({ where: liveActiveWhere })') &&
++    statsSection.includes('where: liveActiveWhere') &&
++    !statsSection.includes("status: { in: ['active', 'disabled'] }"),
++  'admin gift card active count and outstanding balance must exclude expired cards in real time'
++)
++
+ assert(
+   route.includes('function requireGiftCardManager') &&
+     route.includes('PAYINCUS_GIFT_CARD_ADMIN_IDS') &&
+diff --git a/server/src/db/gift-cards.ts b/server/src/db/gift-cards.ts
+index 50351f8cbdfa227154dd438f01fcb320c1ea2773..0b01a09a979cc7823788dbfd19d2e13d58d605f4
+--- a/server/src/db/gift-cards.ts
++++ b/server/src/db/gift-cards.ts
+@@ -623,15 +623,21 @@
+ }
+ 
+ export async function getGiftCardStats() {
++  const now = new Date()
++  const liveActiveWhere: Prisma.GiftCardWhereInput = {
++    status: 'active',
++    OR: [{ expiresAt: null }, { expiresAt: { gt: now } }]
++  }
++
+   const [total, active, used, disabled, expired, outstandingValue, redeemedValue] = await Promise.all([
+     prisma.giftCard.count(),
+-    prisma.giftCard.count({ where: { status: 'active' } }),
++    prisma.giftCard.count({ where: liveActiveWhere }),
+     prisma.giftCard.count({ where: { status: 'used' } }),
+     prisma.giftCard.count({ where: { status: 'disabled' } }),
+     prisma.giftCard.count({ where: { status: 'expired' } }),
+     prisma.giftCard.aggregate({
+       _sum: { balanceValue: true },
+-      where: { status: { in: ['active', 'disabled'] } }
++      where: liveActiveWhere
+     }),
+     prisma.giftCard.aggregate({
+       _sum: { balanceValue: true },
+
+ succeeded in 39134ms:
+
+> server@1.3.7 type-check C:\Users\Administrator\Desktop\payinces\server
+> tsc --noEmit
+
+
+diff --git a/server/scripts/test-gift-card-flow.ts b/server/scripts/test-gift-card-flow.ts
+index 7f86c1686d607ddd88a590e953149467b7001a69..42fbce9191e9f95aff33e97a62e73a4a7315318b
+--- a/server/scripts/test-gift-card-flow.ts
++++ b/server/scripts/test-gift-card-flow.ts
+@@ -161,12 +161,17 @@
+   const batchDisable = await giftCards.batchDisableGiftCards(batch.codes.map(card => card.id))
+   assert.equal(batchDisable.count, 2)
+ 
++  const statsBeforeExpiredCard = await giftCards.getGiftCardStats()
+   const expiredCard = await giftCards.createGiftCard({
+     faceValue: 1,
+     balanceValue: 1,
+     expiresAt: new Date(Date.now() - 60_000),
+     remark: `${runId}:expired`
+   })
++  const statsWithLazyExpiredCard = await giftCards.getGiftCardStats()
++  assert.equal(statsWithLazyExpiredCard.active, statsBeforeExpiredCard.active)
++  assert.equal(statsWithLazyExpiredCard.outstandingValue, statsBeforeExpiredCard.outstandingValue)
++
+   await expectError(() => giftCards.redeemGiftCard(expiredCard.code, recipient.id), 'GIFT_CARD_EXPIRED')
+   const expiredAfterRedeem = await giftCards.findGiftCardByCode(expiredCard.code)
+   assert.equal(expiredAfterRedeem?.status, 'expired')
+diff --git a/server/scripts/test-gift-card-guards.ts b/server/scripts/test-gift-card-guards.ts
+index 82863db9d916b0775f25284d66c77ee017cc19a1..30b55fedf093ebaaea293f1936307f49cb236869
+--- a/server/scripts/test-gift-card-guards.ts
++++ b/server/scripts/test-gift-card-guards.ts
+@@ -102,6 +102,18 @@
+   'gift card redemption must reject self redemption, persist expired status, claim active codes atomically, credit balance, and avoid logging full codes'
+ )
+ 
++const statsSection = db.slice(db.indexOf('export async function getGiftCardStats'))
++
++assert(
++  statsSection.includes('const now = new Date()') &&
++    statsSection.includes("status: 'active'") &&
++    statsSection.includes('OR: [{ expiresAt: null }, { expiresAt: { gt: now } }]') &&
++    statsSection.includes('prisma.giftCard.count({ where: liveActiveWhere })') &&
++    statsSection.includes('where: liveActiveWhere') &&
++    !statsSection.includes("status: { in: ['active', 'disabled'] }"),
++  'admin gift card active count and outstanding balance must exclude expired cards in real time'
++)
++
+ assert(
+   route.includes('function requireGiftCardManager') &&
+     route.includes('PAYINCUS_GIFT_CARD_ADMIN_IDS') &&
+diff --git a/server/src/db/gift-cards.ts b/server/src/db/gift-cards.ts
+index 50351f8cbdfa227154dd438f01fcb320c1ea2773..0b01a09a979cc7823788dbfd19d2e13d58d605f4
+--- a/server/src/db/gift-cards.ts
++++ b/server/src/db/gift-cards.ts
+@@ -623,15 +623,21 @@
+ }
+ 
+ export async function getGiftCardStats() {
++  const now = new Date()
++  const liveActiveWhere: Prisma.GiftCardWhereInput = {
++    status: 'active',
++    OR: [{ expiresAt: null }, { expiresAt: { gt: now } }]
++  }
++
+   const [total, active, used, disabled, expired, outstandingValue, redeemedValue] = await Promise.all([
+     prisma.giftCard.count(),
+-    prisma.giftCard.count({ where: { status: 'active' } }),
++    prisma.giftCard.count({ where: liveActiveWhere }),
+     prisma.giftCard.count({ where: { status: 'used' } }),
+     prisma.giftCard.count({ where: { status: 'disabled' } }),
+     prisma.giftCard.count({ where: { status: 'expired' } }),
+     prisma.giftCard.aggregate({
+       _sum: { balanceValue: true },
+-      where: { status: { in: ['active', 'disabled'] } }
++      where: liveActiveWhere
+     }),
+     prisma.giftCard.aggregate({
+       _sum: { balanceValue: true },
+
+codex
+四项验收均已通过，包括实际数据库流程测试；新增用例验证了“已过期但状态仍为 active”的卡在懒转状态前，就不会增加后台可用数或未兑余额。最后我会复核目标文件与行号、确认没有新增 routes/schema/package/前端改动，然后交付简报。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Write-Output "--- scoped status ---"; git status --short -- server/src/db/gift-cards.ts server/src/routes/gift-cards.ts server/scripts/test-gift-card-guards.ts server/scripts/test-gift-card-flow.ts server/scripts/test-financial-reconciliation-guards.ts server/prisma/schema.prisma server/package.json package.json client/src/views/GiftCardsView.vue; Write-Output "`n--- implemented lines ---"; Select-String -Path server/src/db/gift-cards.ts -Pattern '"'const liveActiveWhere|prisma.giftCard.count\\(\\{ where: liveActiveWhere|where: liveActiveWhere' | ForEach-Object { \"{0}:{1}: {2}\" -f "'$_.Path,$_.LineNumber,$_.Line.Trim() }; Select-String -Path server/scripts/test-gift-card-guards.ts -Pattern '"'const statsSection|active count and outstanding'; Select-String -Path server/scripts/test-gift-card-flow.ts -Pattern 'statsBeforeExpiredCard|statsWithLazyExpiredCard'; Write-Output \""'`n--- final diff check ---"; git diff --check -- server/src/db/gift-cards.ts server/scripts/test-gift-card-guards.ts server/scripts/test-gift-card-flow.ts' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 883ms:
+--- scoped status ---
+ M client/src/views/GiftCardsView.vue
+ M package.json
+ M server/package.json
+ M server/prisma/schema.prisma
+ M server/scripts/test-gift-card-flow.ts
+ M server/scripts/test-gift-card-guards.ts
+ M server/src/db/gift-cards.ts
+ M server/src/routes/gift-cards.ts
+
+--- implemented lines ---
+C:\Users\Administrator\Desktop\payinces\server\src\db\gift-cards.ts:627: const liveActiveWhere: Prisma.GiftCardWhereInput = {
+C:\Users\Administrator\Desktop\payinces\server\src\db\gift-cards.ts:634: prisma.giftCard.count({ where: liveActiveWhere }),
+C:\Users\Administrator\Desktop\payinces\server\src\db\gift-cards.ts:640: where: liveActiveWhere
+
+server\scripts\test-gift-card-guards.ts:105:const statsSection = db.slice(db.indexOf('export async function 
+getGiftCardStats'))
+server\scripts\test-gift-card-guards.ts:114:  'admin gift card active count and outstanding balance must exclude 
+expired cards in real time'
+server\scripts\test-gift-card-flow.ts:164:  const statsBeforeExpiredCard = await giftCards.getGiftCardStats()
+server\scripts\test-gift-card-flow.ts:171:  const statsWithLazyExpiredCard = await giftCards.getGiftCardStats()
+server\scripts\test-gift-card-flow.ts:172:  assert.equal(statsWithLazyExpiredCard.active, 
+statsBeforeExpiredCard.active)
+server\scripts\test-gift-card-flow.ts:173:  assert.equal(statsWithLazyExpiredCard.outstandingValue, 
+statsBeforeExpiredCard.outstandingValue)
+
+--- final diff check ---
+
+
+warning: in the working copy of 'server/scripts/test-gift-card-flow.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/scripts/test-gift-card-guards.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/db/gift-cards.ts', LF will be replaced by CRLF the next time Git touches it
+
+指定 type-check、两组礼品卡守卫/流程及财务对账守卫全部通过，已复核改动范围。
+  ✓ 只读 AGENTS.md、gift-cards.ts 统计/到期逻辑及现有礼品卡守卫
+  ✓ 最小修改后台统计过滤并追加守卫断言
+  ✓ 运行 server type-check 与三组指定守卫，复核变更范围
+diff --git a/server/scripts/test-gift-card-flow.ts b/server/scripts/test-gift-card-flow.ts
+index 7f86c1686d607ddd88a590e953149467b7001a69..42fbce9191e9f95aff33e97a62e73a4a7315318b
+--- a/server/scripts/test-gift-card-flow.ts
++++ b/server/scripts/test-gift-card-flow.ts
+@@ -161,12 +161,17 @@
+   const batchDisable = await giftCards.batchDisableGiftCards(batch.codes.map(card => card.id))
+   assert.equal(batchDisable.count, 2)
+ 
++  const statsBeforeExpiredCard = await giftCards.getGiftCardStats()
+   const expiredCard = await giftCards.createGiftCard({
+     faceValue: 1,
+     balanceValue: 1,
+     expiresAt: new Date(Date.now() - 60_000),
+     remark: `${runId}:expired`
+   })
++  const statsWithLazyExpiredCard = await giftCards.getGiftCardStats()
++  assert.equal(statsWithLazyExpiredCard.active, statsBeforeExpiredCard.active)
++  assert.equal(statsWithLazyExpiredCard.outstandingValue, statsBeforeExpiredCard.outstandingValue)
++
+   await expectError(() => giftCards.redeemGiftCard(expiredCard.code, recipient.id), 'GIFT_CARD_EXPIRED')
+   const expiredAfterRedeem = await giftCards.findGiftCardByCode(expiredCard.code)
+   assert.equal(expiredAfterRedeem?.status, 'expired')
+diff --git a/server/scripts/test-gift-card-guards.ts b/server/scripts/test-gift-card-guards.ts
+index 82863db9d916b0775f25284d66c77ee017cc19a1..30b55fedf093ebaaea293f1936307f49cb236869
+--- a/server/scripts/test-gift-card-guards.ts
++++ b/server/scripts/test-gift-card-guards.ts
+@@ -102,6 +102,18 @@
+   'gift card redemption must reject self redemption, persist expired status, claim active codes atomically, credit balance, and avoid logging full codes'
+ )
+ 
++const statsSection = db.slice(db.indexOf('export async function getGiftCardStats'))
++
++assert(
++  statsSection.includes('const now = new Date()') &&
++    statsSection.includes("status: 'active'") &&
++    statsSection.includes('OR: [{ expiresAt: null }, { expiresAt: { gt: now } }]') &&
++    statsSection.includes('prisma.giftCard.count({ where: liveActiveWhere })') &&
++    statsSection.includes('where: liveActiveWhere') &&
++    !statsSection.includes("status: { in: ['active', 'disabled'] }"),
++  'admin gift card active count and outstanding balance must exclude expired cards in real time'
++)
++
+ assert(
+   route.includes('function requireGiftCardManager') &&
+     route.includes('PAYINCUS_GIFT_CARD_ADMIN_IDS') &&
+diff --git a/server/src/db/gift-cards.ts b/server/src/db/gift-cards.ts
+index 50351f8cbdfa227154dd438f01fcb320c1ea2773..0b01a09a979cc7823788dbfd19d2e13d58d605f4
+--- a/server/src/db/gift-cards.ts
++++ b/server/src/db/gift-cards.ts
+@@ -623,15 +623,21 @@
+ }
+ 
+ export async function getGiftCardStats() {
++  const now = new Date()
++  const liveActiveWhere: Prisma.GiftCardWhereInput = {
++    status: 'active',
++    OR: [{ expiresAt: null }, { expiresAt: { gt: now } }]
++  }
++
+   const [total, active, used, disabled, expired, outstandingValue, redeemedValue] = await Promise.all([
+     prisma.giftCard.count(),
+-    prisma.giftCard.count({ where: { status: 'active' } }),
++    prisma.giftCard.count({ where: liveActiveWhere }),
+     prisma.giftCard.count({ where: { status: 'used' } }),
+     prisma.giftCard.count({ where: { status: 'disabled' } }),
+     prisma.giftCard.count({ where: { status: 'expired' } }),
+     prisma.giftCard.aggregate({
+       _sum: { balanceValue: true },
+-      where: { status: { in: ['active', 'disabled'] } }
++      where: liveActiveWhere
+     }),
+     prisma.giftCard.aggregate({
+       _sum: { balanceValue: true },
+
+codex
+已完成 BF-8-08，未 commit。
+
+- [gift-cards.ts](C:/Users/Administrator/Desktop/payinces/server/src/db/gift-cards.ts:627)：后台 `active` 数量和 `outstandingValue` 聚合统一按 `status = active AND (expiresAt IS NULL OR expiresAt > now)` 实时过滤。
+- [test-gift-card-guards.ts](C:/Users/Administrator/Desktop/payinces/server/scripts/test-gift-card-guards.ts:105)：增加统计口径静态守卫。
+- [test-gift-card-flow.ts](C:/Users/Administrator/Desktop/payinces/server/scripts/test-gift-card-flow.ts:164)：增加懒过期卡不计入可用数和未兑余额的数据库流程验证。
+
+验证全部通过：server type-check、`test:gift-card-guards`、`test:gift-card-flow`、`test:financial-reconciliation-guards`、`git diff --check`。
+
+未修改 routes、schema、package、GiftCardsView、flash-sales 或 instances；这些文件中已有的工作树变更均为本次开始前的并行改动。
+diff --git a/server/scripts/test-gift-card-flow.ts b/server/scripts/test-gift-card-flow.ts
+index 7f86c1686d607ddd88a590e953149467b7001a69..42fbce9191e9f95aff33e97a62e73a4a7315318b
+--- a/server/scripts/test-gift-card-flow.ts
++++ b/server/scripts/test-gift-card-flow.ts
+@@ -161,12 +161,17 @@
+   const batchDisable = await giftCards.batchDisableGiftCards(batch.codes.map(card => card.id))
+   assert.equal(batchDisable.count, 2)
+ 
++  const statsBeforeExpiredCard = await giftCards.getGiftCardStats()
+   const expiredCard = await giftCards.createGiftCard({
+     faceValue: 1,
+     balanceValue: 1,
+     expiresAt: new Date(Date.now() - 60_000),
+     remark: `${runId}:expired`
+   })
++  const statsWithLazyExpiredCard = await giftCards.getGiftCardStats()
++  assert.equal(statsWithLazyExpiredCard.active, statsBeforeExpiredCard.active)
++  assert.equal(statsWithLazyExpiredCard.outstandingValue, statsBeforeExpiredCard.outstandingValue)
++
+   await expectError(() => giftCards.redeemGiftCard(expiredCard.code, recipient.id), 'GIFT_CARD_EXPIRED')
+   const expiredAfterRedeem = await giftCards.findGiftCardByCode(expiredCard.code)
+   assert.equal(expiredAfterRedeem?.status, 'expired')
+diff --git a/server/scripts/test-gift-card-guards.ts b/server/scripts/test-gift-card-guards.ts
+index 82863db9d916b0775f25284d66c77ee017cc19a1..30b55fedf093ebaaea293f1936307f49cb236869
+--- a/server/scripts/test-gift-card-guards.ts
++++ b/server/scripts/test-gift-card-guards.ts
+@@ -102,6 +102,18 @@
+   'gift card redemption must reject self redemption, persist expired status, claim active codes atomically, credit balance, and avoid logging full codes'
+ )
+ 
++const statsSection = db.slice(db.indexOf('export async function getGiftCardStats'))
++
++assert(
++  statsSection.includes('const now = new Date()') &&
++    statsSection.includes("status: 'active'") &&
++    statsSection.includes('OR: [{ expiresAt: null }, { expiresAt: { gt: now } }]') &&
++    statsSection.includes('prisma.giftCard.count({ where: liveActiveWhere })') &&
++    statsSection.includes('where: liveActiveWhere') &&
++    !statsSection.includes("status: { in: ['active', 'disabled'] }"),
++  'admin gift card active count and outstanding balance must exclude expired cards in real time'
++)
++
+ assert(
+   route.includes('function requireGiftCardManager') &&
+     route.includes('PAYINCUS_GIFT_CARD_ADMIN_IDS') &&
+diff --git a/server/src/db/gift-cards.ts b/server/src/db/gift-cards.ts
+index 50351f8cbdfa227154dd438f01fcb320c1ea2773..0b01a09a979cc7823788dbfd19d2e13d58d605f4
+--- a/server/src/db/gift-cards.ts
++++ b/server/src/db/gift-cards.ts
+@@ -623,15 +623,21 @@
+ }
+ 
+ export async function getGiftCardStats() {
++  const now = new Date()
++  const liveActiveWhere: Prisma.GiftCardWhereInput = {
++    status: 'active',
++    OR: [{ expiresAt: null }, { expiresAt: { gt: now } }]
++  }
++
+   const [total, active, used, disabled, expired, outstandingValue, redeemedValue] = await Promise.all([
+     prisma.giftCard.count(),
+-    prisma.giftCard.count({ where: { status: 'active' } }),
++    prisma.giftCard.count({ where: liveActiveWhere }),
+     prisma.giftCard.count({ where: { status: 'used' } }),
+     prisma.giftCard.count({ where: { status: 'disabled' } }),
+     prisma.giftCard.count({ where: { status: 'expired' } }),
+     prisma.giftCard.aggregate({
+       _sum: { balanceValue: true },
+-      where: { status: { in: ['active', 'disabled'] } }
++      where: liveActiveWhere
+     }),
+     prisma.giftCard.aggregate({
+       _sum: { balanceValue: true },
+
+tokens used
+55,833

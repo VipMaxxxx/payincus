@@ -1,0 +1,1 @@
+已完成 FX-059：通过注释及 `normalLineSpeed` 局部命名明确 `trafficLimitSpeed` 表示套餐正常线速；新增系统配置 `traffic_overage_throttle_speed`，默认 `1Mbit`，仲裁继续保持 FX-063“正常线速、流量超量、资源风控取最严”。未改 schema、未碰并行修改的 `traffic-notifier`，未 commit/push。Server type-check 与 `test:plan-bandwidth-limit-guards`、`test:traffic-route-limit-guards`、`test:system-config-value-guards` 均通过。

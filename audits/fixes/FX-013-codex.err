@@ -1,0 +1,3871 @@
+OpenAI Codex v0.144.0-alpha.4
+--------
+workdir: C:\Users\Administrator\Desktop\payinces
+model: gpt-5.6-sol
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: high
+reasoning summaries: none
+session id: 019f52cc-6de1-7a22-8ccd-b56eb3b4a18d
+--------
+user
+你是 PayIncus 仓库实现工程师。先读仓库根 AGENTS.md(返利/计费属高危,先读代码+守卫;不 commit/push/发版、不大重构)。严格按规格,只改 aff.ts 与续费佣金路径及守卫,改完跑守卫报告。不要 commit。不要动 mail.ts 续费入口(另有并行任务在改)。
+---
+# FX-013 规格：禁用优惠码仍照发续费佣金/仍可用(E5③ / BF-3-05 / M15-01)
+
+## owner 裁决(BEHAVIOR.md E5③)
+禁用码应停止续费佣金(并停止折扣)。
+
+## 根因
+实例优惠码校验 validateAffCode(server/src/db/aff.ts:443-468)不检查 enabled;续费扣费 performRenewal 的 AFF 佣金路径也不检查;
+而邮箱码校验已含 `if (!affCode.enabled) ...`(db/aff.ts:1101-1104)。故禁用码在实例新购/续费仍给折扣+返利,口径不一致。
+注:当前无入口把 enabled 置 false(那是 Q-C2 的禁用能力,另立项);本条只做**强制 enabled 检查**,让"一旦禁用即全链失效"成立(现有数据 enabled 均为 true,本改动对现网行为无影响、纯纵深与前置)。
+
+## 修法（改 server/src/db/aff.ts + 续费佣金路径;不碰 package.json)
+1. 在 validateAffCode(实例新购校验,443-468)中,与邮箱校验一致地加 `if (!affCode.enabled) return { valid:false, ... }`(用该函数现有的返回失败结构)。
+2. 在续费的 AFF 佣金/折扣路径(performRenewal 相关,预计在 server/src/db/billing-operations.ts 里取 affCode/算 processAffCommission 处;先 grep 定位)加同样的 enabled 检查:禁用码 → 续费不打折、不发佣金(跳过 commission)。
+3. 保持邮箱码已有的 enabled 检查不变;保证四处口径(实例新购/实例续费/邮箱新购/邮箱续费)对 enabled 一致。
+
+## 加守卫
+在现有 server/scripts/test-aff-review-ui-guards.ts 或最贴近 aff 的守卫追加断言:validateAffCode 与续费佣金路径均检查 affCode.enabled。不改 package.json。
+
+## 不许动
+- 不加"禁用入口"(属 Q-C2 另立项);不改返利比例/折扣数值。不做大重构。
+
+## 验收
+- pnpm --filter server type-check 通过;pnpm --filter server test:aff-review-ui-guards、test:aff-points-query-guards 通过;test:invite-generation-accounting-guards 通过。
+
+## 交付
+一段话:在哪几处加了 enabled 检查、四处口径是否一致、守卫结果。不要 commit。
+
+codex
+我先按高危路径纪律读取根规矩、返利实现和现有守卫，确认续费折扣/佣金的实际调用链与并行改动边界；只会修改 `aff.ts`、续费佣金路径及对应守卫，不碰 `mail.ts`，也不会 commit/push/发版。
+  → 读取 AGENTS.md、相关实现与守卫，定位四条 enabled 口径
+  • 最小修改实例校验、续费路径和 aff 守卫
+  • 运行指定 type-check 与三项守卫并审查 diff
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "Get-Content -Raw AGENTS.md; git status --short; rg -n -C 8 \"validateAffCode|performRenewal|processAffCommission|affCode\\.enabled|enabled\" server/src/db/aff.ts server/src/db/billing-operations.ts server/src/db/mail.ts server/scripts/test-aff-review-ui-guards.ts server/scripts/test-aff-points-query-guards.ts server/scripts/test-invite-generation-accounting-guards.ts" in C:\Users\Administrator\Desktop\payinces
+2026-07-11T20:09:28.197633Z ERROR codex_core::tools::router: error=Exit code: 1
+Wall time: 0.8 seconds
+Output:
+# PayIncus / Incudal â€” é¡¹ç›®ç»Ÿä¸€è§„çŸ©ï¼ˆAGENTS.mdï¼‰
+
+> æœ¬æ–‡ä»¶æ˜¯æœ¬ä»“åº“**æ‰€æœ‰ AI agentï¼ˆClaude Codeã€codex ç­‰ï¼‰çš„ç»Ÿä¸€å·¥ä½œè§„èŒƒ**ã€‚
+> `CLAUDE.md` é€šè¿‡ `@AGENTS.md` å¼•ç”¨æœ¬æ–‡ä»¶ â€”â€” Claude Code ä¸Ž codex è¯»åˆ°çš„æ˜¯**åŒä¸€å¥—è§„çŸ©**ï¼Œæ”¹è¿™ä¸€ä¸ªæ–‡ä»¶å³å¯ã€‚
+> æƒå¨è¿ç»´/å‘ç‰ˆäº‹å®žä»¥ä»“åº“æ ¹çš„ `OPERATIONS_HANDOFF.md`ï¼ˆæ“ä½œæ‰‹å†Œï¼‰ä¸Ž `HANDOFF.md`ï¼ˆç‰ˆæœ¬è¯æ®å°è´¦ï¼‰ä¸ºå‡†ã€‚
+
+---
+
+## 0. æ²Ÿé€šè¯­è¨€
+- ä¸Ž owner é»˜è®¤ç”¨**ä¸­æ–‡**æ²Ÿé€šã€‚
+
+## 1. è¿™æ˜¯ä»€ä¹ˆé¡¹ç›®
+**PayIncus**ï¼ˆå†…éƒ¨ä»£å· `incudal`ï¼‰â€”â€”å•†ç”¨ Incusï¼ˆLXC/KVMï¼‰NAT VPS å”®å–ä¸Žäº¤ä»˜å¹³å°ï¼Œ**çº¿ä¸Šè¿è¥ä¸­**ã€‚å½“å‰ç”Ÿäº§ç‰ˆæœ¬ **v1.3.7**ã€‚pnpm monorepoï¼š
+
+| ç›®å½• | æŠ€æœ¯æ ˆ / ä½œç”¨ |
+|------|----------------|
+| `client/` | Vue 3 + Vite SPAã€‚åŒç«¯æž„å»ºï¼ˆ`VITE_APP_ENTRY`ï¼‰â†’ `dist/user`ï¼ˆpay.payincus.comï¼‰+ `dist/admin`ï¼ˆadmin.payincus.comï¼‰ã€‚ä¸¤ç«¯ç‹¬ç«‹æºã€**ä¸å…±äº« cookie åŸŸ**ã€‚ |
+| `server/` | Fastify 5 + Prisma 7 + PostgreSQLï¼Œ~300 TS æ–‡ä»¶ã€~70 è·¯ç”±ã€~15 è°ƒåº¦/workerã€‚æ—  Redisï¼ˆç”¨ PG advisory lockï¼‰ã€‚ä¸‰å¥—é‰´æƒé¢ï¼šWeb çš„ JWT+refresh cookieã€Public API çš„ `pat_`/`poa_` tokenã€host agent çš„ HMACã€‚ |
+| `agent/` | Go å®¿ä¸» agentï¼Œåªè¯»ç›‘æŽ§ï¼ˆå¿ƒè·³/èµ„æº/å®žä¾‹æ€/æµé‡ï¼‰ï¼ŒHMAC ç­¾åï¼Œè‡ªå‡çº§ã€‚ |
+| å…¶å®ƒ | `docs-site/`ï¼ˆVitePressï¼‰ã€`deploy/`ï¼ˆsystemd+Nginxï¼‰ã€`scripts/`ï¼ˆå®‰è£…/æ ¡éªŒ/OTAï¼‰ã€`plugin-templates/`ã€`theme-templates/`ã€‚ |
+
+éƒ¨ç½²ï¼šä¸‰å±‚æ‹†åˆ†ï¼ˆuser / admin / ç§æœ‰åŽç«¯ `127.0.0.1:3001`ï¼‰ï¼Œè£…æœºæ ¹ `/opt/incudal`ï¼ŒåŽŸå­ OTAï¼ˆ`releases/<ver-ts>` + `current` è½¯é“¾ï¼‰+ è‡ªåŠ¨å›žæ»šã€‚
+
+---
+
+## 2. ðŸ”´ ç¡¬è§„çŸ©ï¼ˆä¸å¯åå•†ï¼Œè¿åå³äº‹æ•…ï¼‰
+
+1. **ä¸ç¢°ç”Ÿäº§**ï¼šæœªç» owner æ˜Žç¡®è¦æ±‚ï¼Œ**ç»ä¸** OTAã€å‘å¸ƒã€pushã€æ‰“ tagã€æ”¹ç”Ÿäº§çŽ¯å¢ƒã€‚
+2. **ä¸åšç ´åæ€§ git**ï¼šæœªç» owner æ˜Žç¡®è¦æ±‚ï¼Œ**ç»ä¸** `git reset`ã€`git checkout --`ã€å¼ºåˆ¶åˆ é™¤ã€æ¸…ç†æœªè·Ÿè¸ªæ–‡ä»¶ã€`git commit`/`git push`ã€‚
+3. **é«˜å±è·¯å¾„å…ˆè¯»åŽå†™**ï¼šæ”¹åŠ¨ä»¥ä¸‹ä»»ä¸€é¢†åŸŸï¼Œ**å¿…é¡»å…ˆè¯»ç›¸å…³ä»£ç  + å¯¹åº”å®ˆå«æµ‹è¯•**å†åŠ¨æ‰‹ï¼š
+   > é‰´æƒ Â· æ”¯ä»˜ Â· æƒé™ Â· é£ŽæŽ§ Â· èµ„æºäº¤ä»˜ Â· å…‘æ¢æµç¨‹ Â· å®žä¾‹åˆ›å»º Â· OTA
+4. **æ”¹åŠ¨æœ€å°åŒ–**ï¼šä¿® bug / å‘ç‰ˆæœŸé—´**ä¸åšå¤§èŒƒå›´é‡æž„**ï¼Œåªæ”¹å¿…è¦çš„ã€‚
+5. **ç»ä¸æ³„å¯†**ï¼šä»»ä½• commitã€handoffã€æ€»ç»“ã€æˆªå›¾ä¸­éƒ½**ä¸å¾—**å‡ºçŽ°å‡­è¯ / token / cookie / å¯†é’¥ã€‚
+6. **æœ¬åœ°è¿‡ â‰  ç”Ÿäº§éªŒè¯**ï¼šæœ¬åœ°é€šè¿‡ã€GitHub Actionsã€Release èµ„äº§ã€OTAã€çº¿ä¸Šå®žè¯æ˜¯**åˆ†å¼€çš„è¯æ®**ï¼Œä¸å¯æ··ä¸ºä¸€è°ˆã€‚
+7. **æ¯æ¬¡æ”¹åŠ¨å¿…é¡»è¿‡å¯¹åº”å®ˆå«**ï¼ˆè§ Â§4ï¼‰ï¼Œå¦åˆ™è§†ä¸º**æœªå®Œæˆ**ã€‚
+8. `RUN_DB_CHECKS=0 bash scripts/apply-online-update.sh <ver>` ä¼š**è·³è¿‡ DB/æ”¯ä»˜å°±ç»ªæ ¡éªŒ**ï¼Œä»…åœ¨ owner æ˜Žç¡®æ‰¹å‡†æ—¶ä½¿ç”¨ã€‚
+
+---
+
+## 3. æœ¬åœ°æ€Žä¹ˆè·‘
+
+- **çŽ¯å¢ƒ**ï¼šNode â‰¥ 20ã€pnpm 9.14.2ã€æœ¬åœ° PostgreSQL 16ã€‚
+- **è£…ä¾èµ–**ï¼š`pnpm install`
+- **ä¸€æŠŠèµ·å…¨éƒ¨ï¼ˆserver + user + adminï¼‰**ï¼š`pnpm dev`
+- **åˆ†å¼€èµ·**ï¼š
+  - åŽç«¯ï¼š`NODE_ENV=development JWT_SECRET=dev-secret-12345678 HOST=127.0.0.1 PORT=3001 pnpm --filter server exec tsx watch src/app.ts`
+  - ç”¨æˆ·å‰ç«¯ï¼š`pnpm dev:user`
+  - ç®¡ç†å‰ç«¯ï¼š`pnpm dev:admin`
+- **ç«¯å£**ï¼šåŽç«¯ API **3001** Â· ç”¨æˆ·å‰ç«¯ **3000** Â· ç®¡ç†å‰ç«¯ **3002**ï¼ˆå‰ç«¯ dev ç» proxy æ‰“åˆ° 3001ï¼‰ã€‚
+
+---
+
+## 4. ðŸ›¡ï¸ å®ˆå«æµ‹è¯•çºªå¾‹ï¼ˆæœ¬ä»“åº“çš„å‘½é—¨ï¼‰
+
+`server/package.json` é‡Œæœ‰ **200+ ä¸ªç‹¬ç«‹ `test-*-guards.ts`**ã€‚å®ƒä»¬æŠŠå…³é”®ä¸šåŠ¡/å‰ç«¯ç»“æž„â€œé’‰æ­»â€ï¼Œ`pnpm test` ä¼šè·‘å…¨å¥—ï¼ˆclient+server type-check + å…¨éƒ¨å®ˆå«ï¼‰ã€‚**ä»»ä½•æ”¹åŠ¨å¿…é¡»è®©ç›¸å…³å®ˆå«é€šè¿‡ã€‚**
+
+- **å…¨é‡**ï¼ˆæ…¢ï¼Œå‘ç‰ˆå‰è·‘ï¼‰ï¼š`pnpm test`
+- **å•ä¸ª**ï¼š`pnpm --filter server test:<guard-name>`
+- **å‰ç«¯æœ€å¸¸ç”¨ä¸‰ä¸ª**ï¼š
+  - `test:frontend-route-guards` â€”â€” è·¯ç”± / **è¡¨æ ¼å¸ƒå±€** / `@click` è·¯å¾„æ–­è¨€
+  - `test:frontend-dist-boundary-guards` â€”â€” åŒç«¯ dist è¾¹ç•Œ
+  - `test:frontend-i18n-keys` â€”â€” i18n key å®Œæ•´æ€§
+- **Go agent**ï¼š`pnpm test:agent`
+
+### âš ï¸ è¡¨æ ¼å¸ƒå±€å®ˆå«ï¼ˆæœ€å®¹æ˜“è¸©é›·ï¼‰
+ä¸€æ‰¹è¡¨è¢«å®ˆå«**é”å®š**ä¸ºâ€œ**ç§»åŠ¨å¡ + PC å®šå®½è¡¨ï¼ˆ`table-fixed` / `overflow-hidden`ï¼‰ï¼Œç»ä¸æ¨ªå‘æ»šåŠ¨**â€ï¼Œå¹¶**åå‘ç¦æ­¢** `overflow-x-auto` / `min-w-[...]` / åŽ»æŽ‰ `table-fixed`ã€‚
+- æƒ³ä¿®â€œå®½è¡¨æŒ¤åŽ‹â€æ—¶ï¼š**å…ˆåˆ¤æ–­è¯¥è¡¨æ˜¯å¦åœ¨å®ˆå«æ¸…å•é‡Œ**ã€‚é”å®šè¡¨**åªèƒ½åœ¨ `table-fixed` å†…å¹³è¡¡åˆ—å®½**ï¼ˆåˆ—å®½ç™¾åˆ†æ¯”åˆè®¡ = 100%ï¼‰+ å…è®¸å•å…ƒæ ¼æ¢è¡Œ + é ç§»åŠ¨å¡åº”å¯¹çª„å±ï¼›**ä¸èƒ½**æ”¹æˆæ¨ªå‘æ»šåŠ¨ã€‚
+- å—é”å®šçš„è¡¨ï¼ˆç”¨æˆ·ç«¯ï¼‰ï¼š`MyPackagesView`ã€`MyHostsView`ã€`TransfersView`ã€`OrdersView`ã€`InvitesView`ã€`FlashSalesView`ã€`HostingWalletView`ã€`InstancesView`ã€`LogsView`ã€`EntertainmentView`ï¼›ï¼ˆç®¡ç†ç«¯ï¼‰`admin/BillingView`ã€`admin/ImagesView`ã€`admin/HelpManageView`ã€`admin/MailView`ã€`admin/PluginCenterView`ï¼›ï¼ˆç»„ä»¶ï¼‰`HostPublicIpv4Tab`ã€`InstanceLogsTab`ã€`ConfigEditModal`ã€‚
+- æ”¹ä»»ä¸€å‰ç«¯æ–‡ä»¶åŽ**å¿…è·‘** `test:frontend-route-guards`ã€‚
+
+---
+
+## 5. æž„å»º / æ ¡éªŒå‘½ä»¤
+
+| ç›®çš„ | å‘½ä»¤ |
+|------|------|
+| æž„å»ºï¼ˆå« dist è¾¹ç•Œå®ˆå«ï¼‰| `pnpm build` |
+| åªæž„å»ºå‰ç«¯ / åŽç«¯ | `pnpm build:client` / `pnpm build:server` |
+| Lintï¼ˆæ£€æŸ¥ / è‡ªåŠ¨ä¿®ï¼‰| `pnpm lint` / `pnpm lint:fix` |
+| ç±»åž‹æ£€æŸ¥ | `pnpm --filter client type-check` Â· `pnpm --filter server type-check` |
+| å…¨å¥—å®ˆå« | `pnpm test` |
+| æ–‡æ¡£ç«™å¼€å‘ / æž„å»º | `pnpm docs:dev` / `pnpm docs:build` |
+
+---
+
+## 6. UI æ”¹åŠ¨çº¦æŸï¼ˆå•è‰²é‡åšè¿›è¡Œä¸­ï¼‰
+
+- **æ–¹å‘**ï¼šè‹¹æžœå¼**çº¯é»‘ç™½å•è‰²**ï¼ˆæµ…è‰²=ç™½åº•é»‘å­—ï¼Œæ·±è‰²=é»‘åº•ç™½å­—ï¼‰ï¼ŒåŽ»äºŒæ¬¡å…ƒ/å‰ç¥¥ç‰©/ç«‹ç»˜ã€‚çŠ¶æ€è‰²**åªä¿ç•™ç»¿/ç¥ç€/çº¢**ä¸‰ç§ï¼ˆè¿è¡Œ/å¾…å¤„ç†/å¤±è´¥ï¼‰ã€‚
+- **çº¢çº¿**ï¼šåªæ”¹**æ ·å¼ / å¸ƒå±€ / æ–‡æ¡ˆå±‚çº§**ï¼Œ**ä¸ç¢°**åŽç«¯æŽ¥å£ã€æƒé™ã€æ”¯ä»˜/è®¢å•/å®žä¾‹åˆ›å»º/OTA ç­‰ä¸šåŠ¡é€»è¾‘ä¸Žè·¯ç”±è¡Œä¸ºâ€”â€”**åŠŸèƒ½ 100% ä¸å˜**ã€‚
+- **é…è‰²èµ° token å±‚**ï¼ˆ`client/tailwind.config.js`ï¼‰ï¼šä¸€å †å½©è‰² ramp å·²æ˜ å°„åˆ°ä¸­æ€§ç°ï¼›`rose â†’ çœŸçº¢`ï¼ˆå±é™©/äºæŸè¯­ä¹‰ï¼‰**ä¿ç•™ä¸å¯ç°åŒ–**ï¼›æ¸¸æˆåŒ–æ¨¡å—ï¼ˆæˆå°±/ç­¾åˆ°/æŠ½å¥–/ç¨€æœ‰åº¦ï¼‰å½©è‰²**åˆ»æ„ä¿ç•™**ã€‚
+- `kawaii-cloud.css` **æ¸è¿›æ”¹é€ ã€ä¸é‡å†™**ï¼›å•é¡µåŽ»è‰²ç”¨é¡µé¢ `<style scoped>`ã€‚
+- åŠ¨æ•ˆå¯ç”¨ **GSAP**ï¼ˆå·²è£… gsap-skillsï¼Œè§ `.claude/skills/`ï¼‰ï¼›å°Šé‡ `prefers-reduced-motion`ã€‚
+
+---
+
+## 7. åä½œæ¨¡åž‹ï¼ˆClaude Code â‡„ codexï¼‰
+
+- **Claude Code = æŠ€æœ¯è´Ÿè´£äºº / é›†æˆæ–¹**ï¼šå®šæ ¹å› ã€åˆ‡ä»»åŠ¡ã€å†™è§„æ ¼ã€å®ˆä¸å˜é‡ã€å®¡ diffã€è·‘å®ˆå«ã€çœŸæœºéªŒè¯ã€ç®¡ gitï¼ˆ**ä»…åœ¨ owner åŒæ„æ—¶** commit / pushï¼‰ã€‚
+- **codex = å®žçŽ°å·¥äºº**ï¼šæŒ‰ Claude ç»™çš„è§„æ ¼å®žçŽ°æ”¹åŠ¨ï¼Œå°¤å…¶**ä½Ž/ä¸­å±ã€è‡ªåŒ…å«ã€å¯å¹¶è¡Œ**çš„å—ã€‚
+- **é£Žé™©åˆ†æ¡£**ï¼šé«˜å±è·¯å¾„ç”± Claude å®šæ ¹å›  + æ”¶ç´§è§„æ ¼ï¼›ä½Ž/ä¸­å± codex å¯ç«¯åˆ°ç«¯ä¿®ã€‚**ä»»ä½•ä¸€æ–¹æ”¹å®Œéƒ½è¦è·‘ç›¸å…³å®ˆå«ï¼ŒClaude ç»Ÿä¸€å®¡æŸ¥åŽæ‰è¿›å…¥ä¸‹ä¸€æ­¥ã€‚**
+- **é¿å…å†²çª**ï¼šåŒä¸€æ‰¹æ–‡ä»¶ä¸€æ¬¡åªè®©ä¸€ä¸ª agent æ”¹ã€‚
+
+---
+
+## 8. ä¸€ä¸ªæ”¹åŠ¨çš„ã€Œå®Œæˆã€å®šä¹‰
+
+1. ç›¸å…³ **type-check** é€šè¿‡ï¼›
+2. ç›¸å…³ **å®ˆå«æµ‹è¯•** é€šè¿‡ï¼›
+3. è‹¥åŠ¨å‰ç«¯ â†’ **åŒç«¯ build** é€šè¿‡ï¼›
+4. **çœŸæœºè·‘è¿‡**å—å½±å“æµç¨‹ï¼ˆä¸æ˜¯åªçœ‹æµ‹è¯•ï¼‰ï¼›
+5. **æŠ¥å‘Š**ï¼šæ”¹äº†å“ªäº›æ–‡ä»¶ / ä¸ºä»€ä¹ˆ / é£Žé™© / æ€Žä¹ˆéªŒè¯çš„ã€‚
+
+ä»¥ä¸Šä»»ä¸€æœªæ»¡è¶³ = **æœªå®Œæˆ**ã€‚
+
+ M client/src/components/plugins/PluginFrame.vue
+ M client/src/utils/validation.ts
+ M deploy/incudal-backend.service.example
+ M deploy/incudal-online-rollback@.service.example
+ M deploy/incudal-online-update@.service.example
+ M package.json
+ M scripts/install-panel.sh
+ M scripts/test-install-panel-guards.sh
+ M server/package.json
+ M server/scripts/test-admin-billing-route-id-guards.ts
+ M server/scripts/test-balance-adjustment-approval-guards.ts
+ M server/scripts/test-capacity-cost-guards.ts
+ M server/scripts/test-log-sanitizer.ts
+ M server/scripts/test-plugin-client-boundary-guards.ts
+ M server/scripts/test-system-config-value-guards.ts
+ M server/scripts/test-system-update-guards.ts
+ M server/scripts/test-trust-proxy-config.ts
+ M server/src/app.ts
+ M server/src/db/balance.ts
+ M server/src/lib/epay.ts
+ M server/src/lib/errors.ts
+ M server/src/lib/heleket.ts
+ M server/src/lib/log-sanitizer.ts
+ M server/src/lib/lottery-notifier.ts
+ M server/src/lib/lsky.ts
+ M server/src/lib/notifier.ts
+ M server/src/lib/outbound-security.ts
+ M server/src/lib/plugin-market-submission-scan.ts
+ M server/src/lib/redirect-validator.ts
+ M server/src/lib/theme-market-submission-scan.ts
+ M server/src/lib/trust-proxy-config.ts
+ M server/src/routes/admin-billing.ts
+ M server/src/routes/admin-capacity-cost.ts
+ M server/src/routes/system-config.ts
+ M server/src/routes/tickets.ts
+ M server/src/services/cranemail.ts
+ M server/src/services/smartermail.ts
+ M server/src/services/system-monitor.ts
+ M server/src/services/traffic-notifier.ts
+?? AGENTS.md
+?? BEHAVIOR.md
+?? CLAUDE.md
+?? DEFECTS.md
+?? EXECUTION.md
+?? EXECUTION_LOG.md
+?? FIX_PLAN.md
+?? MAINTENANCE_PLAN.md
+?? artifacts/
+?? audits/
+?? deploy/incudal-online-task.sh.example
+?? deploy/incudal-ota-chown-wrapper.sh.example
+?? deploy/incudal-systemctl-wrapper.sh.example
+?? server/scripts/test-error-response-guards.ts
+?? server/scripts/test-redirect-validator-guards.ts
+?? server/scripts/test-safe-outbound-fetch-guards.ts
+?? skills-lock.json
+rg : The term 'rg' is not recognized as the name of a cmdlet, function, script file, or operable program. Check the 
+spelling of the name, or if a path was included, verify that the path is correct and try again.
+At line:2 char:49
++ Get-Content -Raw AGENTS.md; git status --short; rg -n -C 8 "validateA ...
++                                                 ~~
+    + CategoryInfo          : ObjectNotFound: (rg:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+
+ exited 1 in 837ms:
+# PayIncus / Incudal â€” é¡¹ç›®ç»Ÿä¸€è§„çŸ©ï¼ˆAGENTS.mdï¼‰
+
+> æœ¬æ–‡ä»¶æ˜¯æœ¬ä»“åº“**æ‰€æœ‰ AI agentï¼ˆClaude Codeã€codex ç­‰ï¼‰çš„ç»Ÿä¸€å·¥ä½œè§„èŒƒ**ã€‚
+> `CLAUDE.md` é€šè¿‡ `@AGENTS.md` å¼•ç”¨æœ¬æ–‡ä»¶ â€”â€” Claude Code ä¸Ž codex è¯»åˆ°çš„æ˜¯**åŒä¸€å¥—è§„çŸ©**ï¼Œæ”¹è¿™ä¸€ä¸ªæ–‡ä»¶å³å¯ã€‚
+> æƒå¨è¿ç»´/å‘ç‰ˆäº‹å®žä»¥ä»“åº“æ ¹çš„ `OPERATIONS_HANDOFF.md`ï¼ˆæ“ä½œæ‰‹å†Œï¼‰ä¸Ž `HANDOFF.md`ï¼ˆç‰ˆæœ¬è¯æ®å°è´¦ï¼‰ä¸ºå‡†ã€‚
+
+---
+
+## 0. æ²Ÿé€šè¯­è¨€
+- ä¸Ž owner é»˜è®¤ç”¨**ä¸­æ–‡**æ²Ÿé€šã€‚
+
+## 1. è¿™æ˜¯ä»€ä¹ˆé¡¹ç›®
+**PayIncus**ï¼ˆå†…éƒ¨ä»£å· `incudal`ï¼‰â€”â€”å•†ç”¨ Incusï¼ˆLXC/KVMï¼‰NAT VPS å”®å–ä¸Žäº¤ä»˜å¹³å°ï¼Œ**çº¿ä¸Šè¿è¥ä¸­**ã€‚å½“å‰ç”Ÿäº§ç‰ˆæœ¬ **v1.3.7**ã€‚pnpm monorepoï¼š
+
+| ç›®å½• | æŠ€æœ¯æ ˆ / ä½œç”¨ |
+|------|----------------|
+| `client/` | Vue 3 + Vite SPAã€‚åŒç«¯æž„å»ºï¼ˆ`VITE_APP_ENTRY`ï¼‰â†’ `dist/user`ï¼ˆpay.payincus.comï¼‰+ `dist/admin`ï¼ˆadmin.payincus.comï¼‰ã€‚ä¸¤ç«¯ç‹¬ç«‹æºã€**ä¸å…±äº« cookie åŸŸ**ã€‚ |
+| `server/` | Fastify 5 + Prisma 7 + PostgreSQLï¼Œ~300 TS æ–‡ä»¶ã€~70 è·¯ç”±ã€~15 è°ƒåº¦/workerã€‚æ—  Redisï¼ˆç”¨ PG advisory lockï¼‰ã€‚ä¸‰å¥—é‰´æƒé¢ï¼šWeb çš„ JWT+refresh cookieã€Public API çš„ `pat_`/`poa_` tokenã€host agent çš„ HMACã€‚ |
+| `agent/` | Go å®¿ä¸» agentï¼Œåªè¯»ç›‘æŽ§ï¼ˆå¿ƒè·³/èµ„æº/å®žä¾‹æ€/æµé‡ï¼‰ï¼ŒHMAC ç­¾åï¼Œè‡ªå‡çº§ã€‚ |
+| å…¶å®ƒ | `docs-site/`ï¼ˆVitePressï¼‰ã€`deploy/`ï¼ˆsystemd+Nginxï¼‰ã€`scripts/`ï¼ˆå®‰è£…/æ ¡éªŒ/OTAï¼‰ã€`plugin-templates/`ã€`theme-templates/`ã€‚ |
+
+éƒ¨ç½²ï¼šä¸‰å±‚æ‹†åˆ†ï¼ˆuser / admin / ç§æœ‰åŽç«¯ `127.0.0.1:3001`ï¼‰ï¼Œè£…æœºæ ¹ `/opt/incudal`ï¼ŒåŽŸå­ OTAï¼ˆ`releases/<ver-ts>` + `current` è½¯é“¾ï¼‰+ è‡ªåŠ¨å›žæ»šã€‚
+
+---
+
+## 2. ðŸ”´ ç¡¬è§„çŸ©ï¼ˆä¸å¯åå•†ï¼Œè¿åå³äº‹æ•…ï¼‰
+
+1. **ä¸ç¢°ç”Ÿäº§**ï¼šæœªç» owner æ˜Žç¡®è¦æ±‚ï¼Œ**ç»ä¸** OTAã€å‘å¸ƒã€pushã€æ‰“ tagã€æ”¹ç”Ÿäº§çŽ¯å¢ƒã€‚
+2. **ä¸åšç ´åæ€§ git**ï¼šæœªç» owner æ˜Žç¡®è¦æ±‚ï¼Œ**ç»ä¸** `git reset`ã€`git checkout --`ã€å¼ºåˆ¶åˆ é™¤ã€æ¸…ç†æœªè·Ÿè¸ªæ–‡ä»¶ã€`git commit`/`git push`ã€‚
+3. **é«˜å±è·¯å¾„å…ˆè¯»åŽå†™**ï¼šæ”¹åŠ¨ä»¥ä¸‹ä»»ä¸€é¢†åŸŸï¼Œ**å¿…é¡»å…ˆè¯»ç›¸å…³ä»£ç  + å¯¹åº”å®ˆå«æµ‹è¯•**å†åŠ¨æ‰‹ï¼š
+   > é‰´æƒ Â· æ”¯ä»˜ Â· æƒé™ Â· é£ŽæŽ§ Â· èµ„æºäº¤ä»˜ Â· å…‘æ¢æµç¨‹ Â· å®žä¾‹åˆ›å»º Â· OTA
+4. **æ”¹åŠ¨æœ€å°åŒ–**ï¼šä¿® bug / å‘ç‰ˆæœŸé—´**ä¸åšå¤§èŒƒå›´é‡æž„**ï¼Œåªæ”¹å¿…è¦çš„ã€‚
+5. **ç»ä¸æ³„å¯†**ï¼šä»»ä½• commitã€handoffã€æ€»ç»“ã€æˆªå›¾ä¸­éƒ½**ä¸å¾—**å‡ºçŽ°å‡­è¯ / token / cookie / å¯†é’¥ã€‚
+6. **æœ¬åœ°è¿‡ â‰  ç”Ÿäº§éªŒè¯**ï¼šæœ¬åœ°é€šè¿‡ã€GitHub Actionsã€Release èµ„äº§ã€OTAã€çº¿ä¸Šå®žè¯æ˜¯**åˆ†å¼€çš„è¯æ®**ï¼Œä¸å¯æ··ä¸ºä¸€è°ˆã€‚
+7. **æ¯æ¬¡æ”¹åŠ¨å¿…é¡»è¿‡å¯¹åº”å®ˆå«**ï¼ˆè§ Â§4ï¼‰ï¼Œå¦åˆ™è§†ä¸º**æœªå®Œæˆ**ã€‚
+8. `RUN_DB_CHECKS=0 bash scripts/apply-online-update.sh <ver>` ä¼š**è·³è¿‡ DB/æ”¯ä»˜å°±ç»ªæ ¡éªŒ**ï¼Œä»…åœ¨ owner æ˜Žç¡®æ‰¹å‡†æ—¶ä½¿ç”¨ã€‚
+
+---
+
+## 3. æœ¬åœ°æ€Žä¹ˆè·‘
+
+- **çŽ¯å¢ƒ**ï¼šNode â‰¥ 20ã€pnpm 9.14.2ã€æœ¬åœ° PostgreSQL 16ã€‚
+- **è£…ä¾èµ–**ï¼š`pnpm install`
+- **ä¸€æŠŠèµ·å…¨éƒ¨ï¼ˆserver + user + adminï¼‰**ï¼š`pnpm dev`
+- **åˆ†å¼€èµ·**ï¼š
+  - åŽç«¯ï¼š`NODE_ENV=development JWT_SECRET=dev-secret-12345678 HOST=127.0.0.1 PORT=3001 pnpm --filter server exec tsx watch src/app.ts`
+  - ç”¨æˆ·å‰ç«¯ï¼š`pnpm dev:user`
+  - ç®¡ç†å‰ç«¯ï¼š`pnpm dev:admin`
+- **ç«¯å£**ï¼šåŽç«¯ API **3001** Â· ç”¨æˆ·å‰ç«¯ **3000** Â· ç®¡ç†å‰ç«¯ **3002**ï¼ˆå‰ç«¯ dev ç» proxy æ‰“åˆ° 3001ï¼‰ã€‚
+
+---
+
+## 4. ðŸ›¡ï¸ å®ˆå«æµ‹è¯•çºªå¾‹ï¼ˆæœ¬ä»“åº“çš„å‘½é—¨ï¼‰
+
+`server/package.json` é‡Œæœ‰ **200+ ä¸ªç‹¬ç«‹ `test-*-guards.ts`**ã€‚å®ƒä»¬æŠŠå…³é”®ä¸šåŠ¡/å‰ç«¯ç»“æž„â€œé’‰æ­»â€ï¼Œ`pnpm test` ä¼šè·‘å…¨å¥—ï¼ˆclient+server type-check + å…¨éƒ¨å®ˆå«ï¼‰ã€‚**ä»»ä½•æ”¹åŠ¨å¿…é¡»è®©ç›¸å…³å®ˆå«é€šè¿‡ã€‚**
+
+- **å…¨é‡**ï¼ˆæ…¢ï¼Œå‘ç‰ˆå‰è·‘ï¼‰ï¼š`pnpm test`
+- **å•ä¸ª**ï¼š`pnpm --filter server test:<guard-name>`
+- **å‰ç«¯æœ€å¸¸ç”¨ä¸‰ä¸ª**ï¼š
+  - `test:frontend-route-guards` â€”â€” è·¯ç”± / **è¡¨æ ¼å¸ƒå±€** / `@click` è·¯å¾„æ–­è¨€
+  - `test:frontend-dist-boundary-guards` â€”â€” åŒç«¯ dist è¾¹ç•Œ
+  - `test:frontend-i18n-keys` â€”â€” i18n key å®Œæ•´æ€§
+- **Go agent**ï¼š`pnpm test:agent`
+
+### âš ï¸ è¡¨æ ¼å¸ƒå±€å®ˆå«ï¼ˆæœ€å®¹æ˜“è¸©é›·ï¼‰
+ä¸€æ‰¹è¡¨è¢«å®ˆå«**é”å®š**ä¸ºâ€œ**ç§»åŠ¨å¡ + PC å®šå®½è¡¨ï¼ˆ`table-fixed` / `overflow-hidden`ï¼‰ï¼Œç»ä¸æ¨ªå‘æ»šåŠ¨**â€ï¼Œå¹¶**åå‘ç¦æ­¢** `overflow-x-auto` / `min-w-[...]` / åŽ»æŽ‰ `table-fixed`ã€‚
+- æƒ³ä¿®â€œå®½è¡¨æŒ¤åŽ‹â€æ—¶ï¼š**å…ˆåˆ¤æ–­è¯¥è¡¨æ˜¯å¦åœ¨å®ˆå«æ¸…å•é‡Œ**ã€‚é”å®šè¡¨**åªèƒ½åœ¨ `table-fixed` å†…å¹³è¡¡åˆ—å®½**ï¼ˆåˆ—å®½ç™¾åˆ†æ¯”åˆè®¡ = 100%ï¼‰+ å…è®¸å•å…ƒæ ¼æ¢è¡Œ + é ç§»åŠ¨å¡åº”å¯¹çª„å±ï¼›**ä¸èƒ½**æ”¹æˆæ¨ªå‘æ»šåŠ¨ã€‚
+- å—é”å®šçš„è¡¨ï¼ˆç”¨æˆ·ç«¯ï¼‰ï¼š`MyPackagesView`ã€`MyHostsView`ã€`TransfersView`ã€`OrdersView`ã€`InvitesView`ã€`FlashSalesView`ã€`HostingWalletView`ã€`InstancesView`ã€`LogsView`ã€`EntertainmentView`ï¼›ï¼ˆç®¡ç†ç«¯ï¼‰`admin/BillingView`ã€`admin/ImagesView`ã€`admin/HelpManageView`ã€`admin/MailView`ã€`admin/PluginCenterView`ï¼›ï¼ˆç»„ä»¶ï¼‰`HostPublicIpv4Tab`ã€`InstanceLogsTab`ã€`ConfigEditModal`ã€‚
+- æ”¹ä»»ä¸€å‰ç«¯æ–‡ä»¶åŽ**å¿…è·‘** `test:frontend-route-guards`ã€‚
+
+---
+
+## 5. æž„å»º / æ ¡éªŒå‘½ä»¤
+
+| ç›®çš„ | å‘½ä»¤ |
+|------|------|
+| æž„å»ºï¼ˆå« dist è¾¹ç•Œå®ˆå«ï¼‰| `pnpm build` |
+| åªæž„å»ºå‰ç«¯ / åŽç«¯ | `pnpm build:client` / `pnpm build:server` |
+| Lintï¼ˆæ£€æŸ¥ / è‡ªåŠ¨ä¿®ï¼‰| `pnpm lint` / `pnpm lint:fix` |
+| ç±»åž‹æ£€æŸ¥ | `pnpm --filter client type-check` Â· `pnpm --filter server type-check` |
+| å…¨å¥—å®ˆå« | `pnpm test` |
+| æ–‡æ¡£ç«™å¼€å‘ / æž„å»º | `pnpm docs:dev` / `pnpm docs:build` |
+
+---
+
+## 6. UI æ”¹åŠ¨çº¦æŸï¼ˆå•è‰²é‡åšè¿›è¡Œä¸­ï¼‰
+
+- **æ–¹å‘**ï¼šè‹¹æžœå¼**çº¯é»‘ç™½å•è‰²**ï¼ˆæµ…è‰²=ç™½åº•é»‘å­—ï¼Œæ·±è‰²=é»‘åº•ç™½å­—ï¼‰ï¼ŒåŽ»äºŒæ¬¡å…ƒ/å‰ç¥¥ç‰©/ç«‹ç»˜ã€‚çŠ¶æ€è‰²**åªä¿ç•™ç»¿/ç¥ç€/çº¢**ä¸‰ç§ï¼ˆè¿è¡Œ/å¾…å¤„ç†/å¤±è´¥ï¼‰ã€‚
+- **çº¢çº¿**ï¼šåªæ”¹**æ ·å¼ / å¸ƒå±€ / æ–‡æ¡ˆå±‚çº§**ï¼Œ**ä¸ç¢°**åŽç«¯æŽ¥å£ã€æƒé™ã€æ”¯ä»˜/è®¢å•/å®žä¾‹åˆ›å»º/OTA ç­‰ä¸šåŠ¡é€»è¾‘ä¸Žè·¯ç”±è¡Œä¸ºâ€”â€”**åŠŸèƒ½ 100% ä¸å˜**ã€‚
+- **é…è‰²èµ° token å±‚**ï¼ˆ`client/tailwind.config.js`ï¼‰ï¼šä¸€å †å½©è‰² ramp å·²æ˜ å°„åˆ°ä¸­æ€§ç°ï¼›`rose â†’ çœŸçº¢`ï¼ˆå±é™©/äºæŸè¯­ä¹‰ï¼‰**ä¿ç•™ä¸å¯ç°åŒ–**ï¼›æ¸¸æˆåŒ–æ¨¡å—ï¼ˆæˆå°±/ç­¾åˆ°/æŠ½å¥–/ç¨€æœ‰åº¦ï¼‰å½©è‰²**åˆ»æ„ä¿ç•™**ã€‚
+- `kawaii-cloud.css` **æ¸è¿›æ”¹é€ ã€ä¸é‡å†™**ï¼›å•é¡µåŽ»è‰²ç”¨é¡µé¢ `<style scoped>`ã€‚
+- åŠ¨æ•ˆå¯ç”¨ **GSAP**ï¼ˆå·²è£… gsap-skillsï¼Œè§ `.claude/skills/`ï¼‰ï¼›å°Šé‡ `prefers-reduced-motion`ã€‚
+
+---
+
+## 7. åä½œæ¨¡åž‹ï¼ˆClaude Code â‡„ codexï¼‰
+
+- **Claude Code = æŠ€æœ¯è´Ÿè´£äºº / é›†æˆæ–¹**ï¼šå®šæ ¹å› ã€åˆ‡ä»»åŠ¡ã€å†™è§„æ ¼ã€å®ˆä¸å˜é‡ã€å®¡ diffã€è·‘å®ˆå«ã€çœŸæœºéªŒè¯ã€ç®¡ gitï¼ˆ**ä»…åœ¨ owner åŒæ„æ—¶** commit / pushï¼‰ã€‚
+- **codex = å®žçŽ°å·¥äºº**ï¼šæŒ‰ Claude ç»™çš„è§„æ ¼å®žçŽ°æ”¹åŠ¨ï¼Œå°¤å…¶**ä½Ž/ä¸­å±ã€è‡ªåŒ…å«ã€å¯å¹¶è¡Œ**çš„å—ã€‚
+- **é£Žé™©åˆ†æ¡£**ï¼šé«˜å±è·¯å¾„ç”± Claude å®šæ ¹å›  + æ”¶ç´§è§„æ ¼ï¼›ä½Ž/ä¸­å± codex å¯ç«¯åˆ°ç«¯ä¿®ã€‚**ä»»ä½•ä¸€æ–¹æ”¹å®Œéƒ½è¦è·‘ç›¸å…³å®ˆå«ï¼ŒClaude ç»Ÿä¸€å®¡æŸ¥åŽæ‰è¿›å…¥ä¸‹ä¸€æ­¥ã€‚**
+- **é¿å…å†²çª**ï¼šåŒä¸€æ‰¹æ–‡ä»¶ä¸€æ¬¡åªè®©ä¸€ä¸ª agent æ”¹ã€‚
+
+---
+
+## 8. ä¸€ä¸ªæ”¹åŠ¨çš„ã€Œå®Œæˆã€å®šä¹‰
+
+1. ç›¸å…³ **type-check** é€šè¿‡ï¼›
+2. ç›¸å…³ **å®ˆå«æµ‹è¯•** é€šè¿‡ï¼›
+3. è‹¥åŠ¨å‰ç«¯ â†’ **åŒç«¯ build** é€šè¿‡ï¼›
+4. **çœŸæœºè·‘è¿‡**å—å½±å“æµç¨‹ï¼ˆä¸æ˜¯åªçœ‹æµ‹è¯•ï¼‰ï¼›
+5. **æŠ¥å‘Š**ï¼šæ”¹äº†å“ªäº›æ–‡ä»¶ / ä¸ºä»€ä¹ˆ / é£Žé™© / æ€Žä¹ˆéªŒè¯çš„ã€‚
+
+ä»¥ä¸Šä»»ä¸€æœªæ»¡è¶³ = **æœªå®Œæˆ**ã€‚
+
+ M client/src/components/plugins/PluginFrame.vue
+ M client/src/utils/validation.ts
+ M deploy/incudal-backend.service.example
+ M deploy/incudal-online-rollback@.service.example
+ M deploy/incudal-online-update@.service.example
+ M package.json
+ M scripts/install-panel.sh
+ M scripts/test-install-panel-guards.sh
+ M server/package.json
+ M server/scripts/test-admin-billing-route-id-guards.ts
+ M server/scripts/test-balance-adjustment-approval-guards.ts
+ M server/scripts/test-capacity-cost-guards.ts
+ M server/scripts/test-log-sanitizer.ts
+ M server/scripts/test-plugin-client-boundary-guards.ts
+ M server/scripts/test-system-config-value-guards.ts
+ M server/scripts/test-system-update-guards.ts
+ M server/scripts/test-trust-proxy-config.ts
+ M server/src/app.ts
+ M server/src/db/balance.ts
+ M server/src/lib/epay.ts
+ M server/src/lib/errors.ts
+ M server/src/lib/heleket.ts
+ M server/src/lib/log-sanitizer.ts
+ M server/src/lib/lottery-notifier.ts
+ M server/src/lib/lsky.ts
+ M server/src/lib/notifier.ts
+ M server/src/lib/outbound-security.ts
+ M server/src/lib/plugin-market-submission-scan.ts
+ M server/src/lib/redirect-validator.ts
+ M server/src/lib/theme-market-submission-scan.ts
+ M server/src/lib/trust-proxy-config.ts
+ M server/src/routes/admin-billing.ts
+ M server/src/routes/admin-capacity-cost.ts
+ M server/src/routes/system-config.ts
+ M server/src/routes/tickets.ts
+ M server/src/services/cranemail.ts
+ M server/src/services/smartermail.ts
+ M server/src/services/system-monitor.ts
+ M server/src/services/traffic-notifier.ts
+?? AGENTS.md
+?? BEHAVIOR.md
+?? CLAUDE.md
+?? DEFECTS.md
+?? EXECUTION.md
+?? EXECUTION_LOG.md
+?? FIX_PLAN.md
+?? MAINTENANCE_PLAN.md
+?? artifacts/
+?? audits/
+?? deploy/incudal-online-task.sh.example
+?? deploy/incudal-ota-chown-wrapper.sh.example
+?? deploy/incudal-systemctl-wrapper.sh.example
+?? server/scripts/test-error-response-guards.ts
+?? server/scripts/test-redirect-validator-guards.ts
+?? server/scripts/test-safe-outbound-fetch-guards.ts
+?? skills-lock.json
+rg : The term 'rg' is not recognized as the name of a cmdlet, function, script file, or operable program. Check the 
+spelling of the name, or if a path was included, verify that the path is correct and try again.
+At line:2 char:49
++ Get-Content -Raw AGENTS.md; git status --short; rg -n -C 8 "validateA ...
++                                                 ~~
+    + CategoryInfo          : ObjectNotFound: (rg:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+
+codex
+仓库当前已有大量与本任务无关的未提交改动，我会全部保留并避开；目标文件目前未显示为已修改。环境没有 `rg`，改用 PowerShell 文本检索继续定位，并会单独检查目标文件 diff，防止覆盖并行任务。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$targets = @('"'server/src/db/aff.ts','server/src/db/billing-operations.ts','server/scripts/test-aff-review-ui-guards.ts','server/scripts/test-aff-points-query-guards.ts','server/scripts/test-invite-generation-accounting-guards.ts'); Select-String -Path "'$targets -Pattern '"'validateAffCode|performRenewal|processAffCommission|affCode\\.enabled|enabled' -Context 8,12; Get-ChildItem server/src -Recurse -Filter '*.ts' | Select-String -Pattern 'performRenewal|processAffCommission' | Select-Object Path,LineNumber,Line; git diff -- server/src/db/aff.ts server/src/db/billing-operations.ts server/scripts/test-aff-review-ui-guards.ts" in C:\Users\Administrator\Desktop\payinces
+ succeeded in 1437ms:
+
+  server\src\db\aff.ts:424:      error: error instanceof Error ? error.message : '删除优惠码失败'
+  server\src\db\aff.ts:425:    }
+  server\src\db\aff.ts:426:  }
+  server\src\db\aff.ts:427:}
+  server\src\db\aff.ts:428:
+  server\src\db\aff.ts:429:/**
+  server\src\db\aff.ts:430: * 验证优惠码（支持全局码）
+  server\src\db\aff.ts:431: */
+> server\src\db\aff.ts:432:export async function validateAffCode(
+  server\src\db\aff.ts:433:  code: string,
+  server\src\db\aff.ts:434:  packagePlanId: number,
+  server\src\db\aff.ts:435:  userId: number
+  server\src\db\aff.ts:436:): Promise<{
+  server\src\db\aff.ts:437:  valid: boolean
+  server\src\db\aff.ts:438:  affCode?: AffCode
+  server\src\db\aff.ts:439:  discountRate?: number
+  server\src\db\aff.ts:440:  commissionRate?: number
+  server\src\db\aff.ts:441:  error?: string
+  server\src\db\aff.ts:442:}> {
+  server\src\db\aff.ts:443:  // 1. 查询优惠码
+  server\src\db\aff.ts:444:  const affCode = await prisma.affCode.findUnique({
+  server\src\db\aff.ts:505:    userId: binding.affCode.userId
+  server\src\db\aff.ts:506:  }
+  server\src\db\aff.ts:507:}
+  server\src\db\aff.ts:508:
+  server\src\db\aff.ts:509:/**
+  server\src\db\aff.ts:510: * 处理 AFF 返利（新购或续费时调用）
+  server\src\db\aff.ts:511: * @param originalAmount 订单原始金额（未打折前）
+  server\src\db\aff.ts:512: */
+> server\src\db\aff.ts:513:export async function processAffCommission(
+  server\src\db\aff.ts:514:  affCodeId: number,
+  server\src\db\aff.ts:515:  instanceId: number,
+  server\src\db\aff.ts:516:  originalAmount: number,
+  server\src\db\aff.ts:517:  type: 'new_purchase' | 'renew',
+  server\src\db\aff.ts:518:  tx?: Prisma.TransactionClient
+  server\src\db\aff.ts:519:): Promise<void> {
+  server\src\db\aff.ts:520:  const client = tx || prisma
+  server\src\db\aff.ts:521:
+  server\src\db\aff.ts:522:  // 1. 获取优惠码信息
+  server\src\db\aff.ts:523:  const affCode = await client.affCode.findUnique({
+  server\src\db\aff.ts:524:    where: { id: affCodeId }
+  server\src\db\aff.ts:525:  })
+  server\src\db\aff.ts:1094:  }
+  server\src\db\aff.ts:1095:
+  server\src\db\aff.ts:1096:  // 3. 检查是否为自己的优惠码（禁止自返利）
+  server\src\db\aff.ts:1097:  if (affCode.userId === userId) {
+  server\src\db\aff.ts:1098:    return { valid: false, error: '不能使用自己的优惠码' }
+  server\src\db\aff.ts:1099:  }
+  server\src\db\aff.ts:1100:
+  server\src\db\aff.ts:1101:  // 4. 检查优惠码是否启用
+> server\src\db\aff.ts:1102:  if (!affCode.enabled) {
+  server\src\db\aff.ts:1103:    return { valid: false, error: '优惠码已禁用' }
+  server\src\db\aff.ts:1104:  }
+  server\src\db\aff.ts:1105:
+  server\src\db\aff.ts:1106:  return {
+  server\src\db\aff.ts:1107:    valid: true,
+  server\src\db\aff.ts:1108:    affCode,
+  server\src\db\aff.ts:1109:    discountRate: Number(affCode.discountRate),
+  server\src\db\aff.ts:1110:    commissionRate: Number(affCode.commissionRate)
+  server\src\db\aff.ts:1111:  }
+  server\src\db\aff.ts:1112:}
+  server\src\db\aff.ts:1113:
+  server\src\db\aff.ts:1114:/**
+  server\src\db\billing-operations.ts:1:/**
+  server\src\db\billing-operations.ts:2: * 计费业务逻辑操作
+  server\src\db\billing-operations.ts:3: * 处理付费实例开通、续费、升降级等核心计费业务
+  server\src\db\billing-operations.ts:4: */
+  server\src\db\billing-operations.ts:5:
+  server\src\db\billing-operations.ts:6:import { prisma } from './prisma.js'
+  server\src\db\billing-operations.ts:7:import type { Instance, PackagePlan, Prisma } from '@prisma/client'
+> server\src\db\billing-operations.ts:8:import { getInstanceAffBinding, processAffCommission } from './aff.js'
+  server\src\db\billing-operations.ts:9:import { getInstanceBillingLineageIds } from './billing-records.js'
+  server\src\db\billing-operations.ts:10:import {
+  server\src\db\billing-operations.ts:11:  calculateDiscountAmount,
+  server\src\db\billing-operations.ts:12:  calculateDiscountedPrice,
+  server\src\db\billing-operations.ts:13:  calculateRemainingDays,
+  server\src\db\billing-operations.ts:14:  calculateRemainingDaysPrecise,
+  server\src\db\billing-operations.ts:15:  calculatePriceDiff,
+  server\src\db\billing-operations.ts:16:  calculateRemainingValue,
+  server\src\db\billing-operations.ts:17:  calculatePlanChangeDetails,
+  server\src\db\billing-operations.ts:18:  addMonths as calcAddMonths
+  server\src\db\billing-operations.ts:19:} from '../lib/billing-calc.js'
+  server\src\db\billing-operations.ts:20:import { shouldSyncInstanceSwapSizeWithPlan } from '../lib/instance-swap.js'
+  server\src\db\billing-operations.ts:278:
+  server\src\db\billing-operations.ts:279:  remainingValue = roundCurrency(remainingValue)
+  server\src\db\billing-operations.ts:280:
+  server\src\db\billing-operations.ts:281:  // 兼容历史/异常数据：如果缺少正向计费记录，则回退到旧逻辑，
+  server\src\db\billing-operations.ts:282:  // 避免老实例直接变成 0 退款。
+  server\src\db\billing-operations.ts:283:  if (positiveBillingRecords.length === 0 && instance.billingPrice && 
+instance.billingCycle) {
+  server\src\db\billing-operations.ts:284:    let discountRate = 0
+  server\src\db\billing-operations.ts:285:    const affBinding = await getInstanceAffBinding(instance.id)
+> server\src\db\billing-operations.ts:286:    if (affBinding?.affCode?.enabled) {
+  server\src\db\billing-operations.ts:287:      discountRate = Number(affBinding.affCode.discountRate) || 0
+  server\src\db\billing-operations.ts:288:    }
+  server\src\db\billing-operations.ts:289:
+  server\src\db\billing-operations.ts:290:    remainingValue = calculateRemainingValue(
+  server\src\db\billing-operations.ts:291:      Number(instance.billingPrice),
+  server\src\db\billing-operations.ts:292:      instance.billingCycle,
+  server\src\db\billing-operations.ts:293:      remainingDays,
+  server\src\db\billing-operations.ts:294:      discountRate
+  server\src\db\billing-operations.ts:295:    )
+  server\src\db\billing-operations.ts:296:  }
+  server\src\db\billing-operations.ts:297:
+  server\src\db\billing-operations.ts:298:  const refundableValue = roundCurrency(Math.min(remainingValue, 
+maxRefundable))
+  server\src\db\billing-operations.ts:469:  tx?: Prisma.TransactionClient
+  server\src\db\billing-operations.ts:470:): Promise<InstancePriceAdjustmentQuote> {
+  server\src\db\billing-operations.ts:471:  const oldPrice = Number(instance.billingPrice) || 0
+  server\src\db\billing-operations.ts:472:  const roundedNewPrice = roundCurrency(newPrice)
+  server\src\db\billing-operations.ts:473:  const billingCycle = instance.billingCycle || 1
+  server\src\db\billing-operations.ts:474:
+  server\src\db\billing-operations.ts:475:  let discountRate = 0
+  server\src\db\billing-operations.ts:476:  const affBinding = await getInstanceAffBinding(instance.id, tx)
+> server\src\db\billing-operations.ts:477:  if (affBinding?.affCode?.enabled) {
+  server\src\db\billing-operations.ts:478:    discountRate = Number(affBinding.affCode.discountRate) || 0
+  server\src\db\billing-operations.ts:479:  }
+  server\src\db\billing-operations.ts:480:
+  server\src\db\billing-operations.ts:481:  let remainingDays = 0
+  server\src\db\billing-operations.ts:482:  let priceDiff = 0
+  server\src\db\billing-operations.ts:483:
+  server\src\db\billing-operations.ts:484:  if (settleBalance && instance.expiresAt) {
+  server\src\db\billing-operations.ts:485:    remainingDays = calculateRemainingDaysPrecise(new 
+Date(instance.expiresAt))
+  server\src\db\billing-operations.ts:486:    if (remainingDays > 0) {
+  server\src\db\billing-operations.ts:487:      priceDiff = calculatePriceDiff(
+  server\src\db\billing-operations.ts:488:        oldPrice,
+  server\src\db\billing-operations.ts:489:        billingCycle,
+  server\src\db\billing-operations.ts:530:    throw new Error(exchangeLock.message || '实例已上架交易所或存在未完成交易，不能执行该操作')
+  server\src\db\billing-operations.ts:531:  }
+  server\src\db\billing-operations.ts:532:}
+  server\src\db\billing-operations.ts:533:
+  server\src\db\billing-operations.ts:534:/**
+  server\src\db\billing-operations.ts:535: * 执行续费操作（带乐观锁并发控制）
+  server\src\db\billing-operations.ts:536: * 支持 AFF 优惠码折扣和返利
+  server\src\db\billing-operations.ts:537: */
+> server\src\db\billing-operations.ts:538:export async function performRenewal(
+  server\src\db\billing-operations.ts:539:  userId: number,
+  server\src\db\billing-operations.ts:540:  instance: Instance,
+  server\src\db\billing-operations.ts:541:  months: number
+  server\src\db\billing-operations.ts:542:): Promise<{ newExpiresAt: Date; amount: number; balanceLogId: number; 
+discountAmount?: number; hostingIncomeResult?: { hostOwnerId: number; hostName: string } | null }> {
+  server\src\db\billing-operations.ts:543:  // 验证付费实例
+  server\src\db\billing-operations.ts:544:  if (!instance.packagePlanId) {
+  server\src\db\billing-operations.ts:545:    throw new Error('免费实例无需续费')
+  server\src\db\billing-operations.ts:546:  }
+  server\src\db\billing-operations.ts:547:
+  server\src\db\billing-operations.ts:548:  // 验证续费月数
+  server\src\db\billing-operations.ts:549:  if (months < 1 || months > 24) {
+  server\src\db\billing-operations.ts:550:    throw new Error('续费月数必须在 1-24 之间')
+  server\src\db\billing-operations.ts:670:        remark: discountAmount > 0
+  server\src\db\billing-operations.ts:671:          ? `续费 ${months} 个月，优惠码折扣 -¥${discountAmount.toFixed(2)}`
+  server\src\db\billing-operations.ts:672:          : `续费 ${months} 个月`
+  server\src\db\billing-operations.ts:673:      }
+  server\src\db\billing-operations.ts:674:    })
+  server\src\db\billing-operations.ts:675:
+  server\src\db\billing-operations.ts:676:    // 如果有 AFF 绑定，给优惠码创建者返利
+  server\src\db\billing-operations.ts:677:    if (affBinding) {
+> server\src\db\billing-operations.ts:678:      await processAffCommission(
+  server\src\db\billing-operations.ts:679:        affBinding.affCode.id,
+  server\src\db\billing-operations.ts:680:        instance.id,
+  server\src\db\billing-operations.ts:681:        originalAmount, // 基于原价计算返利
+  server\src\db\billing-operations.ts:682:        'renew',
+  server\src\db\billing-operations.ts:683:        tx as any
+  server\src\db\billing-operations.ts:684:      )
+  server\src\db\billing-operations.ts:685:    }
+  server\src\db\billing-operations.ts:686:
+  server\src\db\billing-operations.ts:687:    let hostingIncomeResult: { hostOwnerId: number; hostName: string } | 
+null = null
+  server\src\db\billing-operations.ts:688:
+  server\src\db\billing-operations.ts:689:    const hostingOwner = await resolveHostedIncomeOwner(tx, instance.hostId)
+  server\src\db\billing-operations.ts:690:    if (hostingOwner) {
+  server\src\db\billing-operations.ts:911:        // 更新计费信息（注意：newPlan.price 是分，需要除以100转元）
+  server\src\db\billing-operations.ts:912:        billingPrice: Number(newPlan.price) / 100,
+  server\src\db\billing-operations.ts:913:        billingCycle: newPlan.billingCycle,
+  server\src\db\billing-operations.ts:914:        // 配额限制
+  server\src\db\billing-operations.ts:915:        portLimit: newPlan.portLimit,
+  server\src\db\billing-operations.ts:916:        snapshotLimit: newPlan.snapshotLimit,
+  server\src\db\billing-operations.ts:917:        backupLimit: newPlan.backupLimit,
+  server\src\db\billing-operations.ts:918:        siteLimit: newPlan.siteLimit,
+> server\src\db\billing-operations.ts:919:        swapEnabled: isVmPackage ? false : instance.swapEnabled,
+  server\src\db\billing-operations.ts:920:        swapSize: isVmPackage
+  server\src\db\billing-operations.ts:921:          ? null
+  server\src\db\billing-operations.ts:922:          : (shouldSyncInstanceSwapSizeWithPlan(instance.swapSize, 
+changeResult.oldPlan.swapSize)
+  server\src\db\billing-operations.ts:923:              ? newPlan.swapSize
+  server\src\db\billing-operations.ts:924:              : instance.swapSize),
+  server\src\db\billing-operations.ts:925:        monthlyTrafficLimit,
+  server\src\db\billing-operations.ts:926:        limitsIngress: normalizedPlanTrafficLimitSpeed,
+  server\src\db\billing-operations.ts:927:        limitsEgress: normalizedPlanTrafficLimitSpeed,
+  server\src\db\billing-operations.ts:928:        trafficStatus: 
+calculateInstanceTrafficStatus(instance.monthlyTrafficUsed, monthlyTrafficLimit),
+  server\src\db\billing-operations.ts:929:        // 更新冷却期时间
+  server\src\db\billing-operations.ts:930:        lastPlanChangeAt: new Date(),
+  server\src\db\billing-operations.ts:931:        // 版本号递增
+
+Path       : C:\Users\Administrator\Desktop\payinces\server\src\db\aff.ts
+LineNumber : 513
+Line       : export async function processAffCommission(
+
+
+Path       : C:\Users\Administrator\Desktop\payinces\server\src\db\billing-operations.ts
+LineNumber : 8
+Line       : import { getInstanceAffBinding, processAffCommission } from './aff.js'
+
+
+Path       : C:\Users\Administrator\Desktop\payinces\server\src\db\billing-operations.ts
+LineNumber : 538
+Line       : export async function performRenewal(
+
+
+Path       : C:\Users\Administrator\Desktop\payinces\server\src\db\billing-operations.ts
+LineNumber : 678
+Line       :       await processAffCommission(
+
+
+Path       : C:\Users\Administrator\Desktop\payinces\server\src\db\index.ts
+LineNumber : 149
+Line       :   performRenewal,
+
+
+Path       : C:\Users\Administrator\Desktop\payinces\server\src\routes\instance-billing.ts
+LineNumber : 333
+Line       :     const result = await db.performRenewal(user.id, instance, months)
+
+
+Path       : C:\Users\Administrator\Desktop\payinces\server\src\routes\instance-billing.ts
+LineNumber : 655
+Line       :       const result = await db.performRenewal(user.id, instance, months)
+
+
+Path       : C:\Users\Administrator\Desktop\payinces\server\src\routes\instance-billing.ts
+LineNumber : 660
+Line       :         renewAmount: result.amount, // 元（performRenewal 返回的是元）
+
+
+Path       : C:\Users\Administrator\Desktop\payinces\server\src\routes\instances.ts
+LineNumber : 1928
+Line       :             await db.processAffCommission(
+
+
+Path       : C:\Users\Administrator\Desktop\payinces\server\src\routes\public-api.ts
+LineNumber : 9
+Line       : import { findUserById, getSystemConfigBoolean, performRenewal } from '../db/index.js'
+
+
+Path       : C:\Users\Administrator\Desktop\payinces\server\src\routes\public-api.ts
+LineNumber : 2030
+Line       :       const result = await performRenewal(apiToken.userId, service, months)
+
+
+Path       : C:\Users\Administrator\Desktop\payinces\server\src\services\billing-scheduler.ts
+LineNumber : 19
+Line       :   performRenewal,
+
+
+Path       : C:\Users\Administrator\Desktop\payinces\server\src\services\billing-scheduler.ts
+LineNumber : 225
+Line       :     const result = await performRenewal(instance.userId, instance, renewMonths)
+
+
+Path       : C:\Users\Administrator\Desktop\payinces\server\src\services\billing-scheduler.ts
+LineNumber : 230
+Line       :       renewAmount: result.amount,  // 元（performRenewal 返回的是元）
+
+
+
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$aff = Get-Content server/src/db/aff.ts; $aff[431..565]; $aff[1030..1165]; $billing = Get-Content server/src/db/billing-operations.ts; $billing[537..690]; Get-Content -Raw server/scripts/test-aff-review-ui-guards.ts; Get-Content -Raw server/scripts/test-aff-points-query-guards.ts; Get-Content -Raw server/scripts/test-invite-generation-accounting-guards.ts' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 677ms:
+export async function validateAffCode(
+  code: string,
+  packagePlanId: number,
+  userId: number
+): Promise<{
+  valid: boolean
+  affCode?: AffCode
+  discountRate?: number
+  commissionRate?: number
+  error?: string
+}> {
+  // 1. æŸ¥è¯¢ä¼˜æƒ ç 
+  const affCode = await prisma.affCode.findUnique({
+    where: { code: code.toUpperCase() }
+  })
+
+  if (!affCode) {
+    return { valid: false, error: 'ä¼˜æƒ ç ä¸å­˜åœ¨' }
+  }
+
+  // 2. æ£€æŸ¥æ–¹æ¡ˆæ˜¯å¦åŒ¹é…ï¼ˆå…¨å±€ç è·³è¿‡æ­¤æ£€æŸ¥ï¼‰
+  if (affCode.packagePlanId !== null && affCode.packagePlanId !== packagePlanId) {
+    return { valid: false, error: 'ä¼˜æƒ ç ä¸é€‚ç”¨äºŽæ­¤æ–¹æ¡ˆ' }
+  }
+
+  // 3. æ£€æŸ¥æ˜¯å¦è‡ªå·±çš„ä¼˜æƒ ç 
+  if (affCode.userId === userId) {
+    return { valid: false, error: 'ä¸èƒ½ä½¿ç”¨è‡ªå·±çš„ä¼˜æƒ ç ' }
+  }
+
+  return {
+    valid: true,
+    affCode,
+    discountRate: Number(affCode.discountRate),
+    commissionRate: Number(affCode.commissionRate)
+  }
+}
+
+// ==================== AFF ç»‘å®šä¸Žè¿”åˆ© ====================
+
+/**
+ * åˆ›å»ºå®žä¾‹ä¸Žä¼˜æƒ ç çš„ç»‘å®šå…³ç³»ï¼ˆå¼€é€šæ—¶è°ƒç”¨ï¼‰
+ */
+export async function createAffBinding(
+  instanceId: number,
+  affCodeId: number,
+  tx?: Prisma.TransactionClient
+): Promise<void> {
+  const client = tx || prisma
+  await client.affBinding.create({
+    data: { instanceId, affCodeId }
+  })
+}
+
+/**
+ * èŽ·å–å®žä¾‹ç»‘å®šçš„ä¼˜æƒ ç 
+ */
+export async function getInstanceAffBinding(instanceId: number, tx?: Prisma.TransactionClient): Promise<{
+  affCode: AffCode
+  userId: number // ä¼˜æƒ ç åˆ›å»ºè€…
+} | null> {
+  const client = tx || prisma
+  const binding = await client.affBinding.findUnique({
+    where: { instanceId },
+    include: {
+      affCode: true
+    }
+  })
+
+  if (!binding) return null
+
+  return {
+    affCode: binding.affCode,
+    userId: binding.affCode.userId
+  }
+}
+
+/**
+ * å¤„ç† AFF è¿”åˆ©ï¼ˆæ–°è´­æˆ–ç»­è´¹æ—¶è°ƒç”¨ï¼‰
+ * @param originalAmount è®¢å•åŽŸå§‹é‡‘é¢ï¼ˆæœªæ‰“æŠ˜å‰ï¼‰
+ */
+export async function processAffCommission(
+  affCodeId: number,
+  instanceId: number,
+  originalAmount: number,
+  type: 'new_purchase' | 'renew',
+  tx?: Prisma.TransactionClient
+): Promise<void> {
+  const client = tx || prisma
+
+  // 1. èŽ·å–ä¼˜æƒ ç ä¿¡æ¯
+  const affCode = await client.affCode.findUnique({
+    where: { id: affCodeId }
+  })
+
+  if (!affCode) return
+
+  // 2. è®¡ç®—è¿”åˆ©é‡‘é¢
+  const commissionRate = Number(affCode.commissionRate)
+  const commission = Math.round(originalAmount * commissionRate * 100) / 100
+
+  if (commission <= 0) return
+
+  // 3. ç»™ä¼˜æƒ ç åˆ›å»ºè€…å¢žåŠ  AFF ä½™é¢
+  await changeAffBalance({
+    userId: affCode.userId,
+    type,
+    amount: commission,
+    affCodeId,
+    instanceId,
+    originalAmount,
+    remark: type === 'new_purchase' ? 'æ–°è´­è¿”åˆ©' : 'ç»­è´¹è¿”åˆ©'
+  }, client as PrismaClient)
+
+  // 4. æ›´æ–°ä¼˜æƒ ç ç»Ÿè®¡
+  await client.affCode.update({
+    where: { id: affCodeId },
+    data: {
+      usedCount: type === 'new_purchase' ? { increment: 1 } : undefined,
+      totalEarnings: { increment: commission }
+    }
+  })
+}
+
+// ==================== AFF æ—¥å¿—æŸ¥è¯¢ ====================
+
+// AFF æ—¥å¿—å¸¦å…³è”ä¿¡æ¯çš„ç±»åž‹
+export type AffLogWithDetails = AffLog & {
+  affCode?: { code: string } | null
+}
+
+/**
+ * èŽ·å–ç”¨æˆ·çš„ AFF æ”¶ç›Šæ—¥å¿—ï¼ˆåˆ†é¡µï¼‰
+ */
+export async function getAffLogs(
+    where: { id: { in: userIds } },
+    select: { id: true, username: true }
+  })
+
+  const userMap = new Map(users.map(u => [u.id, u.username]))
+
+  // ç»„è£…æ¦œå•æ•°æ®
+  return results.map((r, index) => {
+    const username = userMap.get(r.userId) || 'Unknown'
+    const totalEarnings = r._sum.amount !== null
+      ? parseFloat(String(r._sum.amount))
+      : 0
+
+    return {
+      rank: index + 1,
+      username: maskUsername(username),
+      totalEarnings,
+      isCurrentUser: r.userId === currentUserId
+    }
+  })
+}
+
+/**
+ * ç”¨æˆ·åæ‰“ç ï¼šä¿ç•™é¦–å°¾å„2å­—ç¬¦ï¼Œä¸­é—´ç”¨ *** æ›¿æ¢
+ */
+function maskUsername(username: string): string {
+  if (username.length <= 4) {
+    // å¤ªçŸ­çš„ç”¨æˆ·åï¼Œåªæ˜¾ç¤ºé¦–å­—ç¬¦
+    return username.charAt(0) + '***'
+  }
+  const first = username.slice(0, 2)
+  const last = username.slice(-2)
+  return `${first}***${last}`
+}
+
+// ==================== é‚®ç®±è®¢é˜… AFF æ”¯æŒ ====================
+
+/**
+ * éªŒè¯é‚®ç®±è®¢é˜…ä¼˜æƒ ç 
+ * é‚®ç®±è®¢é˜…ä»…æ”¯æŒå…¨å±€ç 
+ */
+export async function validateMailAffCode(
+  code: string,
+  userId: number
+): Promise<{
+  valid: boolean
+  affCode?: AffCode
+  discountRate?: number
+  commissionRate?: number
+  error?: string
+}> {
+  // 1. æŸ¥è¯¢ä¼˜æƒ ç 
+  const affCode = await prisma.affCode.findUnique({
+    where: { code: code.toUpperCase() }
+  })
+
+  if (!affCode) {
+    return { valid: false, error: 'ä¼˜æƒ ç ä¸å­˜åœ¨' }
+  }
+
+  // 2. æ£€æŸ¥æ˜¯å¦ä¸ºå…¨å±€ç ï¼ˆé‚®ç®±è®¢é˜…ä»…æ”¯æŒå…¨å±€ç ï¼‰
+  if (affCode.packagePlanId !== null) {
+    return { valid: false, error: 'è¯¥ä¼˜æƒ ç ä»…é€‚ç”¨äºŽç‰¹å®šå®žä¾‹å¥—é¤ï¼Œä¸æ”¯æŒé‚®ç®±è®¢é˜…' }
+  }
+
+  // 3. æ£€æŸ¥æ˜¯å¦ä¸ºè‡ªå·±çš„ä¼˜æƒ ç ï¼ˆç¦æ­¢è‡ªè¿”åˆ©ï¼‰
+  if (affCode.userId === userId) {
+    return { valid: false, error: 'ä¸èƒ½ä½¿ç”¨è‡ªå·±çš„ä¼˜æƒ ç ' }
+  }
+
+  // 4. æ£€æŸ¥ä¼˜æƒ ç æ˜¯å¦å¯ç”¨
+  if (!affCode.enabled) {
+    return { valid: false, error: 'ä¼˜æƒ ç å·²ç¦ç”¨' }
+  }
+
+  return {
+    valid: true,
+    affCode,
+    discountRate: Number(affCode.discountRate),
+    commissionRate: Number(affCode.commissionRate)
+  }
+}
+
+/**
+ * åˆ›å»ºé‚®ç®±è®¢é˜…ä¸Žä¼˜æƒ ç çš„ç»‘å®š
+ */
+export async function createMailAffBinding(
+  mailSubscriptionId: number,
+  affCodeId: number,
+  tx?: Prisma.TransactionClient
+): Promise<void> {
+  const client = tx || prisma
+  await client.mailSubscriptionAffBinding.create({
+    data: { mailSubscriptionId, affCodeId }
+  })
+}
+
+/**
+ * å¤„ç†é‚®ç®±è®¢é˜…çš„ AFF è¿”åˆ©
+ */
+export async function processMailAffCommission(
+  affCodeId: number,
+  mailSubscriptionId: number,
+  originalAmount: number,
+  type: 'new_purchase' | 'renew',
+  tx?: Prisma.TransactionClient
+): Promise<void> {
+  const client = tx || prisma
+
+  // 1. èŽ·å–ä¼˜æƒ ç ä¿¡æ¯
+  const affCode = await client.affCode.findUnique({
+    where: { id: affCodeId }
+  })
+
+  if (!affCode) return
+
+  // 2. è®¡ç®—è¿”åˆ©é‡‘é¢
+  const commissionRate = Number(affCode.commissionRate)
+  const commission = Math.round(originalAmount * commissionRate * 100) / 100
+
+  if (commission <= 0) return
+
+  // 3. ç»™ä¼˜æƒ ç åˆ›å»ºè€…å¢žåŠ  AFF ä½™é¢
+  await changeAffBalance({
+    userId: affCode.userId,
+    type,
+    amount: commission,
+    affCodeId,
+    mailSubscriptionId,
+    originalAmount,
+    remark: type === 'new_purchase' ? 'é‚®ç®±æ–°è´­è¿”åˆ©' : 'é‚®ç®±ç»­è´¹è¿”åˆ©'
+  }, client as PrismaClient)
+
+  // 4. æ›´æ–°ä¼˜æƒ ç ç»Ÿè®¡
+  await client.affCode.update({
+    where: { id: affCodeId },
+export async function performRenewal(
+  userId: number,
+  instance: Instance,
+  months: number
+): Promise<{ newExpiresAt: Date; amount: number; balanceLogId: number; discountAmount?: number; hostingIncomeResult?: { hostOwnerId: number; hostName: string } | null }> {
+  // éªŒè¯ä»˜è´¹å®žä¾‹
+  if (!instance.packagePlanId) {
+    throw new Error('å…è´¹å®žä¾‹æ— éœ€ç»­è´¹')
+  }
+
+  // éªŒè¯ç»­è´¹æœˆæ•°
+  if (months < 1 || months > 24) {
+    throw new Error('ç»­è´¹æœˆæ•°å¿…é¡»åœ¨ 1-24 ä¹‹é—´')
+  }
+
+  // æ‰‹åŠ¨å°åœçš„å®žä¾‹ä¸å…è®¸ç»­è´¹
+  if (instance.status === 'suspended' && instance.suspendReason !== 'expired') {
+    throw new Error('å®žä¾‹å·²è¢«æ‰‹åŠ¨å°åœï¼Œè¯·è”ç³»å®¿ä¸»æœºæ‰€æœ‰è€…è§£å°åŽå†ç»­è´¹')
+  }
+
+  await assertInstanceNotExchangeLocked(instance.id)
+
+  const { amount: originalAmount, newExpiresAt } = calculateRenewBilling(instance, months)
+
+  // æ£€æŸ¥ AFF ç»‘å®šï¼Œè®¡ç®—æŠ˜æ‰£
+  const affBinding = await getInstanceAffBinding(instance.id)
+  let discountRate = 0
+  let discountAmount = 0
+  let finalAmount = originalAmount
+
+  if (affBinding) {
+    discountRate = Number(affBinding.affCode.discountRate)
+    discountAmount = calculateDiscountAmount(originalAmount, discountRate)
+    finalAmount = calculateDiscountedPrice(originalAmount, discountRate)
+  }
+
+  // æ‰§è¡Œäº‹åŠ¡ï¼ˆå¸¦ä¹è§‚é”ï¼‰
+  const result = await prisma.$transaction(async (tx) => {
+    const balanceLocked = await tryAdvisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, userId)
+    if (!balanceLocked) {
+      throw new Error('ä½™é¢æ­£åœ¨å¤„ç†ï¼Œè¯·ç¨åŽé‡è¯•')
+    }
+
+    // èŽ·å–ç”¨æˆ·å½“å‰ä½™é¢
+    const user = await tx.user.findUnique({
+      where: { id: userId },
+      select: { balance: true }
+    })
+
+    if (!user) {
+      throw new Error('ç”¨æˆ·ä¸å­˜åœ¨')
+    }
+
+    const oldBalance = Number(user.balance)
+    if (oldBalance < finalAmount) {
+      throw new Error('ä½™é¢ä¸è¶³')
+    }
+
+    // æ‰£é™¤ä½™é¢ï¼ˆä½¿ç”¨æ¡ä»¶æ›´æ–°ç¡®ä¿å¹¶å‘å®‰å…¨ï¼‰
+    const updateResult = await tx.user.updateMany({
+      where: {
+        id: userId,
+        balance: { gte: finalAmount }
+      },
+      data: { balance: { decrement: finalAmount } }
+    })
+
+    if (updateResult.count === 0) {
+      throw new Error('ä½™é¢ä¸è¶³æˆ–å¹¶å‘å†²çª')
+    }
+
+    const updatedUser = await tx.user.findUnique({
+      where: { id: userId },
+      select: { balance: true }
+    })
+    if (!updatedUser) {
+      throw new Error('ç”¨æˆ·ä¸å­˜åœ¨')
+    }
+    const newBalance = Number(updatedUser.balance)
+
+    // ä¹è§‚é”ï¼šæ£€æŸ¥å®žä¾‹ç‰ˆæœ¬å·å¹¶æ›´æ–°
+    const instanceUpdateResult = await tx.instance.updateMany({
+      where: {
+        id: instance.id,
+        version: instance.version  // ç¡®ä¿ç‰ˆæœ¬å·æœªå˜
+      },
+      data: {
+        expiresAt: newExpiresAt,
+        autoRenewAttempts: 0,
+        version: { increment: 1 },  // å¢žåŠ ç‰ˆæœ¬å·
+        // å¦‚æžœå› åˆ°æœŸè¢«å°åœï¼Œç»­è´¹åŽè§£é™¤å°åœï¼ˆæ¢å¤ä¸º stoppedï¼‰
+        ...(instance.status === 'suspended' && instance.suspendReason === 'expired' ? {
+          status: 'stopped',
+          suspendedAt: null,
+          suspendedBy: null,
+          suspendReason: null
+        } : {})
+      }
+    })
+
+    if (instanceUpdateResult.count === 0) {
+      throw new Error('å®žä¾‹çŠ¶æ€å·²å˜æ›´ï¼Œè¯·é‡è¯•')
+    }
+
+    // è®°å½•ä½™é¢æ—¥å¿—
+    const remarkText = discountAmount > 0
+      ? `ç»­è´¹ï¼ˆ${months}ä¸ªæœˆï¼‰ï¼š${instance.name}ï¼Œä¼˜æƒ ç æŠ˜æ‰£ -Â¥${discountAmount.toFixed(2)}`
+      : `ç»­è´¹ï¼ˆ${months}ä¸ªæœˆï¼‰ï¼š${instance.name}`
+
+    const balanceLog = await tx.balanceLog.create({
+      data: {
+        userId,
+        type: 'consume',
+        amount: -finalAmount,
+        balanceBefore: oldBalance,
+        balanceAfter: newBalance,
+        instanceId: instance.id,
+        remark: remarkText
+      }
+    })
+
+    // è®°å½•æ‰£è´¹è®°å½•
+    await tx.instanceBillingRecord.create({
+      data: {
+        instanceId: instance.id,
+        userId,
+        type: 'renew',
+        amount: finalAmount,
+        months,
+        periodStart: instance.expiresAt || new Date(),
+        periodEnd: newExpiresAt,
+        balanceLogId: balanceLog.id,
+        remark: discountAmount > 0
+          ? `ç»­è´¹ ${months} ä¸ªæœˆï¼Œä¼˜æƒ ç æŠ˜æ‰£ -Â¥${discountAmount.toFixed(2)}`
+          : `ç»­è´¹ ${months} ä¸ªæœˆ`
+      }
+    })
+
+    // å¦‚æžœæœ‰ AFF ç»‘å®šï¼Œç»™ä¼˜æƒ ç åˆ›å»ºè€…è¿”åˆ©
+    if (affBinding) {
+      await processAffCommission(
+        affBinding.affCode.id,
+        instance.id,
+        originalAmount, // åŸºäºŽåŽŸä»·è®¡ç®—è¿”åˆ©
+        'renew',
+        tx as any
+      )
+    }
+
+    let hostingIncomeResult: { hostOwnerId: number; hostName: string } | null = null
+
+    const hostingOwner = await resolveHostedIncomeOwner(tx, instance.hostId)
+    if (hostingOwner) {
+      // ç”¨æˆ·æ‰˜ç®¡èŠ‚ç‚¹ï¼Œè®°å½•æ‰˜ç®¡æ”¶å…¥ï¼ˆå¸¦å¿«ç…§ï¼‰
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+
+const root = resolve(process.cwd(), '..')
+const view = readFileSync(resolve(root, 'client/src/views/admin/AffReviewView.vue'), 'utf8')
+
+assert.ok(
+  view.includes('class="space-y-3 p-4 lg:hidden"') &&
+    view.includes('class="hidden overflow-hidden lg:block"') &&
+    view.includes('table class="w-full table-fixed"') &&
+    !view.includes('v-else class="overflow-x-auto"') &&
+    !view.includes('table class="w-full min-w-[960px]"'),
+  'AFF withdrawal review list must keep mobile cards and a fixed desktop table without broad horizontal overflow'
+)
+
+assert.ok(
+  view.includes('@click="approveWithdrawal(w)"') &&
+    view.includes('@click="openRejectModal(w)"') &&
+    view.includes('@click="submitReject"') &&
+    view.includes('v-model="rejectReason"') &&
+    view.includes('@click="page--; loadWithdrawals()"') &&
+    view.includes('@click="page++; loadWithdrawals()"'),
+  'AFF withdrawal review responsive layout must preserve approve, reject, modal, and pagination actions'
+)
+
+console.log('AFF review UI guard tests passed')
+
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+
+const affDbSource = readFileSync(resolve(__dirname, '../src/db/aff.ts'), 'utf8')
+const pointsDbSource = readFileSync(resolve(__dirname, '../src/db/points.ts'), 'utf8')
+const affRouteSource = readFileSync(resolve(__dirname, '../src/routes/aff.ts'), 'utf8')
+
+function sectionBetween(source: string, startMarker: string, endMarker: string): string {
+  const start = source.indexOf(startMarker)
+  assert.notEqual(start, -1, `missing start marker: ${startMarker}`)
+  const end = source.indexOf(endMarker, start + startMarker.length)
+  assert.notEqual(end, -1, `missing end marker: ${endMarker}`)
+  return source.slice(start, end)
+}
+
+function sectionFrom(source: string, startMarker: string): string {
+  const start = source.indexOf(startMarker)
+  assert.notEqual(start, -1, `missing start marker: ${startMarker}`)
+  return source.slice(start)
+}
+
+for (const [name, source] of [
+  ['AFF', affDbSource],
+  ['points', pointsDbSource]
+] as const) {
+  assert.ok(
+    source.includes('function clampPagination(') &&
+      source.includes('page: Number.isInteger(page) && page !== undefined && page > 0 ? page : 1') &&
+      source.includes('Math.min(Math.max(pageSize, 1), maxPageSize)'),
+    `${name} helpers must clamp invalid page/pageSize values`
+  )
+}
+
+assert.ok(
+  affDbSource.includes('const AFF_LOG_TYPES = new Set<AffLogType>') &&
+    affDbSource.includes('function normalizeAffLogType(type: AffLogType | undefined): AffLogType | undefined') &&
+    affDbSource.includes('const AFF_WITHDRAWAL_STATUSES = new Set<AffWithdrawalStatus>') &&
+    affDbSource.includes('function normalizeAffWithdrawalStatus(status: AffWithdrawalStatus | undefined): AffWithdrawalStatus | undefined'),
+  'AFF helpers must allowlist log types and withdrawal statuses before Prisma filters'
+)
+
+assert.ok(
+  affRouteSource.includes('const AFF_ROUTE_MAX_PAGE_SIZE = 100') &&
+    affRouteSource.includes('const AFF_REJECT_REASON_MAX_LENGTH = 500') &&
+    affRouteSource.includes('function parseClampedPositiveQueryInteger(value: string | undefined, fallback: number, max: number): number | null') &&
+    affRouteSource.includes('function parseOptionalAffLogType(value: string | undefined): AffLogType | null | undefined') &&
+    affRouteSource.includes('function parseOptionalAffWithdrawalStatus(value: string | undefined): AffWithdrawalStatus | null | undefined') &&
+    affRouteSource.includes('function normalizeRequiredText(value: unknown, maxLength: number): string | null'),
+  'AFF routes must parse pagination, enum filters, and required text bodies before DB calls'
+)
+
+for (const [name, route, enumVariable] of [
+  ['AFF log list', sectionBetween(affRouteSource, "}>('/me/logs'", '// èŽ·å– AFF æ”¶ç›Šæ¦œå• TOP 10'), 'parsedType'],
+  ['user AFF withdrawal list', sectionBetween(affRouteSource, "}>('/me/withdrawals'", '// ==================== ç®¡ç†å‘˜ API'), 'parsedStatus'],
+  ['admin AFF withdrawal list', sectionBetween(affRouteSource, "}>('/admin/withdrawals'", '// å®¡æ ¸é€šè¿‡è½¬åŒ–ç”³è¯·'), 'parsedStatus']
+] as const) {
+  assert.ok(
+    route.includes('const parsedPage = parseClampedPositiveQueryInteger(page, 1, Number.MAX_SAFE_INTEGER)') &&
+      route.includes('const parsedPageSize = parseClampedPositiveQueryInteger(pageSize, 20, AFF_ROUTE_MAX_PAGE_SIZE)') &&
+      route.includes(`${enumVariable} === null`) &&
+      route.includes('return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS))') &&
+      route.includes('page: parsedPage') &&
+      route.includes('pageSize: parsedPageSize'),
+    `${name} must reject malformed pagination and enum filters at the route boundary`
+  )
+}
+
+assert.ok(
+  !affRouteSource.includes('page: Number(page)') &&
+    !affRouteSource.includes('pageSize: Number(pageSize)') &&
+    !affRouteSource.includes('type: type as any') &&
+    !affRouteSource.includes('status: status as any'),
+  'AFF routes must not rely on loose Number parsing or any-cast enum filters'
+)
+
+const rejectWithdrawalRoute = sectionFrom(affRouteSource, "}>('/admin/withdrawals/:withdrawalId/reject'")
+assert.ok(
+  rejectWithdrawalRoute.includes('const { reason: rawReason } = request.body') &&
+    rejectWithdrawalRoute.includes('const reason = normalizeRequiredText(rawReason, AFF_REJECT_REASON_MAX_LENGTH)') &&
+    rejectWithdrawalRoute.includes('if (!reason)') &&
+    rejectWithdrawalRoute.includes('return reply.code(400).send({ error: \'è¯·å¡«å†™æ‹’ç»åŽŸå› \' })'),
+  'AFF withdrawal rejection must reject missing, non-string, blank, or oversized reasons before DB writes'
+)
+assert.ok(
+  rejectWithdrawalRoute.includes('db.rejectAffWithdrawal(withdrawalId, user.id, reason)') &&
+    rejectWithdrawalRoute.includes('reason }') &&
+    !rejectWithdrawalRoute.includes('reason.trim()'),
+  'AFF withdrawal rejection must persist, notify, and log only the normalized reason'
+)
+
+assert.ok(
+  pointsDbSource.includes('const POINTS_LOG_TYPES = new Set<PointsLogType>') &&
+    pointsDbSource.includes('function normalizePointsLogType(type: PointsLogType | undefined): PointsLogType | undefined') &&
+    pointsDbSource.includes('const USER_POINTS_ORDER_BY_FIELDS = new Set') &&
+    pointsDbSource.includes('function normalizeUserPointsOrderBy(orderBy: string | undefined)') &&
+    pointsDbSource.includes('function normalizeSortOrder(order: string | undefined)'),
+  'points helpers must allowlist log types, orderBy fields, and sort directions before Prisma queries'
+)
+
+for (const [helperName, source, endMarker] of [
+  ['getAffLogs', affDbSource, '/**\n * èŽ·å–ç”¨æˆ· AFF ç»Ÿè®¡'],
+  ['getUserAffWithdrawals', affDbSource, '// ==================== ç®¡ç†å‘˜æ“ä½œ'],
+  ['getPendingAffWithdrawals', affDbSource, '/**\n * å®¡æ ¸é€šè¿‡è½¬åŒ–ç”³è¯·'],
+  ['getPointsLogs', pointsDbSource, '/**\n * èŽ·å–æ‰€æœ‰ç”¨æˆ·ç§¯åˆ†åˆ—è¡¨'],
+  ['getAllUserPoints', pointsDbSource, null]
+] as const) {
+  const helperSection = endMarker === null
+    ? sectionFrom(source, `export async function ${helperName}(`)
+    : sectionBetween(source, `export async function ${helperName}(`, endMarker)
+
+  assert.ok(
+    helperSection.includes('const { page, pageSize } = clampPagination(options.page, options.pageSize)') &&
+      helperSection.includes('const skip = (page - 1) * pageSize') &&
+      helperSection.includes('take: pageSize') &&
+      helperSection.includes('page') &&
+      helperSection.includes('pageSize'),
+    `${helperName} must query with sanitized pagination values and return sanitized metadata`
+  )
+}
+
+assert.ok(
+  sectionBetween(affDbSource, 'export async function getAffLogs(', '/**\n * èŽ·å–ç”¨æˆ· AFF ç»Ÿè®¡')
+    .includes('const type = normalizeAffLogType(options.type)'),
+  'getAffLogs must normalize invalid AFF log types'
+)
+
+for (const helperName of ['getUserAffWithdrawals', 'getPendingAffWithdrawals'] as const) {
+  assert.ok(
+    sectionBetween(
+      affDbSource,
+      `export async function ${helperName}(`,
+      helperName === 'getUserAffWithdrawals'
+        ? '// ==================== ç®¡ç†å‘˜æ“ä½œ'
+        : '/**\n * å®¡æ ¸é€šè¿‡è½¬åŒ–ç”³è¯·'
+    ).includes('const status = normalizeAffWithdrawalStatus(options.status)'),
+    `${helperName} must normalize invalid withdrawal statuses`
+  )
+}
+
+assert.ok(
+  sectionBetween(pointsDbSource, 'export async function getPointsLogs(', '/**\n * èŽ·å–æ‰€æœ‰ç”¨æˆ·ç§¯åˆ†åˆ—è¡¨')
+    .includes('const type = normalizePointsLogType(options.type)'),
+  'getPointsLogs must normalize invalid points log types'
+)
+
+assert.ok(
+  sectionFrom(pointsDbSource, 'export async function getAllUserPoints(')
+    .includes('const orderBy = normalizeUserPointsOrderBy(options.orderBy)') &&
+    sectionFrom(pointsDbSource, 'export async function getAllUserPoints(')
+      .includes('const order = normalizeSortOrder(options.order)') &&
+    sectionFrom(pointsDbSource, 'export async function getAllUserPoints(')
+      .includes('const keyword = search.trim().slice(0, 128)'),
+  'getAllUserPoints must normalize sorting and cap search input'
+)
+
+assert.ok(
+  affDbSource.includes('if (!Number.isFinite(amount) || amount < 0.1)') &&
+    affRouteSource.includes("if (!amount || typeof amount !== 'number' || !Number.isFinite(amount) || amount <= 0)"),
+  'AFF conversion must reject non-finite amounts before balance mutation'
+)
+
+console.log('AFF and points query guard tests passed')
+
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+
+const invitePricingSource = readFileSync(resolve(__dirname, '../src/lib/invite-pricing.ts'), 'utf8')
+const userInvitesRouteSource = readFileSync(resolve(__dirname, '../src/routes/user-invites.ts'), 'utf8')
+const systemConfigRouteSource = readFileSync(resolve(__dirname, '../src/routes/system-config.ts'), 'utf8')
+
+function sectionBetween(source: string, startMarker: string, endMarker: string): string {
+  const start = source.indexOf(startMarker)
+  assert.notEqual(start, -1, `missing start marker: ${startMarker}`)
+  const end = source.indexOf(endMarker, start + startMarker.length)
+  assert.notEqual(end, -1, `missing end marker: ${endMarker}`)
+  return source.slice(start, end)
+}
+
+const balanceHandler = sectionBetween(
+  invitePricingSource,
+  "balance: {",
+  "points: {"
+)
+
+const pointsHandler = sectionBetween(
+  invitePricingSource,
+  "points: {",
+  'export function isSupportedInviteCostResource'
+)
+
+assert.ok(
+  invitePricingSource.includes('USER_BALANCE_LOCK_NAMESPACE') &&
+    invitePricingSource.includes('USER_POINTS_LOCK_NAMESPACE') &&
+    invitePricingSource.includes('advisoryTransactionLock'),
+  'invite generation accounting must import the shared user balance and points lock helpers'
+)
+
+assert.ok(
+  balanceHandler.includes('await advisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, userId)') &&
+    balanceHandler.indexOf('await advisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, userId)') <
+      balanceHandler.indexOf('UPDATE users'),
+  'balance-paid invite generation must acquire the shared user balance lock before deducting balance'
+)
+
+assert.ok(
+  balanceHandler.includes('WHERE id = ${userId} AND balance >= ${amount}') &&
+    balanceHandler.includes('RETURNING (balance + ${amount})::numeric AS "balanceBefore", balance::numeric AS "balanceAfter"') &&
+    balanceHandler.includes("type: 'invite_generate'"),
+  'balance-paid invite generation must keep conditional deduction and persisted balance-log snapshots'
+)
+
+assert.ok(
+  pointsHandler.includes('await advisoryTransactionLock(tx, USER_POINTS_LOCK_NAMESPACE, userId)') &&
+    pointsHandler.indexOf('await advisoryTransactionLock(tx, USER_POINTS_LOCK_NAMESPACE, userId)') <
+      pointsHandler.indexOf('await tx.userPoints.upsert({'),
+  'points-paid invite generation must acquire the shared user points lock before touching user_points'
+)
+
+assert.ok(
+  pointsHandler.includes('WHERE user_id = ${userId} AND points >= ${amount}') &&
+    pointsHandler.includes('RETURNING points + ${amount} AS "pointsBefore", points AS "pointsAfter"') &&
+    pointsHandler.includes("type: 'invite_generate'"),
+  'points-paid invite generation must keep conditional deduction and persisted points-log snapshots'
+)
+
+assert.ok(
+  userInvitesRouteSource.includes('config: { rateLimit: { max: 20, timeWindow: \'1 minute\' } }') &&
+    userInvitesRouteSource.includes("maximum: 10"),
+  'user invite generation must keep per-request and rate-limit bounds'
+)
+
+assert.ok(
+  userInvitesRouteSource.includes('const INVITE_GENERATION_MAX_COUNT = 10') &&
+    userInvitesRouteSource.includes('const INVITE_COST_RESOURCE_MAX_LENGTH = 64') &&
+    userInvitesRouteSource.includes('function isPlainRecord(value: unknown): value is Record<string, unknown>') &&
+    userInvitesRouteSource.includes('function normalizeGenerateInviteBody(input: unknown): GenerateInviteBody'),
+  'user invite generation must define a runtime body normalizer'
+)
+
+assert.ok(
+    userInvitesRouteSource.includes("typeof input.costResource !== 'string'") &&
+    userInvitesRouteSource.includes('input.costResource.trim()') &&
+    userInvitesRouteSource.includes('costResource.length > INVITE_COST_RESOURCE_MAX_LENGTH') &&
+    userInvitesRouteSource.includes("typeof countInput !== 'number' || !Number.isSafeInteger(countInput) || countInput < 1 || countInput > INVITE_GENERATION_MAX_COUNT"),
+  'user invite generation body normalizer must validate cost resource and count before accounting work'
+)
+
+assert.ok(
+  userInvitesRouteSource.includes('input = normalizeGenerateInviteBody(request.body)') &&
+    userInvitesRouteSource.includes('const { count = 1, costResource } = input'),
+  'user invite generation route must use normalized body values before charging resources'
+)
+
+assert.ok(
+  !userInvitesRouteSource.includes('const count = request.body.count ?? 1') &&
+    !userInvitesRouteSource.includes('const costResource = request.body.costResource'),
+  'user invite generation route must not read raw typed body fields before runtime validation'
+)
+
+assert.ok(
+  systemConfigRouteSource.includes("config.key === 'invite_generation_costs'") &&
+    systemConfigRouteSource.includes("typeof amount !== 'number' || !Number.isFinite(amount) || amount < 0") &&
+    systemConfigRouteSource.includes("resource === 'balance' && amount > maxRegisterGiftBalance") &&
+    systemConfigRouteSource.includes("resource === 'points' && (!Number.isSafeInteger(amount) || amount > maxRegisterGiftPoints)"),
+  'invite generation cost config must reject invalid, non-finite, negative, and excessive prices'
+)
+
+console.log('invite generation accounting guard tests passed')
+
+
+codex
+已确认实例续费目前只以“存在绑定”为条件，折扣和 `processAffCommission` 都未看 `enabled`；实例新购校验也缺失，而邮箱新购校验已有同结构检查。下一步先只读核对邮箱续费现有门控，然后用同一个 `affBinding?.affCode.enabled` 条件同时包住实例续费折扣与返利，避免出现“无折扣但仍返佣”的半状态。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "Get-ChildItem server/src -Recurse -Filter '*.ts' | Select-String -Pattern 'getMailSubscriptionAffBinding|processMailAffCommission|mail.*affCode.*enabled|affCode.*enabled' -CaseSensitive:"'$false | Select-Object Path,LineNumber,Line; $files = Get-ChildItem server/src -Recurse -Filter '"'*.ts' | Where-Object { Select-String -Path "'$_.FullName -Pattern '"'processMailAffCommission' -Quiet }; foreach ("'$file in $files) { Write-Output $file.FullName; Select-String -Path $file.FullName -Pattern '"'processMailAffCommission|getMailSubscriptionAffBinding|affBinding|enabled' -Context 5,8 }" in C:\Users\Administrator\Desktop\payinces
+ succeeded in 1811ms:
+
+Path                                                                        LineNumber Line                            
+----                                                                        ---------- ----                            
+C:\Users\Administrator\Desktop\payinces\server\src\db\aff.ts                      1102   if (!affCode.enabled) {       
+C:\Users\Administrator\Desktop\payinces\server\src\db\aff.ts                      1131 export async function process...
+C:\Users\Administrator\Desktop\payinces\server\src\db\aff.ts                      1177 export async function getMail...
+C:\Users\Administrator\Desktop\payinces\server\src\db\billing-operations.ts        286     if (affBinding?.affCode?....
+C:\Users\Administrator\Desktop\payinces\server\src\db\billing-operations.ts        477   if (affBinding?.affCode?.en...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-billing.ts        3100               affCode: { sele...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-billing.ts        3664                 affCode: { se...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-billing.ts        3707           const affDiscountRa...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                  962     const { getMailSubscripti...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                  963     const affBinding = await ...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                 1155         const { createMailAff...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                 1159         await processMailAffC...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                 1231     const { getMailSubscripti...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                 1232     const affBinding = await ...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                 1237     if (affBinding && affBind...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                 1323         await processMailAffC...
+C:\Users\Administrator\Desktop\payinces\server\src\db\aff.ts
+C:\Users\Administrator\Desktop\payinces\server\src\db\aff.ts                       407       prisma.affBinding.count...
+C:\Users\Administrator\Desktop\payinces\server\src\db\aff.ts                       408       prisma.mailSubscription...
+C:\Users\Administrator\Desktop\payinces\server\src\db\aff.ts                       475 export async function createA...
+C:\Users\Administrator\Desktop\payinces\server\src\db\aff.ts                       481   await client.affBinding.cre...
+C:\Users\Administrator\Desktop\payinces\server\src\db\aff.ts                       489 export async function getInst...
+C:\Users\Administrator\Desktop\payinces\server\src\db\aff.ts                       494   const binding = await clien...
+C:\Users\Administrator\Desktop\payinces\server\src\db\aff.ts                      1102   if (!affCode.enabled) {       
+C:\Users\Administrator\Desktop\payinces\server\src\db\aff.ts                      1117 export async function createM...
+C:\Users\Administrator\Desktop\payinces\server\src\db\aff.ts                      1123   await client.mailSubscripti...
+C:\Users\Administrator\Desktop\payinces\server\src\db\aff.ts                      1131 export async function process...
+C:\Users\Administrator\Desktop\payinces\server\src\db\aff.ts                      1177 export async function getMail...
+C:\Users\Administrator\Desktop\payinces\server\src\db\aff.ts                      1181   const binding = await prism...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                   30   enabled?: boolean             
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                   40   enabled?: boolean             
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                  151   if (input.enabled !== undef...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                  152     normalized.enabled = inpu...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                  227   if (input.enabled !== undef...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                  228     if (typeof input.enabled ...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                  231     normalized.enabled = inpu...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                  448       enabled?: boolean         
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                  473       enabled: sourceInput.en...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                  497       enabled?: boolean         
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                  530       enabled: sourceInput.en...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                  597       enabled?: boolean         
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                  619       enabled: planInput.enab...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                  644       enabled?: boolean         
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                  962     const { getMailSubscripti...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                  963     const affBinding = await ...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                  998         affBinding: affBindin...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                 1000             code: affBinding....
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                 1001             discountRate: Num...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                 1035     if (!plan || !plan.enable...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                 1040     if (!source.enabled) {      
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                 1155         const { createMailAff...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                 1157         await createMailAffBi...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                 1159         await processMailAffC...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                 1231     const { getMailSubscripti...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                 1232     const affBinding = await ...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                 1237     if (affBinding && affBind...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                 1238       discountRate = Number(a...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                 1322       if (affBinding) {         
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                 1323         await processMailAffC...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts                 1324           affBinding.affCode.id,
+
+
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "Select-String -Path server/src/db/billing-operations.ts -Pattern '"'^export async function '"' | Select-Object LineNumber,Line; Select-String -Path server/src/db/aff.ts -Pattern '"'^export async function '"' | Where-Object { "'$_.LineNumber -ge 420 -and $_.LineNumber -le 600 } | Select-Object LineNumber,Line' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 887ms:
+
+LineNumber Line                                                                                                        
+---------- ----                                                                                                        
+       153 export async function getMaxRefundable(instanceId: number): Promise<{ maxRefundable: number; lastPaymentA...
+       210 export async function calculateInstanceRemainingRefundQuote(instance: {                                     
+       316 export async function calculateInstanceRefund(instance: {                                                   
+       376 export async function calculatePlanChange(                                                                  
+       460 export async function calculateInstancePriceAdjustmentQuote(                                                
+       538 export async function performRenewal(                                                                       
+       725 export async function performPlanChange(                                                                    
+       972 export async function updateAutoRenew(                                                                      
+       987 export async function getInstanceBillingInfo(instanceId: number): Promise<{                                 
+      1267 export async function isUserHostedNode(hostId: number): Promise<boolean> {                                  
+      1284 export async function getHostOwnerId(hostId: number): Promise<number | null> {                              
+      1302 export async function recordHostingIncome(                                                                  
+      1338 export async function processHostingIncome(                                                                 
+      1399 export async function deductHostingBalance(                                                                 
+       432 export async function validateAffCode(                                                                      
+       475 export async function createAffBinding(                                                                     
+       489 export async function getInstanceAffBinding(instanceId: number, tx?: Prisma.TransactionClient): Promise<{   
+       513 export async function processAffCommission(                                                                 
+       566 export async function getAffLogs(                                                                           
+
+
+
+apply patch
+patch: completed
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-aff-review-ui-guards.ts
+C:\Users\Administrator\Desktop\payinces\server\src\db\aff.ts
+C:\Users\Administrator\Desktop\payinces\server\src\db\billing-operations.ts
+diff --git a/server/scripts/test-aff-review-ui-guards.ts b/server/scripts/test-aff-review-ui-guards.ts
+index f67eaf1e44de6be15498a1fd78f478b55da131c8..706822738cbcf10d7fd5d5b29b927bb51f4accc5
+--- a/server/scripts/test-aff-review-ui-guards.ts
++++ b/server/scripts/test-aff-review-ui-guards.ts
+@@ -4,6 +4,16 @@
+ 
+ const root = resolve(process.cwd(), '..')
+ const view = readFileSync(resolve(root, 'client/src/views/admin/AffReviewView.vue'), 'utf8')
++const affDbSource = readFileSync(resolve(root, 'server/src/db/aff.ts'), 'utf8')
++const billingOperationsSource = readFileSync(resolve(root, 'server/src/db/billing-operations.ts'), 'utf8')
++
++function sectionBetween(source: string, startMarker: string, endMarker: string): string {
++  const start = source.indexOf(startMarker)
++  assert.notEqual(start, -1, `missing start marker: ${startMarker}`)
++  const end = source.indexOf(endMarker, start + startMarker.length)
++  assert.notEqual(end, -1, `missing end marker: ${endMarker}`)
++  return source.slice(start, end)
++}
+ 
+ assert.ok(
+   view.includes('class="space-y-3 p-4 lg:hidden"') &&
+@@ -24,4 +34,31 @@
+   'AFF withdrawal review responsive layout must preserve approve, reject, modal, and pagination actions'
+ )
+ 
++const validateAffCodeSource = sectionBetween(
++  affDbSource,
++  'export async function validateAffCode(',
++  'export async function createAffBinding('
++)
++assert.ok(
++  validateAffCodeSource.includes('if (!affCode.enabled)') &&
++    validateAffCodeSource.includes("return { valid: false, error: '优惠码已禁用' }"),
++  'instance purchase AFF validation must reject disabled codes'
++)
++
++const performRenewalSource = sectionBetween(
++  billingOperationsSource,
++  'export async function performRenewal(',
++  'export async function performPlanChange('
++)
++assert.match(
++  performRenewalSource,
++  /if \(affBinding\?\.affCode\.enabled\) \{\s*discountRate =/,
++  'instance renewal must not apply discounts from disabled AFF codes'
++)
++assert.match(
++  performRenewalSource,
++  /if \(affBinding\?\.affCode\.enabled\) \{\s*await processAffCommission\(/,
++  'instance renewal must not pay commission for disabled AFF codes'
++)
++
+ console.log('AFF review UI guard tests passed')
+diff --git a/server/src/db/aff.ts b/server/src/db/aff.ts
+index 0a0f48dfaae45c805067c5ad994be8481e135714..83f44ac14909a4ab295ee514e4d2882bc9b2f20e
+--- a/server/src/db/aff.ts
++++ b/server/src/db/aff.ts
+@@ -459,6 +459,11 @@
+     return { valid: false, error: '不能使用自己的优惠码' }
+   }
+ 
++  // 4. 检查优惠码是否启用
++  if (!affCode.enabled) {
++    return { valid: false, error: '优惠码已禁用' }
++  }
++
+   return {
+     valid: true,
+     affCode,
+diff --git a/server/src/db/billing-operations.ts b/server/src/db/billing-operations.ts
+index 5cb1e59755ba8d7731e573825b26b81fe6aa49e5..69e8739e915e274547ce154fca4f3197393ce73e
+--- a/server/src/db/billing-operations.ts
++++ b/server/src/db/billing-operations.ts
+@@ -565,7 +565,7 @@
+   let discountAmount = 0
+   let finalAmount = originalAmount
+ 
+-  if (affBinding) {
++  if (affBinding?.affCode.enabled) {
+     discountRate = Number(affBinding.affCode.discountRate)
+     discountAmount = calculateDiscountAmount(originalAmount, discountRate)
+     finalAmount = calculateDiscountedPrice(originalAmount, discountRate)
+@@ -674,7 +674,7 @@
+     })
+ 
+     // 如果有 AFF 绑定，给优惠码创建者返利
+-    if (affBinding) {
++    if (affBinding?.affCode.enabled) {
+       await processAffCommission(
+         affBinding.affCode.id,
+         instance.id,
+
+diff --git a/server/scripts/test-aff-review-ui-guards.ts b/server/scripts/test-aff-review-ui-guards.ts
+index f67eaf1e44de6be15498a1fd78f478b55da131c8..706822738cbcf10d7fd5d5b29b927bb51f4accc5
+--- a/server/scripts/test-aff-review-ui-guards.ts
++++ b/server/scripts/test-aff-review-ui-guards.ts
+@@ -4,6 +4,16 @@
+ 
+ const root = resolve(process.cwd(), '..')
+ const view = readFileSync(resolve(root, 'client/src/views/admin/AffReviewView.vue'), 'utf8')
++const affDbSource = readFileSync(resolve(root, 'server/src/db/aff.ts'), 'utf8')
++const billingOperationsSource = readFileSync(resolve(root, 'server/src/db/billing-operations.ts'), 'utf8')
++
++function sectionBetween(source: string, startMarker: string, endMarker: string): string {
++  const start = source.indexOf(startMarker)
++  assert.notEqual(start, -1, `missing start marker: ${startMarker}`)
++  const end = source.indexOf(endMarker, start + startMarker.length)
++  assert.notEqual(end, -1, `missing end marker: ${endMarker}`)
++  return source.slice(start, end)
++}
+ 
+ assert.ok(
+   view.includes('class="space-y-3 p-4 lg:hidden"') &&
+@@ -24,4 +34,31 @@
+   'AFF withdrawal review responsive layout must preserve approve, reject, modal, and pagination actions'
+ )
+ 
++const validateAffCodeSource = sectionBetween(
++  affDbSource,
++  'export async function validateAffCode(',
++  'export async function createAffBinding('
++)
++assert.ok(
++  validateAffCodeSource.includes('if (!affCode.enabled)') &&
++    validateAffCodeSource.includes("return { valid: false, error: '优惠码已禁用' }"),
++  'instance purchase AFF validation must reject disabled codes'
++)
++
++const performRenewalSource = sectionBetween(
++  billingOperationsSource,
++  'export async function performRenewal(',
++  'export async function performPlanChange('
++)
++assert.match(
++  performRenewalSource,
++  /if \(affBinding\?\.affCode\.enabled\) \{\s*discountRate =/,
++  'instance renewal must not apply discounts from disabled AFF codes'
++)
++assert.match(
++  performRenewalSource,
++  /if \(affBinding\?\.affCode\.enabled\) \{\s*await processAffCommission\(/,
++  'instance renewal must not pay commission for disabled AFF codes'
++)
++
+ console.log('AFF review UI guard tests passed')
+diff --git a/server/src/db/aff.ts b/server/src/db/aff.ts
+index 0a0f48dfaae45c805067c5ad994be8481e135714..83f44ac14909a4ab295ee514e4d2882bc9b2f20e
+--- a/server/src/db/aff.ts
++++ b/server/src/db/aff.ts
+@@ -459,6 +459,11 @@
+     return { valid: false, error: '不能使用自己的优惠码' }
+   }
+ 
++  // 4. 检查优惠码是否启用
++  if (!affCode.enabled) {
++    return { valid: false, error: '优惠码已禁用' }
++  }
++
+   return {
+     valid: true,
+     affCode,
+diff --git a/server/src/db/billing-operations.ts b/server/src/db/billing-operations.ts
+index 5cb1e59755ba8d7731e573825b26b81fe6aa49e5..69e8739e915e274547ce154fca4f3197393ce73e
+--- a/server/src/db/billing-operations.ts
++++ b/server/src/db/billing-operations.ts
+@@ -565,7 +565,7 @@
+   let discountAmount = 0
+   let finalAmount = originalAmount
+ 
+-  if (affBinding) {
++  if (affBinding?.affCode.enabled) {
+     discountRate = Number(affBinding.affCode.discountRate)
+     discountAmount = calculateDiscountAmount(originalAmount, discountRate)
+     finalAmount = calculateDiscountedPrice(originalAmount, discountRate)
+@@ -674,7 +674,7 @@
+     })
+ 
+     // 如果有 AFF 绑定，给优惠码创建者返利
+-    if (affBinding) {
++    if (affBinding?.affCode.enabled) {
+       await processAffCommission(
+         affBinding.affCode.id,
+         instance.id,
+
+已完成最小实现：实例新购拒绝禁用码；实例续费的折扣与返佣均由 enabled 门控；守卫分别锁定这三项行为。
+  ✓ 读取 AGENTS.md、相关实现与守卫，定位四条 enabled 口径
+  ✓ 最小修改实例校验、续费路径和 aff 守卫
+  → 运行指定 type-check 与三项守卫并审查 diff
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'git diff --check -- server/src/db/aff.ts server/src/db/billing-operations.ts server/scripts/test-aff-review-ui-guards.ts; git diff -- server/src/db/aff.ts server/src/db/billing-operations.ts server/scripts/test-aff-review-ui-guards.ts; git status --short -- server/src/db/aff.ts server/src/db/billing-operations.ts server/scripts/test-aff-review-ui-guards.ts server/src/routes/mail.ts' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 631ms:
+diff --git a/server/scripts/test-aff-review-ui-guards.ts b/server/scripts/test-aff-review-ui-guards.ts
+index f67eaf1..7068227 100644
+--- a/server/scripts/test-aff-review-ui-guards.ts
++++ b/server/scripts/test-aff-review-ui-guards.ts
+@@ -4,6 +4,16 @@ import { resolve } from 'node:path'
+ 
+ const root = resolve(process.cwd(), '..')
+ const view = readFileSync(resolve(root, 'client/src/views/admin/AffReviewView.vue'), 'utf8')
++const affDbSource = readFileSync(resolve(root, 'server/src/db/aff.ts'), 'utf8')
++const billingOperationsSource = readFileSync(resolve(root, 'server/src/db/billing-operations.ts'), 'utf8')
++
++function sectionBetween(source: string, startMarker: string, endMarker: string): string {
++  const start = source.indexOf(startMarker)
++  assert.notEqual(start, -1, `missing start marker: ${startMarker}`)
++  const end = source.indexOf(endMarker, start + startMarker.length)
++  assert.notEqual(end, -1, `missing end marker: ${endMarker}`)
++  return source.slice(start, end)
++}
+ 
+ assert.ok(
+   view.includes('class="space-y-3 p-4 lg:hidden"') &&
+@@ -24,4 +34,31 @@ assert.ok(
+   'AFF withdrawal review responsive layout must preserve approve, reject, modal, and pagination actions'
+ )
+ 
++const validateAffCodeSource = sectionBetween(
++  affDbSource,
++  'export async function validateAffCode(',
++  'export async function createAffBinding('
++)
++assert.ok(
++  validateAffCodeSource.includes('if (!affCode.enabled)') &&
++    validateAffCodeSource.includes("return { valid: false, error: '优惠码已禁用' }"),
++  'instance purchase AFF validation must reject disabled codes'
++)
++
++const performRenewalSource = sectionBetween(
++  billingOperationsSource,
++  'export async function performRenewal(',
++  'export async function performPlanChange('
++)
++assert.match(
++  performRenewalSource,
++  /if \(affBinding\?\.affCode\.enabled\) \{\s*discountRate =/,
++  'instance renewal must not apply discounts from disabled AFF codes'
++)
++assert.match(
++  performRenewalSource,
++  /if \(affBinding\?\.affCode\.enabled\) \{\s*await processAffCommission\(/,
++  'instance renewal must not pay commission for disabled AFF codes'
++)
++
+ console.log('AFF review UI guard tests passed')
+diff --git a/server/src/db/aff.ts b/server/src/db/aff.ts
+index 0a0f48d..83f44ac 100644
+--- a/server/src/db/aff.ts
++++ b/server/src/db/aff.ts
+@@ -459,6 +459,11 @@ export async function validateAffCode(
+     return { valid: false, error: '不能使用自己的优惠码' }
+   }
+ 
++  // 4. 检查优惠码是否启用
++  if (!affCode.enabled) {
++    return { valid: false, error: '优惠码已禁用' }
++  }
++
+   return {
+     valid: true,
+     affCode,
+diff --git a/server/src/db/billing-operations.ts b/server/src/db/billing-operations.ts
+index 5cb1e59..69e8739 100644
+--- a/server/src/db/billing-operations.ts
++++ b/server/src/db/billing-operations.ts
+@@ -565,7 +565,7 @@ export async function performRenewal(
+   let discountAmount = 0
+   let finalAmount = originalAmount
+ 
+-  if (affBinding) {
++  if (affBinding?.affCode.enabled) {
+     discountRate = Number(affBinding.affCode.discountRate)
+     discountAmount = calculateDiscountAmount(originalAmount, discountRate)
+     finalAmount = calculateDiscountedPrice(originalAmount, discountRate)
+@@ -674,7 +674,7 @@ export async function performRenewal(
+     })
+ 
+     // 如果有 AFF 绑定，给优惠码创建者返利
+-    if (affBinding) {
++    if (affBinding?.affCode.enabled) {
+       await processAffCommission(
+         affBinding.affCode.id,
+         instance.id,
+ M server/scripts/test-aff-review-ui-guards.ts
+ M server/src/db/aff.ts
+ M server/src/db/billing-operations.ts
+ M server/src/routes/mail.ts
+warning: in the working copy of 'server/scripts/test-aff-review-ui-guards.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/db/aff.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/db/billing-operations.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/scripts/test-aff-review-ui-guards.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/db/aff.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/db/billing-operations.ts', LF will be replaced by CRLF the next time Git touches it
+
+diff --git a/server/scripts/test-aff-review-ui-guards.ts b/server/scripts/test-aff-review-ui-guards.ts
+index f67eaf1e44de6be15498a1fd78f478b55da131c8..706822738cbcf10d7fd5d5b29b927bb51f4accc5
+--- a/server/scripts/test-aff-review-ui-guards.ts
++++ b/server/scripts/test-aff-review-ui-guards.ts
+@@ -4,6 +4,16 @@
+ 
+ const root = resolve(process.cwd(), '..')
+ const view = readFileSync(resolve(root, 'client/src/views/admin/AffReviewView.vue'), 'utf8')
++const affDbSource = readFileSync(resolve(root, 'server/src/db/aff.ts'), 'utf8')
++const billingOperationsSource = readFileSync(resolve(root, 'server/src/db/billing-operations.ts'), 'utf8')
++
++function sectionBetween(source: string, startMarker: string, endMarker: string): string {
++  const start = source.indexOf(startMarker)
++  assert.notEqual(start, -1, `missing start marker: ${startMarker}`)
++  const end = source.indexOf(endMarker, start + startMarker.length)
++  assert.notEqual(end, -1, `missing end marker: ${endMarker}`)
++  return source.slice(start, end)
++}
+ 
+ assert.ok(
+   view.includes('class="space-y-3 p-4 lg:hidden"') &&
+@@ -24,4 +34,31 @@
+   'AFF withdrawal review responsive layout must preserve approve, reject, modal, and pagination actions'
+ )
+ 
++const validateAffCodeSource = sectionBetween(
++  affDbSource,
++  'export async function validateAffCode(',
++  'export async function createAffBinding('
++)
++assert.ok(
++  validateAffCodeSource.includes('if (!affCode.enabled)') &&
++    validateAffCodeSource.includes("return { valid: false, error: '优惠码已禁用' }"),
++  'instance purchase AFF validation must reject disabled codes'
++)
++
++const performRenewalSource = sectionBetween(
++  billingOperationsSource,
++  'export async function performRenewal(',
++  'export async function performPlanChange('
++)
++assert.match(
++  performRenewalSource,
++  /if \(affBinding\?\.affCode\.enabled\) \{\s*discountRate =/,
++  'instance renewal must not apply discounts from disabled AFF codes'
++)
++assert.match(
++  performRenewalSource,
++  /if \(affBinding\?\.affCode\.enabled\) \{\s*await processAffCommission\(/,
++  'instance renewal must not pay commission for disabled AFF codes'
++)
++
+ console.log('AFF review UI guard tests passed')
+diff --git a/server/src/db/aff.ts b/server/src/db/aff.ts
+index 0a0f48dfaae45c805067c5ad994be8481e135714..83f44ac14909a4ab295ee514e4d2882bc9b2f20e
+--- a/server/src/db/aff.ts
++++ b/server/src/db/aff.ts
+@@ -459,6 +459,11 @@
+     return { valid: false, error: '不能使用自己的优惠码' }
+   }
+ 
++  // 4. 检查优惠码是否启用
++  if (!affCode.enabled) {
++    return { valid: false, error: '优惠码已禁用' }
++  }
++
+   return {
+     valid: true,
+     affCode,
+diff --git a/server/src/db/billing-operations.ts b/server/src/db/billing-operations.ts
+index 5cb1e59755ba8d7731e573825b26b81fe6aa49e5..69e8739e915e274547ce154fca4f3197393ce73e
+--- a/server/src/db/billing-operations.ts
++++ b/server/src/db/billing-operations.ts
+@@ -565,7 +565,7 @@
+   let discountAmount = 0
+   let finalAmount = originalAmount
+ 
+-  if (affBinding) {
++  if (affBinding?.affCode.enabled) {
+     discountRate = Number(affBinding.affCode.discountRate)
+     discountAmount = calculateDiscountAmount(originalAmount, discountRate)
+     finalAmount = calculateDiscountedPrice(originalAmount, discountRate)
+@@ -674,7 +674,7 @@
+     })
+ 
+     // 如果有 AFF 绑定，给优惠码创建者返利
+-    if (affBinding) {
++    if (affBinding?.affCode.enabled) {
+       await processAffCommission(
+         affBinding.affCode.id,
+         instance.id,
+
+codex
+目标 diff 已核对，仅三处规格内文件；`mail.ts` 在我工作期间已被并行任务修改，我没有触碰它。现在运行 server type-check 和三项指定守卫；先跑新增守卫，再跑其余回归项。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'pnpm --filter server test:aff-review-ui-guards; pnpm --filter server type-check; pnpm --filter server test:aff-points-query-guards; pnpm --filter server test:invite-generation-accounting-guards' in C:\Users\Administrator\Desktop\payinces
+diff --git a/server/scripts/test-aff-review-ui-guards.ts b/server/scripts/test-aff-review-ui-guards.ts
+index f67eaf1e44de6be15498a1fd78f478b55da131c8..706822738cbcf10d7fd5d5b29b927bb51f4accc5
+--- a/server/scripts/test-aff-review-ui-guards.ts
++++ b/server/scripts/test-aff-review-ui-guards.ts
+@@ -4,6 +4,16 @@
+ 
+ const root = resolve(process.cwd(), '..')
+ const view = readFileSync(resolve(root, 'client/src/views/admin/AffReviewView.vue'), 'utf8')
++const affDbSource = readFileSync(resolve(root, 'server/src/db/aff.ts'), 'utf8')
++const billingOperationsSource = readFileSync(resolve(root, 'server/src/db/billing-operations.ts'), 'utf8')
++
++function sectionBetween(source: string, startMarker: string, endMarker: string): string {
++  const start = source.indexOf(startMarker)
++  assert.notEqual(start, -1, `missing start marker: ${startMarker}`)
++  const end = source.indexOf(endMarker, start + startMarker.length)
++  assert.notEqual(end, -1, `missing end marker: ${endMarker}`)
++  return source.slice(start, end)
++}
+ 
+ assert.ok(
+   view.includes('class="space-y-3 p-4 lg:hidden"') &&
+@@ -24,4 +34,31 @@
+   'AFF withdrawal review responsive layout must preserve approve, reject, modal, and pagination actions'
+ )
+ 
++const validateAffCodeSource = sectionBetween(
++  affDbSource,
++  'export async function validateAffCode(',
++  'export async function createAffBinding('
++)
++assert.ok(
++  validateAffCodeSource.includes('if (!affCode.enabled)') &&
++    validateAffCodeSource.includes("return { valid: false, error: '优惠码已禁用' }"),
++  'instance purchase AFF validation must reject disabled codes'
++)
++
++const performRenewalSource = sectionBetween(
++  billingOperationsSource,
++  'export async function performRenewal(',
++  'export async function performPlanChange('
++)
++assert.match(
++  performRenewalSource,
++  /if \(affBinding\?\.affCode\.enabled\) \{\s*discountRate =/,
++  'instance renewal must not apply discounts from disabled AFF codes'
++)
++assert.match(
++  performRenewalSource,
++  /if \(affBinding\?\.affCode\.enabled\) \{\s*await processAffCommission\(/,
++  'instance renewal must not pay commission for disabled AFF codes'
++)
++
+ console.log('AFF review UI guard tests passed')
+diff --git a/server/src/db/aff.ts b/server/src/db/aff.ts
+index 0a0f48dfaae45c805067c5ad994be8481e135714..83f44ac14909a4ab295ee514e4d2882bc9b2f20e
+--- a/server/src/db/aff.ts
++++ b/server/src/db/aff.ts
+@@ -459,6 +459,11 @@
+     return { valid: false, error: '不能使用自己的优惠码' }
+   }
+ 
++  // 4. 检查优惠码是否启用
++  if (!affCode.enabled) {
++    return { valid: false, error: '优惠码已禁用' }
++  }
++
+   return {
+     valid: true,
+     affCode,
+diff --git a/server/src/db/billing-operations.ts b/server/src/db/billing-operations.ts
+index 5cb1e59755ba8d7731e573825b26b81fe6aa49e5..69e8739e915e274547ce154fca4f3197393ce73e
+--- a/server/src/db/billing-operations.ts
++++ b/server/src/db/billing-operations.ts
+@@ -565,7 +565,7 @@
+   let discountAmount = 0
+   let finalAmount = originalAmount
+ 
+-  if (affBinding) {
++  if (affBinding?.affCode.enabled) {
+     discountRate = Number(affBinding.affCode.discountRate)
+     discountAmount = calculateDiscountAmount(originalAmount, discountRate)
+     finalAmount = calculateDiscountedPrice(originalAmount, discountRate)
+@@ -674,7 +674,7 @@
+     })
+ 
+     // 如果有 AFF 绑定，给优惠码创建者返利
+-    if (affBinding) {
++    if (affBinding?.affCode.enabled) {
+       await processAffCommission(
+         affBinding.affCode.id,
+         instance.id,
+
+diff --git a/server/scripts/test-aff-review-ui-guards.ts b/server/scripts/test-aff-review-ui-guards.ts
+index f67eaf1e44de6be15498a1fd78f478b55da131c8..706822738cbcf10d7fd5d5b29b927bb51f4accc5
+--- a/server/scripts/test-aff-review-ui-guards.ts
++++ b/server/scripts/test-aff-review-ui-guards.ts
+@@ -4,6 +4,16 @@
+ 
+ const root = resolve(process.cwd(), '..')
+ const view = readFileSync(resolve(root, 'client/src/views/admin/AffReviewView.vue'), 'utf8')
++const affDbSource = readFileSync(resolve(root, 'server/src/db/aff.ts'), 'utf8')
++const billingOperationsSource = readFileSync(resolve(root, 'server/src/db/billing-operations.ts'), 'utf8')
++
++function sectionBetween(source: string, startMarker: string, endMarker: string): string {
++  const start = source.indexOf(startMarker)
++  assert.notEqual(start, -1, `missing start marker: ${startMarker}`)
++  const end = source.indexOf(endMarker, start + startMarker.length)
++  assert.notEqual(end, -1, `missing end marker: ${endMarker}`)
++  return source.slice(start, end)
++}
+ 
+ assert.ok(
+   view.includes('class="space-y-3 p-4 lg:hidden"') &&
+@@ -24,4 +34,31 @@
+   'AFF withdrawal review responsive layout must preserve approve, reject, modal, and pagination actions'
+ )
+ 
++const validateAffCodeSource = sectionBetween(
++  affDbSource,
++  'export async function validateAffCode(',
++  'export async function createAffBinding('
++)
++assert.ok(
++  validateAffCodeSource.includes('if (!affCode.enabled)') &&
++    validateAffCodeSource.includes("return { valid: false, error: '优惠码已禁用' }"),
++  'instance purchase AFF validation must reject disabled codes'
++)
++
++const performRenewalSource = sectionBetween(
++  billingOperationsSource,
++  'export async function performRenewal(',
++  'export async function performPlanChange('
++)
++assert.match(
++  performRenewalSource,
++  /if \(affBinding\?\.affCode\.enabled\) \{\s*discountRate =/,
++  'instance renewal must not apply discounts from disabled AFF codes'
++)
++assert.match(
++  performRenewalSource,
++  /if \(affBinding\?\.affCode\.enabled\) \{\s*await processAffCommission\(/,
++  'instance renewal must not pay commission for disabled AFF codes'
++)
++
+ console.log('AFF review UI guard tests passed')
+diff --git a/server/src/db/aff.ts b/server/src/db/aff.ts
+index 0a0f48dfaae45c805067c5ad994be8481e135714..83f44ac14909a4ab295ee514e4d2882bc9b2f20e
+--- a/server/src/db/aff.ts
++++ b/server/src/db/aff.ts
+@@ -459,6 +459,11 @@
+     return { valid: false, error: '不能使用自己的优惠码' }
+   }
+ 
++  // 4. 检查优惠码是否启用
++  if (!affCode.enabled) {
++    return { valid: false, error: '优惠码已禁用' }
++  }
++
+   return {
+     valid: true,
+     affCode,
+diff --git a/server/src/db/billing-operations.ts b/server/src/db/billing-operations.ts
+index 5cb1e59755ba8d7731e573825b26b81fe6aa49e5..69e8739e915e274547ce154fca4f3197393ce73e
+--- a/server/src/db/billing-operations.ts
++++ b/server/src/db/billing-operations.ts
+@@ -565,7 +565,7 @@
+   let discountAmount = 0
+   let finalAmount = originalAmount
+ 
+-  if (affBinding) {
++  if (affBinding?.affCode.enabled) {
+     discountRate = Number(affBinding.affCode.discountRate)
+     discountAmount = calculateDiscountAmount(originalAmount, discountRate)
+     finalAmount = calculateDiscountedPrice(originalAmount, discountRate)
+@@ -674,7 +674,7 @@
+     })
+ 
+     // 如果有 AFF 绑定，给优惠码创建者返利
+-    if (affBinding) {
++    if (affBinding?.affCode.enabled) {
+       await processAffCommission(
+         affBinding.affCode.id,
+         instance.id,
+
+diff --git a/server/scripts/test-aff-review-ui-guards.ts b/server/scripts/test-aff-review-ui-guards.ts
+index f67eaf1e44de6be15498a1fd78f478b55da131c8..706822738cbcf10d7fd5d5b29b927bb51f4accc5
+--- a/server/scripts/test-aff-review-ui-guards.ts
++++ b/server/scripts/test-aff-review-ui-guards.ts
+@@ -4,6 +4,16 @@
+ 
+ const root = resolve(process.cwd(), '..')
+ const view = readFileSync(resolve(root, 'client/src/views/admin/AffReviewView.vue'), 'utf8')
++const affDbSource = readFileSync(resolve(root, 'server/src/db/aff.ts'), 'utf8')
++const billingOperationsSource = readFileSync(resolve(root, 'server/src/db/billing-operations.ts'), 'utf8')
++
++function sectionBetween(source: string, startMarker: string, endMarker: string): string {
++  const start = source.indexOf(startMarker)
++  assert.notEqual(start, -1, `missing start marker: ${startMarker}`)
++  const end = source.indexOf(endMarker, start + startMarker.length)
++  assert.notEqual(end, -1, `missing end marker: ${endMarker}`)
++  return source.slice(start, end)
++}
+ 
+ assert.ok(
+   view.includes('class="space-y-3 p-4 lg:hidden"') &&
+@@ -24,4 +34,31 @@
+   'AFF withdrawal review responsive layout must preserve approve, reject, modal, and pagination actions'
+ )
+ 
++const validateAffCodeSource = sectionBetween(
++  affDbSource,
++  'export async function validateAffCode(',
++  'export async function createAffBinding('
++)
++assert.ok(
++  validateAffCodeSource.includes('if (!affCode.enabled)') &&
++    validateAffCodeSource.includes("return { valid: false, error: '优惠码已禁用' }"),
++  'instance purchase AFF validation must reject disabled codes'
++)
++
++const performRenewalSource = sectionBetween(
++  billingOperationsSource,
++  'export async function performRenewal(',
++  'export async function performPlanChange('
++)
++assert.match(
++  performRenewalSource,
++  /if \(affBinding\?\.affCode\.enabled\) \{\s*discountRate =/,
++  'instance renewal must not apply discounts from disabled AFF codes'
++)
++assert.match(
++  performRenewalSource,
++  /if \(affBinding\?\.affCode\.enabled\) \{\s*await processAffCommission\(/,
++  'instance renewal must not pay commission for disabled AFF codes'
++)
++
+ console.log('AFF review UI guard tests passed')
+diff --git a/server/src/db/aff.ts b/server/src/db/aff.ts
+index 0a0f48dfaae45c805067c5ad994be8481e135714..83f44ac14909a4ab295ee514e4d2882bc9b2f20e
+--- a/server/src/db/aff.ts
++++ b/server/src/db/aff.ts
+@@ -459,6 +459,11 @@
+     return { valid: false, error: '不能使用自己的优惠码' }
+   }
+ 
++  // 4. 检查优惠码是否启用
++  if (!affCode.enabled) {
++    return { valid: false, error: '优惠码已禁用' }
++  }
++
+   return {
+     valid: true,
+     affCode,
+diff --git a/server/src/db/billing-operations.ts b/server/src/db/billing-operations.ts
+index 5cb1e59755ba8d7731e573825b26b81fe6aa49e5..69e8739e915e274547ce154fca4f3197393ce73e
+--- a/server/src/db/billing-operations.ts
++++ b/server/src/db/billing-operations.ts
+@@ -565,7 +565,7 @@
+   let discountAmount = 0
+   let finalAmount = originalAmount
+ 
+-  if (affBinding) {
++  if (affBinding?.affCode.enabled) {
+     discountRate = Number(affBinding.affCode.discountRate)
+     discountAmount = calculateDiscountAmount(originalAmount, discountRate)
+     finalAmount = calculateDiscountedPrice(originalAmount, discountRate)
+@@ -674,7 +674,7 @@
+     })
+ 
+     // 如果有 AFF 绑定，给优惠码创建者返利
+-    if (affBinding) {
++    if (affBinding?.affCode.enabled) {
+       await processAffCommission(
+         affBinding.affCode.id,
+         instance.id,
+
+diff --git a/server/scripts/test-aff-review-ui-guards.ts b/server/scripts/test-aff-review-ui-guards.ts
+index f67eaf1e44de6be15498a1fd78f478b55da131c8..706822738cbcf10d7fd5d5b29b927bb51f4accc5
+--- a/server/scripts/test-aff-review-ui-guards.ts
++++ b/server/scripts/test-aff-review-ui-guards.ts
+@@ -4,6 +4,16 @@
+ 
+ const root = resolve(process.cwd(), '..')
+ const view = readFileSync(resolve(root, 'client/src/views/admin/AffReviewView.vue'), 'utf8')
++const affDbSource = readFileSync(resolve(root, 'server/src/db/aff.ts'), 'utf8')
++const billingOperationsSource = readFileSync(resolve(root, 'server/src/db/billing-operations.ts'), 'utf8')
++
++function sectionBetween(source: string, startMarker: string, endMarker: string): string {
++  const start = source.indexOf(startMarker)
++  assert.notEqual(start, -1, `missing start marker: ${startMarker}`)
++  const end = source.indexOf(endMarker, start + startMarker.length)
++  assert.notEqual(end, -1, `missing end marker: ${endMarker}`)
++  return source.slice(start, end)
++}
+ 
+ assert.ok(
+   view.includes('class="space-y-3 p-4 lg:hidden"') &&
+@@ -24,4 +34,31 @@
+   'AFF withdrawal review responsive layout must preserve approve, reject, modal, and pagination actions'
+ )
+ 
++const validateAffCodeSource = sectionBetween(
++  affDbSource,
++  'export async function validateAffCode(',
++  'export async function createAffBinding('
++)
++assert.ok(
++  validateAffCodeSource.includes('if (!affCode.enabled)') &&
++    validateAffCodeSource.includes("return { valid: false, error: '优惠码已禁用' }"),
++  'instance purchase AFF validation must reject disabled codes'
++)
++
++const performRenewalSource = sectionBetween(
++  billingOperationsSource,
++  'export async function performRenewal(',
++  'export async function performPlanChange('
++)
++assert.match(
++  performRenewalSource,
++  /if \(affBinding\?\.affCode\.enabled\) \{\s*discountRate =/,
++  'instance renewal must not apply discounts from disabled AFF codes'
++)
++assert.match(
++  performRenewalSource,
++  /if \(affBinding\?\.affCode\.enabled\) \{\s*await processAffCommission\(/,
++  'instance renewal must not pay commission for disabled AFF codes'
++)
++
+ console.log('AFF review UI guard tests passed')
+diff --git a/server/src/db/aff.ts b/server/src/db/aff.ts
+index 0a0f48dfaae45c805067c5ad994be8481e135714..83f44ac14909a4ab295ee514e4d2882bc9b2f20e
+--- a/server/src/db/aff.ts
++++ b/server/src/db/aff.ts
+@@ -459,6 +459,11 @@
+     return { valid: false, error: '不能使用自己的优惠码' }
+   }
+ 
++  // 4. 检查优惠码是否启用
++  if (!affCode.enabled) {
++    return { valid: false, error: '优惠码已禁用' }
++  }
++
+   return {
+     valid: true,
+     affCode,
+diff --git a/server/src/db/billing-operations.ts b/server/src/db/billing-operations.ts
+index 5cb1e59755ba8d7731e573825b26b81fe6aa49e5..69e8739e915e274547ce154fca4f3197393ce73e
+--- a/server/src/db/billing-operations.ts
++++ b/server/src/db/billing-operations.ts
+@@ -565,7 +565,7 @@
+   let discountAmount = 0
+   let finalAmount = originalAmount
+ 
+-  if (affBinding) {
++  if (affBinding?.affCode.enabled) {
+     discountRate = Number(affBinding.affCode.discountRate)
+     discountAmount = calculateDiscountAmount(originalAmount, discountRate)
+     finalAmount = calculateDiscountedPrice(originalAmount, discountRate)
+@@ -674,7 +674,7 @@
+     })
+ 
+     // 如果有 AFF 绑定，给优惠码创建者返利
+-    if (affBinding) {
++    if (affBinding?.affCode.enabled) {
+       await processAffCommission(
+         affBinding.affCode.id,
+         instance.id,
+
+diff --git a/server/scripts/test-aff-review-ui-guards.ts b/server/scripts/test-aff-review-ui-guards.ts
+index f67eaf1e44de6be15498a1fd78f478b55da131c8..706822738cbcf10d7fd5d5b29b927bb51f4accc5
+--- a/server/scripts/test-aff-review-ui-guards.ts
++++ b/server/scripts/test-aff-review-ui-guards.ts
+@@ -4,6 +4,16 @@
+ 
+ const root = resolve(process.cwd(), '..')
+ const view = readFileSync(resolve(root, 'client/src/views/admin/AffReviewView.vue'), 'utf8')
++const affDbSource = readFileSync(resolve(root, 'server/src/db/aff.ts'), 'utf8')
++const billingOperationsSource = readFileSync(resolve(root, 'server/src/db/billing-operations.ts'), 'utf8')
++
++function sectionBetween(source: string, startMarker: string, endMarker: string): string {
++  const start = source.indexOf(startMarker)
++  assert.notEqual(start, -1, `missing start marker: ${startMarker}`)
++  const end = source.indexOf(endMarker, start + startMarker.length)
++  assert.notEqual(end, -1, `missing end marker: ${endMarker}`)
++  return source.slice(start, end)
++}
+ 
+ assert.ok(
+   view.includes('class="space-y-3 p-4 lg:hidden"') &&
+@@ -24,4 +34,31 @@
+   'AFF withdrawal review responsive layout must preserve approve, reject, modal, and pagination actions'
+ )
+ 
++const validateAffCodeSource = sectionBetween(
++  affDbSource,
++  'export async function validateAffCode(',
++  'export async function createAffBinding('
++)
++assert.ok(
++  validateAffCodeSource.includes('if (!affCode.enabled)') &&
++    validateAffCodeSource.includes("return { valid: false, error: '优惠码已禁用' }"),
++  'instance purchase AFF validation must reject disabled codes'
++)
++
++const performRenewalSource = sectionBetween(
++  billingOperationsSource,
++  'export async function performRenewal(',
++  'export async function performPlanChange('
++)
++assert.match(
++  performRenewalSource,
++  /if \(affBinding\?\.affCode\.enabled\) \{\s*discountRate =/,
++  'instance renewal must not apply discounts from disabled AFF codes'
++)
++assert.match(
++  performRenewalSource,
++  /if \(affBinding\?\.affCode\.enabled\) \{\s*await processAffCommission\(/,
++  'instance renewal must not pay commission for disabled AFF codes'
++)
++
+ console.log('AFF review UI guard tests passed')
+diff --git a/server/src/db/aff.ts b/server/src/db/aff.ts
+index 0a0f48dfaae45c805067c5ad994be8481e135714..83f44ac14909a4ab295ee514e4d2882bc9b2f20e
+--- a/server/src/db/aff.ts
++++ b/server/src/db/aff.ts
+@@ -459,6 +459,11 @@
+     return { valid: false, error: '不能使用自己的优惠码' }
+   }
+ 
++  // 4. 检查优惠码是否启用
++  if (!affCode.enabled) {
++    return { valid: false, error: '优惠码已禁用' }
++  }
++
+   return {
+     valid: true,
+     affCode,
+diff --git a/server/src/db/billing-operations.ts b/server/src/db/billing-operations.ts
+index 5cb1e59755ba8d7731e573825b26b81fe6aa49e5..69e8739e915e274547ce154fca4f3197393ce73e
+--- a/server/src/db/billing-operations.ts
++++ b/server/src/db/billing-operations.ts
+@@ -565,7 +565,7 @@
+   let discountAmount = 0
+   let finalAmount = originalAmount
+ 
+-  if (affBinding) {
++  if (affBinding?.affCode.enabled) {
+     discountRate = Number(affBinding.affCode.discountRate)
+     discountAmount = calculateDiscountAmount(originalAmount, discountRate)
+     finalAmount = calculateDiscountedPrice(originalAmount, discountRate)
+@@ -674,7 +674,7 @@
+     })
+ 
+     // 如果有 AFF 绑定，给优惠码创建者返利
+-    if (affBinding) {
++    if (affBinding?.affCode.enabled) {
+       await processAffCommission(
+         affBinding.affCode.id,
+         instance.id,
+
+diff --git a/server/scripts/test-aff-review-ui-guards.ts b/server/scripts/test-aff-review-ui-guards.ts
+index f67eaf1e44de6be15498a1fd78f478b55da131c8..706822738cbcf10d7fd5d5b29b927bb51f4accc5
+--- a/server/scripts/test-aff-review-ui-guards.ts
++++ b/server/scripts/test-aff-review-ui-guards.ts
+@@ -4,6 +4,16 @@
+ 
+ const root = resolve(process.cwd(), '..')
+ const view = readFileSync(resolve(root, 'client/src/views/admin/AffReviewView.vue'), 'utf8')
++const affDbSource = readFileSync(resolve(root, 'server/src/db/aff.ts'), 'utf8')
++const billingOperationsSource = readFileSync(resolve(root, 'server/src/db/billing-operations.ts'), 'utf8')
++
++function sectionBetween(source: string, startMarker: string, endMarker: string): string {
++  const start = source.indexOf(startMarker)
++  assert.notEqual(start, -1, `missing start marker: ${startMarker}`)
++  const end = source.indexOf(endMarker, start + startMarker.length)
++  assert.notEqual(end, -1, `missing end marker: ${endMarker}`)
++  return source.slice(start, end)
++}
+ 
+ assert.ok(
+   view.includes('class="space-y-3 p-4 lg:hidden"') &&
+@@ -24,4 +34,31 @@
+   'AFF withdrawal review responsive layout must preserve approve, reject, modal, and pagination actions'
+ )
+ 
++const validateAffCodeSource = sectionBetween(
++  affDbSource,
++  'export async function validateAffCode(',
++  'export async function createAffBinding('
++)
++assert.ok(
++  validateAffCodeSource.includes('if (!affCode.enabled)') &&
++    validateAffCodeSource.includes("return { valid: false, error: '优惠码已禁用' }"),
++  'instance purchase AFF validation must reject disabled codes'
++)
++
++const performRenewalSource = sectionBetween(
++  billingOperationsSource,
++  'export async function performRenewal(',
++  'export async function performPlanChange('
++)
++assert.match(
++  performRenewalSource,
++  /if \(affBinding\?\.affCode\.enabled\) \{\s*discountRate =/,
++  'instance renewal must not apply discounts from disabled AFF codes'
++)
++assert.match(
++  performRenewalSource,
++  /if \(affBinding\?\.affCode\.enabled\) \{\s*await processAffCommission\(/,
++  'instance renewal must not pay commission for disabled AFF codes'
++)
++
+ console.log('AFF review UI guard tests passed')
+diff --git a/server/src/db/aff.ts b/server/src/db/aff.ts
+index 0a0f48dfaae45c805067c5ad994be8481e135714..83f44ac14909a4ab295ee514e4d2882bc9b2f20e
+--- a/server/src/db/aff.ts
++++ b/server/src/db/aff.ts
+@@ -459,6 +459,11 @@
+     return { valid: false, error: '不能使用自己的优惠码' }
+   }
+ 
++  // 4. 检查优惠码是否启用
++  if (!affCode.enabled) {
++    return { valid: false, error: '优惠码已禁用' }
++  }
++
+   return {
+     valid: true,
+     affCode,
+diff --git a/server/src/db/billing-operations.ts b/server/src/db/billing-operations.ts
+index 5cb1e59755ba8d7731e573825b26b81fe6aa49e5..69e8739e915e274547ce154fca4f3197393ce73e
+--- a/server/src/db/billing-operations.ts
++++ b/server/src/db/billing-operations.ts
+@@ -565,7 +565,7 @@
+   let discountAmount = 0
+   let finalAmount = originalAmount
+ 
+-  if (affBinding) {
++  if (affBinding?.affCode.enabled) {
+     discountRate = Number(affBinding.affCode.discountRate)
+     discountAmount = calculateDiscountAmount(originalAmount, discountRate)
+     finalAmount = calculateDiscountedPrice(originalAmount, discountRate)
+@@ -674,7 +674,7 @@
+     })
+ 
+     // 如果有 AFF 绑定，给优惠码创建者返利
+-    if (affBinding) {
++    if (affBinding?.affCode.enabled) {
+       await processAffCommission(
+         affBinding.affCode.id,
+         instance.id,
+
+diff --git a/server/scripts/test-aff-review-ui-guards.ts b/server/scripts/test-aff-review-ui-guards.ts
+index f67eaf1e44de6be15498a1fd78f478b55da131c8..706822738cbcf10d7fd5d5b29b927bb51f4accc5
+--- a/server/scripts/test-aff-review-ui-guards.ts
++++ b/server/scripts/test-aff-review-ui-guards.ts
+@@ -4,6 +4,16 @@
+ 
+ const root = resolve(process.cwd(), '..')
+ const view = readFileSync(resolve(root, 'client/src/views/admin/AffReviewView.vue'), 'utf8')
++const affDbSource = readFileSync(resolve(root, 'server/src/db/aff.ts'), 'utf8')
++const billingOperationsSource = readFileSync(resolve(root, 'server/src/db/billing-operations.ts'), 'utf8')
++
++function sectionBetween(source: string, startMarker: string, endMarker: string): string {
++  const start = source.indexOf(startMarker)
++  assert.notEqual(start, -1, `missing start marker: ${startMarker}`)
++  const end = source.indexOf(endMarker, start + startMarker.length)
++  assert.notEqual(end, -1, `missing end marker: ${endMarker}`)
++  return source.slice(start, end)
++}
+ 
+ assert.ok(
+   view.includes('class="space-y-3 p-4 lg:hidden"') &&
+@@ -24,4 +34,31 @@
+   'AFF withdrawal review responsive layout must preserve approve, reject, modal, and pagination actions'
+ )
+ 
++const validateAffCodeSource = sectionBetween(
++  affDbSource,
++  'export async function validateAffCode(',
++  'export async function createAffBinding('
++)
++assert.ok(
++  validateAffCodeSource.includes('if (!affCode.enabled)') &&
++    validateAffCodeSource.includes("return { valid: false, error: '优惠码已禁用' }"),
++  'instance purchase AFF validation must reject disabled codes'
++)
++
++const performRenewalSource = sectionBetween(
++  billingOperationsSource,
++  'export async function performRenewal(',
++  'export async function performPlanChange('
++)
++assert.match(
++  performRenewalSource,
++  /if \(affBinding\?\.affCode\.enabled\) \{\s*discountRate =/,
++  'instance renewal must not apply discounts from disabled AFF codes'
++)
++assert.match(
++  performRenewalSource,
++  /if \(affBinding\?\.affCode\.enabled\) \{\s*await processAffCommission\(/,
++  'instance renewal must not pay commission for disabled AFF codes'
++)
++
+ console.log('AFF review UI guard tests passed')
+diff --git a/server/src/db/aff.ts b/server/src/db/aff.ts
+index 0a0f48dfaae45c805067c5ad994be8481e135714..83f44ac14909a4ab295ee514e4d2882bc9b2f20e
+--- a/server/src/db/aff.ts
++++ b/server/src/db/aff.ts
+@@ -459,6 +459,11 @@
+     return { valid: false, error: '不能使用自己的优惠码' }
+   }
+ 
++  // 4. 检查优惠码是否启用
++  if (!affCode.enabled) {
++    return { valid: false, error: '优惠码已禁用' }
++  }
++
+   return {
+     valid: true,
+     affCode,
+diff --git a/server/src/db/billing-operations.ts b/server/src/db/billing-operations.ts
+index 5cb1e59755ba8d7731e573825b26b81fe6aa49e5..69e8739e915e274547ce154fca4f3197393ce73e
+--- a/server/src/db/billing-operations.ts
++++ b/server/src/db/billing-operations.ts
+@@ -565,7 +565,7 @@
+   let discountAmount = 0
+   let finalAmount = originalAmount
+ 
+-  if (affBinding) {
++  if (affBinding?.affCode.enabled) {
+     discountRate = Number(affBinding.affCode.discountRate)
+     discountAmount = calculateDiscountAmount(originalAmount, discountRate)
+     finalAmount = calculateDiscountedPrice(originalAmount, discountRate)
+@@ -674,7 +674,7 @@
+     })
+ 
+     // 如果有 AFF 绑定，给优惠码创建者返利
+-    if (affBinding) {
++    if (affBinding?.affCode.enabled) {
+       await processAffCommission(
+         affBinding.affCode.id,
+         instance.id,
+
+diff --git a/server/scripts/test-aff-review-ui-guards.ts b/server/scripts/test-aff-review-ui-guards.ts
+index f67eaf1e44de6be15498a1fd78f478b55da131c8..706822738cbcf10d7fd5d5b29b927bb51f4accc5
+--- a/server/scripts/test-aff-review-ui-guards.ts
++++ b/server/scripts/test-aff-review-ui-guards.ts
+@@ -4,6 +4,16 @@
+ 
+ const root = resolve(process.cwd(), '..')
+ const view = readFileSync(resolve(root, 'client/src/views/admin/AffReviewView.vue'), 'utf8')
++const affDbSource = readFileSync(resolve(root, 'server/src/db/aff.ts'), 'utf8')
++const billingOperationsSource = readFileSync(resolve(root, 'server/src/db/billing-operations.ts'), 'utf8')
++
++function sectionBetween(source: string, startMarker: string, endMarker: string): string {
++  const start = source.indexOf(startMarker)
++  assert.notEqual(start, -1, `missing start marker: ${startMarker}`)
++  const end = source.indexOf(endMarker, start + startMarker.length)
++  assert.notEqual(end, -1, `missing end marker: ${endMarker}`)
++  return source.slice(start, end)
++}
+ 
+ assert.ok(
+   view.includes('class="space-y-3 p-4 lg:hidden"') &&
+@@ -24,4 +34,31 @@
+   'AFF withdrawal review responsive layout must preserve approve, reject, modal, and pagination actions'
+ )
+ 
++const validateAffCodeSource = sectionBetween(
++  affDbSource,
++  'export async function validateAffCode(',
++  'export async function createAffBinding('
++)
++assert.ok(
++  validateAffCodeSource.includes('if (!affCode.enabled)') &&
++    validateAffCodeSource.includes("return { valid: false, error: '优惠码已禁用' }"),
++  'instance purchase AFF validation must reject disabled codes'
++)
++
++const performRenewalSource = sectionBetween(
++  billingOperationsSource,
++  'export async function performRenewal(',
++  'export async function performPlanChange('
++)
++assert.match(
++  performRenewalSource,
++  /if \(affBinding\?\.affCode\.enabled\) \{\s*discountRate =/,
++  'instance renewal must not apply discounts from disabled AFF codes'
++)
++assert.match(
++  performRenewalSource,
++  /if \(affBinding\?\.affCode\.enabled\) \{\s*await processAffCommission\(/,
++  'instance renewal must not pay commission for disabled AFF codes'
++)
++
+ console.log('AFF review UI guard tests passed')
+diff --git a/server/src/db/aff.ts b/server/src/db/aff.ts
+index 0a0f48dfaae45c805067c5ad994be8481e135714..83f44ac14909a4ab295ee514e4d2882bc9b2f20e
+--- a/server/src/db/aff.ts
++++ b/server/src/db/aff.ts
+@@ -459,6 +459,11 @@
+     return { valid: false, error: '不能使用自己的优惠码' }
+   }
+ 
++  // 4. 检查优惠码是否启用
++  if (!affCode.enabled) {
++    return { valid: false, error: '优惠码已禁用' }
++  }
++
+   return {
+     valid: true,
+     affCode,
+diff --git a/server/src/db/billing-operations.ts b/server/src/db/billing-operations.ts
+index 5cb1e59755ba8d7731e573825b26b81fe6aa49e5..69e8739e915e274547ce154fca4f3197393ce73e
+--- a/server/src/db/billing-operations.ts
++++ b/server/src/db/billing-operations.ts
+@@ -565,7 +565,7 @@
+   let discountAmount = 0
+   let finalAmount = originalAmount
+ 
+-  if (affBinding) {
++  if (affBinding?.affCode.enabled) {
+     discountRate = Number(affBinding.affCode.discountRate)
+     discountAmount = calculateDiscountAmount(originalAmount, discountRate)
+     finalAmount = calculateDiscountedPrice(originalAmount, discountRate)
+@@ -674,7 +674,7 @@
+     })
+ 
+     // 如果有 AFF 绑定，给优惠码创建者返利
+-    if (affBinding) {
++    if (affBinding?.affCode.enabled) {
+       await processAffCommission(
+         affBinding.affCode.id,
+         instance.id,
+
+diff --git a/server/scripts/test-aff-review-ui-guards.ts b/server/scripts/test-aff-review-ui-guards.ts
+index f67eaf1e44de6be15498a1fd78f478b55da131c8..706822738cbcf10d7fd5d5b29b927bb51f4accc5
+--- a/server/scripts/test-aff-review-ui-guards.ts
++++ b/server/scripts/test-aff-review-ui-guards.ts
+@@ -4,6 +4,16 @@
+ 
+ const root = resolve(process.cwd(), '..')
+ const view = readFileSync(resolve(root, 'client/src/views/admin/AffReviewView.vue'), 'utf8')
++const affDbSource = readFileSync(resolve(root, 'server/src/db/aff.ts'), 'utf8')
++const billingOperationsSource = readFileSync(resolve(root, 'server/src/db/billing-operations.ts'), 'utf8')
++
++function sectionBetween(source: string, startMarker: string, endMarker: string): string {
++  const start = source.indexOf(startMarker)
++  assert.notEqual(start, -1, `missing start marker: ${startMarker}`)
++  const end = source.indexOf(endMarker, start + startMarker.length)
++  assert.notEqual(end, -1, `missing end marker: ${endMarker}`)
++  return source.slice(start, end)
++}
+ 
+ assert.ok(
+   view.includes('class="space-y-3 p-4 lg:hidden"') &&
+@@ -24,4 +34,31 @@
+   'AFF withdrawal review responsive layout must preserve approve, reject, modal, and pagination actions'
+ )
+ 
++const validateAffCodeSource = sectionBetween(
++  affDbSource,
++  'export async function validateAffCode(',
++  'export async function createAffBinding('
++)
++assert.ok(
++  validateAffCodeSource.includes('if (!affCode.enabled)') &&
++    validateAffCodeSource.includes("return { valid: false, error: '优惠码已禁用' }"),
++  'instance purchase AFF validation must reject disabled codes'
++)
++
++const performRenewalSource = sectionBetween(
++  billingOperationsSource,
++  'export async function performRenewal(',
++  'export async function performPlanChange('
++)
++assert.match(
++  performRenewalSource,
++  /if \(affBinding\?\.affCode\.enabled\) \{\s*discountRate =/,
++  'instance renewal must not apply discounts from disabled AFF codes'
++)
++assert.match(
++  performRenewalSource,
++  /if \(affBinding\?\.affCode\.enabled\) \{\s*await processAffCommission\(/,
++  'instance renewal must not pay commission for disabled AFF codes'
++)
++
+ console.log('AFF review UI guard tests passed')
+diff --git a/server/src/db/aff.ts b/server/src/db/aff.ts
+index 0a0f48dfaae45c805067c5ad994be8481e135714..83f44ac14909a4ab295ee514e4d2882bc9b2f20e
+--- a/server/src/db/aff.ts
++++ b/server/src/db/aff.ts
+@@ -459,6 +459,11 @@
+     return { valid: false, error: '不能使用自己的优惠码' }
+   }
+ 
++  // 4. 检查优惠码是否启用
++  if (!affCode.enabled) {
++    return { valid: false, error: '优惠码已禁用' }
++  }
++
+   return {
+     valid: true,
+     affCode,
+diff --git a/server/src/db/billing-operations.ts b/server/src/db/billing-operations.ts
+index 5cb1e59755ba8d7731e573825b26b81fe6aa49e5..69e8739e915e274547ce154fca4f3197393ce73e
+--- a/server/src/db/billing-operations.ts
++++ b/server/src/db/billing-operations.ts
+@@ -565,7 +565,7 @@
+   let discountAmount = 0
+   let finalAmount = originalAmount
+ 
+-  if (affBinding) {
++  if (affBinding?.affCode.enabled) {
+     discountRate = Number(affBinding.affCode.discountRate)
+     discountAmount = calculateDiscountAmount(originalAmount, discountRate)
+     finalAmount = calculateDiscountedPrice(originalAmount, discountRate)
+@@ -674,7 +674,7 @@
+     })
+ 
+     // 如果有 AFF 绑定，给优惠码创建者返利
+-    if (affBinding) {
++    if (affBinding?.affCode.enabled) {
+       await processAffCommission(
+         affBinding.affCode.id,
+         instance.id,
+
+diff --git a/server/scripts/test-aff-review-ui-guards.ts b/server/scripts/test-aff-review-ui-guards.ts
+index f67eaf1e44de6be15498a1fd78f478b55da131c8..706822738cbcf10d7fd5d5b29b927bb51f4accc5
+--- a/server/scripts/test-aff-review-ui-guards.ts
++++ b/server/scripts/test-aff-review-ui-guards.ts
+@@ -4,6 +4,16 @@
+ 
+ const root = resolve(process.cwd(), '..')
+ const view = readFileSync(resolve(root, 'client/src/views/admin/AffReviewView.vue'), 'utf8')
++const affDbSource = readFileSync(resolve(root, 'server/src/db/aff.ts'), 'utf8')
++const billingOperationsSource = readFileSync(resolve(root, 'server/src/db/billing-operations.ts'), 'utf8')
++
++function sectionBetween(source: string, startMarker: string, endMarker: string): string {
++  const start = source.indexOf(startMarker)
++  assert.notEqual(start, -1, `missing start marker: ${startMarker}`)
++  const end = source.indexOf(endMarker, start + startMarker.length)
++  assert.notEqual(end, -1, `missing end marker: ${endMarker}`)
++  return source.slice(start, end)
++}
+ 
+ assert.ok(
+   view.includes('class="space-y-3 p-4 lg:hidden"') &&
+@@ -24,4 +34,31 @@
+   'AFF withdrawal review responsive layout must preserve approve, reject, modal, and pagination actions'
+ )
+ 
++const validateAffCodeSource = sectionBetween(
++  affDbSource,
++  'export async function validateAffCode(',
++  'export async function createAffBinding('
++)
++assert.ok(
++  validateAffCodeSource.includes('if (!affCode.enabled)') &&
++    validateAffCodeSource.includes("return { valid: false, error: '优惠码已禁用' }"),
++  'instance purchase AFF validation must reject disabled codes'
++)
++
++const performRenewalSource = sectionBetween(
++  billingOperationsSource,
++  'export async function performRenewal(',
++  'export async function performPlanChange('
++)
++assert.match(
++  performRenewalSource,
++  /if \(affBinding\?\.affCode\.enabled\) \{\s*discountRate =/,
++  'instance renewal must not apply discounts from disabled AFF codes'
++)
++assert.match(
++  performRenewalSource,
++  /if \(affBinding\?\.affCode\.enabled\) \{\s*await processAffCommission\(/,
++  'instance renewal must not pay commission for disabled AFF codes'
++)
++
+ console.log('AFF review UI guard tests passed')
+diff --git a/server/src/db/aff.ts b/server/src/db/aff.ts
+index 0a0f48dfaae45c805067c5ad994be8481e135714..83f44ac14909a4ab295ee514e4d2882bc9b2f20e
+--- a/server/src/db/aff.ts
++++ b/server/src/db/aff.ts
+@@ -459,6 +459,11 @@
+     return { valid: false, error: '不能使用自己的优惠码' }
+   }
+ 
++  // 4. 检查优惠码是否启用
++  if (!affCode.enabled) {
++    return { valid: false, error: '优惠码已禁用' }
++  }
++
+   return {
+     valid: true,
+     affCode,
+diff --git a/server/src/db/billing-operations.ts b/server/src/db/billing-operations.ts
+index 5cb1e59755ba8d7731e573825b26b81fe6aa49e5..69e8739e915e274547ce154fca4f3197393ce73e
+--- a/server/src/db/billing-operations.ts
++++ b/server/src/db/billing-operations.ts
+@@ -565,7 +565,7 @@
+   let discountAmount = 0
+   let finalAmount = originalAmount
+ 
+-  if (affBinding) {
++  if (affBinding?.affCode.enabled) {
+     discountRate = Number(affBinding.affCode.discountRate)
+     discountAmount = calculateDiscountAmount(originalAmount, discountRate)
+     finalAmount = calculateDiscountedPrice(originalAmount, discountRate)
+@@ -674,7 +674,7 @@
+     })
+ 
+     // 如果有 AFF 绑定，给优惠码创建者返利
+-    if (affBinding) {
++    if (affBinding?.affCode.enabled) {
+       await processAffCommission(
+         affBinding.affCode.id,
+         instance.id,
+
+diff --git a/server/scripts/test-aff-review-ui-guards.ts b/server/scripts/test-aff-review-ui-guards.ts
+index f67eaf1e44de6be15498a1fd78f478b55da131c8..706822738cbcf10d7fd5d5b29b927bb51f4accc5
+--- a/server/scripts/test-aff-review-ui-guards.ts
++++ b/server/scripts/test-aff-review-ui-guards.ts
+@@ -4,6 +4,16 @@
+ 
+ const root = resolve(process.cwd(), '..')
+ const view = readFileSync(resolve(root, 'client/src/views/admin/AffReviewView.vue'), 'utf8')
++const affDbSource = readFileSync(resolve(root, 'server/src/db/aff.ts'), 'utf8')
++const billingOperationsSource = readFileSync(resolve(root, 'server/src/db/billing-operations.ts'), 'utf8')
++
++function sectionBetween(source: string, startMarker: string, endMarker: string): string {
++  const start = source.indexOf(startMarker)
++  assert.notEqual(start, -1, `missing start marker: ${startMarker}`)
++  const end = source.indexOf(endMarker, start + startMarker.length)
++  assert.notEqual(end, -1, `missing end marker: ${endMarker}`)
++  return source.slice(start, end)
++}
+ 
+ assert.ok(
+   view.includes('class="space-y-3 p-4 lg:hidden"') &&
+@@ -24,4 +34,31 @@
+   'AFF withdrawal review responsive layout must preserve approve, reject, modal, and pagination actions'
+ )
+ 
++const validateAffCodeSource = sectionBetween(
++  affDbSource,
++  'export async function validateAffCode(',
++  'export async function createAffBinding('
++)
++assert.ok(
++  validateAffCodeSource.includes('if (!affCode.enabled)') &&
++    validateAffCodeSource.includes("return { valid: false, error: '优惠码已禁用' }"),
++  'instance purchase AFF validation must reject disabled codes'
++)
++
++const performRenewalSource = sectionBetween(
++  billingOperationsSource,
++  'export async function performRenewal(',
++  'export async function performPlanChange('
++)
++assert.match(
++  performRenewalSource,
++  /if \(affBinding\?\.affCode\.enabled\) \{\s*discountRate =/,
++  'instance renewal must not apply discounts from disabled AFF codes'
++)
++assert.match(
++  performRenewalSource,
++  /if \(affBinding\?\.affCode\.enabled\) \{\s*await processAffCommission\(/,
++  'instance renewal must not pay commission for disabled AFF codes'
++)
++
+ console.log('AFF review UI guard tests passed')
+diff --git a/server/src/db/aff.ts b/server/src/db/aff.ts
+index 0a0f48dfaae45c805067c5ad994be8481e135714..83f44ac14909a4ab295ee514e4d2882bc9b2f20e
+--- a/server/src/db/aff.ts
++++ b/server/src/db/aff.ts
+@@ -459,6 +459,11 @@
+     return { valid: false, error: '不能使用自己的优惠码' }
+   }
+ 
++  // 4. 检查优惠码是否启用
++  if (!affCode.enabled) {
++    return { valid: false, error: '优惠码已禁用' }
++  }
++
+   return {
+     valid: true,
+     affCode,
+diff --git a/server/src/db/billing-operations.ts b/server/src/db/billing-operations.ts
+index 5cb1e59755ba8d7731e573825b26b81fe6aa49e5..69e8739e915e274547ce154fca4f3197393ce73e
+--- a/server/src/db/billing-operations.ts
++++ b/server/src/db/billing-operations.ts
+@@ -565,7 +565,7 @@
+   let discountAmount = 0
+   let finalAmount = originalAmount
+ 
+-  if (affBinding) {
++  if (affBinding?.affCode.enabled) {
+     discountRate = Number(affBinding.affCode.discountRate)
+     discountAmount = calculateDiscountAmount(originalAmount, discountRate)
+     finalAmount = calculateDiscountedPrice(originalAmount, discountRate)
+@@ -674,7 +674,7 @@
+     })
+ 
+     // 如果有 AFF 绑定，给优惠码创建者返利
+-    if (affBinding) {
++    if (affBinding?.affCode.enabled) {
+       await processAffCommission(
+         affBinding.affCode.id,
+         instance.id,
+
+diff --git a/server/scripts/test-aff-review-ui-guards.ts b/server/scripts/test-aff-review-ui-guards.ts
+index f67eaf1e44de6be15498a1fd78f478b55da131c8..706822738cbcf10d7fd5d5b29b927bb51f4accc5
+--- a/server/scripts/test-aff-review-ui-guards.ts
++++ b/server/scripts/test-aff-review-ui-guards.ts
+@@ -4,6 +4,16 @@
+ 
+ const root = resolve(process.cwd(), '..')
+ const view = readFileSync(resolve(root, 'client/src/views/admin/AffReviewView.vue'), 'utf8')
++const affDbSource = readFileSync(resolve(root, 'server/src/db/aff.ts'), 'utf8')
++const billingOperationsSource = readFileSync(resolve(root, 'server/src/db/billing-operations.ts'), 'utf8')
++
++function sectionBetween(source: string, startMarker: string, endMarker: string): string {
++  const start = source.indexOf(startMarker)
++  assert.notEqual(start, -1, `missing start marker: ${startMarker}`)
++  const end = source.indexOf(endMarker, start + startMarker.length)
++  assert.notEqual(end, -1, `missing end marker: ${endMarker}`)
++  return source.slice(start, end)
++}
+ 
+ assert.ok(
+   view.includes('class="space-y-3 p-4 lg:hidden"') &&
+@@ -24,4 +34,31 @@
+   'AFF withdrawal review responsive layout must preserve approve, reject, modal, and pagination actions'
+ )
+ 
++const validateAffCodeSource = sectionBetween(
++  affDbSource,
++  'export async function validateAffCode(',
++  'export async function createAffBinding('
++)
++assert.ok(
++  validateAffCodeSource.includes('if (!affCode.enabled)') &&
++    validateAffCodeSource.includes("return { valid: false, error: '优惠码已禁用' }"),
++  'instance purchase AFF validation must reject disabled codes'
++)
++
++const performRenewalSource = sectionBetween(
++  billingOperationsSource,
++  'export async function performRenewal(',
++  'export async function performPlanChange('
++)
++assert.match(
++  performRenewalSource,
++  /if \(affBinding\?\.affCode\.enabled\) \{\s*discountRate =/,
++  'instance renewal must not apply discounts from disabled AFF codes'
++)
++assert.match(
++  performRenewalSource,
++  /if \(affBinding\?\.affCode\.enabled\) \{\s*await processAffCommission\(/,
++  'instance renewal must not pay commission for disabled AFF codes'
++)
++
+ console.log('AFF review UI guard tests passed')
+diff --git a/server/src/db/aff.ts b/server/src/db/aff.ts
+index 0a0f48dfaae45c805067c5ad994be8481e135714..83f44ac14909a4ab295ee514e4d2882bc9b2f20e
+--- a/server/src/db/aff.ts
++++ b/server/src/db/aff.ts
+@@ -459,6 +459,11 @@
+     return { valid: false, error: '不能使用自己的优惠码' }
+   }
+ 
++  // 4. 检查优惠码是否启用
++  if (!affCode.enabled) {
++    return { valid: false, error: '优惠码已禁用' }
++  }
++
+   return {
+     valid: true,
+     affCode,
+diff --git a/server/src/db/billing-operations.ts b/server/src/db/billing-operations.ts
+index 5cb1e59755ba8d7731e573825b26b81fe6aa49e5..69e8739e915e274547ce154fca4f3197393ce73e
+--- a/server/src/db/billing-operations.ts
++++ b/server/src/db/billing-operations.ts
+@@ -565,7 +565,7 @@
+   let discountAmount = 0
+   let finalAmount = originalAmount
+ 
+-  if (affBinding) {
++  if (affBinding?.affCode.enabled) {
+     discountRate = Number(affBinding.affCode.discountRate)
+     discountAmount = calculateDiscountAmount(originalAmount, discountRate)
+     finalAmount = calculateDiscountedPrice(originalAmount, discountRate)
+@@ -674,7 +674,7 @@
+     })
+ 
+     // 如果有 AFF 绑定，给优惠码创建者返利
+-    if (affBinding) {
++    if (affBinding?.affCode.enabled) {
+       await processAffCommission(
+         affBinding.affCode.id,
+         instance.id,
+
+diff --git a/server/scripts/test-aff-review-ui-guards.ts b/server/scripts/test-aff-review-ui-guards.ts
+index f67eaf1e44de6be15498a1fd78f478b55da131c8..706822738cbcf10d7fd5d5b29b927bb51f4accc5
+--- a/server/scripts/test-aff-review-ui-guards.ts
++++ b/server/scripts/test-aff-review-ui-guards.ts
+@@ -4,6 +4,16 @@
+ 
+ const root = resolve(process.cwd(), '..')
+ const view = readFileSync(resolve(root, 'client/src/views/admin/AffReviewView.vue'), 'utf8')
++const affDbSource = readFileSync(resolve(root, 'server/src/db/aff.ts'), 'utf8')
++const billingOperationsSource = readFileSync(resolve(root, 'server/src/db/billing-operations.ts'), 'utf8')
++
++function sectionBetween(source: string, startMarker: string, endMarker: string): string {
++  const start = source.indexOf(startMarker)
++  assert.notEqual(start, -1, `missing start marker: ${startMarker}`)
++  const end = source.indexOf(endMarker, start + startMarker.length)
++  assert.notEqual(end, -1, `missing end marker: ${endMarker}`)
++  return source.slice(start, end)
++}
+ 
+ assert.ok(
+   view.includes('class="space-y-3 p-4 lg:hidden"') &&
+@@ -24,4 +34,31 @@
+   'AFF withdrawal review responsive layout must preserve approve, reject, modal, and pagination actions'
+ )
+ 
++const validateAffCodeSource = sectionBetween(
++  affDbSource,
++  'export async function validateAffCode(',
++  'export async function createAffBinding('
++)
++assert.ok(
++  validateAffCodeSource.includes('if (!affCode.enabled)') &&
++    validateAffCodeSource.includes("return { valid: false, error: '优惠码已禁用' }"),
++  'instance purchase AFF validation must reject disabled codes'
++)
++
++const performRenewalSource = sectionBetween(
++  billingOperationsSource,
++  'export async function performRenewal(',
++  'export async function performPlanChange('
++)
++assert.match(
++  performRenewalSource,
++  /if \(affBinding\?\.affCode\.enabled\) \{\s*discountRate =/,
++  'instance renewal must not apply discounts from disabled AFF codes'
++)
++assert.match(
++  performRenewalSource,
++  /if \(affBinding\?\.affCode\.enabled\) \{\s*await processAffCommission\(/,
++  'instance renewal must not pay commission for disabled AFF codes'
++)
++
+ console.log('AFF review UI guard tests passed')
+diff --git a/server/src/db/aff.ts b/server/src/db/aff.ts
+index 0a0f48dfaae45c805067c5ad994be8481e135714..83f44ac14909a4ab295ee514e4d2882bc9b2f20e
+--- a/server/src/db/aff.ts
++++ b/server/src/db/aff.ts
+@@ -459,6 +459,11 @@
+     return { valid: false, error: '不能使用自己的优惠码' }
+   }
+ 
++  // 4. 检查优惠码是否启用
++  if (!affCode.enabled) {
++    return { valid: false, error: '优惠码已禁用' }
++  }
++
+   return {
+     valid: true,
+     affCode,
+diff --git a/server/src/db/billing-operations.ts b/server/src/db/billing-operations.ts
+index 5cb1e59755ba8d7731e573825b26b81fe6aa49e5..69e8739e915e274547ce154fca4f3197393ce73e
+--- a/server/src/db/billing-operations.ts
++++ b/server/src/db/billing-operations.ts
+@@ -565,7 +565,7 @@
+   let discountAmount = 0
+   let finalAmount = originalAmount
+ 
+-  if (affBinding) {
++  if (affBinding?.affCode.enabled) {
+     discountRate = Number(affBinding.affCode.discountRate)
+     discountAmount = calculateDiscountAmount(originalAmount, discountRate)
+     finalAmount = calculateDiscountedPrice(originalAmount, discountRate)
+@@ -674,7 +674,7 @@
+     })
+ 
+     // 如果有 AFF 绑定，给优惠码创建者返利
+-    if (affBinding) {
++    if (affBinding?.affCode.enabled) {
+       await processAffCommission(
+         affBinding.affCode.id,
+         instance.id,
+
+ succeeded in 45966ms:
+
+> server@1.3.7 test:aff-review-ui-guards C:\Users\Administrator\Desktop\payinces\server
+> node --import tsx scripts/test-aff-review-ui-guards.ts
+
+AFF review UI guard tests passed
+
+> server@1.3.7 type-check C:\Users\Administrator\Desktop\payinces\server
+> tsc --noEmit
+
+
+> server@1.3.7 test:aff-points-query-guards C:\Users\Administrator\Desktop\payinces\server
+> node --import tsx scripts/test-aff-points-query-guards.ts
+
+AFF and points query guard tests passed
+
+> server@1.3.7 test:invite-generation-accounting-guards C:\Users\Administrator\Desktop\payinces\server
+> node --import tsx scripts/test-invite-generation-accounting-guards.ts
+
+invite generation accounting guard tests passed
+
+diff --git a/server/scripts/test-aff-review-ui-guards.ts b/server/scripts/test-aff-review-ui-guards.ts
+index f67eaf1e44de6be15498a1fd78f478b55da131c8..706822738cbcf10d7fd5d5b29b927bb51f4accc5
+--- a/server/scripts/test-aff-review-ui-guards.ts
++++ b/server/scripts/test-aff-review-ui-guards.ts
+@@ -4,6 +4,16 @@
+ 
+ const root = resolve(process.cwd(), '..')
+ const view = readFileSync(resolve(root, 'client/src/views/admin/AffReviewView.vue'), 'utf8')
++const affDbSource = readFileSync(resolve(root, 'server/src/db/aff.ts'), 'utf8')
++const billingOperationsSource = readFileSync(resolve(root, 'server/src/db/billing-operations.ts'), 'utf8')
++
++function sectionBetween(source: string, startMarker: string, endMarker: string): string {
++  const start = source.indexOf(startMarker)
++  assert.notEqual(start, -1, `missing start marker: ${startMarker}`)
++  const end = source.indexOf(endMarker, start + startMarker.length)
++  assert.notEqual(end, -1, `missing end marker: ${endMarker}`)
++  return source.slice(start, end)
++}
+ 
+ assert.ok(
+   view.includes('class="space-y-3 p-4 lg:hidden"') &&
+@@ -24,4 +34,31 @@
+   'AFF withdrawal review responsive layout must preserve approve, reject, modal, and pagination actions'
+ )
+ 
++const validateAffCodeSource = sectionBetween(
++  affDbSource,
++  'export async function validateAffCode(',
++  'export async function createAffBinding('
++)
++assert.ok(
++  validateAffCodeSource.includes('if (!affCode.enabled)') &&
++    validateAffCodeSource.includes("return { valid: false, error: '优惠码已禁用' }"),
++  'instance purchase AFF validation must reject disabled codes'
++)
++
++const performRenewalSource = sectionBetween(
++  billingOperationsSource,
++  'export async function performRenewal(',
++  'export async function performPlanChange('
++)
++assert.match(
++  performRenewalSource,
++  /if \(affBinding\?\.affCode\.enabled\) \{\s*discountRate =/,
++  'instance renewal must not apply discounts from disabled AFF codes'
++)
++assert.match(
++  performRenewalSource,
++  /if \(affBinding\?\.affCode\.enabled\) \{\s*await processAffCommission\(/,
++  'instance renewal must not pay commission for disabled AFF codes'
++)
++
+ console.log('AFF review UI guard tests passed')
+diff --git a/server/src/db/aff.ts b/server/src/db/aff.ts
+index 0a0f48dfaae45c805067c5ad994be8481e135714..83f44ac14909a4ab295ee514e4d2882bc9b2f20e
+--- a/server/src/db/aff.ts
++++ b/server/src/db/aff.ts
+@@ -459,6 +459,11 @@
+     return { valid: false, error: '不能使用自己的优惠码' }
+   }
+ 
++  // 4. 检查优惠码是否启用
++  if (!affCode.enabled) {
++    return { valid: false, error: '优惠码已禁用' }
++  }
++
+   return {
+     valid: true,
+     affCode,
+diff --git a/server/src/db/billing-operations.ts b/server/src/db/billing-operations.ts
+index 5cb1e59755ba8d7731e573825b26b81fe6aa49e5..69e8739e915e274547ce154fca4f3197393ce73e
+--- a/server/src/db/billing-operations.ts
++++ b/server/src/db/billing-operations.ts
+@@ -565,7 +565,7 @@
+   let discountAmount = 0
+   let finalAmount = originalAmount
+ 
+-  if (affBinding) {
++  if (affBinding?.affCode.enabled) {
+     discountRate = Number(affBinding.affCode.discountRate)
+     discountAmount = calculateDiscountAmount(originalAmount, discountRate)
+     finalAmount = calculateDiscountedPrice(originalAmount, discountRate)
+@@ -674,7 +674,7 @@
+     })
+ 
+     // 如果有 AFF 绑定，给优惠码创建者返利
+-    if (affBinding) {
++    if (affBinding?.affCode.enabled) {
+       await processAffCommission(
+         affBinding.affCode.id,
+         instance.id,
+
+codex
+四项验收命令均已通过。最后我会做一次并行改动后的边界复核：确认本任务三个文件的 diff 未被交叉修改，并只读确认邮箱续费现有 `enabled` 门控已经同时覆盖折扣与返佣，再给出交付结论。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$mail = Get-Content server/src/routes/mail.ts; $mail[1225..1332]; git diff --check -- server/src/db/aff.ts server/src/db/billing-operations.ts server/scripts/test-aff-review-ui-guards.ts; git diff --stat -- server/src/db/aff.ts server/src/db/billing-operations.ts server/scripts/test-aff-review-ui-guards.ts; git diff -- server/src/db/aff.ts server/src/db/billing-operations.ts server/scripts/test-aff-review-ui-guards.ts; git status --short -- server/src/db/aff.ts server/src/db/billing-operations.ts server/scripts/test-aff-review-ui-guards.ts server/src/routes/mail.ts' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 1230ms:
+    }
+
+    // æ£€æŸ¥è®¢é˜…çŠ¶æ€
+    if (subscription.status === 'suspended') {
+      return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, 'è®¢é˜…å·²è¢«æš‚åœï¼Œæ— æ³•ç»­è´¹'))
+    }
+
+    const plan = subscription.plan
+    try {
+      validateMailRenewMonthsForBillingCycle(renewMonths, plan.billingCycle)
+    } catch (error) {
+      return reply.code(400).send(error)
+    }
+    const monthlyPrice = plan.billingCycle === 'monthly' 
+      ? Number(plan.price) 
+      : Number(plan.price) / 12
+    
+    const originalPrice = Math.round(monthlyPrice * renewMonths * 100) / 100
+
+    // æ£€æŸ¥ AFF ç»‘å®šï¼Œè®¡ç®—æŠ˜æ‰£
+    const { getMailSubscriptionAffBinding, processMailAffCommission } = await import('../db/aff.js')
+    const affBinding = await getMailSubscriptionAffBinding(subscription.id)
+    let discountRate = 0
+    let discountAmount = 0
+    let finalPrice = originalPrice
+
+    if (affBinding && affBinding.affCode.enabled) {
+      discountRate = Number(affBinding.affCode.discountRate)
+      discountAmount = calculateDiscountAmount(originalPrice, discountRate)
+      finalPrice = calculateDiscountedPrice(originalPrice, discountRate)
+    }
+
+    // æ£€æŸ¥ä½™é¢
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { balance: true }
+    })
+    if (!user || Number(user.balance) < finalPrice) {
+      return reply.code(400).send(apiError(ErrorCode.INSUFFICIENT_BALANCE, `ä½™é¢ä¸è¶³ï¼Œéœ€è¦ Â¥${finalPrice.toFixed(2)}ï¼Œå½“å‰ä½™é¢ Â¥${Number(user?.balance || 0).toFixed(2)}`))
+    }
+
+    // äº‹åŠ¡ï¼šæ‰£è´¹ + ç»­è´¹ + è¿”åˆ©
+    const renewResult = await prisma.$transaction(async (tx) => {
+      const locked = await tryAdvisoryTransactionLock(tx, MAIL_SUBSCRIPTION_LOCK_NAMESPACE, userId)
+      if (!locked) {
+        return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, 'é‚®ç®±è®¢é˜…æ­£åœ¨å¤„ç†ï¼Œè¯·ç¨åŽé‡è¯•') }
+      }
+      const balanceLocked = await tryAdvisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, userId)
+      if (!balanceLocked) {
+        return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, 'ç”¨æˆ·ä½™é¢æ­£åœ¨å¤„ç†ï¼Œè¯·ç¨åŽé‡è¯•') }
+      }
+
+      const currentSubscription = await tx.mailSubscription.findUnique({
+        where: { id: subscription.id },
+        include: { plan: true }
+      })
+      if (!currentSubscription || currentSubscription.userId !== userId) {
+        return { error: apiError(ErrorCode.NOT_FOUND, 'æ‚¨æ²¡æœ‰é‚®ç®±è®¢é˜…') }
+      }
+      if (currentSubscription.status === 'suspended') {
+        return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, 'è®¢é˜…å·²è¢«æš‚åœï¼Œæ— æ³•ç»­è´¹') }
+      }
+      try {
+        validateMailRenewMonthsForBillingCycle(renewMonths, currentSubscription.plan.billingCycle)
+      } catch (error) {
+        return { error }
+      }
+
+      const deductResult = await tx.user.updateMany({
+        where: {
+          id: userId,
+          balance: { gte: finalPrice }
+        },
+        data: { balance: { decrement: finalPrice } }
+      })
+      if (deductResult.count === 0) {
+        const currentUser = await tx.user.findUnique({
+          where: { id: userId },
+          select: { balance: true }
+        })
+        return { error: apiError(ErrorCode.INSUFFICIENT_BALANCE, `ä½™é¢ä¸è¶³ï¼Œéœ€è¦ Â¥${finalPrice.toFixed(2)}ï¼Œå½“å‰ä½™é¢ Â¥${Number(currentUser?.balance || 0).toFixed(2)}`) }
+      }
+
+      const updatedUser = await tx.user.findUnique({
+        where: { id: userId },
+        select: { balance: true }
+      })
+      const balanceAfter = Number(updatedUser?.balance || 0)
+      const balanceBefore = Number((balanceAfter + finalPrice).toFixed(2))
+      const remarkText = discountAmount > 0
+        ? `ç»­è´¹åŸŸåé‚®ç®± ${renewMonths} ä¸ªæœˆï¼ˆä¼˜æƒ ç æŠ˜æ‰£ -Â¥${discountAmount.toFixed(2)}ï¼‰`
+        : `ç»­è´¹åŸŸåé‚®ç®± ${renewMonths} ä¸ªæœˆ`
+      
+      await tx.balanceLog.create({
+        data: {
+          userId,
+          type: 'consume',
+          amount: -finalPrice,
+          balanceBefore,
+          balanceAfter,
+          remark: remarkText
+        }
+      })
+
+      // è®¡ç®—æ–°çš„è¿‡æœŸæ—¶é—´
+      const currentExpiry = currentSubscription.expiresAt > new Date() ? currentSubscription.expiresAt : new Date()
+      const newExpiry = new Date(currentExpiry)
+      newExpiry.setMonth(newExpiry.getMonth() + renewMonths)
+ server/scripts/test-aff-review-ui-guards.ts | 37 +++++++++++++++++++++++++++++
+ server/src/db/aff.ts                        |  5 ++++
+ server/src/db/billing-operations.ts         |  4 ++--
+ 3 files changed, 44 insertions(+), 2 deletions(-)
+diff --git a/server/scripts/test-aff-review-ui-guards.ts b/server/scripts/test-aff-review-ui-guards.ts
+index f67eaf1..7068227 100644
+--- a/server/scripts/test-aff-review-ui-guards.ts
++++ b/server/scripts/test-aff-review-ui-guards.ts
+@@ -4,6 +4,16 @@ import { resolve } from 'node:path'
+ 
+ const root = resolve(process.cwd(), '..')
+ const view = readFileSync(resolve(root, 'client/src/views/admin/AffReviewView.vue'), 'utf8')
++const affDbSource = readFileSync(resolve(root, 'server/src/db/aff.ts'), 'utf8')
++const billingOperationsSource = readFileSync(resolve(root, 'server/src/db/billing-operations.ts'), 'utf8')
++
++function sectionBetween(source: string, startMarker: string, endMarker: string): string {
++  const start = source.indexOf(startMarker)
++  assert.notEqual(start, -1, `missing start marker: ${startMarker}`)
++  const end = source.indexOf(endMarker, start + startMarker.length)
++  assert.notEqual(end, -1, `missing end marker: ${endMarker}`)
++  return source.slice(start, end)
++}
+ 
+ assert.ok(
+   view.includes('class="space-y-3 p-4 lg:hidden"') &&
+@@ -24,4 +34,31 @@ assert.ok(
+   'AFF withdrawal review responsive layout must preserve approve, reject, modal, and pagination actions'
+ )
+ 
++const validateAffCodeSource = sectionBetween(
++  affDbSource,
++  'export async function validateAffCode(',
++  'export async function createAffBinding('
++)
++assert.ok(
++  validateAffCodeSource.includes('if (!affCode.enabled)') &&
++    validateAffCodeSource.includes("return { valid: false, error: '优惠码已禁用' }"),
++  'instance purchase AFF validation must reject disabled codes'
++)
++
++const performRenewalSource = sectionBetween(
++  billingOperationsSource,
++  'export async function performRenewal(',
++  'export async function performPlanChange('
++)
++assert.match(
++  performRenewalSource,
++  /if \(affBinding\?\.affCode\.enabled\) \{\s*discountRate =/,
++  'instance renewal must not apply discounts from disabled AFF codes'
++)
++assert.match(
++  performRenewalSource,
++  /if \(affBinding\?\.affCode\.enabled\) \{\s*await processAffCommission\(/,
++  'instance renewal must not pay commission for disabled AFF codes'
++)
++
+ console.log('AFF review UI guard tests passed')
+diff --git a/server/src/db/aff.ts b/server/src/db/aff.ts
+index 0a0f48d..83f44ac 100644
+--- a/server/src/db/aff.ts
++++ b/server/src/db/aff.ts
+@@ -459,6 +459,11 @@ export async function validateAffCode(
+     return { valid: false, error: '不能使用自己的优惠码' }
+   }
+ 
++  // 4. 检查优惠码是否启用
++  if (!affCode.enabled) {
++    return { valid: false, error: '优惠码已禁用' }
++  }
++
+   return {
+     valid: true,
+     affCode,
+diff --git a/server/src/db/billing-operations.ts b/server/src/db/billing-operations.ts
+index 5cb1e59..69e8739 100644
+--- a/server/src/db/billing-operations.ts
++++ b/server/src/db/billing-operations.ts
+@@ -565,7 +565,7 @@ export async function performRenewal(
+   let discountAmount = 0
+   let finalAmount = originalAmount
+ 
+-  if (affBinding) {
++  if (affBinding?.affCode.enabled) {
+     discountRate = Number(affBinding.affCode.discountRate)
+     discountAmount = calculateDiscountAmount(originalAmount, discountRate)
+     finalAmount = calculateDiscountedPrice(originalAmount, discountRate)
+@@ -674,7 +674,7 @@ export async function performRenewal(
+     })
+ 
+     // 如果有 AFF 绑定，给优惠码创建者返利
+-    if (affBinding) {
++    if (affBinding?.affCode.enabled) {
+       await processAffCommission(
+         affBinding.affCode.id,
+         instance.id,
+ M server/scripts/test-aff-review-ui-guards.ts
+ M server/src/db/aff.ts
+ M server/src/db/billing-operations.ts
+ M server/src/routes/mail.ts
+warning: in the working copy of 'server/scripts/test-aff-review-ui-guards.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/db/aff.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/db/billing-operations.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/scripts/test-aff-review-ui-guards.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/db/aff.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/db/billing-operations.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/scripts/test-aff-review-ui-guards.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/db/aff.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/db/billing-operations.ts', LF will be replaced by CRLF the next time Git touches it
+
+diff --git a/server/scripts/test-aff-review-ui-guards.ts b/server/scripts/test-aff-review-ui-guards.ts
+index f67eaf1e44de6be15498a1fd78f478b55da131c8..706822738cbcf10d7fd5d5b29b927bb51f4accc5
+--- a/server/scripts/test-aff-review-ui-guards.ts
++++ b/server/scripts/test-aff-review-ui-guards.ts
+@@ -4,6 +4,16 @@
+ 
+ const root = resolve(process.cwd(), '..')
+ const view = readFileSync(resolve(root, 'client/src/views/admin/AffReviewView.vue'), 'utf8')
++const affDbSource = readFileSync(resolve(root, 'server/src/db/aff.ts'), 'utf8')
++const billingOperationsSource = readFileSync(resolve(root, 'server/src/db/billing-operations.ts'), 'utf8')
++
++function sectionBetween(source: string, startMarker: string, endMarker: string): string {
++  const start = source.indexOf(startMarker)
++  assert.notEqual(start, -1, `missing start marker: ${startMarker}`)
++  const end = source.indexOf(endMarker, start + startMarker.length)
++  assert.notEqual(end, -1, `missing end marker: ${endMarker}`)
++  return source.slice(start, end)
++}
+ 
+ assert.ok(
+   view.includes('class="space-y-3 p-4 lg:hidden"') &&
+@@ -24,4 +34,31 @@
+   'AFF withdrawal review responsive layout must preserve approve, reject, modal, and pagination actions'
+ )
+ 
++const validateAffCodeSource = sectionBetween(
++  affDbSource,
++  'export async function validateAffCode(',
++  'export async function createAffBinding('
++)
++assert.ok(
++  validateAffCodeSource.includes('if (!affCode.enabled)') &&
++    validateAffCodeSource.includes("return { valid: false, error: '优惠码已禁用' }"),
++  'instance purchase AFF validation must reject disabled codes'
++)
++
++const performRenewalSource = sectionBetween(
++  billingOperationsSource,
++  'export async function performRenewal(',
++  'export async function performPlanChange('
++)
++assert.match(
++  performRenewalSource,
++  /if \(affBinding\?\.affCode\.enabled\) \{\s*discountRate =/,
++  'instance renewal must not apply discounts from disabled AFF codes'
++)
++assert.match(
++  performRenewalSource,
++  /if \(affBinding\?\.affCode\.enabled\) \{\s*await processAffCommission\(/,
++  'instance renewal must not pay commission for disabled AFF codes'
++)
++
+ console.log('AFF review UI guard tests passed')
+diff --git a/server/src/db/aff.ts b/server/src/db/aff.ts
+index 0a0f48dfaae45c805067c5ad994be8481e135714..83f44ac14909a4ab295ee514e4d2882bc9b2f20e
+--- a/server/src/db/aff.ts
++++ b/server/src/db/aff.ts
+@@ -459,6 +459,11 @@
+     return { valid: false, error: '不能使用自己的优惠码' }
+   }
+ 
++  // 4. 检查优惠码是否启用
++  if (!affCode.enabled) {
++    return { valid: false, error: '优惠码已禁用' }
++  }
++
+   return {
+     valid: true,
+     affCode,
+diff --git a/server/src/db/billing-operations.ts b/server/src/db/billing-operations.ts
+index 5cb1e59755ba8d7731e573825b26b81fe6aa49e5..69e8739e915e274547ce154fca4f3197393ce73e
+--- a/server/src/db/billing-operations.ts
++++ b/server/src/db/billing-operations.ts
+@@ -565,7 +565,7 @@
+   let discountAmount = 0
+   let finalAmount = originalAmount
+ 
+-  if (affBinding) {
++  if (affBinding?.affCode.enabled) {
+     discountRate = Number(affBinding.affCode.discountRate)
+     discountAmount = calculateDiscountAmount(originalAmount, discountRate)
+     finalAmount = calculateDiscountedPrice(originalAmount, discountRate)
+@@ -674,7 +674,7 @@
+     })
+ 
+     // 如果有 AFF 绑定，给优惠码创建者返利
+-    if (affBinding) {
++    if (affBinding?.affCode.enabled) {
+       await processAffCommission(
+         affBinding.affCode.id,
+         instance.id,
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "Select-String -Path server/src/routes/mail.ts -Pattern 'processMailAffCommission' -Context 4,7; git diff -- server/src/routes/mail.ts | Select-String -Pattern 'affBinding|processMailAffCommission|enabled' -Context 2,4" in C:\Users\Administrator\Desktop\payinces
+ succeeded in 1062ms:
+
+  server\src\routes\mail.ts:1161:      })
+  server\src\routes\mail.ts:1162:
+  server\src\routes\mail.ts:1163:      // 如果使用了优惠码，创建 AFF 绑定并处理返利
+  server\src\routes\mail.ts:1164:      if (validatedAffCode) {
+> server\src\routes\mail.ts:1165:        const { createMailAffBinding, processMailAffCommission } = await 
+import('../db/aff.js')
+  server\src\routes\mail.ts:1166:        // 创建订阅与优惠码的永久绑定
+  server\src\routes\mail.ts:1167:        await createMailAffBinding(newSubscription.id, validatedAffCode.id, tx as any)
+  server\src\routes\mail.ts:1168:        // 给优惠码创建者返利（基于原价，不是折扣后价格）
+> server\src\routes\mail.ts:1169:        await processMailAffCommission(
+  server\src\routes\mail.ts:1170:          validatedAffCode.id,
+  server\src\routes\mail.ts:1171:          newSubscription.id,
+  server\src\routes\mail.ts:1172:          originalPrice,
+  server\src\routes\mail.ts:1173:          'new_purchase',
+  server\src\routes\mail.ts:1174:          tx as any
+  server\src\routes\mail.ts:1175:        )
+  server\src\routes\mail.ts:1176:      }
+  server\src\routes\mail.ts:1242:    
+  server\src\routes\mail.ts:1243:    const originalPrice = Math.round(monthlyPrice * renewMonths * 100) / 100
+  server\src\routes\mail.ts:1244:
+  server\src\routes\mail.ts:1245:    // 检查 AFF 绑定，计算折扣
+> server\src\routes\mail.ts:1246:    const { getMailSubscriptionAffBinding, processMailAffCommission } = await 
+import('../db/aff.js')
+  server\src\routes\mail.ts:1247:    const affBinding = await getMailSubscriptionAffBinding(subscription.id)
+  server\src\routes\mail.ts:1248:    let discountRate = 0
+  server\src\routes\mail.ts:1249:    let discountAmount = 0
+  server\src\routes\mail.ts:1250:    let finalPrice = originalPrice
+  server\src\routes\mail.ts:1251:
+  server\src\routes\mail.ts:1252:    if (affBinding && affBinding.affCode.enabled) {
+  server\src\routes\mail.ts:1253:      discountRate = Number(affBinding.affCode.discountRate)
+  server\src\routes\mail.ts:1339:      })
+  server\src\routes\mail.ts:1340:
+  server\src\routes\mail.ts:1341:      // 如果有 AFF 绑定，给推荐人返利
+  server\src\routes\mail.ts:1342:      if (affBinding) {
+> server\src\routes\mail.ts:1343:        await processMailAffCommission(
+  server\src\routes\mail.ts:1344:          affBinding.affCode.id,
+  server\src\routes\mail.ts:1345:          subscription.id,
+  server\src\routes\mail.ts:1346:          originalPrice, // 基于原价计算返利
+  server\src\routes\mail.ts:1347:          'renew',
+  server\src\routes\mail.ts:1348:          tx as any
+  server\src\routes\mail.ts:1349:        )
+  server\src\routes\mail.ts:1350:      }
+
+
+warning: in the working copy of 'server/src/routes/mail.ts', LF will be replaced by CRLF the next time Git touches it
+
+diff --git a/server/scripts/test-aff-review-ui-guards.ts b/server/scripts/test-aff-review-ui-guards.ts
+index f67eaf1e44de6be15498a1fd78f478b55da131c8..706822738cbcf10d7fd5d5b29b927bb51f4accc5
+--- a/server/scripts/test-aff-review-ui-guards.ts
++++ b/server/scripts/test-aff-review-ui-guards.ts
+@@ -4,6 +4,16 @@
+ 
+ const root = resolve(process.cwd(), '..')
+ const view = readFileSync(resolve(root, 'client/src/views/admin/AffReviewView.vue'), 'utf8')
++const affDbSource = readFileSync(resolve(root, 'server/src/db/aff.ts'), 'utf8')
++const billingOperationsSource = readFileSync(resolve(root, 'server/src/db/billing-operations.ts'), 'utf8')
++
++function sectionBetween(source: string, startMarker: string, endMarker: string): string {
++  const start = source.indexOf(startMarker)
++  assert.notEqual(start, -1, `missing start marker: ${startMarker}`)
++  const end = source.indexOf(endMarker, start + startMarker.length)
++  assert.notEqual(end, -1, `missing end marker: ${endMarker}`)
++  return source.slice(start, end)
++}
+ 
+ assert.ok(
+   view.includes('class="space-y-3 p-4 lg:hidden"') &&
+@@ -24,4 +34,31 @@
+   'AFF withdrawal review responsive layout must preserve approve, reject, modal, and pagination actions'
+ )
+ 
++const validateAffCodeSource = sectionBetween(
++  affDbSource,
++  'export async function validateAffCode(',
++  'export async function createAffBinding('
++)
++assert.ok(
++  validateAffCodeSource.includes('if (!affCode.enabled)') &&
++    validateAffCodeSource.includes("return { valid: false, error: '优惠码已禁用' }"),
++  'instance purchase AFF validation must reject disabled codes'
++)
++
++const performRenewalSource = sectionBetween(
++  billingOperationsSource,
++  'export async function performRenewal(',
++  'export async function performPlanChange('
++)
++assert.match(
++  performRenewalSource,
++  /if \(affBinding\?\.affCode\.enabled\) \{\s*discountRate =/,
++  'instance renewal must not apply discounts from disabled AFF codes'
++)
++assert.match(
++  performRenewalSource,
++  /if \(affBinding\?\.affCode\.enabled\) \{\s*await processAffCommission\(/,
++  'instance renewal must not pay commission for disabled AFF codes'
++)
++
+ console.log('AFF review UI guard tests passed')
+diff --git a/server/src/db/aff.ts b/server/src/db/aff.ts
+index 0a0f48dfaae45c805067c5ad994be8481e135714..83f44ac14909a4ab295ee514e4d2882bc9b2f20e
+--- a/server/src/db/aff.ts
++++ b/server/src/db/aff.ts
+@@ -459,6 +459,11 @@
+     return { valid: false, error: '不能使用自己的优惠码' }
+   }
+ 
++  // 4. 检查优惠码是否启用
++  if (!affCode.enabled) {
++    return { valid: false, error: '优惠码已禁用' }
++  }
++
+   return {
+     valid: true,
+     affCode,
+diff --git a/server/src/db/billing-operations.ts b/server/src/db/billing-operations.ts
+index 5cb1e59755ba8d7731e573825b26b81fe6aa49e5..69e8739e915e274547ce154fca4f3197393ce73e
+--- a/server/src/db/billing-operations.ts
++++ b/server/src/db/billing-operations.ts
+@@ -565,7 +565,7 @@
+   let discountAmount = 0
+   let finalAmount = originalAmount
+ 
+-  if (affBinding) {
++  if (affBinding?.affCode.enabled) {
+     discountRate = Number(affBinding.affCode.discountRate)
+     discountAmount = calculateDiscountAmount(originalAmount, discountRate)
+     finalAmount = calculateDiscountedPrice(originalAmount, discountRate)
+@@ -674,7 +674,7 @@
+     })
+ 
+     // 如果有 AFF 绑定，给优惠码创建者返利
+-    if (affBinding) {
++    if (affBinding?.affCode.enabled) {
+       await processAffCommission(
+         affBinding.affCode.id,
+         instance.id,
+
+指定 type-check 与三项守卫全部通过，目标 diff 已复核且未触碰 mail.ts。
+  ✓ 读取 AGENTS.md、相关实现与守卫，定位四条 enabled 口径
+  ✓ 最小修改实例校验、续费路径和 aff 守卫
+  ✓ 运行指定 type-check 与三项守卫并审查 diff
+diff --git a/server/scripts/test-aff-review-ui-guards.ts b/server/scripts/test-aff-review-ui-guards.ts
+index f67eaf1e44de6be15498a1fd78f478b55da131c8..706822738cbcf10d7fd5d5b29b927bb51f4accc5
+--- a/server/scripts/test-aff-review-ui-guards.ts
++++ b/server/scripts/test-aff-review-ui-guards.ts
+@@ -4,6 +4,16 @@
+ 
+ const root = resolve(process.cwd(), '..')
+ const view = readFileSync(resolve(root, 'client/src/views/admin/AffReviewView.vue'), 'utf8')
++const affDbSource = readFileSync(resolve(root, 'server/src/db/aff.ts'), 'utf8')
++const billingOperationsSource = readFileSync(resolve(root, 'server/src/db/billing-operations.ts'), 'utf8')
++
++function sectionBetween(source: string, startMarker: string, endMarker: string): string {
++  const start = source.indexOf(startMarker)
++  assert.notEqual(start, -1, `missing start marker: ${startMarker}`)
++  const end = source.indexOf(endMarker, start + startMarker.length)
++  assert.notEqual(end, -1, `missing end marker: ${endMarker}`)
++  return source.slice(start, end)
++}
+ 
+ assert.ok(
+   view.includes('class="space-y-3 p-4 lg:hidden"') &&
+@@ -24,4 +34,31 @@
+   'AFF withdrawal review responsive layout must preserve approve, reject, modal, and pagination actions'
+ )
+ 
++const validateAffCodeSource = sectionBetween(
++  affDbSource,
++  'export async function validateAffCode(',
++  'export async function createAffBinding('
++)
++assert.ok(
++  validateAffCodeSource.includes('if (!affCode.enabled)') &&
++    validateAffCodeSource.includes("return { valid: false, error: '优惠码已禁用' }"),
++  'instance purchase AFF validation must reject disabled codes'
++)
++
++const performRenewalSource = sectionBetween(
++  billingOperationsSource,
++  'export async function performRenewal(',
++  'export async function performPlanChange('
++)
++assert.match(
++  performRenewalSource,
++  /if \(affBinding\?\.affCode\.enabled\) \{\s*discountRate =/,
++  'instance renewal must not apply discounts from disabled AFF codes'
++)
++assert.match(
++  performRenewalSource,
++  /if \(affBinding\?\.affCode\.enabled\) \{\s*await processAffCommission\(/,
++  'instance renewal must not pay commission for disabled AFF codes'
++)
++
+ console.log('AFF review UI guard tests passed')
+diff --git a/server/src/db/aff.ts b/server/src/db/aff.ts
+index 0a0f48dfaae45c805067c5ad994be8481e135714..83f44ac14909a4ab295ee514e4d2882bc9b2f20e
+--- a/server/src/db/aff.ts
++++ b/server/src/db/aff.ts
+@@ -459,6 +459,11 @@
+     return { valid: false, error: '不能使用自己的优惠码' }
+   }
+ 
++  // 4. 检查优惠码是否启用
++  if (!affCode.enabled) {
++    return { valid: false, error: '优惠码已禁用' }
++  }
++
+   return {
+     valid: true,
+     affCode,
+diff --git a/server/src/db/billing-operations.ts b/server/src/db/billing-operations.ts
+index 5cb1e59755ba8d7731e573825b26b81fe6aa49e5..69e8739e915e274547ce154fca4f3197393ce73e
+--- a/server/src/db/billing-operations.ts
++++ b/server/src/db/billing-operations.ts
+@@ -565,7 +565,7 @@
+   let discountAmount = 0
+   let finalAmount = originalAmount
+ 
+-  if (affBinding) {
++  if (affBinding?.affCode.enabled) {
+     discountRate = Number(affBinding.affCode.discountRate)
+     discountAmount = calculateDiscountAmount(originalAmount, discountRate)
+     finalAmount = calculateDiscountedPrice(originalAmount, discountRate)
+@@ -674,7 +674,7 @@
+     })
+ 
+     // 如果有 AFF 绑定，给优惠码创建者返利
+-    if (affBinding) {
++    if (affBinding?.affCode.enabled) {
+       await processAffCommission(
+         affBinding.affCode.id,
+         instance.id,
+
+codex
+已在 [aff.ts](C:/Users/Administrator/Desktop/payinces/server/src/db/aff.ts:432) 为实例新购校验增加 `enabled` 检查，并在 [billing-operations.ts](C:/Users/Administrator/Desktop/payinces/server/src/db/billing-operations.ts:538) 同时阻断禁用码的续费折扣和佣金；[守卫](C:/Users/Administrator/Desktop/payinces/server/scripts/test-aff-review-ui-guards.ts:7) 已覆盖两条路径。实例新购/续费口径已一致，邮箱新购原检查保持不变；邮箱续费佣金仍由约定的 `mail.ts` 并行任务负责，当前工作树尚不能宣称四处全部一致。server type-check、`test:aff-review-ui-guards`、`test:aff-points-query-guards`、`test:invite-generation-accounting-guards` 全部通过；未 commit，未触碰 `mail.ts`。
+diff --git a/server/scripts/test-aff-review-ui-guards.ts b/server/scripts/test-aff-review-ui-guards.ts
+index f67eaf1e44de6be15498a1fd78f478b55da131c8..706822738cbcf10d7fd5d5b29b927bb51f4accc5
+--- a/server/scripts/test-aff-review-ui-guards.ts
++++ b/server/scripts/test-aff-review-ui-guards.ts
+@@ -4,6 +4,16 @@
+ 
+ const root = resolve(process.cwd(), '..')
+ const view = readFileSync(resolve(root, 'client/src/views/admin/AffReviewView.vue'), 'utf8')
++const affDbSource = readFileSync(resolve(root, 'server/src/db/aff.ts'), 'utf8')
++const billingOperationsSource = readFileSync(resolve(root, 'server/src/db/billing-operations.ts'), 'utf8')
++
++function sectionBetween(source: string, startMarker: string, endMarker: string): string {
++  const start = source.indexOf(startMarker)
++  assert.notEqual(start, -1, `missing start marker: ${startMarker}`)
++  const end = source.indexOf(endMarker, start + startMarker.length)
++  assert.notEqual(end, -1, `missing end marker: ${endMarker}`)
++  return source.slice(start, end)
++}
+ 
+ assert.ok(
+   view.includes('class="space-y-3 p-4 lg:hidden"') &&
+@@ -24,4 +34,31 @@
+   'AFF withdrawal review responsive layout must preserve approve, reject, modal, and pagination actions'
+ )
+ 
++const validateAffCodeSource = sectionBetween(
++  affDbSource,
++  'export async function validateAffCode(',
++  'export async function createAffBinding('
++)
++assert.ok(
++  validateAffCodeSource.includes('if (!affCode.enabled)') &&
++    validateAffCodeSource.includes("return { valid: false, error: '优惠码已禁用' }"),
++  'instance purchase AFF validation must reject disabled codes'
++)
++
++const performRenewalSource = sectionBetween(
++  billingOperationsSource,
++  'export async function performRenewal(',
++  'export async function performPlanChange('
++)
++assert.match(
++  performRenewalSource,
++  /if \(affBinding\?\.affCode\.enabled\) \{\s*discountRate =/,
++  'instance renewal must not apply discounts from disabled AFF codes'
++)
++assert.match(
++  performRenewalSource,
++  /if \(affBinding\?\.affCode\.enabled\) \{\s*await processAffCommission\(/,
++  'instance renewal must not pay commission for disabled AFF codes'
++)
++
+ console.log('AFF review UI guard tests passed')
+diff --git a/server/src/db/aff.ts b/server/src/db/aff.ts
+index 0a0f48dfaae45c805067c5ad994be8481e135714..83f44ac14909a4ab295ee514e4d2882bc9b2f20e
+--- a/server/src/db/aff.ts
++++ b/server/src/db/aff.ts
+@@ -459,6 +459,11 @@
+     return { valid: false, error: '不能使用自己的优惠码' }
+   }
+ 
++  // 4. 检查优惠码是否启用
++  if (!affCode.enabled) {
++    return { valid: false, error: '优惠码已禁用' }
++  }
++
+   return {
+     valid: true,
+     affCode,
+diff --git a/server/src/db/billing-operations.ts b/server/src/db/billing-operations.ts
+index 5cb1e59755ba8d7731e573825b26b81fe6aa49e5..69e8739e915e274547ce154fca4f3197393ce73e
+--- a/server/src/db/billing-operations.ts
++++ b/server/src/db/billing-operations.ts
+@@ -565,7 +565,7 @@
+   let discountAmount = 0
+   let finalAmount = originalAmount
+ 
+-  if (affBinding) {
++  if (affBinding?.affCode.enabled) {
+     discountRate = Number(affBinding.affCode.discountRate)
+     discountAmount = calculateDiscountAmount(originalAmount, discountRate)
+     finalAmount = calculateDiscountedPrice(originalAmount, discountRate)
+@@ -674,7 +674,7 @@
+     })
+ 
+     // 如果有 AFF 绑定，给优惠码创建者返利
+-    if (affBinding) {
++    if (affBinding?.affCode.enabled) {
+       await processAffCommission(
+         affBinding.affCode.id,
+         instance.id,
+
+tokens used
+63,355

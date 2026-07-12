@@ -1,0 +1,1 @@
+已完成 FX-025：到期实例通过带 `id + version + suspended/expired + suspendedAt` 条件的 `updateMany` 原子软删，仅设置 `status='deleted'` 并递增 `version`，避免与并发续费竞态；移除了 `prisma.instance.delete`，账单记录及收入统计得以保留。Incus 删除、CPU/内存/磁盘回滚、宿主资源重算、通知/日志等副作用保持不变，并显式事务释放端口、IP、IPv6 子网和公网 IPv4。已更新两个相关守卫；server type-check 及三个指定守卫全部通过。未修改 schema、package.json、`mail.ts`，未 commit。

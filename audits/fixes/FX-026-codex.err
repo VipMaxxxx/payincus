@@ -1,0 +1,3616 @@
+OpenAI Codex v0.144.0-alpha.4
+--------
+workdir: C:\Users\Administrator\Desktop\payinces
+model: gpt-5.6-sol
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: high
+reasoning summaries: none
+session id: 019f5303-74b5-7793-8ab0-ba8ead15b4ef
+--------
+user
+你是 PayIncus 实现工程师。先读 AGENTS.md(用户删除/权限高危,先读代码+守卫;不 commit/push/发版、不大重构;不改 schema)。严格按规格只改 users.ts 删除路径+db.deleteUser 与守卫,不做用户软删大重构。改完跑守卫报告。不要 commit。
+---
+# FX-026 规格：删用户硬删除静默抹掉资金/审计流水,或因外键 500(P1 / D-003 / M02-01)
+
+## 根因
+删除用户走 prisma.user.delete 硬删除;删除阻断器只统计 instances/hosts/packages/hostingZones 四类。
+User 大量关系 onDelete:Cascade(BalanceLog/RechargeRecord/HostingBalanceLog/LoginRecord/RedeemCodeUsage…)→ 删成功即静默抹掉资金流水与登录审计(合规/取证风险,且未做余额对账);
+另一批 RESTRICT(invite_codes.created_by、ExchangeOrder buyer/seller、OrderOperationCreator、RechargeRefundRequester…)→ 只要产生过对应记录,user.delete 抛外键约束变成未捕获 500。
+
+## 修法（bounded:不做用户软删大重构、不改 schema;改 server/src/routes/users.ts 删除路径 + server/src/db/users.ts deleteUser)
+1. 先只读:删除路由(users.ts:1124-1179)、阻断器 getUserDeletionBlockers(users.ts:44-60)、db.deleteUser(users.ts:697-701)。
+2. **扩展删除阻断**:删除前额外校验并阻断(返回明确 4xx + 阻断原因,不 500):
+   - 用户主余额 / 托管余额 非零 → 阻断(要求先清零/结算);
+   - 存在资金/审计类关键记录(BalanceLog / RechargeRecord / HostingBalanceLog 等,以"是否有记录"为阻断条件)→ 阻断,提示"该用户有资金/审计流水,不能直接删除"。
+   把这些纳入 getUserDeletionBlockers 的返回,路由据此拒绝并给清晰原因。
+3. **捕获外键错误**:db.deleteUser 加 try/catch,捕获 Prisma 外键约束错误(P2003/P2014 等)→ 向上返回明确业务错误(如"该用户存在关联记录,无法删除"),路由返回 4xx 而非未捕获 500。
+4. **不静默级联抹财务**:通过第2条阻断"有资金/审计记录的用户不可删",从源头避免 Cascade 静默删除财务流水;不改 schema 的 Cascade(改它需迁移,风险大;阻断即规避)。
+5. 结果:有资金/审计历史的用户**不能被直接硬删**(需先处理),删除动作要么成功(干净用户)要么给明确阻断原因,不再静默抹账、不再误导性 500。
+
+## 加守卫
+在现有 server/scripts/test-admin-user-delete-resource-guards.ts 追加断言:删除阻断含余额/资金审计记录校验 + db.deleteUser 捕获外键错误返回业务码。不改 package.json。
+
+## 不许动
+- 不改 schema Cascade/Restrict;不做用户软删架构改造(记为 owner 设计待办)。不做大重构。
+
+## 验收
+- pnpm --filter server type-check 通过;pnpm --filter server test:admin-user-delete-resource-guards、test:user-route-id-guards 通过。
+
+## 交付
+一段话:扩了哪些阻断、外键错误如何捕获、守卫结果、以及"用户软删架构"是否建议 owner 后续做。不要 commit。
+
+codex
+我会严格按 FX-026 的边界处理：先只读指定删除路由、阻断器、`db.deleteUser` 及现有守卫，再只改这三处相关文件；不会改 schema、做软删重构、commit、push 或发版。随后跑指定 type-check 和两项守卫。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$files = @('"'AGENTS.md','server/src/routes/users.ts','server/src/db/users.ts','server/scripts/test-admin-user-delete-resource-guards.ts'); foreach ("'$f in $files) { Write-Output "FILE $f"; if ($f -eq '"'server/src/routes/users.ts') { Get-Content "'$f | Select-Object -First 90; Get-Content $f | Select-Object -Skip 1100 -First 110 } elseif ($f -eq '"'server/src/db/users.ts') { Get-Content "'$f | Select-Object -Skip 650 -First 90 } else { Get-Content $f } }' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 609ms:
+FILE AGENTS.md
+# PayIncus / Incudal â€” é¡¹ç›®ç»Ÿä¸€è§„çŸ©ï¼ˆAGENTS.mdï¼‰
+
+> æœ¬æ–‡ä»¶æ˜¯æœ¬ä»“åº“**æ‰€æœ‰ AI agentï¼ˆClaude Codeã€codex ç­‰ï¼‰çš„ç»Ÿä¸€å·¥ä½œè§„èŒƒ**ã€‚
+> `CLAUDE.md` é€šè¿‡ `@AGENTS.md` å¼•ç”¨æœ¬æ–‡ä»¶ â€”â€” Claude Code ä¸Ž codex è¯»åˆ°çš„æ˜¯**åŒä¸€å¥—è§„çŸ©**ï¼Œæ”¹è¿™ä¸€ä¸ªæ–‡ä»¶å³å¯ã€‚
+> æƒå¨è¿ç»´/å‘ç‰ˆäº‹å®žä»¥ä»“åº“æ ¹çš„ `OPERATIONS_HANDOFF.md`ï¼ˆæ“ä½œæ‰‹å†Œï¼‰ä¸Ž `HANDOFF.md`ï¼ˆç‰ˆæœ¬è¯æ®å°è´¦ï¼‰ä¸ºå‡†ã€‚
+
+---
+
+## 0. æ²Ÿé€šè¯­è¨€
+- ä¸Ž owner é»˜è®¤ç”¨**ä¸­æ–‡**æ²Ÿé€šã€‚
+
+## 1. è¿™æ˜¯ä»€ä¹ˆé¡¹ç›®
+**PayIncus**ï¼ˆå†…éƒ¨ä»£å· `incudal`ï¼‰â€”â€”å•†ç”¨ Incusï¼ˆLXC/KVMï¼‰NAT VPS å”®å–ä¸Žäº¤ä»˜å¹³å°ï¼Œ**çº¿ä¸Šè¿è¥ä¸­**ã€‚å½“å‰ç”Ÿäº§ç‰ˆæœ¬ **v1.3.7**ã€‚pnpm monorepoï¼š
+
+| ç›®å½• | æŠ€æœ¯æ ˆ / ä½œç”¨ |
+|------|----------------|
+| `client/` | Vue 3 + Vite SPAã€‚åŒç«¯æž„å»ºï¼ˆ`VITE_APP_ENTRY`ï¼‰â†’ `dist/user`ï¼ˆpay.payincus.comï¼‰+ `dist/admin`ï¼ˆadmin.payincus.comï¼‰ã€‚ä¸¤ç«¯ç‹¬ç«‹æºã€**ä¸å…±äº« cookie åŸŸ**ã€‚ |
+| `server/` | Fastify 5 + Prisma 7 + PostgreSQLï¼Œ~300 TS æ–‡ä»¶ã€~70 è·¯ç”±ã€~15 è°ƒåº¦/workerã€‚æ—  Redisï¼ˆç”¨ PG advisory lockï¼‰ã€‚ä¸‰å¥—é‰´æƒé¢ï¼šWeb çš„ JWT+refresh cookieã€Public API çš„ `pat_`/`poa_` tokenã€host agent çš„ HMACã€‚ |
+| `agent/` | Go å®¿ä¸» agentï¼Œåªè¯»ç›‘æŽ§ï¼ˆå¿ƒè·³/èµ„æº/å®žä¾‹æ€/æµé‡ï¼‰ï¼ŒHMAC ç­¾åï¼Œè‡ªå‡çº§ã€‚ |
+| å…¶å®ƒ | `docs-site/`ï¼ˆVitePressï¼‰ã€`deploy/`ï¼ˆsystemd+Nginxï¼‰ã€`scripts/`ï¼ˆå®‰è£…/æ ¡éªŒ/OTAï¼‰ã€`plugin-templates/`ã€`theme-templates/`ã€‚ |
+
+éƒ¨ç½²ï¼šä¸‰å±‚æ‹†åˆ†ï¼ˆuser / admin / ç§æœ‰åŽç«¯ `127.0.0.1:3001`ï¼‰ï¼Œè£…æœºæ ¹ `/opt/incudal`ï¼ŒåŽŸå­ OTAï¼ˆ`releases/<ver-ts>` + `current` è½¯é“¾ï¼‰+ è‡ªåŠ¨å›žæ»šã€‚
+
+---
+
+## 2. ðŸ”´ ç¡¬è§„çŸ©ï¼ˆä¸å¯åå•†ï¼Œè¿åå³äº‹æ•…ï¼‰
+
+1. **ä¸ç¢°ç”Ÿäº§**ï¼šæœªç» owner æ˜Žç¡®è¦æ±‚ï¼Œ**ç»ä¸** OTAã€å‘å¸ƒã€pushã€æ‰“ tagã€æ”¹ç”Ÿäº§çŽ¯å¢ƒã€‚
+2. **ä¸åšç ´åæ€§ git**ï¼šæœªç» owner æ˜Žç¡®è¦æ±‚ï¼Œ**ç»ä¸** `git reset`ã€`git checkout --`ã€å¼ºåˆ¶åˆ é™¤ã€æ¸…ç†æœªè·Ÿè¸ªæ–‡ä»¶ã€`git commit`/`git push`ã€‚
+3. **é«˜å±è·¯å¾„å…ˆè¯»åŽå†™**ï¼šæ”¹åŠ¨ä»¥ä¸‹ä»»ä¸€é¢†åŸŸï¼Œ**å¿…é¡»å…ˆè¯»ç›¸å…³ä»£ç  + å¯¹åº”å®ˆå«æµ‹è¯•**å†åŠ¨æ‰‹ï¼š
+   > é‰´æƒ Â· æ”¯ä»˜ Â· æƒé™ Â· é£ŽæŽ§ Â· èµ„æºäº¤ä»˜ Â· å…‘æ¢æµç¨‹ Â· å®žä¾‹åˆ›å»º Â· OTA
+4. **æ”¹åŠ¨æœ€å°åŒ–**ï¼šä¿® bug / å‘ç‰ˆæœŸé—´**ä¸åšå¤§èŒƒå›´é‡æž„**ï¼Œåªæ”¹å¿…è¦çš„ã€‚
+5. **ç»ä¸æ³„å¯†**ï¼šä»»ä½• commitã€handoffã€æ€»ç»“ã€æˆªå›¾ä¸­éƒ½**ä¸å¾—**å‡ºçŽ°å‡­è¯ / token / cookie / å¯†é’¥ã€‚
+6. **æœ¬åœ°è¿‡ â‰  ç”Ÿäº§éªŒè¯**ï¼šæœ¬åœ°é€šè¿‡ã€GitHub Actionsã€Release èµ„äº§ã€OTAã€çº¿ä¸Šå®žè¯æ˜¯**åˆ†å¼€çš„è¯æ®**ï¼Œä¸å¯æ··ä¸ºä¸€è°ˆã€‚
+7. **æ¯æ¬¡æ”¹åŠ¨å¿…é¡»è¿‡å¯¹åº”å®ˆå«**ï¼ˆè§ Â§4ï¼‰ï¼Œå¦åˆ™è§†ä¸º**æœªå®Œæˆ**ã€‚
+8. `RUN_DB_CHECKS=0 bash scripts/apply-online-update.sh <ver>` ä¼š**è·³è¿‡ DB/æ”¯ä»˜å°±ç»ªæ ¡éªŒ**ï¼Œä»…åœ¨ owner æ˜Žç¡®æ‰¹å‡†æ—¶ä½¿ç”¨ã€‚
+
+---
+
+## 3. æœ¬åœ°æ€Žä¹ˆè·‘
+
+- **çŽ¯å¢ƒ**ï¼šNode â‰¥ 20ã€pnpm 9.14.2ã€æœ¬åœ° PostgreSQL 16ã€‚
+- **è£…ä¾èµ–**ï¼š`pnpm install`
+- **ä¸€æŠŠèµ·å…¨éƒ¨ï¼ˆserver + user + adminï¼‰**ï¼š`pnpm dev`
+- **åˆ†å¼€èµ·**ï¼š
+  - åŽç«¯ï¼š`NODE_ENV=development JWT_SECRET=dev-secret-12345678 HOST=127.0.0.1 PORT=3001 pnpm --filter server exec tsx watch src/app.ts`
+  - ç”¨æˆ·å‰ç«¯ï¼š`pnpm dev:user`
+  - ç®¡ç†å‰ç«¯ï¼š`pnpm dev:admin`
+- **ç«¯å£**ï¼šåŽç«¯ API **3001** Â· ç”¨æˆ·å‰ç«¯ **3000** Â· ç®¡ç†å‰ç«¯ **3002**ï¼ˆå‰ç«¯ dev ç» proxy æ‰“åˆ° 3001ï¼‰ã€‚
+
+---
+
+## 4. ðŸ›¡ï¸ å®ˆå«æµ‹è¯•çºªå¾‹ï¼ˆæœ¬ä»“åº“çš„å‘½é—¨ï¼‰
+
+`server/package.json` é‡Œæœ‰ **200+ ä¸ªç‹¬ç«‹ `test-*-guards.ts`**ã€‚å®ƒä»¬æŠŠå…³é”®ä¸šåŠ¡/å‰ç«¯ç»“æž„â€œé’‰æ­»â€ï¼Œ`pnpm test` ä¼šè·‘å…¨å¥—ï¼ˆclient+server type-check + å…¨éƒ¨å®ˆå«ï¼‰ã€‚**ä»»ä½•æ”¹åŠ¨å¿…é¡»è®©ç›¸å…³å®ˆå«é€šè¿‡ã€‚**
+
+- **å…¨é‡**ï¼ˆæ…¢ï¼Œå‘ç‰ˆå‰è·‘ï¼‰ï¼š`pnpm test`
+- **å•ä¸ª**ï¼š`pnpm --filter server test:<guard-name>`
+- **å‰ç«¯æœ€å¸¸ç”¨ä¸‰ä¸ª**ï¼š
+  - `test:frontend-route-guards` â€”â€” è·¯ç”± / **è¡¨æ ¼å¸ƒå±€** / `@click` è·¯å¾„æ–­è¨€
+  - `test:frontend-dist-boundary-guards` â€”â€” åŒç«¯ dist è¾¹ç•Œ
+  - `test:frontend-i18n-keys` â€”â€” i18n key å®Œæ•´æ€§
+- **Go agent**ï¼š`pnpm test:agent`
+
+### âš ï¸ è¡¨æ ¼å¸ƒå±€å®ˆå«ï¼ˆæœ€å®¹æ˜“è¸©é›·ï¼‰
+ä¸€æ‰¹è¡¨è¢«å®ˆå«**é”å®š**ä¸ºâ€œ**ç§»åŠ¨å¡ + PC å®šå®½è¡¨ï¼ˆ`table-fixed` / `overflow-hidden`ï¼‰ï¼Œç»ä¸æ¨ªå‘æ»šåŠ¨**â€ï¼Œå¹¶**åå‘ç¦æ­¢** `overflow-x-auto` / `min-w-[...]` / åŽ»æŽ‰ `table-fixed`ã€‚
+- æƒ³ä¿®â€œå®½è¡¨æŒ¤åŽ‹â€æ—¶ï¼š**å…ˆåˆ¤æ–­è¯¥è¡¨æ˜¯å¦åœ¨å®ˆå«æ¸…å•é‡Œ**ã€‚é”å®šè¡¨**åªèƒ½åœ¨ `table-fixed` å†…å¹³è¡¡åˆ—å®½**ï¼ˆåˆ—å®½ç™¾åˆ†æ¯”åˆè®¡ = 100%ï¼‰+ å…è®¸å•å…ƒæ ¼æ¢è¡Œ + é ç§»åŠ¨å¡åº”å¯¹çª„å±ï¼›**ä¸èƒ½**æ”¹æˆæ¨ªå‘æ»šåŠ¨ã€‚
+- å—é”å®šçš„è¡¨ï¼ˆç”¨æˆ·ç«¯ï¼‰ï¼š`MyPackagesView`ã€`MyHostsView`ã€`TransfersView`ã€`OrdersView`ã€`InvitesView`ã€`FlashSalesView`ã€`HostingWalletView`ã€`InstancesView`ã€`LogsView`ã€`EntertainmentView`ï¼›ï¼ˆç®¡ç†ç«¯ï¼‰`admin/BillingView`ã€`admin/ImagesView`ã€`admin/HelpManageView`ã€`admin/MailView`ã€`admin/PluginCenterView`ï¼›ï¼ˆç»„ä»¶ï¼‰`HostPublicIpv4Tab`ã€`InstanceLogsTab`ã€`ConfigEditModal`ã€‚
+- æ”¹ä»»ä¸€å‰ç«¯æ–‡ä»¶åŽ**å¿…è·‘** `test:frontend-route-guards`ã€‚
+
+---
+
+## 5. æž„å»º / æ ¡éªŒå‘½ä»¤
+
+| ç›®çš„ | å‘½ä»¤ |
+|------|------|
+| æž„å»ºï¼ˆå« dist è¾¹ç•Œå®ˆå«ï¼‰| `pnpm build` |
+| åªæž„å»ºå‰ç«¯ / åŽç«¯ | `pnpm build:client` / `pnpm build:server` |
+| Lintï¼ˆæ£€æŸ¥ / è‡ªåŠ¨ä¿®ï¼‰| `pnpm lint` / `pnpm lint:fix` |
+| ç±»åž‹æ£€æŸ¥ | `pnpm --filter client type-check` Â· `pnpm --filter server type-check` |
+| å…¨å¥—å®ˆå« | `pnpm test` |
+| æ–‡æ¡£ç«™å¼€å‘ / æž„å»º | `pnpm docs:dev` / `pnpm docs:build` |
+
+---
+
+## 6. UI æ”¹åŠ¨çº¦æŸï¼ˆå•è‰²é‡åšè¿›è¡Œä¸­ï¼‰
+
+- **æ–¹å‘**ï¼šè‹¹æžœå¼**çº¯é»‘ç™½å•è‰²**ï¼ˆæµ…è‰²=ç™½åº•é»‘å­—ï¼Œæ·±è‰²=é»‘åº•ç™½å­—ï¼‰ï¼ŒåŽ»äºŒæ¬¡å…ƒ/å‰ç¥¥ç‰©/ç«‹ç»˜ã€‚çŠ¶æ€è‰²**åªä¿ç•™ç»¿/ç¥ç€/çº¢**ä¸‰ç§ï¼ˆè¿è¡Œ/å¾…å¤„ç†/å¤±è´¥ï¼‰ã€‚
+- **çº¢çº¿**ï¼šåªæ”¹**æ ·å¼ / å¸ƒå±€ / æ–‡æ¡ˆå±‚çº§**ï¼Œ**ä¸ç¢°**åŽç«¯æŽ¥å£ã€æƒé™ã€æ”¯ä»˜/è®¢å•/å®žä¾‹åˆ›å»º/OTA ç­‰ä¸šåŠ¡é€»è¾‘ä¸Žè·¯ç”±è¡Œä¸ºâ€”â€”**åŠŸèƒ½ 100% ä¸å˜**ã€‚
+- **é…è‰²èµ° token å±‚**ï¼ˆ`client/tailwind.config.js`ï¼‰ï¼šä¸€å †å½©è‰² ramp å·²æ˜ å°„åˆ°ä¸­æ€§ç°ï¼›`rose â†’ çœŸçº¢`ï¼ˆå±é™©/äºæŸè¯­ä¹‰ï¼‰**ä¿ç•™ä¸å¯ç°åŒ–**ï¼›æ¸¸æˆåŒ–æ¨¡å—ï¼ˆæˆå°±/ç­¾åˆ°/æŠ½å¥–/ç¨€æœ‰åº¦ï¼‰å½©è‰²**åˆ»æ„ä¿ç•™**ã€‚
+- `kawaii-cloud.css` **æ¸è¿›æ”¹é€ ã€ä¸é‡å†™**ï¼›å•é¡µåŽ»è‰²ç”¨é¡µé¢ `<style scoped>`ã€‚
+- åŠ¨æ•ˆå¯ç”¨ **GSAP**ï¼ˆå·²è£… gsap-skillsï¼Œè§ `.claude/skills/`ï¼‰ï¼›å°Šé‡ `prefers-reduced-motion`ã€‚
+
+---
+
+## 7. åä½œæ¨¡åž‹ï¼ˆClaude Code â‡„ codexï¼‰
+
+- **Claude Code = æŠ€æœ¯è´Ÿè´£äºº / é›†æˆæ–¹**ï¼šå®šæ ¹å› ã€åˆ‡ä»»åŠ¡ã€å†™è§„æ ¼ã€å®ˆä¸å˜é‡ã€å®¡ diffã€è·‘å®ˆå«ã€çœŸæœºéªŒè¯ã€ç®¡ gitï¼ˆ**ä»…åœ¨ owner åŒæ„æ—¶** commit / pushï¼‰ã€‚
+- **codex = å®žçŽ°å·¥äºº**ï¼šæŒ‰ Claude ç»™çš„è§„æ ¼å®žçŽ°æ”¹åŠ¨ï¼Œå°¤å…¶**ä½Ž/ä¸­å±ã€è‡ªåŒ…å«ã€å¯å¹¶è¡Œ**çš„å—ã€‚
+- **é£Žé™©åˆ†æ¡£**ï¼šé«˜å±è·¯å¾„ç”± Claude å®šæ ¹å›  + æ”¶ç´§è§„æ ¼ï¼›ä½Ž/ä¸­å± codex å¯ç«¯åˆ°ç«¯ä¿®ã€‚**ä»»ä½•ä¸€æ–¹æ”¹å®Œéƒ½è¦è·‘ç›¸å…³å®ˆå«ï¼ŒClaude ç»Ÿä¸€å®¡æŸ¥åŽæ‰è¿›å…¥ä¸‹ä¸€æ­¥ã€‚**
+- **é¿å…å†²çª**ï¼šåŒä¸€æ‰¹æ–‡ä»¶ä¸€æ¬¡åªè®©ä¸€ä¸ª agent æ”¹ã€‚
+
+---
+
+## 8. ä¸€ä¸ªæ”¹åŠ¨çš„ã€Œå®Œæˆã€å®šä¹‰
+
+1. ç›¸å…³ **type-check** é€šè¿‡ï¼›
+2. ç›¸å…³ **å®ˆå«æµ‹è¯•** é€šè¿‡ï¼›
+3. è‹¥åŠ¨å‰ç«¯ â†’ **åŒç«¯ build** é€šè¿‡ï¼›
+4. **çœŸæœºè·‘è¿‡**å—å½±å“æµç¨‹ï¼ˆä¸æ˜¯åªçœ‹æµ‹è¯•ï¼‰ï¼›
+5. **æŠ¥å‘Š**ï¼šæ”¹äº†å“ªäº›æ–‡ä»¶ / ä¸ºä»€ä¹ˆ / é£Žé™© / æ€Žä¹ˆéªŒè¯çš„ã€‚
+
+ä»¥ä¸Šä»»ä¸€æœªæ»¡è¶³ = **æœªå®Œæˆ**ã€‚
+FILE server/src/routes/users.ts
+/**
+ * ç”¨æˆ·ç®¡ç†è·¯ç”±
+ */
+
+// @ts-ignore - bcryptjs has its own types
+import bcrypt from 'bcryptjs'
+import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
+import * as db from '../db/index.js'
+import { prisma } from '../db/prisma.js'
+import { createLog } from '../db/logs.js'
+import type { UpdateUserRequest } from '../types/api.js'
+import { apiError, ErrorCode } from '../lib/errors.js'
+import { containsDangerousChars, revokeAllUserRefreshTokens, getUserSessions, logAdminAction, validatePassword, invalidateUserAccessTokens } from '../lib/security.js'
+import {
+    isOperationVerified,
+    claimOperationVerificationRequirement
+} from '../lib/operation-verification.js'
+import { isSmtpEnabled, sendBanNotificationEmail, sendVerificationEmail } from '../lib/mailer.js'
+import { sendNotification } from '../lib/notifier.js'
+import { closeUserSessions } from '../lib/terminal-proxy.js'
+import { createVerificationCode, verifyCode } from '../db/email-verification.js'
+import { validateEmailDomain } from '../lib/email-domain.js'
+import { HOSTING_BALANCE_LOG_LOCK_NAMESPACE, USER_ADMIN_ROLE_LOCK_NAMESPACE, tryAdvisoryTransactionLock } from '../db/advisory-locks.js'
+import { emitUserPluginEvent } from '../lib/plugin-business-events.js'
+import {
+  DEMO_ACCOUNT_PROTECTED_MESSAGE,
+  redactDemoLoginRecord,
+  shouldProtectDemoAccount,
+  shouldRedactDemoLoginRecords
+} from '../lib/demo-safety.js'
+
+const USER_SEARCH_FIELDS = ['username', 'id', 'email'] as const
+const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\d*$/
+const MAX_HOSTING_BALANCE_ADJUST_AMOUNT = 99999999.99
+const MAX_HOSTING_BALANCE_ADJUST_REASON_LENGTH = 500
+const ADMIN_HOSTING_BALANCE_ADJUST_REMARK_PREFIX = '[Admin]'
+type UserSearchField = (typeof USER_SEARCH_FIELDS)[number]
+type UserDeletionBlockers = {
+  instances: number
+  hosts: number
+  packages: number
+  hostingZones: number
+}
+
+async function getUserDeletionBlockers(userId: number): Promise<UserDeletionBlockers> {
+  const [instances, hosts, packages, hostingZones] = await Promise.all([
+    // Count every instance state, including deleted history, because the required User relation
+    // still blocks hard deletion and the history should not be orphaned by admin actions.
+    prisma.instance.count({ where: { userId } }),
+    prisma.host.count({ where: { userId } }),
+    prisma.package.count({ where: { userId } }),
+    prisma.hostingZone.count({ where: { ownerId: userId } })
+  ])
+
+  return {
+    instances,
+    hosts,
+    packages,
+    hostingZones
+  }
+}
+
+function hasUserDeletionBlockers(blockers: UserDeletionBlockers): boolean {
+  return Object.values(blockers).some(count => count > 0)
+}
+
+function parseUserSearchFields(rawValue?: string): UserSearchField[] {
+  if (!rawValue) {
+    return [...USER_SEARCH_FIELDS]
+  }
+
+  const validFields = new Set<string>(USER_SEARCH_FIELDS)
+  const fields = rawValue
+    .split(',')
+    .map(field => field.trim())
+    .filter((field): field is UserSearchField => validFields.has(field))
+
+  return fields.length > 0
+    ? USER_SEARCH_FIELDS.filter(field => fields.includes(field))
+    : [...USER_SEARCH_FIELDS]
+}
+
+function parseBooleanQuery(rawValue?: string): boolean {
+  if (!rawValue) {
+    return false
+  }
+
+  return ['1', 'true', 'yes', 'on'].includes(rawValue.toLowerCase())
+}
+
+      userAgent: request.headers['user-agent'],
+      targetUserId: userId,
+      targetUsername: user.username,
+      resourceType: 'user',
+      reason: status === 'banned' ? (reason || 'Admin banned user') : 'Admin unbanned user'
+    })
+
+    // å¦‚æžœæ˜¯å°ç¦ä¸”æä¾›äº†åŽŸå› ï¼Œå‘é€å°ç¦é‚®ä»¶é€šçŸ¥
+    if (status === 'banned' && reason && user.email) {
+      sendBanNotificationEmail(user.email, {
+        username: user.username,
+        reason: reason
+      }).then(result => {
+        if (!result.success) {
+          console.error(`[Ban] Failed to send ban notification email:`, result.error)
+        }
+      }).catch(err => {
+        console.error(`[Ban] Failed to send ban notification email:`, err)
+      })
+    }
+
+    return { message: status === 'banned' ? 'User banned' : 'User unbanned' }
+  })
+
+  // åˆ é™¤ç”¨æˆ· (ç®¡ç†å‘˜)
+  fastify.delete<{ Params: { id: string } }>('/:id', {
+    onRequest: [fastify.authenticateAdmin]
+  }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+    const { id } = request.params
+    const userId = parsePositiveRouteId(id)
+
+    if (!userId) {
+      return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
+    }
+
+    // ä¸èƒ½åˆ é™¤è‡ªå·±
+    if (request.user.id === userId) {
+      return reply.code(400).send(apiError(ErrorCode.CANNOT_DELETE_SELF))
+    }
+
+    const user = await db.findUserById(userId)
+    if (!user) {
+      return reply.code(404).send(apiError(ErrorCode.USER_NOT_FOUND))
+    }
+
+    // ä¸èƒ½åˆ é™¤ç®¡ç†å‘˜
+    if (user.role === 'admin') {
+      return reply.code(400).send(apiError(ErrorCode.CANNOT_DELETE_ADMIN))
+    }
+
+    const blockers = await getUserDeletionBlockers(userId)
+    if (hasUserDeletionBlockers(blockers)) {
+      return reply.code(400).send(apiError(
+        ErrorCode.USER_HAS_RESOURCES,
+        `instances=${blockers.instances}, hosts=${blockers.hosts}, packages=${blockers.packages}, hostingZones=${blockers.hostingZones}`
+      ))
+    }
+
+    await db.deleteUser(userId)
+
+    await createLog(
+      request.user.id,
+      'user',
+      'user.delete',
+      `Deleted user "${user.username}" (ID: ${userId}, role: ${user.role})`,
+      'success'
+    )
+
+    // AUTH003: ç®¡ç†å‘˜æ“ä½œå®¡è®¡æ—¥å¿— - åˆ é™¤ç”¨æˆ·æ˜¯é«˜å±æ“ä½œ
+    await logAdminAction(request.user.id, 'user.delete', {
+      ip: request.ip,
+      userAgent: request.headers['user-agent'],
+      targetUserId: userId,
+      targetUsername: user.username,
+      resourceType: 'user',
+      reason: 'Admin deleted user account'
+    })
+
+    return { message: 'User deleted' }
+  })
+
+  // ç®¡ç†å‘˜èŽ·å–æŒ‡å®šç”¨æˆ·çš„æ‰€æœ‰ä¼šè¯
+  fastify.get<{ Params: { id: string } }>('/:id/sessions', {
+    onRequest: [fastify.authenticateAdmin]
+  }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+    const userId = parsePositiveRouteId(request.params.id)
+    if (!userId) {
+      return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
+    }
+
+    const user = await db.findUserById(userId)
+    if (!user) {
+      return reply.code(404).send(apiError(ErrorCode.USER_NOT_FOUND))
+    }
+
+    const sessions = await getUserSessions(userId)
+    return { sessions }
+  })
+
+  // ç®¡ç†å‘˜æ’¤é”€æŒ‡å®šç”¨æˆ·çš„æ‰€æœ‰ä¼šè¯
+  fastify.post<{ Params: { id: string } }>('/:id/revoke-sessions', {
+    onRequest: [fastify.authenticateAdmin]
+  }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+    const userId = parsePositiveRouteId(request.params.id)
+    if (!userId) {
+      return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
+    }
+
+    const user = await db.findUserById(userId)
+    if (!user) {
+FILE server/src/db/users.ts
+  email?: string
+  role?: 'admin' | 'user'
+  status?: 'active' | 'banned'
+  passwordHash?: string
+  avatarStyle?: string
+}): Promise<void> {
+  const updateData: {
+    email?: string
+    role?: 'admin' | 'user'
+    status?: 'active' | 'banned'
+    passwordHash?: string
+    avatarStyle?: string
+  } = {}
+
+  if (data.email !== undefined) updateData.email = data.email
+  if (data.role !== undefined) updateData.role = data.role
+  if (data.status !== undefined) updateData.status = data.status
+  if (data.passwordHash !== undefined) updateData.passwordHash = data.passwordHash
+  if (data.avatarStyle !== undefined) updateData.avatarStyle = data.avatarStyle
+
+  if (Object.keys(updateData).length === 0) return
+
+  await prisma.user.update({
+    where: { id },
+    data: updateData
+  })
+}
+
+/**
+ * æ›´æ–°ç”¨æˆ·çŠ¶æ€
+ * @param banReason å°ç¦åŽŸå› ï¼ˆä»…å½“ status='banned' æ—¶æœ‰æ„ä¹‰ï¼‰
+ */
+export async function updateUserStatus(id: number, status: 'active' | 'banned', banReason?: string): Promise<void> {
+  await prisma.user.update({
+    where: { id },
+    data: {
+      status,
+      // å°ç¦æ—¶ä¿å­˜åŽŸå› ï¼Œè§£å°æ—¶æ¸…é™¤åŽŸå› 
+      banReason: status === 'banned' ? (banReason || null) : null
+    }
+  })
+}
+
+/**
+ * åˆ é™¤ç”¨æˆ·
+ */
+export async function deleteUser(id: number): Promise<void> {
+  await prisma.user.delete({
+    where: { id }
+  })
+}
+
+
+// ==================== 2FA ç›¸å…³æ“ä½œ ====================
+
+/**
+ * èŽ·å–ç”¨æˆ· 2FA çŠ¶æ€
+ */
+export async function getUser2FAStatus(userId: number): Promise<{ enabled: boolean; hasSecret: boolean }> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      twoFactorEnabled: true,
+      twoFactorSecret: true
+    }
+  })
+
+  if (!user) {
+    return { enabled: false, hasSecret: false }
+  }
+
+  return {
+    enabled: user.twoFactorEnabled,
+    hasSecret: !!user.twoFactorSecret
+  }
+}
+
+/**
+ * ä¿å­˜ 2FA å¯†é’¥ (å¯ç”¨å‰çš„ä¸´æ—¶ä¿å­˜)
+ */
+export async function save2FASecret(userId: number, secret: string): Promise<void> {
+  await prisma.user.update({
+    where: { id: userId },
+    data: { twoFactorSecret: secret }
+  })
+}
+
+/**
+ * å¯ç”¨ 2FA
+ */
+FILE server/scripts/test-admin-user-delete-resource-guards.ts
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+
+const usersRoute = readFileSync(resolve(__dirname, '../src/routes/users.ts'), 'utf8')
+const errorsSource = readFileSync(resolve(__dirname, '../src/lib/errors.ts'), 'utf8')
+const zhCN = readFileSync(resolve(__dirname, '../../client/src/locales/zh-CN.ts'), 'utf8')
+const zhTW = readFileSync(resolve(__dirname, '../../client/src/locales/zh-TW.ts'), 'utf8')
+const en = readFileSync(resolve(__dirname, '../../client/src/locales/en.ts'), 'utf8')
+
+const deleteRouteStart = usersRoute.indexOf("// åˆ é™¤ç”¨æˆ· (ç®¡ç†å‘˜)")
+const deleteRouteEnd = usersRoute.indexOf("// ç®¡ç†å‘˜èŽ·å–æŒ‡å®šç”¨æˆ·çš„æ‰€æœ‰ä¼šè¯", deleteRouteStart)
+
+assert.ok(deleteRouteStart >= 0 && deleteRouteEnd > deleteRouteStart, 'admin user delete route section must exist')
+
+const deleteRouteSource = usersRoute.slice(deleteRouteStart, deleteRouteEnd)
+
+assert.ok(
+  usersRoute.includes('async function getUserDeletionBlockers(userId: number): Promise<UserDeletionBlockers>') &&
+    usersRoute.includes('prisma.instance.count({ where: { userId } })') &&
+    usersRoute.includes('prisma.host.count({ where: { userId } })') &&
+    usersRoute.includes('prisma.package.count({ where: { userId } })') &&
+    usersRoute.includes('prisma.hostingZone.count({ where: { ownerId: userId } })'),
+  'admin user deletion must count all resource blockers before hard deleting a user'
+)
+
+assert.ok(
+  deleteRouteSource.includes('const blockers = await getUserDeletionBlockers(userId)') &&
+    deleteRouteSource.includes('if (hasUserDeletionBlockers(blockers))') &&
+    deleteRouteSource.includes('ErrorCode.USER_HAS_RESOURCES') &&
+    deleteRouteSource.indexOf('const blockers = await getUserDeletionBlockers(userId)') <
+      deleteRouteSource.indexOf('await db.deleteUser(userId)'),
+  'admin user deletion must reject users with resource blockers before db.deleteUser'
+)
+
+assert.ok(
+  !deleteRouteSource.includes('db.getInstancesByUserId(userId)'),
+  'admin user deletion must not rely on active-instance-only checks'
+)
+
+for (const [name, source] of [
+  ['errors', errorsSource],
+  ['zh-CN', zhCN],
+  ['zh-TW', zhTW],
+  ['en', en]
+] as const) {
+  assert.ok(source.includes('USER_HAS_RESOURCES'), `${name} must define USER_HAS_RESOURCES`)
+}
+
+console.log('admin user delete resource guard checks passed')
+
+codex
+已确认当前实现正是规格描述的状态：阻断器只有四类资源，路由直接调用硬删除，DB 层未翻译 Prisma 外键异常。下一步我会核对 Prisma 模型/字段名与现有业务错误模式，避免凭猜测加入错误码或查询。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "rg -n \"model (User|BalanceLog|RechargeRecord|HostingBalanceLog|LoginRecord|RedeemCodeUsage)|balance|hostingBalance|P2003|P2014|PrismaClientKnownRequestError|USER_HAS_RESOURCES|deleteUser\\(\" server/prisma server/src server/scripts/test-user-route-id-guards.ts | Select-Object -First 300" in C:\Users\Administrator\Desktop\payinces
+2026-07-11T21:09:37.719311Z ERROR codex_core::tools::router: error=Exit code: 1
+Wall time: 0.5 seconds
+Output:
+rg : The term 'rg' is not recognized as the name of a cmdlet, function, script file, or operable program. Check the 
+spelling of the name, or if a path was included, verify that the path is correct and try again.
+At line:2 char:1
++ rg -n "model (User|BalanceLog|RechargeRecord|HostingBalanceLog|LoginR ...
++ ~~
+    + CategoryInfo          : ObjectNotFound: (rg:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+
+ exited 1 in 514ms:
+rg : The term 'rg' is not recognized as the name of a cmdlet, function, script file, or operable program. Check the 
+spelling of the name, or if a path was included, verify that the path is correct and try again.
+At line:2 char:1
++ rg -n "model (User|BalanceLog|RechargeRecord|HostingBalanceLog|LoginR ...
++ ~~
+    + CategoryInfo          : ObjectNotFound: (rg:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$paths = @('"'server/prisma','server/src','server/scripts/test-user-route-id-guards.ts'); Get-ChildItem "'$paths -Recurse -File | Select-String -Pattern '"'model (User|BalanceLog|RechargeRecord|HostingBalanceLog|LoginRecord|RedeemCodeUsage)|P2003|P2014|PrismaClientKnownRequestError|USER_HAS_RESOURCES|deleteUser\\(' | Select-Object -First 300" in C:\Users\Administrator\Desktop\payinces
+ succeeded in 1002ms:
+
+server\prisma\schema.prisma:699:model User {
+server\prisma\schema.prisma:889:model UserQuota {
+server\prisma\schema.prisma:1757:model UserOAuthBinding {
+server\prisma\schema.prisma:1779:model UserTelegramBinding {
+server\prisma\schema.prisma:2191:model UserOrderRestriction {
+server\prisma\schema.prisma:3317:model UserLifecycleTag {
+server\prisma\schema.prisma:3336:model UserLifecycleSegmentRule {
+server\prisma\schema.prisma:3352:model UserLifecycleSegmentMember {
+server\prisma\schema.prisma:3368:model UserLifecycleEvent {
+server\prisma\schema.prisma:3387:model UserLifecycleAction {
+server\prisma\schema.prisma:3548:model LoginRecord {
+server\prisma\schema.prisma:3810:model RedeemCodeUsage {
+server\prisma\schema.prisma:3867:model BalanceLog {
+server\prisma\schema.prisma:4040:model RechargeRecord {
+server\prisma\schema.prisma:4509:model UserPoints {
+server\prisma\schema.prisma:4585:model UserBadgeOwnership {
+server\prisma\schema.prisma:4736:model UserResourcePool {
+server\prisma\schema.prisma:4770:model UserDestroyRecord {
+server\prisma\schema.prisma:4957:model HostingBalanceLog {
+server\src\db\checkin.ts:398:    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+server\src\db\gift-cards.ts:97:  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002'
+server\src\db\redeem-codes.ts:311:        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 
+'P2002' && batchId) {
+server\src\db\redeem-codes.ts:425:      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 
+'P2002' && data.batchId) {
+server\src\db\users.ts:697:export async function deleteUser(id: number): Promise<void> {
+server\src\lib\distributed-lock.ts:110:      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code 
+=== 'P2034') {
+server\src\lib\errors.ts:26:    USER_HAS_RESOURCES: 'USER_HAS_RESOURCES',
+server\src\lib\errors.ts:373:    [ErrorCode.USER_HAS_RESOURCES]: 'User owns resources, please transfer or remove them 
+first',
+server\src\lib\plugin-runtime.ts:107:  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 
+'P2002'
+server\src\routes\admin-entertainment.ts:1448:      if (code === 'P2003') {
+server\src\routes\admin-entertainment.ts:1537:      if (code === 'P2003') {
+server\src\routes\admin-sla-alerts.ts:255:    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code 
+=== 'P2002') {
+server\src\routes\agent.ts:1001:    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 
+'P2002') {
+server\src\routes\instances.ts:301:  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 
+'P2002'
+server\src\routes\instances.ts:2013:      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 
+'P2002') {
+server\src\routes\plugin-market-submissions.ts:749:      if (error instanceof Prisma.PrismaClientKnownRequestError && 
+error.code === 'P2002') {
+server\src\routes\plugin-market-submissions.ts:874:      if (error instanceof Prisma.PrismaClientKnownRequestError && 
+error.code === 'P2025') {
+server\src\routes\theme-market-submissions.ts:227:      if (error instanceof Prisma.PrismaClientKnownRequestError && 
+error.code === 'P2002') {
+server\src\routes\theme-market-submissions.ts:290:      if (error instanceof Prisma.PrismaClientKnownRequestError && 
+error.code === 'P2025') {
+server\src\routes\users.ts:1154:        ErrorCode.USER_HAS_RESOURCES,
+server\src\routes\users.ts:1159:    await db.deleteUser(userId)
+server\src\scripts\smoke-split-auth.ts:114:        await deleteUser(temporaryUserId)
+server\src\workers\db-failure-backoff.ts:15:    prismaError instanceof Prisma.PrismaClientKnownRequestError &&
+
+
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "Write-Output 'DB USERS TOP'; Get-Content server/src/db/users.ts | Select-Object -First 45; Write-Output 'USER MODEL'; Get-Content server/prisma/schema.prisma | Select-Object -Skip 698 -First 195; Write-Output 'RECORD MODELS'; foreach ("'$start in @(3547,3809,3866,4039,4956)) { Get-Content server/prisma/schema.prisma | Select-Object -Skip $start -First 55 }; Write-Output '"'ERRORS'; Get-Content server/src/lib/errors.ts | Select-Object -First 55; Get-Content server/src/lib/errors.ts | Select-Object -Skip 350 -First 45; Get-ChildItem server/src -Recurse -File | Select-String -Pattern 'class .*Error|instanceof .*Error.*reply.code\\(4|statusCode.*4' | Select-Object -First 120" in C:\Users\Administrator\Desktop\payinces
+ succeeded in 1009ms:
+DB USERS TOP
+/**
+ * ç”¨æˆ·ç›¸å…³æ•°æ®åº“æ“ä½œ
+ * ä½¿ç”¨ Prisma ORM
+ */
+
+import { prisma } from './prisma.js'
+import type { Prisma } from '@prisma/client'
+import type { User, UserQuota } from '../types/database.js'
+import {
+  USER_BALANCE_LOCK_NAMESPACE,
+  USER_EMAIL_REGISTRATION_LOCK_NAMESPACE,
+  advisoryTransactionLockString,
+  tryAdvisoryTransactionLock
+} from './advisory-locks.js'
+
+const MAX_REGISTER_GIFT_BALANCE = 99999999.99
+const MAX_REGISTER_GIFT_POINTS = 2147483647
+
+export interface RegisterGiftResult {
+  balanceAmount: number
+  pointsAmount: number
+  newBalance: number
+  newPoints: number
+}
+
+export interface CreateRegisteredUserResult {
+  userId: number
+  registerGift: RegisterGiftResult | null
+}
+
+/**
+ * æ ¹æ®ç”¨æˆ·åæŸ¥æ‰¾ç”¨æˆ·
+ */
+export async function findUserByUsername(username: string): Promise<User | null> {
+  const user = await prisma.user.findUnique({
+    where: { username }
+  })
+
+  if (!user) return null
+
+  // è½¬æ¢ Prisma ç±»åž‹åˆ°æŽ¥å£ç±»åž‹
+  return {
+    id: user.id,
+    username: user.username,
+    email: user.email,
+USER MODEL
+model User {
+  id           Int        @id @default(autoincrement())
+  username     String     @unique
+  email        String?
+  passwordHash String     @map("password_hash")
+  role         UserRole   @default(user)
+  status       UserStatus @default(active)
+  banReason    String?    @map("ban_reason") // å°ç¦åŽŸå› ï¼ˆç®¡ç†å‘˜å¯é€‰å¡«å†™ï¼‰
+  balance      Decimal    @default(0) @db.Decimal(10, 2)
+  avatarStyle  String     @default("bigSmile") @map("avatar_style") // bigSmile, croodles, notionists, lorelei
+  avatarBadgeId String?   @map("avatar_badge_id")
+  hasCreatedHostBefore Boolean @default(false) @map("has_created_host_before")
+
+  // 2FA åŒå› ç´ è®¤è¯
+  twoFactorEnabled       Boolean @default(false) @map("two_factor_enabled")
+  twoFactorSecret        String? @map("two_factor_secret")
+  twoFactorRecoveryCodes String? @map("two_factor_recovery_codes") // JSON array of encrypted codes
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // å…³ç³»
+  quota                UserQuota?
+  inviteCodes          InviteCode[]          @relation("CreatedInviteCodes")
+  usedInviteCodes      InviteCode[]          @relation("UsedInviteCodes")
+  sshKeys              SshKey[]
+  instances            Instance[]
+  resourceRiskStates   InstanceRiskState[] @relation("InstanceRiskStateUser")
+  resourceRiskEvents   InstanceRiskEvent[] @relation("InstanceRiskEventUser")
+  resourceRiskSamples  InstanceResourceSample[] @relation("InstanceResourceSampleUser")
+  orderRestrictions    UserOrderRestriction[] @relation("UserOrderRestrictionUser")
+  notificationChannels NotificationChannel[]
+  storageConfigs       StorageConfig[]
+  oauthBindings        UserOAuthBinding[]
+  telegramBinding      UserTelegramBinding?
+  telegramBindTokens   TelegramBindToken[]
+  publicApiTokens      PublicApiToken[]
+  publicPluginActionRateLimitPolicies PublicPluginActionRateLimitPolicy[] @relation("PublicPluginActionRateLimitPolicyUpdater")
+  helpArticles         HelpArticle[]         @relation("CreatedArticles")
+  logs                 Log[]
+  transfersSent        InstanceTransfer[]    @relation("TransferFrom")
+  transfersReceived    InstanceTransfer[]    @relation("TransferTo")
+  exchangeWallet       ExchangeWallet?
+  exchangeListings     ExchangeListing[]     @relation("ExchangeListingSeller")
+  exchangePurchases    ExchangeOrder[]       @relation("ExchangeOrderBuyer")
+  exchangeSales        ExchangeOrder[]       @relation("ExchangeOrderSeller")
+  exchangeWalletLogs   ExchangeWalletLog[]
+  exchangeWithdrawals  ExchangeWithdrawal[]
+  exchangeDisputes     ExchangeDispute[]     @relation("ExchangeDisputeCreator")
+  exchangeAuditLogs    ExchangeAuditLog[]
+  refreshTokens        RefreshToken[]
+  tokenInvalidations   TokenInvalidation[]
+
+  // ç”¨æˆ·èµ„æºå…³ç³»
+  hosts    Host[]
+  packages Package[]
+
+  // å¥½å‹å…³ç³»
+  friendshipsSent     Friendship[] @relation("FriendshipSent")
+  friendshipsReceived Friendship[] @relation("FriendshipReceived")
+
+  // å¥—é¤å…±äº«å…³ç³»
+  packageSharesOwned    PackageShare[] @relation("PackageShareOwner")
+  packageSharesReceived PackageShare[] @relation("PackageShareReceiver")
+
+  // æ•æ„Ÿæ“ä½œéªŒè¯
+  operationVerifications OperationVerification[]
+
+  // ç«™å†…ä¿¡
+  inboxMessages InboxMessage[]
+  hostNotificationEmailTasks HostNotificationEmailTask[]
+
+  // ç™»å½•è®°å½•
+  loginRecords LoginRecord[]
+
+  // å…¬å‘Šå‘é€è®°å½•
+  announcements Announcement[] @relation("AnnouncementSender")
+
+  // å·¥å•ç³»ç»Ÿ
+  ticketsCreated   Ticket[]        @relation("TicketCreator")
+  ticketMessages   TicketMessage[] @relation("TicketMessageSender")
+  ticketAttachments TicketMessageAttachment[] @relation("TicketAttachmentUploader")
+
+  // ç­¾åˆ°ç³»ç»Ÿ
+  checkinRecords   CheckinRecord[] @relation("CheckinRecords")
+  redeemRecords    CheckinRecord[] @relation("RedeemRecords")
+  checkinStats     CheckinStats?
+  dailyCheckins    DailyCheckin[]
+
+  // ç³»ç»Ÿå…‘æ¢ç 
+  redeemCodesCreated RedeemCode[]      @relation("RedeemCodesCreated")
+  redeemCodeUsages   RedeemCodeUsage[] @relation("RedeemCodeUsages")
+
+  // ç¤¼å“å¡å…‘æ¢ç 
+  giftCardsCreated   GiftCard[]        @relation("GiftCardsCreated")
+  giftCardsOwned     GiftCard[]        @relation("GiftCardsOwner")
+  giftCardsUsed      GiftCard[]        @relation("GiftCardsUsedBy")
+
+  // ç”¨æˆ·è‡ªå®šä¹‰åˆå§‹åŒ–å‘½ä»¤
+  customInitCommands CustomInitCommand[]
+
+  // ç”¨æˆ·ç»ˆç«¯å¿«æ·å‘½ä»¤
+  terminalSavedCommands TerminalSavedCommand[]
+
+  // è®¡è´¹ç›¸å…³
+  balanceLogs     BalanceLog[]
+  rechargeRecords RechargeRecord[]
+  rechargeRefundTargets RechargeRefundRequest[] @relation("RechargeRefundTarget")
+  rechargeRefundRequests RechargeRefundRequest[] @relation("RechargeRefundRequester")
+  rechargeRefundProcessors RechargeRefundRequest[] @relation("RechargeRefundProcessor")
+  balanceAdjustmentTargets BalanceAdjustmentRequest[] @relation("BalanceAdjustmentTarget")
+  balanceAdjustmentRequests BalanceAdjustmentRequest[] @relation("BalanceAdjustmentRequester")
+  balanceAdjustmentReviews BalanceAdjustmentRequest[] @relation("BalanceAdjustmentReviewer")
+  orderOperationCases OrderOperationCase[] @relation("OrderOperationTarget")
+  orderOperationCasesCreated OrderOperationCase[] @relation("OrderOperationCreator")
+  orderOperationCasesUpdated OrderOperationCase[] @relation("OrderOperationUpdater")
+  financialReconciliationRunsCreated FinancialReconciliationRun[] @relation("FinancialReconciliationRunCreator")
+  financialReconciliationRunsUpdated FinancialReconciliationRun[] @relation("FinancialReconciliationRunUpdater")
+  financialReconciliationItems FinancialReconciliationItem[]
+  financialReconciliationItemsHandled FinancialReconciliationItem[] @relation("FinancialReconciliationItemHandler")
+  badgeOwnerships UserBadgeOwnership[]
+  vipBenefitClaims VipBenefitClaim[]
+
+  // AFFæŽ¨èè®¡åˆ’
+  affBalance       Decimal         @default(0) @map("aff_balance") @db.Decimal(10, 2)  // AFFä½™é¢
+  affActivatedAt   DateTime?       @map("aff_activated_at")                            // AFFæ¿€æ´»æ—¶é—´
+  affCodes         AffCode[]
+  affLogs          AffLog[]
+  affWithdrawals   AffWithdrawal[]
+
+  // æ‰˜ç®¡ä½™é¢ç³»ç»Ÿ
+  hostingBalance      Decimal              @default(0) @map("hosting_balance") @db.Decimal(10, 2) // å¯ç”¨æ‰˜ç®¡ä½™é¢
+  hostingBalanceLogs  HostingBalanceLog[]
+  hostingWithdrawals  HostingWithdrawal[]
+  hostingBlocksCreated  HostingUserBlock[] @relation("HostingBlocker")
+  hostingBlocksReceived HostingUserBlock[] @relation("HostingBlockedUser")
+  hostingZone         HostingZone?         @relation("HostingZoneOwner")
+
+  // åŸŸåé‚®ç®±ç³»ç»Ÿ
+  mailSubscriptions   MailSubscription[]
+
+  // æŠ½å¥–ç³»ç»Ÿ
+  userPoints       UserPoints?
+  pointsLogs       PointsLog[]
+  lotteryRecords   LotteryRecord[]
+
+  // èµ„æºæ± ç³»ç»Ÿ
+  resourcePool     UserResourcePool?
+  resourcePoolLogs ResourcePoolLog[]
+
+  // é”€æ¯è®°å½•
+  destroyRecords   UserDestroyRecord[]
+  instanceAuditRules InstanceAuditRule[] @relation("InstanceAuditRuleCreator")
+  instanceAuditBuiltinRuleOverrides InstanceAuditBuiltinRuleOverride[] @relation("InstanceAuditBuiltinRuleOverrideCreator")
+  instanceAuditIgnores InstanceAuditIgnore[] @relation("InstanceAuditIgnoreCreator")
+  instanceAuditScans InstanceAuditScan[] @relation("InstanceAuditScanUser")
+  instanceAuditActions InstanceAuditAction[] @relation("InstanceAuditActionUser")
+  systemUpdateTasks SystemUpdateTask[] @relation("SystemUpdateTaskStarter")
+  pluginsInstalled Plugin[] @relation("PluginInstaller")
+  pluginsEnabled Plugin[] @relation("PluginEnabler")
+  pluginInstallTasks PluginInstallTask[] @relation("PluginInstallTaskStarter")
+  pluginEventLogs PluginEventLog[] @relation("PluginEventLogUser")
+  pluginUserData PluginUserData[] @relation("PluginUserDataUser")
+  pluginStorageItemsCreated PluginStorageItem[] @relation("PluginStorageItemCreator")
+  pluginStorageItemsUpdated PluginStorageItem[] @relation("PluginStorageItemUpdater")
+  pluginStorageBackupRemoteArchives PluginStorageBackupRemoteArchive[] @relation("PluginStorageBackupRemoteArchiveUploader")
+  pluginMarketSubmissions PluginMarketSubmission[] @relation("PluginMarketSubmissionSubmitter")
+  pluginMarketReviews PluginMarketSubmission[] @relation("PluginMarketSubmissionReviewer")
+  pluginEventAlertPreferences PluginEventAlertPreference[] @relation("PluginEventAlertPreferenceUser")
+  themeMarketSubmissions ThemeMarketSubmission[] @relation("ThemeMarketSubmissionSubmitter")
+  themeMarketReviews ThemeMarketSubmission[] @relation("ThemeMarketSubmissionReviewer")
+  themesInstalled ThemePackage[] @relation("ThemeInstaller")
+  themesEnabled ThemePackage[] @relation("ThemeEnabler")
+  oauthAppsCreated OAuthClientApp[] @relation("OAuthClientAppCreator")
+  oauthAuthorizationCodes OAuthAuthorizationCode[] @relation("OAuthAuthorizationCodeUser")
+  oauthAccessTokens OAuthAccessToken[] @relation("OAuthAccessTokenUser")
+  oauthRefreshTokens OAuthRefreshToken[] @relation("OAuthRefreshTokenUser")
+  oauthGrants OAuthGrant[] @relation("OAuthGrantUser")
+  lifecycleTags UserLifecycleTag[]
+  lifecycleSegmentMembers UserLifecycleSegmentMember[]
+  lifecycleEvents UserLifecycleEvent[]
+  lifecycleActionsTargeted UserLifecycleAction[] @relation("UserLifecycleActionTarget")
+  lifecycleActionsCreated UserLifecycleAction[] @relation("UserLifecycleActionActor")
+  flashSaleCampaignsCreated FlashSaleCampaign[] @relation("FlashSaleCampaignCreator")
+  flashSaleReservations FlashSaleReservation[] @relation("FlashSaleReservationUser")
+  flashSaleAuditLogs FlashSaleAuditLog[] @relation("FlashSaleAuditActor")
+
+  @@map("users")
+}
+
+model UserQuota {
+  id     Int @id @default(autoincrement())
+  userId Int @unique @map("user_id")
+
+  // æ–°é…é¢ç³»ç»Ÿï¼šæŽ§åˆ¶ç”¨æˆ·å¯æ‹¥æœ‰çš„èµ„æºæ•°é‡
+RECORD MODELS
+model LoginRecord {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  ip        String   // ç™»å½• IP
+  country   String?  // å›½å®¶
+  region    String?  // åœ°åŒº/çœä»½
+  city      String?  // åŸŽå¸‚
+  isp       String?  // ISP æœåŠ¡å•†
+  timezone  String?  // æ—¶åŒº
+  userAgent String?  @map("user_agent") // ç”¨æˆ·ä»£ç†
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([userId, ip])
+  @@map("login_records")
+}
+
+// ==================== å·¥å•ç³»ç»Ÿæ¨¡åž‹ ====================
+
+// å·¥å•çŠ¶æ€æžšä¸¾
+enum TicketStatus {
+  open        // å¾…å¤„ç†
+  in_progress // å¤„ç†ä¸­
+  resolved    // å·²è§£å†³
+  closed      // å·²å…³é—­
+}
+
+// å·¥å•ä¼˜å…ˆçº§æžšä¸¾
+enum TicketPriority {
+  low
+  normal
+  high
+  urgent
+}
+
+// å·¥å•ä¸»è¡¨
+model Ticket {
+  id          Int            @id @default(autoincrement())
+  userId      Int            @map("user_id")      // å‘èµ·å·¥å•çš„ç”¨æˆ·
+  hostId      Int?           @map("host_id")      // å¯é€‰ï¼šå…³è”çš„å®¿ä¸»æœºï¼ˆæ— å®žä¾‹æ—¶ä¸ºnullï¼Œå·¥å•ç›´æŽ¥å‘ç»™ç®¡ç†å‘˜ï¼‰
+  instanceId  Int?           @map("instance_id")  // å¯é€‰ï¼šå…³è”çš„å®žä¾‹
+  
+  subject     String                              // å·¥å•æ ‡é¢˜
+  category    String         @default("general")  // åˆ†ç±»ï¼šgeneral/billing/technical/abuse
+  priority    TicketPriority @default(normal)
+  status      TicketStatus   @default(open)
+  
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
+  resolvedAt  DateTime?      @map("resolved_at")
+  closedAt    DateTime?      @map("closed_at")
+  firstResponseDueAt DateTime? @map("first_response_due_at")
+  resolutionDueAt    DateTime? @map("resolution_due_at")
+model RedeemCodeUsage {
+  id           Int      @id @default(autoincrement())
+  redeemCodeId Int      @map("redeem_code_id")  // å…‘æ¢ç  ID
+  userId       Int      @map("user_id")         // ä½¿ç”¨è€…
+  instanceId   Int      @map("instance_id")     // åº”ç”¨åˆ°çš„å®žä¾‹
+  batchId      String?  @map("batch_id")        // æ‰¹æ¬¡IDï¼ˆå†—ä½™å­˜å‚¨ï¼Œç”¨äºŽå”¯ä¸€çº¦æŸï¼‰
+  usedAt       DateTime @default(now()) @map("used_at")
+
+  redeemCode RedeemCode @relation(fields: [redeemCodeId], references: [id], onDelete: Cascade)
+  user       User       @relation("RedeemCodeUsages", fields: [userId], references: [id], onDelete: Cascade)
+  instance   Instance   @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, batchId])  // åŒæ‰¹æ¬¡æ¯ç”¨æˆ·åªèƒ½ä½¿ç”¨ä¸€æ¬¡ï¼ˆNULLå€¼ä¸å‚ä¸Žçº¦æŸï¼‰
+  @@index([redeemCodeId])
+  @@index([userId])
+  @@index([instanceId])
+  @@map("redeem_code_usages")
+}
+
+// ==================== ç”¨æˆ·è‡ªå®šä¹‰åˆå§‹åŒ–å‘½ä»¤æ¨¡åž‹ ====================
+
+model CustomInitCommand {
+  id          Int      @id @default(autoincrement())
+  userId      Int      @map("user_id")
+  name        String   // æ¨¡æ¿åç§°
+  command     String   @db.Text // å‘½ä»¤å†…å®¹ï¼ˆå¤šè¡Œæ–‡æœ¬ï¼‰
+  distros     String   // JSONæ•°ç»„ï¼Œé€‚é…çš„å‘è¡Œç‰ˆ ["ubuntu","alpine","all"]
+  description String?  // å¤‡æ³¨è¯´æ˜Ž
+  enabled     Boolean  @default(true) // æ˜¯å¦å¯ç”¨
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, enabled])
+  @@map("custom_init_commands")
+}
+
+model TerminalSavedCommand {
+  id          Int      @id @default(autoincrement())
+  userId      Int      @map("user_id")
+  name        String
+  command     String   @db.Text
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, updatedAt])
+  @@map("terminal_saved_commands")
+}
+
+// ==================== è®¡è´¹ç³»ç»Ÿæ¨¡åž‹ ====================
+model BalanceLog {
+  id            Int            @id @default(autoincrement())
+  userId        Int            @map("user_id")
+  type          BalanceLogType
+  amount        Decimal        @db.Decimal(10, 2) // æ­£æ•°=å¢žåŠ ï¼Œè´Ÿæ•°=å‡å°‘
+  balanceBefore Decimal        @map("balance_before") @db.Decimal(10, 2)
+  balanceAfter  Decimal        @map("balance_after") @db.Decimal(10, 2)
+
+  // å…³è”ä¿¡æ¯
+  orderId    String? @map("order_id")    // å……å€¼è®¢å•å·
+  instanceId Int?    @map("instance_id") // å…³è”å®žä¾‹
+  remark     String?                      // å¤‡æ³¨
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  adjustmentRequest BalanceAdjustmentRequest?
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([type])
+  @@map("balance_logs")
+}
+
+model BalanceAdjustmentRequest {
+  id                Int                            @id @default(autoincrement())
+  userId            Int                            @map("user_id")
+  requestedByUserId Int                            @map("requested_by_user_id")
+  reviewedByUserId  Int?                           @map("reviewed_by_user_id")
+  amount            Decimal                        @db.Decimal(10, 2)
+  requestType       BalanceAdjustmentRequestType   @default(manual_adjust) @map("request_type")
+  status            BalanceAdjustmentRequestStatus @default(pending)
+  sourceType        String?                        @map("source_type")
+  sourceId          Int?                           @map("source_id")
+  orderNo           String?                        @map("order_no")
+  reason            String
+  reviewRemark      String?                        @map("review_remark")
+  balanceLogId      Int?                           @unique @map("balance_log_id")
+  createdAt         DateTime                       @default(now()) @map("created_at")
+  updatedAt         DateTime                       @updatedAt @map("updated_at")
+  reviewedAt        DateTime?                      @map("reviewed_at")
+
+  user        User        @relation("BalanceAdjustmentTarget", fields: [userId], references: [id], onDelete: Cascade)
+  requestedBy User        @relation("BalanceAdjustmentRequester", fields: [requestedByUserId], references: [id], onDelete: Restrict)
+  reviewedBy  User?       @relation("BalanceAdjustmentReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+  balanceLog  BalanceLog? @relation(fields: [balanceLogId], references: [id], onDelete: SetNull)
+  orderOperationCase OrderOperationCase?
+
+  @@index([status, createdAt])
+  @@index([userId, createdAt])
+  @@index([requestedByUserId])
+  @@index([reviewedByUserId])
+  @@index([orderNo])
+  @@map("balance_adjustment_requests")
+}
+
+model RechargeRecord {
+  id         Int @id @default(autoincrement())
+  userId     Int @map("user_id")
+  providerId Int @map("provider_id")
+
+  // è®¢å•ä¿¡æ¯
+  orderNo String  @unique @map("order_no") // ç³»ç»Ÿè®¢å•å·
+  tradeNo String? @map("trade_no")          // ç¬¬ä¸‰æ–¹äº¤æ˜“å·
+
+  // é‡‘é¢
+  amount       Decimal  @db.Decimal(10, 2)                                // å……å€¼é‡‘é¢
+  actualAmount Decimal? @map("actual_amount") @db.Decimal(10, 2)          // å®žé™…åˆ°è´¦é‡‘é¢
+  fee          Decimal  @default(0) @db.Decimal(10, 2)                    // å¹³å°æ‰‹ç»­è´¹
+
+  // æ”¯ä»˜æ–¹å¼
+  paymentMethod String? @map("payment_method") // alipay/wxpay/card ç­‰
+
+  status RechargeStatus @default(pending)
+
+  // å›žè°ƒä¿¡æ¯
+  callbackData Json?     @map("callback_data") // æ”¯ä»˜å›žè°ƒåŽŸå§‹æ•°æ®
+  callbackAt   DateTime? @map("callback_at")
+  providerConfigSnapshot String? @map("provider_config_snapshot") // è®¢å•åˆ›å»ºæ—¶çš„æ”¯ä»˜æ¸ é“é…ç½®å¿«ç…§ï¼ˆåŠ å¯†ï¼‰
+  paymentDetails        Json?    @map("payment_details")          // ç»“æž„åŒ–æ”¯ä»˜è¯¦æƒ…ï¼ˆå¸ç§/ç½‘ç»œ/txidç­‰ï¼‰
+
+  // å¤±è´¥ä¿¡æ¯
+  failReason String? @map("fail_reason")
+
+  // IP ä¸Žè®¾å¤‡
+  ip        String?
+  userAgent String? @map("user_agent")
+
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  expiredAt   DateTime? @map("expired_at")   // è®¢å•è¿‡æœŸæ—¶é—´ï¼ˆæŒ‰æ”¯ä»˜æ¸ é“å‘ç¥¨æœ‰æ•ˆæœŸï¼‰
+  completedAt DateTime? @map("completed_at")
+
+  user     User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider PaymentProvider @relation(fields: [providerId], references: [id])
+  refundRequests RechargeRefundRequest[]
+
+  @@index([userId, status])
+  @@index([status, createdAt])
+  @@index([orderNo])
+  @@index([tradeNo])
+  @@map("recharge_records")
+}
+
+model RechargeRefundRequest {
+  id                Int                  @id @default(autoincrement())
+  rechargeRecordId  Int                  @map("recharge_record_id")
+  userId            Int                  @map("user_id")
+  providerId        Int                  @map("provider_id")
+  requestedByUserId Int                  @map("requested_by_user_id")
+  processedByUserId Int?                 @map("processed_by_user_id")
+model HostingBalanceLog {
+  id         Int                 @id @default(autoincrement())
+  userId     Int                 @map("user_id")
+  type       HostingBalanceType
+  actionType HostingActionType?  @map("action_type") // å…·ä½“æ“ä½œç±»åž‹ï¼ˆå¼€é€š/ç»­è´¹/å‡çº§/é”€æ¯ç­‰ï¼‰
+  amount     Decimal             @db.Decimal(10, 2) // é‡‘é¢ï¼ˆæ­£æ•°ï¼‰
+  frozen     Boolean             @default(true)     // æ˜¯å¦å†»ç»“çŠ¶æ€
+  unfreezeAt DateTime?           @map("unfreeze_at") // è§£å†»æ—¶é—´
+  relatedId  Int?                @map("related_id") // å…³è”IDï¼ˆå®žä¾‹ID/æçŽ°IDï¼‰
+  remark     String?
+
+  // Snapshot fields for data persistence
+  snapshotBuyerName    String?   @map("snapshot_buyer_name")
+  snapshotBuyerEmail   String?   @map("snapshot_buyer_email")
+  snapshotBuyerAvatar  String?   @map("snapshot_buyer_avatar")
+  snapshotInstanceName String?   @map("snapshot_instance_name")
+  snapshotHostName     String?   @map("snapshot_host_name")
+  snapshotPackageName  String?   @map("snapshot_package_name")
+  snapshotPlanName     String?   @map("snapshot_plan_name")
+
+  createdAt  DateTime            @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, frozen])
+  @@index([unfreezeAt])
+  @@map("hosting_balance_logs")
+}
+
+// æ‰˜ç®¡ä½™é¢æçŽ°è®°å½•
+model HostingWithdrawal {
+  id           Int              @id @default(autoincrement())
+  userId       Int              @map("user_id")
+  amount       Decimal          @db.Decimal(10, 2) // æçŽ°é‡‘é¢
+  feeRate      Decimal          @map("fee_rate") @db.Decimal(5, 4)  // æ‰‹ç»­è´¹çŽ‡ï¼ˆå¦‚ 0.1000 è¡¨ç¤º 10%ï¼‰
+  feeAmount    Decimal          @map("fee_amount") @db.Decimal(10, 2) // æ‰‹ç»­è´¹é‡‘é¢
+  actualAmount Decimal          @map("actual_amount") @db.Decimal(10, 2) // å®žé™…åˆ°è´¦é‡‘é¢
+  target       WithdrawalTarget
+  usdtAddress  String?          @map("usdt_address") // USDTåœ°å€ï¼ˆä»…USDTæçŽ°ï¼‰
+  status       WithdrawalStatus @default(pending)
+  rejectReason String?          @map("reject_reason")
+  processedAt  DateTime?        @map("processed_at")
+  processedBy  Int?             @map("processed_by") // å¤„ç†çš„ç®¡ç†å‘˜ID
+  createdAt    DateTime         @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@map("hosting_withdrawals")
+}
+
+// æ‰˜ç®¡ç”¨æˆ·æ‹‰é»‘å…³ç³»
+model HostingUserBlock {
+  id            Int      @id @default(autoincrement())
+  blockerId     Int      @map("blocker_id") // æ‰˜ç®¡ç”¨æˆ·
+ERRORS
+/**
+ * Standardized API error codes and messages
+ * Frontend will translate these based on error codes
+ */
+
+import { sanitizeTokensInString } from './log-sanitizer.js'
+
+export const ErrorCode = {
+    // Common errors
+    INVALID_ID: 'INVALID_ID',
+    NOT_FOUND: 'NOT_FOUND',
+    UNAUTHORIZED: 'UNAUTHORIZED',
+    FORBIDDEN: 'FORBIDDEN',
+    ADMIN_REQUIRED: 'ADMIN_REQUIRED',
+    FEATURE_DISABLED: 'FEATURE_DISABLED',
+    INVALID_INPUT: 'INVALID_INPUT',
+
+    // User errors
+    USER_NOT_FOUND: 'USER_NOT_FOUND',
+    USER_EXISTS: 'USER_EXISTS',
+    CANNOT_MODIFY_SELF: 'CANNOT_MODIFY_SELF',
+    CANNOT_DELETE_SELF: 'CANNOT_DELETE_SELF',
+    CANNOT_BAN_ADMIN: 'CANNOT_BAN_ADMIN',
+    CANNOT_DELETE_ADMIN: 'CANNOT_DELETE_ADMIN',
+    USER_HAS_INSTANCES: 'USER_HAS_INSTANCES',
+    USER_HAS_RESOURCES: 'USER_HAS_RESOURCES',
+
+    // Auth errors
+    INVALID_CREDENTIALS: 'INVALID_CREDENTIALS',
+    ACCOUNT_BANNED: 'ACCOUNT_BANNED',
+    TOO_MANY_ATTEMPTS: 'TOO_MANY_ATTEMPTS',
+    REGISTRATION_DISABLED: 'REGISTRATION_DISABLED',
+    INVALID_INVITE_CODE: 'INVALID_INVITE_CODE',
+    INVITE_CODE_EXPIRED: 'INVITE_CODE_EXPIRED',
+    INVALID_2FA_CODE: 'INVALID_2FA_CODE',
+    TWO_FA_REQUIRED: 'TWO_FA_REQUIRED',
+    TWO_FA_ALREADY_ENABLED: 'TWO_FA_ALREADY_ENABLED',
+    TWO_FA_NOT_ENABLED: 'TWO_FA_NOT_ENABLED',
+    REFRESH_TOKEN_MISSING: 'REFRESH_TOKEN_MISSING',
+    REFRESH_TOKEN_INVALID: 'REFRESH_TOKEN_INVALID',
+    SESSION_NOT_FOUND: 'SESSION_NOT_FOUND',
+
+    // Validation errors
+    INVALID_EMAIL: 'INVALID_EMAIL',
+    EMAIL_CONTAINS_ILLEGAL: 'EMAIL_CONTAINS_ILLEGAL',
+    USERNAME_CONTAINS_ILLEGAL: 'USERNAME_CONTAINS_ILLEGAL',
+    PASSWORD_TOO_WEAK: 'PASSWORD_TOO_WEAK',
+    INVALID_SSH_KEY: 'INVALID_SSH_KEY',
+    SSH_KEY_EXISTS: 'SSH_KEY_EXISTS',
+    INVALID_NAME: 'INVALID_NAME',
+
+    // Instance errors
+    INSTANCE_NOT_FOUND: 'INSTANCE_NOT_FOUND',
+    INSTANCE_ALREADY_RUNNING: 'INSTANCE_ALREADY_RUNNING',
+    INSTANCE_ALREADY_STOPPED: 'INSTANCE_ALREADY_STOPPED',
+
+export type ErrorCodeType = typeof ErrorCode[keyof typeof ErrorCode]
+
+// English error messages (default)
+export const ErrorMessages: Record<ErrorCodeType, string> = {
+    // Common errors
+    [ErrorCode.INVALID_ID]: 'Invalid ID',
+    [ErrorCode.NOT_FOUND]: 'Resource not found',
+    [ErrorCode.UNAUTHORIZED]: 'Unauthorized',
+    [ErrorCode.FORBIDDEN]: 'Access denied',
+    [ErrorCode.ADMIN_REQUIRED]: 'Admin privileges required',
+    [ErrorCode.FEATURE_DISABLED]: 'This feature has been disabled',
+    [ErrorCode.INVALID_INPUT]: 'Invalid input',
+
+    // User errors
+    [ErrorCode.USER_NOT_FOUND]: 'User not found',
+    [ErrorCode.USER_EXISTS]: 'Username already exists',
+    [ErrorCode.CANNOT_MODIFY_SELF]: 'Cannot modify your own status',
+    [ErrorCode.CANNOT_DELETE_SELF]: 'Cannot delete yourself',
+    [ErrorCode.CANNOT_BAN_ADMIN]: 'Cannot ban admin account',
+    [ErrorCode.CANNOT_DELETE_ADMIN]: 'Cannot delete admin account',
+    [ErrorCode.USER_HAS_INSTANCES]: 'User has instances, please delete them first',
+    [ErrorCode.USER_HAS_RESOURCES]: 'User owns resources, please transfer or remove them first',
+
+    // Auth errors
+    [ErrorCode.INVALID_CREDENTIALS]: 'Invalid username or password',
+    [ErrorCode.ACCOUNT_BANNED]: 'Account has been disabled',
+    [ErrorCode.TOO_MANY_ATTEMPTS]: 'Too many login attempts, please try again later',
+    [ErrorCode.REGISTRATION_DISABLED]: 'Registration is currently closed',
+    [ErrorCode.INVALID_INVITE_CODE]: 'Invalid or used invite code',
+    [ErrorCode.INVITE_CODE_EXPIRED]: 'Invite code has expired',
+    [ErrorCode.INVALID_2FA_CODE]: 'Invalid verification code or recovery code',
+    [ErrorCode.TWO_FA_REQUIRED]: 'Two-factor authentication required',
+    [ErrorCode.TWO_FA_ALREADY_ENABLED]: '2FA is already enabled, please disable it first',
+    [ErrorCode.TWO_FA_NOT_ENABLED]: '2FA is not enabled',
+    [ErrorCode.REFRESH_TOKEN_MISSING]: 'Refresh token missing',
+    [ErrorCode.REFRESH_TOKEN_INVALID]: 'Refresh token invalid or expired',
+    [ErrorCode.SESSION_NOT_FOUND]: 'Session not found',
+
+    // Validation errors
+    [ErrorCode.INVALID_EMAIL]: 'Please enter a valid email address',
+    [ErrorCode.EMAIL_CONTAINS_ILLEGAL]: 'Email contains illegal characters',
+    [ErrorCode.USERNAME_CONTAINS_ILLEGAL]: 'Username contains illegal characters',
+    [ErrorCode.PASSWORD_TOO_WEAK]: 'Password is too weak',
+    [ErrorCode.INVALID_SSH_KEY]: 'Invalid SSH public key format',
+
+server\src\db\instance-tasks.ts:45:export class InstanceTaskConflictError extends Error {
+server\src\lib\caddy-client.ts:77:      if (response.statusCode >= 400) {
+server\src\lib\cloud-init-status.ts:270:    if (result.statusCode >= 500 || result.statusCode === 403) {
+server\src\lib\cloud-init-status.ts:280:  if (bootFinishedResult.statusCode >= 500 || bootFinishedResult.statusCode 
+=== 403) {
+server\src\lib\cloud-init-status.ts:288:  if (bootFinishedResult.statusCode === 404) {
+server\src\lib\outbound-security.ts:6:export class OutboundTargetValidationError extends Error {
+server\src\lib\plugin-extension-dispatch.ts:20:export class PluginExtensionDispatchError extends Error {
+server\src\lib\incus\incus-restore.ts:63:            if (status === 'Failure' || (statusCode && statusCode >= 400)) {
+server\src\lib\incus\incus-utils.ts:78:      if (opStatus === 'Failure' || (opStatusCode && opStatusCode >= 400)) {
+server\src\routes\admin-billing.ts:846:class BatchPriceUpdateError extends Error {
+server\src\routes\admin-billing.ts:850:  constructor(message: string, statusCode = 400, preview?: 
+BatchPriceUpdatePreview) {
+server\src\routes\admin-delivery.ts:742:      if (err instanceof Error && err.message.includes('备注')) return 
+reply.code(400).send({ error: err.message })
+server\src\routes\admin-delivery.ts:795:      if (err instanceof Error && err.message.includes('备注')) return 
+reply.code(400).send({ error: err.message })
+server\src\routes\admin-delivery.ts:831:      if (err instanceof Error && err.message.includes('备注')) return 
+reply.code(400).send({ error: err.message })
+server\src\routes\admin-delivery.ts:870:      if (err instanceof Error && err.message.includes('备注')) return 
+reply.code(400).send({ error: err.message })
+server\src\routes\admin-delivery.ts:887:      if (err instanceof Error && err.message.includes('备注')) return 
+reply.code(400).send({ error: err.message })
+server\src\routes\admin-delivery.ts:932:      if (err instanceof Error && err.message.includes('备注')) return 
+reply.code(400).send({ error: err.message })
+server\src\routes\hosts.ts:4053:      if (err instanceof Error && err.message === 'PUBLIC_IPV4_POOL_NOT_FOUND') return 
+reply.code(404).send({ error: '地址池不存在' })
+server\src\routes\hosts.ts:4071:      if (err instanceof Error && err.message === 'PUBLIC_IPV4_ADDRESS_ASSIGNED') 
+return reply.code(400).send({ error: '地址已分配，不能修改状态' })
+server\src\routes\hosts.ts:4072:      if (err instanceof Error && err.message === 'PUBLIC_IPV4_ADDRESS_NOT_FOUND') 
+return reply.code(404).send({ error: '地址不存在' })
+server\src\routes\hosts.ts:4088:      if (err instanceof Error && err.message === 'PUBLIC_IPV4_ADDRESS_ASSIGNED') 
+return reply.code(400).send({ error: '地址已分配，不能删除' })
+server\src\routes\hosts.ts:4089:      if (err instanceof Error && err.message === 'PUBLIC_IPV4_ADDRESS_NOT_FOUND') 
+return reply.code(404).send({ error: '地址不存在' })
+server\src\routes\instances.ts:127:class PortMappingValidationError extends Error {
+server\src\routes\mail.ts:1575:        return { statusCode: 400, error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, 
+'邮箱订阅正在处理，请稍后重试') }
+server\src\routes\mail.ts:1580:        return { statusCode: 400, error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, 
+'邮箱域名正在处理，请稍后重试') }
+server\src\routes\mail.ts:1587:        return { statusCode: 404, error: apiError(ErrorCode.NOT_FOUND, '您没有邮箱订阅') }
+server\src\routes\mail.ts:1590:        return { statusCode: 400, error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, 
+'订阅已过期或暂停') }
+server\src\routes\mail.ts:1597:        return { statusCode: 400, error: apiError(ErrorCode.QUOTA_EXCEEDED, '已达域名数量上限') 
+}
+server\src\routes\mail.ts:1609:        return { statusCode: 400, error: apiError(ErrorCode.RESOURCE_EXISTS, '该域名已被使用') 
+}
+server\src\routes\recharge.ts:171:      error.statusCode = 413
+server\src\routes\traffic.ts:467:                const statusCode = message.includes('余额不足') ? 400 : 
+message.includes('正在处理') ? 409 : 400
+server\src\services\exchange.ts:41:export class ExchangeError extends Error {
+server\src\services\flash-sales.ts:13:export class FlashSaleError extends Error {
+server\src\services\host-address-monitor.ts:42:export class HostAddressRegistryError extends Error {
+server\src\services\user-order-restrictions.ts:4:export class OrderRestrictedError extends Error {
+server\src\services\vip-benefits.ts:114:export class VipBenefitError extends Error {
+server\src\services\vip-benefits.ts:118:    public readonly statusCode = 400
+
+
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Content server/src/lib/errors.ts | Select-Object -Skip 520 -First 55; Get-Content server/src/db/instance-tasks.ts | Select-Object -First 65; Get-Content server/src/routes/admin-entertainment.ts | Select-Object -Skip 1425 -First 35; Get-Content server/scripts/test-user-route-id-guards.ts | Select-Object -First 220; Get-Content server/src/db/index.ts | Select-String -Pattern "users" -Context 2,2' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 503ms:
+    // Port mapping errors (additional)
+    [ErrorCode.PORT_MAPPING_NAT_ONLY]: 'Port mapping is only supported in NAT or dual-stack mode',
+    [ErrorCode.PORT_NO_AVAILABLE]: 'No available ports, please contact administrator',
+    [ErrorCode.PORT_MAPPING_INVALID_ID]: 'Invalid instance or port mapping ID',
+
+    // Image errors (additional)
+    [ErrorCode.IMAGE_CREATE_FAILED]: 'Image creation failed',
+    [ErrorCode.IMAGE_UPDATE_FAILED]: 'Image update failed',
+    [ErrorCode.IMAGE_INVALID_HOST_ID]: 'Invalid image or host ID',
+
+    // Backup errors (additional)
+    [ErrorCode.BACKUP_CREATE_FAILED]: 'Backup creation failed',
+    [ErrorCode.BACKUP_DELETE_FAILED]: 'Backup deletion failed',
+    [ErrorCode.BACKUP_EXPORT_FAILED]: 'Backup export failed',
+    [ErrorCode.BACKUP_QUOTA_NOT_SET]: 'Please set backup quota for this instance first',
+    [ErrorCode.BACKUP_EXPORT_STATUS_INVALID]: 'Export task status is invalid',
+
+    // Config errors
+    [ErrorCode.CONFIG_INVALID_KEY]: 'Invalid configuration key',
+    [ErrorCode.CONFIG_INVALID_VALUE]: 'Configuration value must be a non-negative integer',
+
+    // Snapshot errors (additional)
+    [ErrorCode.SNAPSHOT_QUOTA_NOT_SET]: 'Please set snapshot quota for this instance first',
+
+    // Package errors (additional)
+    [ErrorCode.PACKAGE_HAS_INSTANCES]: 'Package is in use by instances and cannot be deleted',
+
+    // Resource limit errors
+    [ErrorCode.RESOURCE_CPU_EXCEEDS_PACKAGE]: 'CPU configuration exceeds package limit',
+    [ErrorCode.RESOURCE_MEMORY_EXCEEDS_PACKAGE]: 'Memory configuration exceeds package limit',
+    [ErrorCode.RESOURCE_DISK_EXCEEDS_PACKAGE]: 'Disk configuration exceeds package limit',
+
+    // User quota errors (detailed)
+    [ErrorCode.QUOTA_CPU_INSUFFICIENT]: 'CPU quota insufficient',
+    [ErrorCode.QUOTA_MEMORY_INSUFFICIENT]: 'Memory quota insufficient',
+    [ErrorCode.QUOTA_DISK_INSUFFICIENT]: 'Disk quota insufficient',
+    [ErrorCode.QUOTA_INSTANCE_LIMIT_REACHED]: 'Instance limit reached',
+    [ErrorCode.QUOTA_HOST_LIMIT_REACHED]: 'Host limit reached',
+    [ErrorCode.QUOTA_PACKAGE_LIMIT_REACHED]: 'Package limit reached',
+    [ErrorCode.QUOTA_FRIEND_LIMIT_REACHED]: 'Friend limit reached',
+    [ErrorCode.QUOTA_PORT_BELOW_USED]: 'Port quota cannot be less than current usage',
+    [ErrorCode.QUOTA_SNAPSHOT_BELOW_USED]: 'Snapshot quota cannot be less than current usage',
+    [ErrorCode.QUOTA_BACKUP_BELOW_USED]: 'Backup quota cannot be less than current usage',
+    [ErrorCode.QUOTA_PORT_TOTAL_EXCEEDED]: 'Total port quota exceeds user limit',
+    [ErrorCode.QUOTA_SNAPSHOT_TOTAL_EXCEEDED]: 'Total snapshot quota exceeds user limit',
+    [ErrorCode.QUOTA_BACKUP_TOTAL_EXCEEDED]: 'Total backup quota exceeds user limit',
+
+    // Image errors (additional)
+    [ErrorCode.IMAGE_NOT_SYNCED]: 'Image not synced to selected host',
+    [ErrorCode.IMAGE_SYNCING_CANNOT_DELETE]: 'Image is syncing on hosts and cannot be deleted',
+    [ErrorCode.IMAGE_NO_HOSTS]: 'No available hosts, please add hosts first',
+
+    // Port errors (additional)
+    [ErrorCode.PORT_RANGE_INVALID]: 'Port must be within allowed range',
+
+/**
+ * å®žä¾‹æ“ä½œä»»åŠ¡æ•°æ®åº“æ“ä½œ
+ */
+
+import { prisma } from './prisma.js'
+import type { InstanceTaskType, InstanceTaskStatus, Prisma } from '@prisma/client'
+import { INSTANCE_OPERATION_LOCK_NAMESPACE, tryAdvisoryTransactionLock } from './advisory-locks.js'
+
+export interface CreateInstanceTaskData {
+  instanceId: number
+  hostId: number
+  userId: number
+  taskType: InstanceTaskType
+  imageAlias?: string       // é‡è£…ä½¿ç”¨çš„é•œåƒåˆ«å
+  sshKeyId?: number         // é‡è£…ä½¿ç”¨çš„ SSH å¯†é’¥ ID
+  customInitCommandIds?: number[]  // é‡è£…ä½¿ç”¨çš„è‡ªå®šä¹‰åˆå§‹åŒ–å‘½ä»¤ ID åˆ—è¡¨
+  targetName?: string       // å…‹éš†çš„ç›®æ ‡åç§°
+  targetHostId?: number     // å…‹éš†çš„ç›®æ ‡å®¿ä¸»æœº
+  snapshotName?: string     // å…‹éš†æ—¶çš„å¿«ç…§åç§°
+  allowExchangeLocked?: boolean // äº¤æ˜“æ‰€å†…éƒ¨äº¤å‰²ä»»åŠ¡å¯æ˜¾å¼ç»•è¿‡æŒ‚ç‰Œé”
+}
+
+export interface InstanceTaskWithDetails {
+  id: number
+  instanceId: number
+  hostId: number
+  userId: number
+  taskType: InstanceTaskType
+  status: InstanceTaskStatus
+  progress: string | null
+  retryCount: number
+  imageAlias: string | null
+  sshKeyId: number | null
+  customInitCommandIds: string | null  // JSON å­—ç¬¦ä¸²ï¼Œè§£æžåŽä¸º number[]
+  targetName: string | null
+  targetHostId: number | null
+  snapshotName: string | null
+  newInstanceId: number | null
+  error: string | null
+  createdAt: Date
+  startedAt: Date | null
+  finishedAt: Date | null
+}
+
+export class InstanceTaskConflictError extends Error {
+  activeTask: InstanceTaskWithDetails | null
+
+  constructor(activeTask: InstanceTaskWithDetails | null = null) {
+    super('Instance has an active task')
+    this.name = 'InstanceTaskConflictError'
+    this.activeTask = activeTask
+  }
+}
+
+const INSTANCE_TASK_STATUSES = new Set<InstanceTaskStatus>([
+  'PENDING',
+  'PROCESSING',
+  'COMPLETED',
+  'FAILED'
+])
+
+function clampInstanceTaskPagination(
+  page: number | undefined,
+  pageSize: number | undefined
+): { page: number; pageSize: number } {
+      const badge = await db.createBadge({
+        id,
+        name,
+        nameEn: normalizeOptionalText(request.body.nameEn),
+        fullLabel,
+        seriesId,
+        sourceId: normalizeOptionalText(request.body.sourceId),
+        sourceLabel: normalizeOptionalText(request.body.sourceLabel),
+        assetUrl,
+        assetUrlDark,
+        assetUrlLight,
+        displayOrder,
+        isActive: request.body.isActive ?? true
+      })
+
+      await createLog(request.user.id, 'admin', 'badge.create', `Created badge "${badge.name}" (${badge.id})`, 'success')
+      return { success: true, badge }
+    } catch (error) {
+      const code = (error as { code?: string }).code
+      if (code === 'P2002') {
+        return reply.code(409).send({ error: 'BADGE_ID_EXISTS', message: 'Badge ID already exists' })
+      }
+      if (code === 'P2003') {
+        return reply.code(400).send({ error: 'SERIES_NOT_FOUND', message: 'Series not found' })
+      }
+      throw error
+    }
+  })
+
+  fastify.put<{
+    Params: { id: string }
+    Body: {
+      name?: string
+      nameEn?: string | null
+      fullLabel?: string
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+
+const source = readFileSync(resolve(__dirname, '../src/routes/users.ts'), 'utf8')
+
+assert.ok(
+  source.includes('const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\\d*$/') &&
+    source.includes('function parsePositiveRouteId(value: string): number | null') &&
+    source.includes('Number.isSafeInteger(parsed)'),
+  'user routes must define strict positive safe-integer route ID parsing'
+)
+
+assert.equal(
+  source.match(/const userId = parsePositiveRouteId\(id\)/g)?.length ?? 0,
+  6,
+  'all destructured user route IDs must use strict positive route ID parsing'
+)
+
+assert.equal(
+  source.match(/const userId = parsePositiveRouteId\(request\.params\.id\)/g)?.length ?? 0,
+  9,
+  'all direct request.params.id user routes must use strict positive route ID parsing'
+)
+
+for (const forbiddenPattern of [
+  'const userId = Number(id)',
+  'const userId = Number(request.params.id)',
+  'const userId = parseInt(request.params.id, 10)',
+  'isNaN(userId)'
+] as const) {
+  assert.ok(
+    !source.includes(forbiddenPattern),
+    `user routes must not use loose path ID parsing: ${forbiddenPattern}`
+  )
+}
+
+console.log('user route ID guard tests passed')
+
+  
+  // å¯¼å‡ºç”¨æˆ·ç›¸å…³æ“ä½œ
+> export * from './users.js'
+  
+  // å¯¼å‡ºé…é¢æ“ä½œ
+
+
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "Select-String -Path server/src/lib/errors.ts -Pattern 'function apiError|export function apiError' -Context 0,20; Get-ChildItem server/src -Recurse -File | Select-String -Pattern 'instanceof db\\.' | Select-Object -First 50" in C:\Users\Administrator\Desktop\payinces
+ succeeded in 685ms:
+
+> server\src\lib\errors.ts:706:export function apiError(code: ErrorCodeType, details?: string) {
+  server\src\lib\errors.ts:707:    const response = {
+  server\src\lib\errors.ts:708:        error: ErrorMessages[code],
+  server\src\lib\errors.ts:709:        code,
+  server\src\lib\errors.ts:710:    }
+  server\src\lib\errors.ts:711:
+  server\src\lib\errors.ts:712:    if (INTERNAL_ERROR_CODES.has(code) || details === undefined) {
+  server\src\lib\errors.ts:713:        return response
+  server\src\lib\errors.ts:714:    }
+  server\src\lib\errors.ts:715:
+  server\src\lib\errors.ts:716:    return {
+  server\src\lib\errors.ts:717:        ...response,
+  server\src\lib\errors.ts:718:        details: sanitizeTokensInString(details).slice(0, 256),
+  server\src\lib\errors.ts:719:    }
+  server\src\lib\errors.ts:720:}
+
+
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "Select-String -Path server/src/db/users.ts -Pattern '\\bPrisma\\.' | Select-Object -First 30; Select-String -Path server/src/db/users.ts -Pattern 'import.*@prisma/client'" in C:\Users\Administrator\Desktop\payinces
+ succeeded in 569ms:
+
+server\src\db\users.ts:6:import { prisma } from './prisma.js'
+server\src\db\users.ts:35:  const user = await prisma.user.findUnique({
+server\src\db\users.ts:63:  const userByUsername = await prisma.user.findUnique({
+server\src\db\users.ts:89:  const userByEmail = await prisma.user.findFirst({
+server\src\db\users.ts:121:  const user = await prisma.user.findUnique({
+server\src\db\users.ts:149:  const user = await prisma.user.findFirst({
+server\src\db\users.ts:202:  const user = await prisma.user.create({
+server\src\db\users.ts:280:  tx: Prisma.TransactionClient,
+server\src\db\users.ts:407:    return await prisma.$transaction(async (tx) => {
+server\src\db\users.ts:499:  const users = await prisma.user.findMany({
+server\src\db\users.ts:535:  const users = await prisma.user.findMany({
+server\src\db\users.ts:579:  const quota = await prisma.userQuota.findUnique({
+server\src\db\users.ts:609:  await prisma.userQuota.create({
+server\src\db\users.ts:641:  await prisma.userQuota.update({
+server\src\db\users.ts:673:  await prisma.user.update({
+server\src\db\users.ts:684:  await prisma.user.update({
+server\src\db\users.ts:698:  await prisma.user.delete({
+server\src\db\users.ts:710:  const user = await prisma.user.findUnique({
+server\src\db\users.ts:732:  await prisma.user.update({
+server\src\db\users.ts:742:  await prisma.user.update({
+server\src\db\users.ts:752:  await prisma.user.update({
+server\src\db\users.ts:765:  const user = await prisma.user.findUnique({
+server\src\db\users.ts:777:  const user = await prisma.user.findUnique({
+server\src\db\users.ts:789:  await prisma.user.update({
+server\src\db\users.ts:799:  const user = await prisma.user.findUnique({
+server\src\db\users.ts:811:  await prisma.user.update({
+server\src\db\users.ts:824:  await prisma.user.update({
+server\src\db\users.ts:839:  const admins = await prisma.user.findMany({
+server\src\db\users.ts:7:import type { Prisma } from '@prisma/client'
+
+
+
+codex
+模型核对完成：本次按根因中明确列出的五类关键历史记录（`BalanceLog`、`RechargeRecord`、`HostingBalanceLog`、`LoginRecord`、`RedeemCodeUsage`）做存在性阻断，并分别检查主余额和托管余额是否非零。外键竞态/遗漏关联由 DB 层专用业务异常兜底，路由映射为 409；沿用现有 `USER_HAS_RESOURCES` API 错误码，不扩散修改 i18n 或 schema。现在开始最小补丁。
+apply patch
+patch: completed
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-admin-user-delete-resource-guards.ts
+C:\Users\Administrator\Desktop\payinces\server\src\db\users.ts
+C:\Users\Administrator\Desktop\payinces\server\src\routes\users.ts
+diff --git a/server/scripts/test-admin-user-delete-resource-guards.ts b/server/scripts/test-admin-user-delete-resource-guards.ts
+index f1e81dc8eb0160de74d0ba4a7e561549a94bc7f7..3bc5d87e80139958f73399e9bc88f6794a84acfc
+--- a/server/scripts/test-admin-user-delete-resource-guards.ts
++++ b/server/scripts/test-admin-user-delete-resource-guards.ts
+@@ -7,6 +7,7 @@
+ const __dirname = dirname(__filename)
+ 
+ const usersRoute = readFileSync(resolve(__dirname, '../src/routes/users.ts'), 'utf8')
++const usersDb = readFileSync(resolve(__dirname, '../src/db/users.ts'), 'utf8')
+ const errorsSource = readFileSync(resolve(__dirname, '../src/lib/errors.ts'), 'utf8')
+ const zhCN = readFileSync(resolve(__dirname, '../../client/src/locales/zh-CN.ts'), 'utf8')
+ const zhTW = readFileSync(resolve(__dirname, '../../client/src/locales/zh-TW.ts'), 'utf8')
+@@ -21,14 +22,26 @@
+ 
+ assert.ok(
+   usersRoute.includes('async function getUserDeletionBlockers(userId: number): Promise<UserDeletionBlockers>') &&
++    usersRoute.includes('select: { balance: true, hostingBalance: true }') &&
+     usersRoute.includes('prisma.instance.count({ where: { userId } })') &&
+     usersRoute.includes('prisma.host.count({ where: { userId } })') &&
+     usersRoute.includes('prisma.package.count({ where: { userId } })') &&
+-    usersRoute.includes('prisma.hostingZone.count({ where: { ownerId: userId } })'),
+-  'admin user deletion must count all resource blockers before hard deleting a user'
++    usersRoute.includes('prisma.hostingZone.count({ where: { ownerId: userId } })') &&
++    usersRoute.includes('prisma.balanceLog.count({ where: { userId } })') &&
++    usersRoute.includes('prisma.rechargeRecord.count({ where: { userId } })') &&
++    usersRoute.includes('prisma.hostingBalanceLog.count({ where: { userId } })') &&
++    usersRoute.includes('prisma.loginRecord.count({ where: { userId } })') &&
++    usersRoute.includes('prisma.redeemCodeUsage.count({ where: { userId } })'),
++  'admin user deletion must check balances, financial/audit history, and resource blockers before hard deleting a user'
+ )
+ 
+ assert.ok(
++  deleteRouteSource.includes("'用户主余额或托管余额非零，请先清零或结算'") &&
++    deleteRouteSource.includes("'该用户有资金/审计流水，不能直接删除'"),
++  'admin user deletion must return clear balance and financial/audit blocker reasons'
++)
++
++assert.ok(
+   deleteRouteSource.includes('const blockers = await getUserDeletionBlockers(userId)') &&
+     deleteRouteSource.includes('if (hasUserDeletionBlockers(blockers))') &&
+     deleteRouteSource.includes('ErrorCode.USER_HAS_RESOURCES') &&
+@@ -42,6 +55,16 @@
+   'admin user deletion must not rely on active-instance-only checks'
+ )
+ 
++assert.ok(
++  usersDb.includes('export class UserDeletionConflictError extends Error') &&
++    usersDb.includes("prismaErrorCode === 'P2003' || prismaErrorCode === 'P2014'") &&
++    usersDb.includes('throw new UserDeletionConflictError()') &&
++    deleteRouteSource.includes('error instanceof db.UserDeletionConflictError') &&
++    deleteRouteSource.includes('return reply.code(409).send(apiError(') &&
++    deleteRouteSource.includes("'该用户存在关联记录，无法删除'"),
++  'db.deleteUser must translate foreign-key failures into a business conflict returned as 4xx'
++)
++
+ for (const [name, source] of [
+   ['errors', errorsSource],
+   ['zh-CN', zhCN],
+diff --git a/server/src/db/users.ts b/server/src/db/users.ts
+index f2cd4d256fa791b2e2fcc832f113bedccb5bf7d3..c4b0feb4be699affc0cdd6ad06e60b665cf300d7
+--- a/server/src/db/users.ts
++++ b/server/src/db/users.ts
+@@ -694,10 +694,27 @@
+ /**
+  * 删除用户
+  */
++export class UserDeletionConflictError extends Error {
++  readonly code = 'USER_DELETE_ASSOCIATED_RECORDS'
++
++  constructor() {
++    super('User has associated records and cannot be deleted')
++    this.name = 'UserDeletionConflictError'
++  }
++}
++
+ export async function deleteUser(id: number): Promise<void> {
+-  await prisma.user.delete({
+-    where: { id }
+-  })
++  try {
++    await prisma.user.delete({
++      where: { id }
++    })
++  } catch (error) {
++    const prismaErrorCode = (error as { code?: string }).code
++    if (prismaErrorCode === 'P2003' || prismaErrorCode === 'P2014') {
++      throw new UserDeletionConflictError()
++    }
++    throw error
++  }
+ }
+ 
+ 
+diff --git a/server/src/routes/users.ts b/server/src/routes/users.ts
+index 507345b46ef16cb574f3d2686cc5b62951e35d02..4374dd7f4e6db731d2b7adac90972e8d08df97d5
+--- a/server/src/routes/users.ts
++++ b/server/src/routes/users.ts
+@@ -40,28 +40,62 @@
+   hosts: number
+   packages: number
+   hostingZones: number
++  balanceNonZero: boolean
++  hostingBalanceNonZero: boolean
++  balanceLogs: number
++  rechargeRecords: number
++  hostingBalanceLogs: number
++  loginRecords: number
++  redeemCodeUsages: number
+ }
+ 
+ async function getUserDeletionBlockers(userId: number): Promise<UserDeletionBlockers> {
+-  const [instances, hosts, packages, hostingZones] = await Promise.all([
++  const [
++    balances,
++    instances,
++    hosts,
++    packages,
++    hostingZones,
++    balanceLogs,
++    rechargeRecords,
++    hostingBalanceLogs,
++    loginRecords,
++    redeemCodeUsages
++  ] = await Promise.all([
++    prisma.user.findUnique({
++      where: { id: userId },
++      select: { balance: true, hostingBalance: true }
++    }),
+     // Count every instance state, including deleted history, because the required User relation
+     // still blocks hard deletion and the history should not be orphaned by admin actions.
+     prisma.instance.count({ where: { userId } }),
+     prisma.host.count({ where: { userId } }),
+     prisma.package.count({ where: { userId } }),
+-    prisma.hostingZone.count({ where: { ownerId: userId } })
++    prisma.hostingZone.count({ where: { ownerId: userId } }),
++    prisma.balanceLog.count({ where: { userId } }),
++    prisma.rechargeRecord.count({ where: { userId } }),
++    prisma.hostingBalanceLog.count({ where: { userId } }),
++    prisma.loginRecord.count({ where: { userId } }),
++    prisma.redeemCodeUsage.count({ where: { userId } })
+   ])
+ 
+   return {
+     instances,
+     hosts,
+     packages,
+-    hostingZones
++    hostingZones,
++    balanceNonZero: balances?.balance.isZero() === false,
++    hostingBalanceNonZero: balances?.hostingBalance.isZero() === false,
++    balanceLogs,
++    rechargeRecords,
++    hostingBalanceLogs,
++    loginRecords,
++    redeemCodeUsages
+   }
+ }
+ 
+ function hasUserDeletionBlockers(blockers: UserDeletionBlockers): boolean {
+-  return Object.values(blockers).some(count => count > 0)
++  return Object.values(blockers).some(value => value === true || (typeof value === 'number' && value > 0))
+ }
+ 
+ function parseUserSearchFields(rawValue?: string): UserSearchField[] {
+@@ -1150,13 +1184,43 @@
+ 
+     const blockers = await getUserDeletionBlockers(userId)
+     if (hasUserDeletionBlockers(blockers)) {
++      if (blockers.balanceNonZero || blockers.hostingBalanceNonZero) {
++        return reply.code(400).send(apiError(
++          ErrorCode.USER_HAS_RESOURCES,
++          '用户主余额或托管余额非零，请先清零或结算'
++        ))
++      }
++
++      if (
++        blockers.balanceLogs > 0 ||
++        blockers.rechargeRecords > 0 ||
++        blockers.hostingBalanceLogs > 0 ||
++        blockers.loginRecords > 0 ||
++        blockers.redeemCodeUsages > 0
++      ) {
++        return reply.code(400).send(apiError(
++          ErrorCode.USER_HAS_RESOURCES,
++          '该用户有资金/审计流水，不能直接删除'
++        ))
++      }
++
+       return reply.code(400).send(apiError(
+         ErrorCode.USER_HAS_RESOURCES,
+         `instances=${blockers.instances}, hosts=${blockers.hosts}, packages=${blockers.packages}, hostingZones=${blockers.hostingZones}`
+       ))
+     }
+ 
+-    await db.deleteUser(userId)
++    try {
++      await db.deleteUser(userId)
++    } catch (error) {
++      if (error instanceof db.UserDeletionConflictError) {
++        return reply.code(409).send(apiError(
++          ErrorCode.USER_HAS_RESOURCES,
++          '该用户存在关联记录，无法删除'
++        ))
++      }
++      throw error
++    }
+ 
+     await createLog(
+       request.user.id,
+
+diff --git a/server/scripts/test-admin-user-delete-resource-guards.ts b/server/scripts/test-admin-user-delete-resource-guards.ts
+index f1e81dc8eb0160de74d0ba4a7e561549a94bc7f7..3bc5d87e80139958f73399e9bc88f6794a84acfc
+--- a/server/scripts/test-admin-user-delete-resource-guards.ts
++++ b/server/scripts/test-admin-user-delete-resource-guards.ts
+@@ -7,6 +7,7 @@
+ const __dirname = dirname(__filename)
+ 
+ const usersRoute = readFileSync(resolve(__dirname, '../src/routes/users.ts'), 'utf8')
++const usersDb = readFileSync(resolve(__dirname, '../src/db/users.ts'), 'utf8')
+ const errorsSource = readFileSync(resolve(__dirname, '../src/lib/errors.ts'), 'utf8')
+ const zhCN = readFileSync(resolve(__dirname, '../../client/src/locales/zh-CN.ts'), 'utf8')
+ const zhTW = readFileSync(resolve(__dirname, '../../client/src/locales/zh-TW.ts'), 'utf8')
+@@ -21,14 +22,26 @@
+ 
+ assert.ok(
+   usersRoute.includes('async function getUserDeletionBlockers(userId: number): Promise<UserDeletionBlockers>') &&
++    usersRoute.includes('select: { balance: true, hostingBalance: true }') &&
+     usersRoute.includes('prisma.instance.count({ where: { userId } })') &&
+     usersRoute.includes('prisma.host.count({ where: { userId } })') &&
+     usersRoute.includes('prisma.package.count({ where: { userId } })') &&
+-    usersRoute.includes('prisma.hostingZone.count({ where: { ownerId: userId } })'),
+-  'admin user deletion must count all resource blockers before hard deleting a user'
++    usersRoute.includes('prisma.hostingZone.count({ where: { ownerId: userId } })') &&
++    usersRoute.includes('prisma.balanceLog.count({ where: { userId } })') &&
++    usersRoute.includes('prisma.rechargeRecord.count({ where: { userId } })') &&
++    usersRoute.includes('prisma.hostingBalanceLog.count({ where: { userId } })') &&
++    usersRoute.includes('prisma.loginRecord.count({ where: { userId } })') &&
++    usersRoute.includes('prisma.redeemCodeUsage.count({ where: { userId } })'),
++  'admin user deletion must check balances, financial/audit history, and resource blockers before hard deleting a user'
+ )
+ 
+ assert.ok(
++  deleteRouteSource.includes("'用户主余额或托管余额非零，请先清零或结算'") &&
++    deleteRouteSource.includes("'该用户有资金/审计流水，不能直接删除'"),
++  'admin user deletion must return clear balance and financial/audit blocker reasons'
++)
++
++assert.ok(
+   deleteRouteSource.includes('const blockers = await getUserDeletionBlockers(userId)') &&
+     deleteRouteSource.includes('if (hasUserDeletionBlockers(blockers))') &&
+     deleteRouteSource.includes('ErrorCode.USER_HAS_RESOURCES') &&
+@@ -42,6 +55,16 @@
+   'admin user deletion must not rely on active-instance-only checks'
+ )
+ 
++assert.ok(
++  usersDb.includes('export class UserDeletionConflictError extends Error') &&
++    usersDb.includes("prismaErrorCode === 'P2003' || prismaErrorCode === 'P2014'") &&
++    usersDb.includes('throw new UserDeletionConflictError()') &&
++    deleteRouteSource.includes('error instanceof db.UserDeletionConflictError') &&
++    deleteRouteSource.includes('return reply.code(409).send(apiError(') &&
++    deleteRouteSource.includes("'该用户存在关联记录，无法删除'"),
++  'db.deleteUser must translate foreign-key failures into a business conflict returned as 4xx'
++)
++
+ for (const [name, source] of [
+   ['errors', errorsSource],
+   ['zh-CN', zhCN],
+diff --git a/server/src/db/users.ts b/server/src/db/users.ts
+index f2cd4d256fa791b2e2fcc832f113bedccb5bf7d3..c4b0feb4be699affc0cdd6ad06e60b665cf300d7
+--- a/server/src/db/users.ts
++++ b/server/src/db/users.ts
+@@ -694,10 +694,27 @@
+ /**
+  * 删除用户
+  */
++export class UserDeletionConflictError extends Error {
++  readonly code = 'USER_DELETE_ASSOCIATED_RECORDS'
++
++  constructor() {
++    super('User has associated records and cannot be deleted')
++    this.name = 'UserDeletionConflictError'
++  }
++}
++
+ export async function deleteUser(id: number): Promise<void> {
+-  await prisma.user.delete({
+-    where: { id }
+-  })
++  try {
++    await prisma.user.delete({
++      where: { id }
++    })
++  } catch (error) {
++    const prismaErrorCode = (error as { code?: string }).code
++    if (prismaErrorCode === 'P2003' || prismaErrorCode === 'P2014') {
++      throw new UserDeletionConflictError()
++    }
++    throw error
++  }
+ }
+ 
+ 
+diff --git a/server/src/routes/users.ts b/server/src/routes/users.ts
+index 507345b46ef16cb574f3d2686cc5b62951e35d02..4374dd7f4e6db731d2b7adac90972e8d08df97d5
+--- a/server/src/routes/users.ts
++++ b/server/src/routes/users.ts
+@@ -40,28 +40,62 @@
+   hosts: number
+   packages: number
+   hostingZones: number
++  balanceNonZero: boolean
++  hostingBalanceNonZero: boolean
++  balanceLogs: number
++  rechargeRecords: number
++  hostingBalanceLogs: number
++  loginRecords: number
++  redeemCodeUsages: number
+ }
+ 
+ async function getUserDeletionBlockers(userId: number): Promise<UserDeletionBlockers> {
+-  const [instances, hosts, packages, hostingZones] = await Promise.all([
++  const [
++    balances,
++    instances,
++    hosts,
++    packages,
++    hostingZones,
++    balanceLogs,
++    rechargeRecords,
++    hostingBalanceLogs,
++    loginRecords,
++    redeemCodeUsages
++  ] = await Promise.all([
++    prisma.user.findUnique({
++      where: { id: userId },
++      select: { balance: true, hostingBalance: true }
++    }),
+     // Count every instance state, including deleted history, because the required User relation
+     // still blocks hard deletion and the history should not be orphaned by admin actions.
+     prisma.instance.count({ where: { userId } }),
+     prisma.host.count({ where: { userId } }),
+     prisma.package.count({ where: { userId } }),
+-    prisma.hostingZone.count({ where: { ownerId: userId } })
++    prisma.hostingZone.count({ where: { ownerId: userId } }),
++    prisma.balanceLog.count({ where: { userId } }),
++    prisma.rechargeRecord.count({ where: { userId } }),
++    prisma.hostingBalanceLog.count({ where: { userId } }),
++    prisma.loginRecord.count({ where: { userId } }),
++    prisma.redeemCodeUsage.count({ where: { userId } })
+   ])
+ 
+   return {
+     instances,
+     hosts,
+     packages,
+-    hostingZones
++    hostingZones,
++    balanceNonZero: balances?.balance.isZero() === false,
++    hostingBalanceNonZero: balances?.hostingBalance.isZero() === false,
++    balanceLogs,
++    rechargeRecords,
++    hostingBalanceLogs,
++    loginRecords,
++    redeemCodeUsages
+   }
+ }
+ 
+ function hasUserDeletionBlockers(blockers: UserDeletionBlockers): boolean {
+-  return Object.values(blockers).some(count => count > 0)
++  return Object.values(blockers).some(value => value === true || (typeof value === 'number' && value > 0))
+ }
+ 
+ function parseUserSearchFields(rawValue?: string): UserSearchField[] {
+@@ -1150,13 +1184,43 @@
+ 
+     const blockers = await getUserDeletionBlockers(userId)
+     if (hasUserDeletionBlockers(blockers)) {
++      if (blockers.balanceNonZero || blockers.hostingBalanceNonZero) {
++        return reply.code(400).send(apiError(
++          ErrorCode.USER_HAS_RESOURCES,
++          '用户主余额或托管余额非零，请先清零或结算'
++        ))
++      }
++
++      if (
++        blockers.balanceLogs > 0 ||
++        blockers.rechargeRecords > 0 ||
++        blockers.hostingBalanceLogs > 0 ||
++        blockers.loginRecords > 0 ||
++        blockers.redeemCodeUsages > 0
++      ) {
++        return reply.code(400).send(apiError(
++          ErrorCode.USER_HAS_RESOURCES,
++          '该用户有资金/审计流水，不能直接删除'
++        ))
++      }
++
+       return reply.code(400).send(apiError(
+         ErrorCode.USER_HAS_RESOURCES,
+         `instances=${blockers.instances}, hosts=${blockers.hosts}, packages=${blockers.packages}, hostingZones=${blockers.hostingZones}`
+       ))
+     }
+ 
+-    await db.deleteUser(userId)
++    try {
++      await db.deleteUser(userId)
++    } catch (error) {
++      if (error instanceof db.UserDeletionConflictError) {
++        return reply.code(409).send(apiError(
++          ErrorCode.USER_HAS_RESOURCES,
++          '该用户存在关联记录，无法删除'
++        ))
++      }
++      throw error
++    }
+ 
+     await createLog(
+       request.user.id,
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'git diff -- server/src/routes/users.ts server/src/db/users.ts server/scripts/test-admin-user-delete-resource-guards.ts; git status --short' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 492ms:
+diff --git a/server/scripts/test-admin-user-delete-resource-guards.ts b/server/scripts/test-admin-user-delete-resource-guards.ts
+index f1e81dc..3bc5d87 100644
+--- a/server/scripts/test-admin-user-delete-resource-guards.ts
++++ b/server/scripts/test-admin-user-delete-resource-guards.ts
+@@ -7,6 +7,7 @@ const __filename = fileURLToPath(import.meta.url)
+ const __dirname = dirname(__filename)
+ 
+ const usersRoute = readFileSync(resolve(__dirname, '../src/routes/users.ts'), 'utf8')
++const usersDb = readFileSync(resolve(__dirname, '../src/db/users.ts'), 'utf8')
+ const errorsSource = readFileSync(resolve(__dirname, '../src/lib/errors.ts'), 'utf8')
+ const zhCN = readFileSync(resolve(__dirname, '../../client/src/locales/zh-CN.ts'), 'utf8')
+ const zhTW = readFileSync(resolve(__dirname, '../../client/src/locales/zh-TW.ts'), 'utf8')
+@@ -21,11 +22,23 @@ const deleteRouteSource = usersRoute.slice(deleteRouteStart, deleteRouteEnd)
+ 
+ assert.ok(
+   usersRoute.includes('async function getUserDeletionBlockers(userId: number): Promise<UserDeletionBlockers>') &&
++    usersRoute.includes('select: { balance: true, hostingBalance: true }') &&
+     usersRoute.includes('prisma.instance.count({ where: { userId } })') &&
+     usersRoute.includes('prisma.host.count({ where: { userId } })') &&
+     usersRoute.includes('prisma.package.count({ where: { userId } })') &&
+-    usersRoute.includes('prisma.hostingZone.count({ where: { ownerId: userId } })'),
+-  'admin user deletion must count all resource blockers before hard deleting a user'
++    usersRoute.includes('prisma.hostingZone.count({ where: { ownerId: userId } })') &&
++    usersRoute.includes('prisma.balanceLog.count({ where: { userId } })') &&
++    usersRoute.includes('prisma.rechargeRecord.count({ where: { userId } })') &&
++    usersRoute.includes('prisma.hostingBalanceLog.count({ where: { userId } })') &&
++    usersRoute.includes('prisma.loginRecord.count({ where: { userId } })') &&
++    usersRoute.includes('prisma.redeemCodeUsage.count({ where: { userId } })'),
++  'admin user deletion must check balances, financial/audit history, and resource blockers before hard deleting a user'
++)
++
++assert.ok(
++  deleteRouteSource.includes("'用户主余额或托管余额非零，请先清零或结算'") &&
++    deleteRouteSource.includes("'该用户有资金/审计流水，不能直接删除'"),
++  'admin user deletion must return clear balance and financial/audit blocker reasons'
+ )
+ 
+ assert.ok(
+@@ -42,6 +55,16 @@ assert.ok(
+   'admin user deletion must not rely on active-instance-only checks'
+ )
+ 
++assert.ok(
++  usersDb.includes('export class UserDeletionConflictError extends Error') &&
++    usersDb.includes("prismaErrorCode === 'P2003' || prismaErrorCode === 'P2014'") &&
++    usersDb.includes('throw new UserDeletionConflictError()') &&
++    deleteRouteSource.includes('error instanceof db.UserDeletionConflictError') &&
++    deleteRouteSource.includes('return reply.code(409).send(apiError(') &&
++    deleteRouteSource.includes("'该用户存在关联记录，无法删除'"),
++  'db.deleteUser must translate foreign-key failures into a business conflict returned as 4xx'
++)
++
+ for (const [name, source] of [
+   ['errors', errorsSource],
+   ['zh-CN', zhCN],
+diff --git a/server/src/db/users.ts b/server/src/db/users.ts
+index f2cd4d2..c4b0feb 100644
+--- a/server/src/db/users.ts
++++ b/server/src/db/users.ts
+@@ -694,10 +694,27 @@ export async function updateUserStatus(id: number, status: 'active' | 'banned',
+ /**
+  * 删除用户
+  */
++export class UserDeletionConflictError extends Error {
++  readonly code = 'USER_DELETE_ASSOCIATED_RECORDS'
++
++  constructor() {
++    super('User has associated records and cannot be deleted')
++    this.name = 'UserDeletionConflictError'
++  }
++}
++
+ export async function deleteUser(id: number): Promise<void> {
+-  await prisma.user.delete({
+-    where: { id }
+-  })
++  try {
++    await prisma.user.delete({
++      where: { id }
++    })
++  } catch (error) {
++    const prismaErrorCode = (error as { code?: string }).code
++    if (prismaErrorCode === 'P2003' || prismaErrorCode === 'P2014') {
++      throw new UserDeletionConflictError()
++    }
++    throw error
++  }
+ }
+ 
+ 
+diff --git a/server/src/routes/users.ts b/server/src/routes/users.ts
+index 60f56b2..4374dd7 100644
+--- a/server/src/routes/users.ts
++++ b/server/src/routes/users.ts
+@@ -33,34 +33,69 @@ const USER_SEARCH_FIELDS = ['username', 'id', 'email'] as const
+ const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\d*$/
+ const MAX_HOSTING_BALANCE_ADJUST_AMOUNT = 99999999.99
+ const MAX_HOSTING_BALANCE_ADJUST_REASON_LENGTH = 500
++const ADMIN_HOSTING_BALANCE_ADJUST_REMARK_PREFIX = '[Admin]'
+ type UserSearchField = (typeof USER_SEARCH_FIELDS)[number]
+ type UserDeletionBlockers = {
+   instances: number
+   hosts: number
+   packages: number
+   hostingZones: number
++  balanceNonZero: boolean
++  hostingBalanceNonZero: boolean
++  balanceLogs: number
++  rechargeRecords: number
++  hostingBalanceLogs: number
++  loginRecords: number
++  redeemCodeUsages: number
+ }
+ 
+ async function getUserDeletionBlockers(userId: number): Promise<UserDeletionBlockers> {
+-  const [instances, hosts, packages, hostingZones] = await Promise.all([
++  const [
++    balances,
++    instances,
++    hosts,
++    packages,
++    hostingZones,
++    balanceLogs,
++    rechargeRecords,
++    hostingBalanceLogs,
++    loginRecords,
++    redeemCodeUsages
++  ] = await Promise.all([
++    prisma.user.findUnique({
++      where: { id: userId },
++      select: { balance: true, hostingBalance: true }
++    }),
+     // Count every instance state, including deleted history, because the required User relation
+     // still blocks hard deletion and the history should not be orphaned by admin actions.
+     prisma.instance.count({ where: { userId } }),
+     prisma.host.count({ where: { userId } }),
+     prisma.package.count({ where: { userId } }),
+-    prisma.hostingZone.count({ where: { ownerId: userId } })
++    prisma.hostingZone.count({ where: { ownerId: userId } }),
++    prisma.balanceLog.count({ where: { userId } }),
++    prisma.rechargeRecord.count({ where: { userId } }),
++    prisma.hostingBalanceLog.count({ where: { userId } }),
++    prisma.loginRecord.count({ where: { userId } }),
++    prisma.redeemCodeUsage.count({ where: { userId } })
+   ])
+ 
+   return {
+     instances,
+     hosts,
+     packages,
+-    hostingZones
++    hostingZones,
++    balanceNonZero: balances?.balance.isZero() === false,
++    hostingBalanceNonZero: balances?.hostingBalance.isZero() === false,
++    balanceLogs,
++    rechargeRecords,
++    hostingBalanceLogs,
++    loginRecords,
++    redeemCodeUsages
+   }
+ }
+ 
+ function hasUserDeletionBlockers(blockers: UserDeletionBlockers): boolean {
+-  return Object.values(blockers).some(count => count > 0)
++  return Object.values(blockers).some(value => value === true || (typeof value === 'number' && value > 0))
+ }
+ 
+ function parseUserSearchFields(rawValue?: string): UserSearchField[] {
+@@ -1149,13 +1184,43 @@ export default async function userRoutes(fastify: FastifyInstance) {
+ 
+     const blockers = await getUserDeletionBlockers(userId)
+     if (hasUserDeletionBlockers(blockers)) {
++      if (blockers.balanceNonZero || blockers.hostingBalanceNonZero) {
++        return reply.code(400).send(apiError(
++          ErrorCode.USER_HAS_RESOURCES,
++          '用户主余额或托管余额非零，请先清零或结算'
++        ))
++      }
++
++      if (
++        blockers.balanceLogs > 0 ||
++        blockers.rechargeRecords > 0 ||
++        blockers.hostingBalanceLogs > 0 ||
++        blockers.loginRecords > 0 ||
++        blockers.redeemCodeUsages > 0
++      ) {
++        return reply.code(400).send(apiError(
++          ErrorCode.USER_HAS_RESOURCES,
++          '该用户有资金/审计流水，不能直接删除'
++        ))
++      }
++
+       return reply.code(400).send(apiError(
+         ErrorCode.USER_HAS_RESOURCES,
+         `instances=${blockers.instances}, hosts=${blockers.hosts}, packages=${blockers.packages}, hostingZones=${blockers.hostingZones}`
+       ))
+     }
+ 
+-    await db.deleteUser(userId)
++    try {
++      await db.deleteUser(userId)
++    } catch (error) {
++      if (error instanceof db.UserDeletionConflictError) {
++        return reply.code(409).send(apiError(
++          ErrorCode.USER_HAS_RESOURCES,
++          '该用户存在关联记录，无法删除'
++        ))
++      }
++      throw error
++    }
+ 
+     await createLog(
+       request.user.id,
+@@ -1701,7 +1766,7 @@ export default async function userRoutes(fastify: FastifyInstance) {
+               actionType: 'admin_adjust',
+               amount: absAmount,
+               frozen: false,
+-              remark: `[Admin] ${normalizedReason}`
++              remark: `${ADMIN_HOSTING_BALANCE_ADJUST_REMARK_PREFIX} ${normalizedReason}`
+             }
+           })
+         })
+ M client/src/components/plugins/PluginFrame.vue
+ M client/src/utils/validation.ts
+ M deploy/incudal-backend.service.example
+ M deploy/incudal-online-rollback@.service.example
+ M deploy/incudal-online-update@.service.example
+ M package.json
+ M scripts/install-panel.sh
+ M scripts/test-install-panel-guards.sh
+ M server/package.json
+ M server/scripts/test-admin-billing-route-id-guards.ts
+ M server/scripts/test-admin-entertainment-route-guards.ts
+ M server/scripts/test-admin-user-delete-resource-guards.ts
+ M server/scripts/test-aff-review-ui-guards.ts
+ M server/scripts/test-balance-adjustment-approval-guards.ts
+ M server/scripts/test-billing-expiry-delete.ts
+ M server/scripts/test-billing-expiry-race-guards.ts
+ M server/scripts/test-billing-query-guards.ts
+ M server/scripts/test-capacity-cost-guards.ts
+ M server/scripts/test-commercial-operations-overview-guards.ts
+ M server/scripts/test-gift-card-guards.ts
+ M server/scripts/test-hosting-balance-guards.ts
+ M server/scripts/test-instance-billing-route-id-guards.ts
+ M server/scripts/test-log-sanitizer.ts
+ M server/scripts/test-mail-plan-financial-guards.ts
+ M server/scripts/test-mail-renewal-month-guards.ts
+ M server/scripts/test-order-payment-operations-guards.ts
+ M server/scripts/test-plugin-client-boundary-guards.ts
+ M server/scripts/test-system-config-value-guards.ts
+ M server/scripts/test-system-update-guards.ts
+ M server/scripts/test-trust-proxy-config.ts
+ M server/scripts/test-user-destroy-incus-order.ts
+ M server/scripts/test-vip-benefit-route-guards.ts
+ M server/src/app.ts
+ M server/src/db/aff.ts
+ M server/src/db/balance.ts
+ M server/src/db/billing-operations.ts
+ M server/src/db/gift-cards.ts
+ M server/src/db/users.ts
+ M server/src/lib/billing-calc.ts
+ M server/src/lib/epay.ts
+ M server/src/lib/errors.ts
+ M server/src/lib/heleket.ts
+ M server/src/lib/log-sanitizer.ts
+ M server/src/lib/lottery-notifier.ts
+ M server/src/lib/lsky.ts
+ M server/src/lib/notifier.ts
+ M server/src/lib/outbound-security.ts
+ M server/src/lib/plugin-market-submission-scan.ts
+ M server/src/lib/redirect-validator.ts
+ M server/src/lib/theme-market-submission-scan.ts
+ M server/src/lib/trust-proxy-config.ts
+ M server/src/routes/admin-billing.ts
+ M server/src/routes/admin-capacity-cost.ts
+ M server/src/routes/admin-entertainment.ts
+ M server/src/routes/admin-statistics.ts
+ M server/src/routes/gift-cards.ts
+ M server/src/routes/hosting.ts
+ M server/src/routes/instance-billing.ts
+ M server/src/routes/instance-destroy.ts
+ M server/src/routes/mail.ts
+ M server/src/routes/orders.ts
+ M server/src/routes/system-config.ts
+ M server/src/routes/tickets.ts
+ M server/src/routes/users.ts
+ M server/src/services/billing-scheduler.ts
+ M server/src/services/cranemail.ts
+ M server/src/services/smartermail.ts
+ M server/src/services/system-monitor.ts
+ M server/src/services/traffic-notifier.ts
+ M server/src/services/vip-benefits.ts
+?? AGENTS.md
+?? BEHAVIOR.md
+?? CLAUDE.md
+?? DEFECTS.md
+?? EXECUTION.md
+?? EXECUTION_LOG.md
+?? FIX_PLAN.md
+?? MAINTENANCE_PLAN.md
+?? artifacts/
+?? audits/
+?? deploy/incudal-online-task.sh.example
+?? deploy/incudal-ota-chown-wrapper.sh.example
+?? deploy/incudal-systemctl-wrapper.sh.example
+?? server/scripts/test-error-response-guards.ts
+?? server/scripts/test-redirect-validator-guards.ts
+?? server/scripts/test-safe-outbound-fetch-guards.ts
+?? skills-lock.json
+warning: in the working copy of 'server/scripts/test-admin-user-delete-resource-guards.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/db/users.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/users.ts', LF will be replaced by CRLF the next time Git touches it
+
+diff --git a/server/scripts/test-admin-user-delete-resource-guards.ts b/server/scripts/test-admin-user-delete-resource-guards.ts
+index f1e81dc8eb0160de74d0ba4a7e561549a94bc7f7..3bc5d87e80139958f73399e9bc88f6794a84acfc
+--- a/server/scripts/test-admin-user-delete-resource-guards.ts
++++ b/server/scripts/test-admin-user-delete-resource-guards.ts
+@@ -7,6 +7,7 @@
+ const __dirname = dirname(__filename)
+ 
+ const usersRoute = readFileSync(resolve(__dirname, '../src/routes/users.ts'), 'utf8')
++const usersDb = readFileSync(resolve(__dirname, '../src/db/users.ts'), 'utf8')
+ const errorsSource = readFileSync(resolve(__dirname, '../src/lib/errors.ts'), 'utf8')
+ const zhCN = readFileSync(resolve(__dirname, '../../client/src/locales/zh-CN.ts'), 'utf8')
+ const zhTW = readFileSync(resolve(__dirname, '../../client/src/locales/zh-TW.ts'), 'utf8')
+@@ -21,14 +22,26 @@
+ 
+ assert.ok(
+   usersRoute.includes('async function getUserDeletionBlockers(userId: number): Promise<UserDeletionBlockers>') &&
++    usersRoute.includes('select: { balance: true, hostingBalance: true }') &&
+     usersRoute.includes('prisma.instance.count({ where: { userId } })') &&
+     usersRoute.includes('prisma.host.count({ where: { userId } })') &&
+     usersRoute.includes('prisma.package.count({ where: { userId } })') &&
+-    usersRoute.includes('prisma.hostingZone.count({ where: { ownerId: userId } })'),
+-  'admin user deletion must count all resource blockers before hard deleting a user'
++    usersRoute.includes('prisma.hostingZone.count({ where: { ownerId: userId } })') &&
++    usersRoute.includes('prisma.balanceLog.count({ where: { userId } })') &&
++    usersRoute.includes('prisma.rechargeRecord.count({ where: { userId } })') &&
++    usersRoute.includes('prisma.hostingBalanceLog.count({ where: { userId } })') &&
++    usersRoute.includes('prisma.loginRecord.count({ where: { userId } })') &&
++    usersRoute.includes('prisma.redeemCodeUsage.count({ where: { userId } })'),
++  'admin user deletion must check balances, financial/audit history, and resource blockers before hard deleting a user'
+ )
+ 
+ assert.ok(
++  deleteRouteSource.includes("'用户主余额或托管余额非零，请先清零或结算'") &&
++    deleteRouteSource.includes("'该用户有资金/审计流水，不能直接删除'"),
++  'admin user deletion must return clear balance and financial/audit blocker reasons'
++)
++
++assert.ok(
+   deleteRouteSource.includes('const blockers = await getUserDeletionBlockers(userId)') &&
+     deleteRouteSource.includes('if (hasUserDeletionBlockers(blockers))') &&
+     deleteRouteSource.includes('ErrorCode.USER_HAS_RESOURCES') &&
+@@ -42,6 +55,16 @@
+   'admin user deletion must not rely on active-instance-only checks'
+ )
+ 
++assert.ok(
++  usersDb.includes('export class UserDeletionConflictError extends Error') &&
++    usersDb.includes("prismaErrorCode === 'P2003' || prismaErrorCode === 'P2014'") &&
++    usersDb.includes('throw new UserDeletionConflictError()') &&
++    deleteRouteSource.includes('error instanceof db.UserDeletionConflictError') &&
++    deleteRouteSource.includes('return reply.code(409).send(apiError(') &&
++    deleteRouteSource.includes("'该用户存在关联记录，无法删除'"),
++  'db.deleteUser must translate foreign-key failures into a business conflict returned as 4xx'
++)
++
+ for (const [name, source] of [
+   ['errors', errorsSource],
+   ['zh-CN', zhCN],
+diff --git a/server/src/db/users.ts b/server/src/db/users.ts
+index f2cd4d256fa791b2e2fcc832f113bedccb5bf7d3..c4b0feb4be699affc0cdd6ad06e60b665cf300d7
+--- a/server/src/db/users.ts
++++ b/server/src/db/users.ts
+@@ -694,10 +694,27 @@
+ /**
+  * 删除用户
+  */
++export class UserDeletionConflictError extends Error {
++  readonly code = 'USER_DELETE_ASSOCIATED_RECORDS'
++
++  constructor() {
++    super('User has associated records and cannot be deleted')
++    this.name = 'UserDeletionConflictError'
++  }
++}
++
+ export async function deleteUser(id: number): Promise<void> {
+-  await prisma.user.delete({
+-    where: { id }
+-  })
++  try {
++    await prisma.user.delete({
++      where: { id }
++    })
++  } catch (error) {
++    const prismaErrorCode = (error as { code?: string }).code
++    if (prismaErrorCode === 'P2003' || prismaErrorCode === 'P2014') {
++      throw new UserDeletionConflictError()
++    }
++    throw error
++  }
+ }
+ 
+ 
+diff --git a/server/src/routes/users.ts b/server/src/routes/users.ts
+index 507345b46ef16cb574f3d2686cc5b62951e35d02..4374dd7f4e6db731d2b7adac90972e8d08df97d5
+--- a/server/src/routes/users.ts
++++ b/server/src/routes/users.ts
+@@ -40,28 +40,62 @@
+   hosts: number
+   packages: number
+   hostingZones: number
++  balanceNonZero: boolean
++  hostingBalanceNonZero: boolean
++  balanceLogs: number
++  rechargeRecords: number
++  hostingBalanceLogs: number
++  loginRecords: number
++  redeemCodeUsages: number
+ }
+ 
+ async function getUserDeletionBlockers(userId: number): Promise<UserDeletionBlockers> {
+-  const [instances, hosts, packages, hostingZones] = await Promise.all([
++  const [
++    balances,
++    instances,
++    hosts,
++    packages,
++    hostingZones,
++    balanceLogs,
++    rechargeRecords,
++    hostingBalanceLogs,
++    loginRecords,
++    redeemCodeUsages
++  ] = await Promise.all([
++    prisma.user.findUnique({
++      where: { id: userId },
++      select: { balance: true, hostingBalance: true }
++    }),
+     // Count every instance state, including deleted history, because the required User relation
+     // still blocks hard deletion and the history should not be orphaned by admin actions.
+     prisma.instance.count({ where: { userId } }),
+     prisma.host.count({ where: { userId } }),
+     prisma.package.count({ where: { userId } }),
+-    prisma.hostingZone.count({ where: { ownerId: userId } })
++    prisma.hostingZone.count({ where: { ownerId: userId } }),
++    prisma.balanceLog.count({ where: { userId } }),
++    prisma.rechargeRecord.count({ where: { userId } }),
++    prisma.hostingBalanceLog.count({ where: { userId } }),
++    prisma.loginRecord.count({ where: { userId } }),
++    prisma.redeemCodeUsage.count({ where: { userId } })
+   ])
+ 
+   return {
+     instances,
+     hosts,
+     packages,
+-    hostingZones
++    hostingZones,
++    balanceNonZero: balances?.balance.isZero() === false,
++    hostingBalanceNonZero: balances?.hostingBalance.isZero() === false,
++    balanceLogs,
++    rechargeRecords,
++    hostingBalanceLogs,
++    loginRecords,
++    redeemCodeUsages
+   }
+ }
+ 
+ function hasUserDeletionBlockers(blockers: UserDeletionBlockers): boolean {
+-  return Object.values(blockers).some(count => count > 0)
++  return Object.values(blockers).some(value => value === true || (typeof value === 'number' && value > 0))
+ }
+ 
+ function parseUserSearchFields(rawValue?: string): UserSearchField[] {
+@@ -1150,13 +1184,43 @@
+ 
+     const blockers = await getUserDeletionBlockers(userId)
+     if (hasUserDeletionBlockers(blockers)) {
++      if (blockers.balanceNonZero || blockers.hostingBalanceNonZero) {
++        return reply.code(400).send(apiError(
++          ErrorCode.USER_HAS_RESOURCES,
++          '用户主余额或托管余额非零，请先清零或结算'
++        ))
++      }
++
++      if (
++        blockers.balanceLogs > 0 ||
++        blockers.rechargeRecords > 0 ||
++        blockers.hostingBalanceLogs > 0 ||
++        blockers.loginRecords > 0 ||
++        blockers.redeemCodeUsages > 0
++      ) {
++        return reply.code(400).send(apiError(
++          ErrorCode.USER_HAS_RESOURCES,
++          '该用户有资金/审计流水，不能直接删除'
++        ))
++      }
++
+       return reply.code(400).send(apiError(
+         ErrorCode.USER_HAS_RESOURCES,
+         `instances=${blockers.instances}, hosts=${blockers.hosts}, packages=${blockers.packages}, hostingZones=${blockers.hostingZones}`
+       ))
+     }
+ 
+-    await db.deleteUser(userId)
++    try {
++      await db.deleteUser(userId)
++    } catch (error) {
++      if (error instanceof db.UserDeletionConflictError) {
++        return reply.code(409).send(apiError(
++          ErrorCode.USER_HAS_RESOURCES,
++          '该用户存在关联记录，无法删除'
++        ))
++      }
++      throw error
++    }
+ 
+     await createLog(
+       request.user.id,
+
+codex
+补丁已落在指定三文件；检查 diff 时发现仓库原本存在大量未提交改动，且 `users.ts` 内已有与本任务无关的托管余额备注常量改动，我已原样保留、没有触碰或回退。现在先跑两项守卫和 server type-check；若失败只处理与本补丁直接相关的问题。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'pnpm --filter server test:admin-user-delete-resource-guards' in C:\Users\Administrator\Desktop\payinces
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'pnpm --filter server test:user-route-id-guards' in C:\Users\Administrator\Desktop\payinces
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'pnpm --filter server type-check' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 1755ms:
+
+> server@1.3.7 test:admin-user-delete-resource-guards C:\Users\Administrator\Desktop\payinces\server
+> node --import tsx scripts/test-admin-user-delete-resource-guards.ts
+
+admin user delete resource guard checks passed
+
+ succeeded in 1755ms:
+
+> server@1.3.7 test:user-route-id-guards C:\Users\Administrator\Desktop\payinces\server
+> node --import tsx scripts/test-user-route-id-guards.ts
+
+user route ID guard tests passed
+
+diff --git a/server/scripts/test-admin-user-delete-resource-guards.ts b/server/scripts/test-admin-user-delete-resource-guards.ts
+index f1e81dc8eb0160de74d0ba4a7e561549a94bc7f7..3bc5d87e80139958f73399e9bc88f6794a84acfc
+--- a/server/scripts/test-admin-user-delete-resource-guards.ts
++++ b/server/scripts/test-admin-user-delete-resource-guards.ts
+@@ -7,6 +7,7 @@
+ const __dirname = dirname(__filename)
+ 
+ const usersRoute = readFileSync(resolve(__dirname, '../src/routes/users.ts'), 'utf8')
++const usersDb = readFileSync(resolve(__dirname, '../src/db/users.ts'), 'utf8')
+ const errorsSource = readFileSync(resolve(__dirname, '../src/lib/errors.ts'), 'utf8')
+ const zhCN = readFileSync(resolve(__dirname, '../../client/src/locales/zh-CN.ts'), 'utf8')
+ const zhTW = readFileSync(resolve(__dirname, '../../client/src/locales/zh-TW.ts'), 'utf8')
+@@ -21,14 +22,26 @@
+ 
+ assert.ok(
+   usersRoute.includes('async function getUserDeletionBlockers(userId: number): Promise<UserDeletionBlockers>') &&
++    usersRoute.includes('select: { balance: true, hostingBalance: true }') &&
+     usersRoute.includes('prisma.instance.count({ where: { userId } })') &&
+     usersRoute.includes('prisma.host.count({ where: { userId } })') &&
+     usersRoute.includes('prisma.package.count({ where: { userId } })') &&
+-    usersRoute.includes('prisma.hostingZone.count({ where: { ownerId: userId } })'),
+-  'admin user deletion must count all resource blockers before hard deleting a user'
++    usersRoute.includes('prisma.hostingZone.count({ where: { ownerId: userId } })') &&
++    usersRoute.includes('prisma.balanceLog.count({ where: { userId } })') &&
++    usersRoute.includes('prisma.rechargeRecord.count({ where: { userId } })') &&
++    usersRoute.includes('prisma.hostingBalanceLog.count({ where: { userId } })') &&
++    usersRoute.includes('prisma.loginRecord.count({ where: { userId } })') &&
++    usersRoute.includes('prisma.redeemCodeUsage.count({ where: { userId } })'),
++  'admin user deletion must check balances, financial/audit history, and resource blockers before hard deleting a user'
+ )
+ 
+ assert.ok(
++  deleteRouteSource.includes("'用户主余额或托管余额非零，请先清零或结算'") &&
++    deleteRouteSource.includes("'该用户有资金/审计流水，不能直接删除'"),
++  'admin user deletion must return clear balance and financial/audit blocker reasons'
++)
++
++assert.ok(
+   deleteRouteSource.includes('const blockers = await getUserDeletionBlockers(userId)') &&
+     deleteRouteSource.includes('if (hasUserDeletionBlockers(blockers))') &&
+     deleteRouteSource.includes('ErrorCode.USER_HAS_RESOURCES') &&
+@@ -42,6 +55,16 @@
+   'admin user deletion must not rely on active-instance-only checks'
+ )
+ 
++assert.ok(
++  usersDb.includes('export class UserDeletionConflictError extends Error') &&
++    usersDb.includes("prismaErrorCode === 'P2003' || prismaErrorCode === 'P2014'") &&
++    usersDb.includes('throw new UserDeletionConflictError()') &&
++    deleteRouteSource.includes('error instanceof db.UserDeletionConflictError') &&
++    deleteRouteSource.includes('return reply.code(409).send(apiError(') &&
++    deleteRouteSource.includes("'该用户存在关联记录，无法删除'"),
++  'db.deleteUser must translate foreign-key failures into a business conflict returned as 4xx'
++)
++
+ for (const [name, source] of [
+   ['errors', errorsSource],
+   ['zh-CN', zhCN],
+diff --git a/server/src/db/users.ts b/server/src/db/users.ts
+index f2cd4d256fa791b2e2fcc832f113bedccb5bf7d3..c4b0feb4be699affc0cdd6ad06e60b665cf300d7
+--- a/server/src/db/users.ts
++++ b/server/src/db/users.ts
+@@ -694,10 +694,27 @@
+ /**
+  * 删除用户
+  */
++export class UserDeletionConflictError extends Error {
++  readonly code = 'USER_DELETE_ASSOCIATED_RECORDS'
++
++  constructor() {
++    super('User has associated records and cannot be deleted')
++    this.name = 'UserDeletionConflictError'
++  }
++}
++
+ export async function deleteUser(id: number): Promise<void> {
+-  await prisma.user.delete({
+-    where: { id }
+-  })
++  try {
++    await prisma.user.delete({
++      where: { id }
++    })
++  } catch (error) {
++    const prismaErrorCode = (error as { code?: string }).code
++    if (prismaErrorCode === 'P2003' || prismaErrorCode === 'P2014') {
++      throw new UserDeletionConflictError()
++    }
++    throw error
++  }
+ }
+ 
+ 
+diff --git a/server/src/routes/users.ts b/server/src/routes/users.ts
+index 507345b46ef16cb574f3d2686cc5b62951e35d02..4374dd7f4e6db731d2b7adac90972e8d08df97d5
+--- a/server/src/routes/users.ts
++++ b/server/src/routes/users.ts
+@@ -40,28 +40,62 @@
+   hosts: number
+   packages: number
+   hostingZones: number
++  balanceNonZero: boolean
++  hostingBalanceNonZero: boolean
++  balanceLogs: number
++  rechargeRecords: number
++  hostingBalanceLogs: number
++  loginRecords: number
++  redeemCodeUsages: number
+ }
+ 
+ async function getUserDeletionBlockers(userId: number): Promise<UserDeletionBlockers> {
+-  const [instances, hosts, packages, hostingZones] = await Promise.all([
++  const [
++    balances,
++    instances,
++    hosts,
++    packages,
++    hostingZones,
++    balanceLogs,
++    rechargeRecords,
++    hostingBalanceLogs,
++    loginRecords,
++    redeemCodeUsages
++  ] = await Promise.all([
++    prisma.user.findUnique({
++      where: { id: userId },
++      select: { balance: true, hostingBalance: true }
++    }),
+     // Count every instance state, including deleted history, because the required User relation
+     // still blocks hard deletion and the history should not be orphaned by admin actions.
+     prisma.instance.count({ where: { userId } }),
+     prisma.host.count({ where: { userId } }),
+     prisma.package.count({ where: { userId } }),
+-    prisma.hostingZone.count({ where: { ownerId: userId } })
++    prisma.hostingZone.count({ where: { ownerId: userId } }),
++    prisma.balanceLog.count({ where: { userId } }),
++    prisma.rechargeRecord.count({ where: { userId } }),
++    prisma.hostingBalanceLog.count({ where: { userId } }),
++    prisma.loginRecord.count({ where: { userId } }),
++    prisma.redeemCodeUsage.count({ where: { userId } })
+   ])
+ 
+   return {
+     instances,
+     hosts,
+     packages,
+-    hostingZones
++    hostingZones,
++    balanceNonZero: balances?.balance.isZero() === false,
++    hostingBalanceNonZero: balances?.hostingBalance.isZero() === false,
++    balanceLogs,
++    rechargeRecords,
++    hostingBalanceLogs,
++    loginRecords,
++    redeemCodeUsages
+   }
+ }
+ 
+ function hasUserDeletionBlockers(blockers: UserDeletionBlockers): boolean {
+-  return Object.values(blockers).some(count => count > 0)
++  return Object.values(blockers).some(value => value === true || (typeof value === 'number' && value > 0))
+ }
+ 
+ function parseUserSearchFields(rawValue?: string): UserSearchField[] {
+@@ -1150,13 +1184,43 @@
+ 
+     const blockers = await getUserDeletionBlockers(userId)
+     if (hasUserDeletionBlockers(blockers)) {
++      if (blockers.balanceNonZero || blockers.hostingBalanceNonZero) {
++        return reply.code(400).send(apiError(
++          ErrorCode.USER_HAS_RESOURCES,
++          '用户主余额或托管余额非零，请先清零或结算'
++        ))
++      }
++
++      if (
++        blockers.balanceLogs > 0 ||
++        blockers.rechargeRecords > 0 ||
++        blockers.hostingBalanceLogs > 0 ||
++        blockers.loginRecords > 0 ||
++        blockers.redeemCodeUsages > 0
++      ) {
++        return reply.code(400).send(apiError(
++          ErrorCode.USER_HAS_RESOURCES,
++          '该用户有资金/审计流水，不能直接删除'
++        ))
++      }
++
+       return reply.code(400).send(apiError(
+         ErrorCode.USER_HAS_RESOURCES,
+         `instances=${blockers.instances}, hosts=${blockers.hosts}, packages=${blockers.packages}, hostingZones=${blockers.hostingZones}`
+       ))
+     }
+ 
+-    await db.deleteUser(userId)
++    try {
++      await db.deleteUser(userId)
++    } catch (error) {
++      if (error instanceof db.UserDeletionConflictError) {
++        return reply.code(409).send(apiError(
++          ErrorCode.USER_HAS_RESOURCES,
++          '该用户存在关联记录，无法删除'
++        ))
++      }
++      throw error
++    }
+ 
+     await createLog(
+       request.user.id,
+
+codex
+两项守卫与类型检查正在并行执行，当前仍未结束；我会等结果并复核最终 diff，不会扩大修改范围。
+diff --git a/server/scripts/test-admin-user-delete-resource-guards.ts b/server/scripts/test-admin-user-delete-resource-guards.ts
+index f1e81dc8eb0160de74d0ba4a7e561549a94bc7f7..3bc5d87e80139958f73399e9bc88f6794a84acfc
+--- a/server/scripts/test-admin-user-delete-resource-guards.ts
++++ b/server/scripts/test-admin-user-delete-resource-guards.ts
+@@ -7,6 +7,7 @@
+ const __dirname = dirname(__filename)
+ 
+ const usersRoute = readFileSync(resolve(__dirname, '../src/routes/users.ts'), 'utf8')
++const usersDb = readFileSync(resolve(__dirname, '../src/db/users.ts'), 'utf8')
+ const errorsSource = readFileSync(resolve(__dirname, '../src/lib/errors.ts'), 'utf8')
+ const zhCN = readFileSync(resolve(__dirname, '../../client/src/locales/zh-CN.ts'), 'utf8')
+ const zhTW = readFileSync(resolve(__dirname, '../../client/src/locales/zh-TW.ts'), 'utf8')
+@@ -21,14 +22,26 @@
+ 
+ assert.ok(
+   usersRoute.includes('async function getUserDeletionBlockers(userId: number): Promise<UserDeletionBlockers>') &&
++    usersRoute.includes('select: { balance: true, hostingBalance: true }') &&
+     usersRoute.includes('prisma.instance.count({ where: { userId } })') &&
+     usersRoute.includes('prisma.host.count({ where: { userId } })') &&
+     usersRoute.includes('prisma.package.count({ where: { userId } })') &&
+-    usersRoute.includes('prisma.hostingZone.count({ where: { ownerId: userId } })'),
+-  'admin user deletion must count all resource blockers before hard deleting a user'
++    usersRoute.includes('prisma.hostingZone.count({ where: { ownerId: userId } })') &&
++    usersRoute.includes('prisma.balanceLog.count({ where: { userId } })') &&
++    usersRoute.includes('prisma.rechargeRecord.count({ where: { userId } })') &&
++    usersRoute.includes('prisma.hostingBalanceLog.count({ where: { userId } })') &&
++    usersRoute.includes('prisma.loginRecord.count({ where: { userId } })') &&
++    usersRoute.includes('prisma.redeemCodeUsage.count({ where: { userId } })'),
++  'admin user deletion must check balances, financial/audit history, and resource blockers before hard deleting a user'
+ )
+ 
+ assert.ok(
++  deleteRouteSource.includes("'用户主余额或托管余额非零，请先清零或结算'") &&
++    deleteRouteSource.includes("'该用户有资金/审计流水，不能直接删除'"),
++  'admin user deletion must return clear balance and financial/audit blocker reasons'
++)
++
++assert.ok(
+   deleteRouteSource.includes('const blockers = await getUserDeletionBlockers(userId)') &&
+     deleteRouteSource.includes('if (hasUserDeletionBlockers(blockers))') &&
+     deleteRouteSource.includes('ErrorCode.USER_HAS_RESOURCES') &&
+@@ -42,6 +55,16 @@
+   'admin user deletion must not rely on active-instance-only checks'
+ )
+ 
++assert.ok(
++  usersDb.includes('export class UserDeletionConflictError extends Error') &&
++    usersDb.includes("prismaErrorCode === 'P2003' || prismaErrorCode === 'P2014'") &&
++    usersDb.includes('throw new UserDeletionConflictError()') &&
++    deleteRouteSource.includes('error instanceof db.UserDeletionConflictError') &&
++    deleteRouteSource.includes('return reply.code(409).send(apiError(') &&
++    deleteRouteSource.includes("'该用户存在关联记录，无法删除'"),
++  'db.deleteUser must translate foreign-key failures into a business conflict returned as 4xx'
++)
++
+ for (const [name, source] of [
+   ['errors', errorsSource],
+   ['zh-CN', zhCN],
+diff --git a/server/src/db/users.ts b/server/src/db/users.ts
+index f2cd4d256fa791b2e2fcc832f113bedccb5bf7d3..c4b0feb4be699affc0cdd6ad06e60b665cf300d7
+--- a/server/src/db/users.ts
++++ b/server/src/db/users.ts
+@@ -694,10 +694,27 @@
+ /**
+  * 删除用户
+  */
++export class UserDeletionConflictError extends Error {
++  readonly code = 'USER_DELETE_ASSOCIATED_RECORDS'
++
++  constructor() {
++    super('User has associated records and cannot be deleted')
++    this.name = 'UserDeletionConflictError'
++  }
++}
++
+ export async function deleteUser(id: number): Promise<void> {
+-  await prisma.user.delete({
+-    where: { id }
+-  })
++  try {
++    await prisma.user.delete({
++      where: { id }
++    })
++  } catch (error) {
++    const prismaErrorCode = (error as { code?: string }).code
++    if (prismaErrorCode === 'P2003' || prismaErrorCode === 'P2014') {
++      throw new UserDeletionConflictError()
++    }
++    throw error
++  }
+ }
+ 
+ 
+diff --git a/server/src/routes/users.ts b/server/src/routes/users.ts
+index 507345b46ef16cb574f3d2686cc5b62951e35d02..4374dd7f4e6db731d2b7adac90972e8d08df97d5
+--- a/server/src/routes/users.ts
++++ b/server/src/routes/users.ts
+@@ -40,28 +40,62 @@
+   hosts: number
+   packages: number
+   hostingZones: number
++  balanceNonZero: boolean
++  hostingBalanceNonZero: boolean
++  balanceLogs: number
++  rechargeRecords: number
++  hostingBalanceLogs: number
++  loginRecords: number
++  redeemCodeUsages: number
+ }
+ 
+ async function getUserDeletionBlockers(userId: number): Promise<UserDeletionBlockers> {
+-  const [instances, hosts, packages, hostingZones] = await Promise.all([
++  const [
++    balances,
++    instances,
++    hosts,
++    packages,
++    hostingZones,
++    balanceLogs,
++    rechargeRecords,
++    hostingBalanceLogs,
++    loginRecords,
++    redeemCodeUsages
++  ] = await Promise.all([
++    prisma.user.findUnique({
++      where: { id: userId },
++      select: { balance: true, hostingBalance: true }
++    }),
+     // Count every instance state, including deleted history, because the required User relation
+     // still blocks hard deletion and the history should not be orphaned by admin actions.
+     prisma.instance.count({ where: { userId } }),
+     prisma.host.count({ where: { userId } }),
+     prisma.package.count({ where: { userId } }),
+-    prisma.hostingZone.count({ where: { ownerId: userId } })
++    prisma.hostingZone.count({ where: { ownerId: userId } }),
++    prisma.balanceLog.count({ where: { userId } }),
++    prisma.rechargeRecord.count({ where: { userId } }),
++    prisma.hostingBalanceLog.count({ where: { userId } }),
++    prisma.loginRecord.count({ where: { userId } }),
++    prisma.redeemCodeUsage.count({ where: { userId } })
+   ])
+ 
+   return {
+     instances,
+     hosts,
+     packages,
+-    hostingZones
++    hostingZones,
++    balanceNonZero: balances?.balance.isZero() === false,
++    hostingBalanceNonZero: balances?.hostingBalance.isZero() === false,
++    balanceLogs,
++    rechargeRecords,
++    hostingBalanceLogs,
++    loginRecords,
++    redeemCodeUsages
+   }
+ }
+ 
+ function hasUserDeletionBlockers(blockers: UserDeletionBlockers): boolean {
+-  return Object.values(blockers).some(count => count > 0)
++  return Object.values(blockers).some(value => value === true || (typeof value === 'number' && value > 0))
+ }
+ 
+ function parseUserSearchFields(rawValue?: string): UserSearchField[] {
+@@ -1150,13 +1184,43 @@
+ 
+     const blockers = await getUserDeletionBlockers(userId)
+     if (hasUserDeletionBlockers(blockers)) {
++      if (blockers.balanceNonZero || blockers.hostingBalanceNonZero) {
++        return reply.code(400).send(apiError(
++          ErrorCode.USER_HAS_RESOURCES,
++          '用户主余额或托管余额非零，请先清零或结算'
++        ))
++      }
++
++      if (
++        blockers.balanceLogs > 0 ||
++        blockers.rechargeRecords > 0 ||
++        blockers.hostingBalanceLogs > 0 ||
++        blockers.loginRecords > 0 ||
++        blockers.redeemCodeUsages > 0
++      ) {
++        return reply.code(400).send(apiError(
++          ErrorCode.USER_HAS_RESOURCES,
++          '该用户有资金/审计流水，不能直接删除'
++        ))
++      }
++
+       return reply.code(400).send(apiError(
+         ErrorCode.USER_HAS_RESOURCES,
+         `instances=${blockers.instances}, hosts=${blockers.hosts}, packages=${blockers.packages}, hostingZones=${blockers.hostingZones}`
+       ))
+     }
+ 
+-    await db.deleteUser(userId)
++    try {
++      await db.deleteUser(userId)
++    } catch (error) {
++      if (error instanceof db.UserDeletionConflictError) {
++        return reply.code(409).send(apiError(
++          ErrorCode.USER_HAS_RESOURCES,
++          '该用户存在关联记录，无法删除'
++        ))
++      }
++      throw error
++    }
+ 
+     await createLog(
+       request.user.id,
+
+ succeeded in 31567ms:
+
+> server@1.3.7 type-check C:\Users\Administrator\Desktop\payinces\server
+> tsc --noEmit
+
+
+diff --git a/server/scripts/test-admin-user-delete-resource-guards.ts b/server/scripts/test-admin-user-delete-resource-guards.ts
+index f1e81dc8eb0160de74d0ba4a7e561549a94bc7f7..3bc5d87e80139958f73399e9bc88f6794a84acfc
+--- a/server/scripts/test-admin-user-delete-resource-guards.ts
++++ b/server/scripts/test-admin-user-delete-resource-guards.ts
+@@ -7,6 +7,7 @@
+ const __dirname = dirname(__filename)
+ 
+ const usersRoute = readFileSync(resolve(__dirname, '../src/routes/users.ts'), 'utf8')
++const usersDb = readFileSync(resolve(__dirname, '../src/db/users.ts'), 'utf8')
+ const errorsSource = readFileSync(resolve(__dirname, '../src/lib/errors.ts'), 'utf8')
+ const zhCN = readFileSync(resolve(__dirname, '../../client/src/locales/zh-CN.ts'), 'utf8')
+ const zhTW = readFileSync(resolve(__dirname, '../../client/src/locales/zh-TW.ts'), 'utf8')
+@@ -21,14 +22,26 @@
+ 
+ assert.ok(
+   usersRoute.includes('async function getUserDeletionBlockers(userId: number): Promise<UserDeletionBlockers>') &&
++    usersRoute.includes('select: { balance: true, hostingBalance: true }') &&
+     usersRoute.includes('prisma.instance.count({ where: { userId } })') &&
+     usersRoute.includes('prisma.host.count({ where: { userId } })') &&
+     usersRoute.includes('prisma.package.count({ where: { userId } })') &&
+-    usersRoute.includes('prisma.hostingZone.count({ where: { ownerId: userId } })'),
+-  'admin user deletion must count all resource blockers before hard deleting a user'
++    usersRoute.includes('prisma.hostingZone.count({ where: { ownerId: userId } })') &&
++    usersRoute.includes('prisma.balanceLog.count({ where: { userId } })') &&
++    usersRoute.includes('prisma.rechargeRecord.count({ where: { userId } })') &&
++    usersRoute.includes('prisma.hostingBalanceLog.count({ where: { userId } })') &&
++    usersRoute.includes('prisma.loginRecord.count({ where: { userId } })') &&
++    usersRoute.includes('prisma.redeemCodeUsage.count({ where: { userId } })'),
++  'admin user deletion must check balances, financial/audit history, and resource blockers before hard deleting a user'
+ )
+ 
+ assert.ok(
++  deleteRouteSource.includes("'用户主余额或托管余额非零，请先清零或结算'") &&
++    deleteRouteSource.includes("'该用户有资金/审计流水，不能直接删除'"),
++  'admin user deletion must return clear balance and financial/audit blocker reasons'
++)
++
++assert.ok(
+   deleteRouteSource.includes('const blockers = await getUserDeletionBlockers(userId)') &&
+     deleteRouteSource.includes('if (hasUserDeletionBlockers(blockers))') &&
+     deleteRouteSource.includes('ErrorCode.USER_HAS_RESOURCES') &&
+@@ -42,6 +55,16 @@
+   'admin user deletion must not rely on active-instance-only checks'
+ )
+ 
++assert.ok(
++  usersDb.includes('export class UserDeletionConflictError extends Error') &&
++    usersDb.includes("prismaErrorCode === 'P2003' || prismaErrorCode === 'P2014'") &&
++    usersDb.includes('throw new UserDeletionConflictError()') &&
++    deleteRouteSource.includes('error instanceof db.UserDeletionConflictError') &&
++    deleteRouteSource.includes('return reply.code(409).send(apiError(') &&
++    deleteRouteSource.includes("'该用户存在关联记录，无法删除'"),
++  'db.deleteUser must translate foreign-key failures into a business conflict returned as 4xx'
++)
++
+ for (const [name, source] of [
+   ['errors', errorsSource],
+   ['zh-CN', zhCN],
+diff --git a/server/src/db/users.ts b/server/src/db/users.ts
+index f2cd4d256fa791b2e2fcc832f113bedccb5bf7d3..c4b0feb4be699affc0cdd6ad06e60b665cf300d7
+--- a/server/src/db/users.ts
++++ b/server/src/db/users.ts
+@@ -694,10 +694,27 @@
+ /**
+  * 删除用户
+  */
++export class UserDeletionConflictError extends Error {
++  readonly code = 'USER_DELETE_ASSOCIATED_RECORDS'
++
++  constructor() {
++    super('User has associated records and cannot be deleted')
++    this.name = 'UserDeletionConflictError'
++  }
++}
++
+ export async function deleteUser(id: number): Promise<void> {
+-  await prisma.user.delete({
+-    where: { id }
+-  })
++  try {
++    await prisma.user.delete({
++      where: { id }
++    })
++  } catch (error) {
++    const prismaErrorCode = (error as { code?: string }).code
++    if (prismaErrorCode === 'P2003' || prismaErrorCode === 'P2014') {
++      throw new UserDeletionConflictError()
++    }
++    throw error
++  }
+ }
+ 
+ 
+diff --git a/server/src/routes/users.ts b/server/src/routes/users.ts
+index 507345b46ef16cb574f3d2686cc5b62951e35d02..4374dd7f4e6db731d2b7adac90972e8d08df97d5
+--- a/server/src/routes/users.ts
++++ b/server/src/routes/users.ts
+@@ -40,28 +40,62 @@
+   hosts: number
+   packages: number
+   hostingZones: number
++  balanceNonZero: boolean
++  hostingBalanceNonZero: boolean
++  balanceLogs: number
++  rechargeRecords: number
++  hostingBalanceLogs: number
++  loginRecords: number
++  redeemCodeUsages: number
+ }
+ 
+ async function getUserDeletionBlockers(userId: number): Promise<UserDeletionBlockers> {
+-  const [instances, hosts, packages, hostingZones] = await Promise.all([
++  const [
++    balances,
++    instances,
++    hosts,
++    packages,
++    hostingZones,
++    balanceLogs,
++    rechargeRecords,
++    hostingBalanceLogs,
++    loginRecords,
++    redeemCodeUsages
++  ] = await Promise.all([
++    prisma.user.findUnique({
++      where: { id: userId },
++      select: { balance: true, hostingBalance: true }
++    }),
+     // Count every instance state, including deleted history, because the required User relation
+     // still blocks hard deletion and the history should not be orphaned by admin actions.
+     prisma.instance.count({ where: { userId } }),
+     prisma.host.count({ where: { userId } }),
+     prisma.package.count({ where: { userId } }),
+-    prisma.hostingZone.count({ where: { ownerId: userId } })
++    prisma.hostingZone.count({ where: { ownerId: userId } }),
++    prisma.balanceLog.count({ where: { userId } }),
++    prisma.rechargeRecord.count({ where: { userId } }),
++    prisma.hostingBalanceLog.count({ where: { userId } }),
++    prisma.loginRecord.count({ where: { userId } }),
++    prisma.redeemCodeUsage.count({ where: { userId } })
+   ])
+ 
+   return {
+     instances,
+     hosts,
+     packages,
+-    hostingZones
++    hostingZones,
++    balanceNonZero: balances?.balance.isZero() === false,
++    hostingBalanceNonZero: balances?.hostingBalance.isZero() === false,
++    balanceLogs,
++    rechargeRecords,
++    hostingBalanceLogs,
++    loginRecords,
++    redeemCodeUsages
+   }
+ }
+ 
+ function hasUserDeletionBlockers(blockers: UserDeletionBlockers): boolean {
+-  return Object.values(blockers).some(count => count > 0)
++  return Object.values(blockers).some(value => value === true || (typeof value === 'number' && value > 0))
+ }
+ 
+ function parseUserSearchFields(rawValue?: string): UserSearchField[] {
+@@ -1150,13 +1184,43 @@
+ 
+     const blockers = await getUserDeletionBlockers(userId)
+     if (hasUserDeletionBlockers(blockers)) {
++      if (blockers.balanceNonZero || blockers.hostingBalanceNonZero) {
++        return reply.code(400).send(apiError(
++          ErrorCode.USER_HAS_RESOURCES,
++          '用户主余额或托管余额非零，请先清零或结算'
++        ))
++      }
++
++      if (
++        blockers.balanceLogs > 0 ||
++        blockers.rechargeRecords > 0 ||
++        blockers.hostingBalanceLogs > 0 ||
++        blockers.loginRecords > 0 ||
++        blockers.redeemCodeUsages > 0
++      ) {
++        return reply.code(400).send(apiError(
++          ErrorCode.USER_HAS_RESOURCES,
++          '该用户有资金/审计流水，不能直接删除'
++        ))
++      }
++
+       return reply.code(400).send(apiError(
+         ErrorCode.USER_HAS_RESOURCES,
+         `instances=${blockers.instances}, hosts=${blockers.hosts}, packages=${blockers.packages}, hostingZones=${blockers.hostingZones}`
+       ))
+     }
+ 
+-    await db.deleteUser(userId)
++    try {
++      await db.deleteUser(userId)
++    } catch (error) {
++      if (error instanceof db.UserDeletionConflictError) {
++        return reply.code(409).send(apiError(
++          ErrorCode.USER_HAS_RESOURCES,
++          '该用户存在关联记录，无法删除'
++        ))
++      }
++      throw error
++    }
+ 
+     await createLog(
+       request.user.id,
+
+codex
+验收三项均已通过。最后我会做一次仅针对目标文件的 diff/空白检查，确认没有误改 schema、package 配置或其它路径，也确认未执行任何 git 写操作。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "git diff --check -- server/src/routes/users.ts server/src/db/users.ts server/scripts/test-admin-user-delete-resource-guards.ts; git diff --numstat -- server/src/routes/users.ts server/src/db/users.ts server/scripts/test-admin-user-delete-resource-guards.ts; Select-String -Path server/src/routes/users.ts -Pattern 'balanceNonZero|balanceLog.count|资金/审计流水|UserDeletionConflictError' ; Select-String -Path server/src/db/users.ts -Pattern 'UserDeletionConflictError|P2003|P2014'" in C:\Users\Administrator\Desktop\payinces
+ succeeded in 550ms:
+25	2	server/scripts/test-admin-user-delete-resource-guards.ts
+20	3	server/src/db/users.ts
+71	6	server/src/routes/users.ts
+
+server\src\routes\users.ts:43:  balanceNonZero: boolean
+server\src\routes\users.ts:44:  hostingBalanceNonZero: boolean
+server\src\routes\users.ts:75:    prisma.balanceLog.count({ where: { userId } }),
+server\src\routes\users.ts:77:    prisma.hostingBalanceLog.count({ where: { userId } }),
+server\src\routes\users.ts:87:    balanceNonZero: balances?.balance.isZero() === false,
+server\src\routes\users.ts:88:    hostingBalanceNonZero: balances?.hostingBalance.isZero() === false,
+server\src\routes\users.ts:1187:      if (blockers.balanceNonZero || blockers.hostingBalanceNonZero) {
+server\src\routes\users.ts:1203:          '该用户有资金/审计流水，不能直接删除'
+server\src\routes\users.ts:1216:      if (error instanceof db.UserDeletionConflictError) {
+server\src\routes\users.ts:1662:      prisma.hostingBalanceLog.count({ where: { userId } })
+server\src\db\users.ts:697:export class UserDeletionConflictError extends Error {
+server\src\db\users.ts:702:    this.name = 'UserDeletionConflictError'
+server\src\db\users.ts:713:    if (prismaErrorCode === 'P2003' || prismaErrorCode === 'P2014') {
+server\src\db\users.ts:714:      throw new UserDeletionConflictError()
+
+
+warning: in the working copy of 'server/scripts/test-admin-user-delete-resource-guards.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/db/users.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/users.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/scripts/test-admin-user-delete-resource-guards.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/db/users.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/users.ts', LF will be replaced by CRLF the next time Git touches it
+
+diff --git a/server/scripts/test-admin-user-delete-resource-guards.ts b/server/scripts/test-admin-user-delete-resource-guards.ts
+index f1e81dc8eb0160de74d0ba4a7e561549a94bc7f7..3bc5d87e80139958f73399e9bc88f6794a84acfc
+--- a/server/scripts/test-admin-user-delete-resource-guards.ts
++++ b/server/scripts/test-admin-user-delete-resource-guards.ts
+@@ -7,6 +7,7 @@
+ const __dirname = dirname(__filename)
+ 
+ const usersRoute = readFileSync(resolve(__dirname, '../src/routes/users.ts'), 'utf8')
++const usersDb = readFileSync(resolve(__dirname, '../src/db/users.ts'), 'utf8')
+ const errorsSource = readFileSync(resolve(__dirname, '../src/lib/errors.ts'), 'utf8')
+ const zhCN = readFileSync(resolve(__dirname, '../../client/src/locales/zh-CN.ts'), 'utf8')
+ const zhTW = readFileSync(resolve(__dirname, '../../client/src/locales/zh-TW.ts'), 'utf8')
+@@ -21,14 +22,26 @@
+ 
+ assert.ok(
+   usersRoute.includes('async function getUserDeletionBlockers(userId: number): Promise<UserDeletionBlockers>') &&
++    usersRoute.includes('select: { balance: true, hostingBalance: true }') &&
+     usersRoute.includes('prisma.instance.count({ where: { userId } })') &&
+     usersRoute.includes('prisma.host.count({ where: { userId } })') &&
+     usersRoute.includes('prisma.package.count({ where: { userId } })') &&
+-    usersRoute.includes('prisma.hostingZone.count({ where: { ownerId: userId } })'),
+-  'admin user deletion must count all resource blockers before hard deleting a user'
++    usersRoute.includes('prisma.hostingZone.count({ where: { ownerId: userId } })') &&
++    usersRoute.includes('prisma.balanceLog.count({ where: { userId } })') &&
++    usersRoute.includes('prisma.rechargeRecord.count({ where: { userId } })') &&
++    usersRoute.includes('prisma.hostingBalanceLog.count({ where: { userId } })') &&
++    usersRoute.includes('prisma.loginRecord.count({ where: { userId } })') &&
++    usersRoute.includes('prisma.redeemCodeUsage.count({ where: { userId } })'),
++  'admin user deletion must check balances, financial/audit history, and resource blockers before hard deleting a user'
+ )
+ 
+ assert.ok(
++  deleteRouteSource.includes("'用户主余额或托管余额非零，请先清零或结算'") &&
++    deleteRouteSource.includes("'该用户有资金/审计流水，不能直接删除'"),
++  'admin user deletion must return clear balance and financial/audit blocker reasons'
++)
++
++assert.ok(
+   deleteRouteSource.includes('const blockers = await getUserDeletionBlockers(userId)') &&
+     deleteRouteSource.includes('if (hasUserDeletionBlockers(blockers))') &&
+     deleteRouteSource.includes('ErrorCode.USER_HAS_RESOURCES') &&
+@@ -42,6 +55,16 @@
+   'admin user deletion must not rely on active-instance-only checks'
+ )
+ 
++assert.ok(
++  usersDb.includes('export class UserDeletionConflictError extends Error') &&
++    usersDb.includes("prismaErrorCode === 'P2003' || prismaErrorCode === 'P2014'") &&
++    usersDb.includes('throw new UserDeletionConflictError()') &&
++    deleteRouteSource.includes('error instanceof db.UserDeletionConflictError') &&
++    deleteRouteSource.includes('return reply.code(409).send(apiError(') &&
++    deleteRouteSource.includes("'该用户存在关联记录，无法删除'"),
++  'db.deleteUser must translate foreign-key failures into a business conflict returned as 4xx'
++)
++
+ for (const [name, source] of [
+   ['errors', errorsSource],
+   ['zh-CN', zhCN],
+diff --git a/server/src/db/users.ts b/server/src/db/users.ts
+index f2cd4d256fa791b2e2fcc832f113bedccb5bf7d3..c4b0feb4be699affc0cdd6ad06e60b665cf300d7
+--- a/server/src/db/users.ts
++++ b/server/src/db/users.ts
+@@ -694,10 +694,27 @@
+ /**
+  * 删除用户
+  */
++export class UserDeletionConflictError extends Error {
++  readonly code = 'USER_DELETE_ASSOCIATED_RECORDS'
++
++  constructor() {
++    super('User has associated records and cannot be deleted')
++    this.name = 'UserDeletionConflictError'
++  }
++}
++
+ export async function deleteUser(id: number): Promise<void> {
+-  await prisma.user.delete({
+-    where: { id }
+-  })
++  try {
++    await prisma.user.delete({
++      where: { id }
++    })
++  } catch (error) {
++    const prismaErrorCode = (error as { code?: string }).code
++    if (prismaErrorCode === 'P2003' || prismaErrorCode === 'P2014') {
++      throw new UserDeletionConflictError()
++    }
++    throw error
++  }
+ }
+ 
+ 
+diff --git a/server/src/routes/users.ts b/server/src/routes/users.ts
+index 507345b46ef16cb574f3d2686cc5b62951e35d02..4374dd7f4e6db731d2b7adac90972e8d08df97d5
+--- a/server/src/routes/users.ts
++++ b/server/src/routes/users.ts
+@@ -40,28 +40,62 @@
+   hosts: number
+   packages: number
+   hostingZones: number
++  balanceNonZero: boolean
++  hostingBalanceNonZero: boolean
++  balanceLogs: number
++  rechargeRecords: number
++  hostingBalanceLogs: number
++  loginRecords: number
++  redeemCodeUsages: number
+ }
+ 
+ async function getUserDeletionBlockers(userId: number): Promise<UserDeletionBlockers> {
+-  const [instances, hosts, packages, hostingZones] = await Promise.all([
++  const [
++    balances,
++    instances,
++    hosts,
++    packages,
++    hostingZones,
++    balanceLogs,
++    rechargeRecords,
++    hostingBalanceLogs,
++    loginRecords,
++    redeemCodeUsages
++  ] = await Promise.all([
++    prisma.user.findUnique({
++      where: { id: userId },
++      select: { balance: true, hostingBalance: true }
++    }),
+     // Count every instance state, including deleted history, because the required User relation
+     // still blocks hard deletion and the history should not be orphaned by admin actions.
+     prisma.instance.count({ where: { userId } }),
+     prisma.host.count({ where: { userId } }),
+     prisma.package.count({ where: { userId } }),
+-    prisma.hostingZone.count({ where: { ownerId: userId } })
++    prisma.hostingZone.count({ where: { ownerId: userId } }),
++    prisma.balanceLog.count({ where: { userId } }),
++    prisma.rechargeRecord.count({ where: { userId } }),
++    prisma.hostingBalanceLog.count({ where: { userId } }),
++    prisma.loginRecord.count({ where: { userId } }),
++    prisma.redeemCodeUsage.count({ where: { userId } })
+   ])
+ 
+   return {
+     instances,
+     hosts,
+     packages,
+-    hostingZones
++    hostingZones,
++    balanceNonZero: balances?.balance.isZero() === false,
++    hostingBalanceNonZero: balances?.hostingBalance.isZero() === false,
++    balanceLogs,
++    rechargeRecords,
++    hostingBalanceLogs,
++    loginRecords,
++    redeemCodeUsages
+   }
+ }
+ 
+ function hasUserDeletionBlockers(blockers: UserDeletionBlockers): boolean {
+-  return Object.values(blockers).some(count => count > 0)
++  return Object.values(blockers).some(value => value === true || (typeof value === 'number' && value > 0))
+ }
+ 
+ function parseUserSearchFields(rawValue?: string): UserSearchField[] {
+@@ -1150,13 +1184,43 @@
+ 
+     const blockers = await getUserDeletionBlockers(userId)
+     if (hasUserDeletionBlockers(blockers)) {
++      if (blockers.balanceNonZero || blockers.hostingBalanceNonZero) {
++        return reply.code(400).send(apiError(
++          ErrorCode.USER_HAS_RESOURCES,
++          '用户主余额或托管余额非零，请先清零或结算'
++        ))
++      }
++
++      if (
++        blockers.balanceLogs > 0 ||
++        blockers.rechargeRecords > 0 ||
++        blockers.hostingBalanceLogs > 0 ||
++        blockers.loginRecords > 0 ||
++        blockers.redeemCodeUsages > 0
++      ) {
++        return reply.code(400).send(apiError(
++          ErrorCode.USER_HAS_RESOURCES,
++          '该用户有资金/审计流水，不能直接删除'
++        ))
++      }
++
+       return reply.code(400).send(apiError(
+         ErrorCode.USER_HAS_RESOURCES,
+         `instances=${blockers.instances}, hosts=${blockers.hosts}, packages=${blockers.packages}, hostingZones=${blockers.hostingZones}`
+       ))
+     }
+ 
+-    await db.deleteUser(userId)
++    try {
++      await db.deleteUser(userId)
++    } catch (error) {
++      if (error instanceof db.UserDeletionConflictError) {
++        return reply.code(409).send(apiError(
++          ErrorCode.USER_HAS_RESOURCES,
++          '该用户存在关联记录，无法删除'
++        ))
++      }
++      throw error
++    }
+ 
+     await createLog(
+       request.user.id,
+
+codex
+已按 FX-026 完成且未 commit：在 `users.ts` 删除阻断中新增主余额、托管余额非零检查，以及 BalanceLog、RechargeRecord、HostingBalanceLog、LoginRecord、RedeemCodeUsage 历史记录检查，分别返回明确 400 原因；`db.deleteUser` 将 Prisma `P2003/P2014` 外键错误转换为 `UserDeletionConflictError`，路由返回 409，避免误导性 500。守卫已追加并通过，`server type-check`、`test:admin-user-delete-resource-guards`、`test:user-route-id-guards` 均通过。未改 schema、package.json 或其他业务路径；建议 owner 后续单独设计用户软删/匿名化架构，但不应并入本次修复。
+diff --git a/server/scripts/test-admin-user-delete-resource-guards.ts b/server/scripts/test-admin-user-delete-resource-guards.ts
+index f1e81dc8eb0160de74d0ba4a7e561549a94bc7f7..3bc5d87e80139958f73399e9bc88f6794a84acfc
+--- a/server/scripts/test-admin-user-delete-resource-guards.ts
++++ b/server/scripts/test-admin-user-delete-resource-guards.ts
+@@ -7,6 +7,7 @@
+ const __dirname = dirname(__filename)
+ 
+ const usersRoute = readFileSync(resolve(__dirname, '../src/routes/users.ts'), 'utf8')
++const usersDb = readFileSync(resolve(__dirname, '../src/db/users.ts'), 'utf8')
+ const errorsSource = readFileSync(resolve(__dirname, '../src/lib/errors.ts'), 'utf8')
+ const zhCN = readFileSync(resolve(__dirname, '../../client/src/locales/zh-CN.ts'), 'utf8')
+ const zhTW = readFileSync(resolve(__dirname, '../../client/src/locales/zh-TW.ts'), 'utf8')
+@@ -21,14 +22,26 @@
+ 
+ assert.ok(
+   usersRoute.includes('async function getUserDeletionBlockers(userId: number): Promise<UserDeletionBlockers>') &&
++    usersRoute.includes('select: { balance: true, hostingBalance: true }') &&
+     usersRoute.includes('prisma.instance.count({ where: { userId } })') &&
+     usersRoute.includes('prisma.host.count({ where: { userId } })') &&
+     usersRoute.includes('prisma.package.count({ where: { userId } })') &&
+-    usersRoute.includes('prisma.hostingZone.count({ where: { ownerId: userId } })'),
+-  'admin user deletion must count all resource blockers before hard deleting a user'
++    usersRoute.includes('prisma.hostingZone.count({ where: { ownerId: userId } })') &&
++    usersRoute.includes('prisma.balanceLog.count({ where: { userId } })') &&
++    usersRoute.includes('prisma.rechargeRecord.count({ where: { userId } })') &&
++    usersRoute.includes('prisma.hostingBalanceLog.count({ where: { userId } })') &&
++    usersRoute.includes('prisma.loginRecord.count({ where: { userId } })') &&
++    usersRoute.includes('prisma.redeemCodeUsage.count({ where: { userId } })'),
++  'admin user deletion must check balances, financial/audit history, and resource blockers before hard deleting a user'
+ )
+ 
+ assert.ok(
++  deleteRouteSource.includes("'用户主余额或托管余额非零，请先清零或结算'") &&
++    deleteRouteSource.includes("'该用户有资金/审计流水，不能直接删除'"),
++  'admin user deletion must return clear balance and financial/audit blocker reasons'
++)
++
++assert.ok(
+   deleteRouteSource.includes('const blockers = await getUserDeletionBlockers(userId)') &&
+     deleteRouteSource.includes('if (hasUserDeletionBlockers(blockers))') &&
+     deleteRouteSource.includes('ErrorCode.USER_HAS_RESOURCES') &&
+@@ -42,6 +55,16 @@
+   'admin user deletion must not rely on active-instance-only checks'
+ )
+ 
++assert.ok(
++  usersDb.includes('export class UserDeletionConflictError extends Error') &&
++    usersDb.includes("prismaErrorCode === 'P2003' || prismaErrorCode === 'P2014'") &&
++    usersDb.includes('throw new UserDeletionConflictError()') &&
++    deleteRouteSource.includes('error instanceof db.UserDeletionConflictError') &&
++    deleteRouteSource.includes('return reply.code(409).send(apiError(') &&
++    deleteRouteSource.includes("'该用户存在关联记录，无法删除'"),
++  'db.deleteUser must translate foreign-key failures into a business conflict returned as 4xx'
++)
++
+ for (const [name, source] of [
+   ['errors', errorsSource],
+   ['zh-CN', zhCN],
+diff --git a/server/src/db/users.ts b/server/src/db/users.ts
+index f2cd4d256fa791b2e2fcc832f113bedccb5bf7d3..c4b0feb4be699affc0cdd6ad06e60b665cf300d7
+--- a/server/src/db/users.ts
++++ b/server/src/db/users.ts
+@@ -694,10 +694,27 @@
+ /**
+  * 删除用户
+  */
++export class UserDeletionConflictError extends Error {
++  readonly code = 'USER_DELETE_ASSOCIATED_RECORDS'
++
++  constructor() {
++    super('User has associated records and cannot be deleted')
++    this.name = 'UserDeletionConflictError'
++  }
++}
++
+ export async function deleteUser(id: number): Promise<void> {
+-  await prisma.user.delete({
+-    where: { id }
+-  })
++  try {
++    await prisma.user.delete({
++      where: { id }
++    })
++  } catch (error) {
++    const prismaErrorCode = (error as { code?: string }).code
++    if (prismaErrorCode === 'P2003' || prismaErrorCode === 'P2014') {
++      throw new UserDeletionConflictError()
++    }
++    throw error
++  }
+ }
+ 
+ 
+diff --git a/server/src/routes/users.ts b/server/src/routes/users.ts
+index 507345b46ef16cb574f3d2686cc5b62951e35d02..4374dd7f4e6db731d2b7adac90972e8d08df97d5
+--- a/server/src/routes/users.ts
++++ b/server/src/routes/users.ts
+@@ -40,28 +40,62 @@
+   hosts: number
+   packages: number
+   hostingZones: number
++  balanceNonZero: boolean
++  hostingBalanceNonZero: boolean
++  balanceLogs: number
++  rechargeRecords: number
++  hostingBalanceLogs: number
++  loginRecords: number
++  redeemCodeUsages: number
+ }
+ 
+ async function getUserDeletionBlockers(userId: number): Promise<UserDeletionBlockers> {
+-  const [instances, hosts, packages, hostingZones] = await Promise.all([
++  const [
++    balances,
++    instances,
++    hosts,
++    packages,
++    hostingZones,
++    balanceLogs,
++    rechargeRecords,
++    hostingBalanceLogs,
++    loginRecords,
++    redeemCodeUsages
++  ] = await Promise.all([
++    prisma.user.findUnique({
++      where: { id: userId },
++      select: { balance: true, hostingBalance: true }
++    }),
+     // Count every instance state, including deleted history, because the required User relation
+     // still blocks hard deletion and the history should not be orphaned by admin actions.
+     prisma.instance.count({ where: { userId } }),
+     prisma.host.count({ where: { userId } }),
+     prisma.package.count({ where: { userId } }),
+-    prisma.hostingZone.count({ where: { ownerId: userId } })
++    prisma.hostingZone.count({ where: { ownerId: userId } }),
++    prisma.balanceLog.count({ where: { userId } }),
++    prisma.rechargeRecord.count({ where: { userId } }),
++    prisma.hostingBalanceLog.count({ where: { userId } }),
++    prisma.loginRecord.count({ where: { userId } }),
++    prisma.redeemCodeUsage.count({ where: { userId } })
+   ])
+ 
+   return {
+     instances,
+     hosts,
+     packages,
+-    hostingZones
++    hostingZones,
++    balanceNonZero: balances?.balance.isZero() === false,
++    hostingBalanceNonZero: balances?.hostingBalance.isZero() === false,
++    balanceLogs,
++    rechargeRecords,
++    hostingBalanceLogs,
++    loginRecords,
++    redeemCodeUsages
+   }
+ }
+ 
+ function hasUserDeletionBlockers(blockers: UserDeletionBlockers): boolean {
+-  return Object.values(blockers).some(count => count > 0)
++  return Object.values(blockers).some(value => value === true || (typeof value === 'number' && value > 0))
+ }
+ 
+ function parseUserSearchFields(rawValue?: string): UserSearchField[] {
+@@ -1150,13 +1184,43 @@
+ 
+     const blockers = await getUserDeletionBlockers(userId)
+     if (hasUserDeletionBlockers(blockers)) {
++      if (blockers.balanceNonZero || blockers.hostingBalanceNonZero) {
++        return reply.code(400).send(apiError(
++          ErrorCode.USER_HAS_RESOURCES,
++          '用户主余额或托管余额非零，请先清零或结算'
++        ))
++      }
++
++      if (
++        blockers.balanceLogs > 0 ||
++        blockers.rechargeRecords > 0 ||
++        blockers.hostingBalanceLogs > 0 ||
++        blockers.loginRecords > 0 ||
++        blockers.redeemCodeUsages > 0
++      ) {
++        return reply.code(400).send(apiError(
++          ErrorCode.USER_HAS_RESOURCES,
++          '该用户有资金/审计流水，不能直接删除'
++        ))
++      }
++
+       return reply.code(400).send(apiError(
+         ErrorCode.USER_HAS_RESOURCES,
+         `instances=${blockers.instances}, hosts=${blockers.hosts}, packages=${blockers.packages}, hostingZones=${blockers.hostingZones}`
+       ))
+     }
+ 
+-    await db.deleteUser(userId)
++    try {
++      await db.deleteUser(userId)
++    } catch (error) {
++      if (error instanceof db.UserDeletionConflictError) {
++        return reply.code(409).send(apiError(
++          ErrorCode.USER_HAS_RESOURCES,
++          '该用户存在关联记录，无法删除'
++        ))
++      }
++      throw error
++    }
+ 
+     await createLog(
+       request.user.id,
+
+tokens used
+47,440

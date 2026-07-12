@@ -1,0 +1,1 @@
+已完成 FX-041：创建超时清理由赢得 `creating → error` 的流程调用 `markFlashSaleFailed`；公网 IPv4 无货分支同样仅在原子状态迁移成功后执行资源、账务与秒杀补偿。`markFlashSaleFailed` 改为带原状态条件的 `updateMany`，只有首次迁移成功才回滚 `soldCount`，并发或重复调用不会双减。已更新两项守卫；`test:flash-sale-guards`、`test:instance-create-failure-compensation`、server type-check 均通过。未触碰 `traffic.ts`、schema/package，未 commit/push/发版。

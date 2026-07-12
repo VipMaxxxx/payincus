@@ -1,0 +1,1 @@
+已完成 FX-047：在 `sync-status` 路由层跳过 `suspended` 状态覆写，同时继续同步 IP 等遥测；在 `db/instances.ts` 的通用状态写入层通过 `notIn: ['deleted', 'suspended']` 做并发兜底，正常 `running ↔ stopped` 不受影响，显式解封路径未改。已追加路由与 DB 双层守卫。`server type-check` 和 `test:instance-operation-conflict-guards` 均通过；未触碰 `traffic.ts`，未 commit/push/发版。

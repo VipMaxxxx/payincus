@@ -1,0 +1,1 @@
+已完成 FX-082：初连前注册客户端 `close/error`，建连后复核 OPEN 状态，断开则立即关闭 Incus 连接且不登记会话/启动心跳；重连增加可失效的 `reconnectGeneration`，退避及建连完成后均复核会话与代次，关闭会话时使代次失效。守卫已追加；server type-check 与 `test:terminal-route-id-guards` 均通过。未触碰 `terminal.ts`、`resource-risk.ts`，未 commit。

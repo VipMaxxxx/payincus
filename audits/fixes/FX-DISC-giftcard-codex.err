@@ -1,0 +1,2411 @@
+OpenAI Codex v0.144.0-alpha.4
+--------
+workdir: C:\Users\Administrator\Desktop\payinces
+model: gpt-5.6-sol
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: high
+reasoning summaries: none
+session id: 019f53ad-6481-74e1-8983-3f123898a419
+--------
+user
+你是 PayIncus 前端工程师。先读 AGENTS.md §4(表格守卫红线,禁改守卫/禁 overflow-x-auto/min-w)。按规格改 GiftCardsView 用户+管理两页恢复锁定表并满足 test-gift-card-guards.ts:228-249 全部子条件(移动卡/table-fixed/指定@click/@change/t()/i18n key),功能不变。反复跑 test:gift-card-guards 直到绿。不 commit。
+---
+# 表格漂移恢复:GiftCardsView(用户+管理)(gift-card-guards FAIL)
+
+## 失败断言(test-gift-card-guards.ts:228-249,大 AND)
+需同时满足(用户 client/src/views/GiftCardsView.vue + 管理 client/src/views/admin/GiftCardsView.vue):
+- 用户端:`class="mt-5 space-y-3 lg:hidden"`(移动卡)、`class="mt-5 hidden overflow-hidden lg:block"`+`class="w-full table-fixed text-sm"`(桌面定宽表)、`class="block truncate"`、`@click="toggleCodeReveal(card)"`、`@click="copyCode(card.code)"`、`t('giftCards.redeemTitle')`、TurnstileWidget、**不得**含 `class="w-full min-w-[860px] table-fixed text-sm"`;i18n `redeemTitle: '兑换礼品卡'`。
+- 管理端:`t('giftCardsAdmin.description')`、`class="mt-5 space-y-3 lg:hidden"`、`class="mt-5 hidden overflow-hidden lg:block"`+`class="w-full table-fixed text-sm"`、`@change="toggleSelected(card.id, ($event.target as HTMLInputElement).checked)"`、`@click="updateCardStatus(card)"`、`@click="deleteCard(card)"`、`t('giftCardsAdmin.revealCode')`;i18n `revealCode: '显示完整兑换码'`、`PAYINCUS_GIFT_CARD_ADMIN_IDS`。
+
+## 硬约束(memory + AGENTS.md §4)
+锁定表只能移动卡+PC定宽表(table-fixed/overflow-hidden,禁横滚/禁 min-w)。**不许改/弱化守卫**,只改 .vue(+必要 i18n key 若被删)。
+
+## 修法(只改 client/src/views/GiftCardsView.vue + client/src/views/admin/GiftCardsView.vue + 必要 locales;不改守卫;不碰后端)
+1. 先只读 test-gift-card-guards.ts:228-249 全部子条件 + 两 .vue 当前结构,逐条比对缺哪些。
+2. 恢复:移动卡 `space-y-3 lg:hidden` + 桌面 `hidden overflow-hidden lg:block`+`table-fixed`(去 `min-w-[860px]`),保留断言要求的 @click/@change/t() 调用与 truncate;若 i18n key(redeemTitle/revealCode)被删则补回三语。功能 100% 不变。
+3. 反复跑 test:gift-card-guards 直到全 AND 通过。
+
+## 验收
+test:gift-card-guards、test:frontend-route-guards、test:frontend-dist-boundary-guards、test:frontend-i18n-keys、client type-check 通过。不 commit。
+
+codex
+我会严格按锁定表红线处理：先只读守卫对应断言与两页现状，逐条补齐结构和事件，不改守卫、不碰后端，也不 commit。随后依次跑指定 gift-card 守卫及前端验收项。
+  → 读取 AGENTS.md §4、gift card 守卫断言及两页当前结构
+  • 最小化恢复用户端与管理端锁定表结构及必要 i18n
+  • 运行 gift-card 守卫并迭代至通过
+  • 运行 route/dist/i18n 守卫与 client type-check
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$lines = Get-Content -LiteralPath '"'AGENTS.md'; "'$start = ($lines | Select-String -SimpleMatch '"'## 4.' | Select-Object -First 1).LineNumber; "'$end = ($lines | Select-String -SimpleMatch '"'## 5.' | Select-Object -First 1).LineNumber; "'$lines[($start-1)..($end-2)]
+rg -n -C 28 "GiftCardsView|redeemTitle|revealCode|PAYINCUS_GIFT_CARD_ADMIN_IDS" server client -g "test-gift-card-guards.ts" -g "*.vue" -g "*.ts"' in C:\Users\Administrator\Desktop\payinces
+2026-07-12T00:15:14.123803Z ERROR codex_core::tools::router: error=Exit code: 1
+Wall time: 0.9 seconds
+Output:
+## 4. ðŸ›¡ï¸ å®ˆå«æµ‹è¯•çºªå¾‹ï¼ˆæœ¬ä»“åº“çš„å‘½é—¨ï¼‰
+
+`server/package.json` é‡Œæœ‰ **200+ ä¸ªç‹¬ç«‹ `test-*-guards.ts`**ã€‚å®ƒä»¬æŠŠå…³é”®ä¸šåŠ¡/å‰ç«¯ç»“æž„â€œé’‰æ­»â€ï¼Œ`pnpm test` ä¼šè·‘å…¨å¥—ï¼ˆclient+server type-check + å…¨éƒ¨å®ˆå«ï¼‰ã€‚**ä»»ä½•æ”¹åŠ¨å¿…é¡»è®©ç›¸å…³å®ˆå«é€šè¿‡ã€‚**
+
+- **å…¨é‡**ï¼ˆæ…¢ï¼Œå‘ç‰ˆå‰è·‘ï¼‰ï¼š`pnpm test`
+- **å•ä¸ª**ï¼š`pnpm --filter server test:<guard-name>`
+- **å‰ç«¯æœ€å¸¸ç”¨ä¸‰ä¸ª**ï¼š
+  - `test:frontend-route-guards` â€”â€” è·¯ç”± / **è¡¨æ ¼å¸ƒå±€** / `@click` è·¯å¾„æ–­è¨€
+  - `test:frontend-dist-boundary-guards` â€”â€” åŒç«¯ dist è¾¹ç•Œ
+  - `test:frontend-i18n-keys` â€”â€” i18n key å®Œæ•´æ€§
+- **Go agent**ï¼š`pnpm test:agent`
+
+### âš ï¸ è¡¨æ ¼å¸ƒå±€å®ˆå«ï¼ˆæœ€å®¹æ˜“è¸©é›·ï¼‰
+ä¸€æ‰¹è¡¨è¢«å®ˆå«**é”å®š**ä¸ºâ€œ**ç§»åŠ¨å¡ + PC å®šå®½è¡¨ï¼ˆ`table-fixed` / `overflow-hidden`ï¼‰ï¼Œç»ä¸æ¨ªå‘æ»šåŠ¨**â€ï¼Œå¹¶**åå‘ç¦æ­¢** `overflow-x-auto` / `min-w-[...]` / åŽ»æŽ‰ `table-fixed`ã€‚
+- æƒ³ä¿®â€œå®½è¡¨æŒ¤åŽ‹â€æ—¶ï¼š**å…ˆåˆ¤æ–­è¯¥è¡¨æ˜¯å¦åœ¨å®ˆå«æ¸…å•é‡Œ**ã€‚é”å®šè¡¨**åªèƒ½åœ¨ `table-fixed` å†…å¹³è¡¡åˆ—å®½**ï¼ˆåˆ—å®½ç™¾åˆ†æ¯”åˆè®¡ = 100%ï¼‰+ å…è®¸å•å…ƒæ ¼æ¢è¡Œ + é ç§»åŠ¨å¡åº”å¯¹çª„å±ï¼›**ä¸èƒ½**æ”¹æˆæ¨ªå‘æ»šåŠ¨ã€‚
+- å—é”å®šçš„è¡¨ï¼ˆç”¨æˆ·ç«¯ï¼‰ï¼š`MyPackagesView`ã€`MyHostsView`ã€`TransfersView`ã€`OrdersView`ã€`InvitesView`ã€`FlashSalesView`ã€`HostingWalletView`ã€`InstancesView`ã€`LogsView`ã€`EntertainmentView`ï¼›ï¼ˆç®¡ç†ç«¯ï¼‰`admin/BillingView`ã€`admin/ImagesView`ã€`admin/HelpManageView`ã€`admin/MailView`ã€`admin/PluginCenterView`ï¼›ï¼ˆç»„ä»¶ï¼‰`HostPublicIpv4Tab`ã€`InstanceLogsTab`ã€`ConfigEditModal`ã€‚
+- æ”¹ä»»ä¸€å‰ç«¯æ–‡ä»¶åŽ**å¿…è·‘** `test:frontend-route-guards`ã€‚
+
+---
+
+rg : The term 'rg' is not recognized as the name of a cmdlet, function, script file, or operable program. Check the 
+spelling of the name, or if a path was included, verify that the path is correct and try again.
+At line:3 char:1
++ rg -n -C 28 "GiftCardsView|redeemTitle|revealCode|PAYINCUS_GIFT_CARD_ ...
++ ~~
+    + CategoryInfo          : ObjectNotFound: (rg:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+
+ exited 1 in 927ms:
+## 4. ðŸ›¡ï¸ å®ˆå«æµ‹è¯•çºªå¾‹ï¼ˆæœ¬ä»“åº“çš„å‘½é—¨ï¼‰
+
+`server/package.json` é‡Œæœ‰ **200+ ä¸ªç‹¬ç«‹ `test-*-guards.ts`**ã€‚å®ƒä»¬æŠŠå…³é”®ä¸šåŠ¡/å‰ç«¯ç»“æž„â€œé’‰æ­»â€ï¼Œ`pnpm test` ä¼šè·‘å…¨å¥—ï¼ˆclient+server type-check + å…¨éƒ¨å®ˆå«ï¼‰ã€‚**ä»»ä½•æ”¹åŠ¨å¿…é¡»è®©ç›¸å…³å®ˆå«é€šè¿‡ã€‚**
+
+- **å…¨é‡**ï¼ˆæ…¢ï¼Œå‘ç‰ˆå‰è·‘ï¼‰ï¼š`pnpm test`
+- **å•ä¸ª**ï¼š`pnpm --filter server test:<guard-name>`
+- **å‰ç«¯æœ€å¸¸ç”¨ä¸‰ä¸ª**ï¼š
+  - `test:frontend-route-guards` â€”â€” è·¯ç”± / **è¡¨æ ¼å¸ƒå±€** / `@click` è·¯å¾„æ–­è¨€
+  - `test:frontend-dist-boundary-guards` â€”â€” åŒç«¯ dist è¾¹ç•Œ
+  - `test:frontend-i18n-keys` â€”â€” i18n key å®Œæ•´æ€§
+- **Go agent**ï¼š`pnpm test:agent`
+
+### âš ï¸ è¡¨æ ¼å¸ƒå±€å®ˆå«ï¼ˆæœ€å®¹æ˜“è¸©é›·ï¼‰
+ä¸€æ‰¹è¡¨è¢«å®ˆå«**é”å®š**ä¸ºâ€œ**ç§»åŠ¨å¡ + PC å®šå®½è¡¨ï¼ˆ`table-fixed` / `overflow-hidden`ï¼‰ï¼Œç»ä¸æ¨ªå‘æ»šåŠ¨**â€ï¼Œå¹¶**åå‘ç¦æ­¢** `overflow-x-auto` / `min-w-[...]` / åŽ»æŽ‰ `table-fixed`ã€‚
+- æƒ³ä¿®â€œå®½è¡¨æŒ¤åŽ‹â€æ—¶ï¼š**å…ˆåˆ¤æ–­è¯¥è¡¨æ˜¯å¦åœ¨å®ˆå«æ¸…å•é‡Œ**ã€‚é”å®šè¡¨**åªèƒ½åœ¨ `table-fixed` å†…å¹³è¡¡åˆ—å®½**ï¼ˆåˆ—å®½ç™¾åˆ†æ¯”åˆè®¡ = 100%ï¼‰+ å…è®¸å•å…ƒæ ¼æ¢è¡Œ + é ç§»åŠ¨å¡åº”å¯¹çª„å±ï¼›**ä¸èƒ½**æ”¹æˆæ¨ªå‘æ»šåŠ¨ã€‚
+- å—é”å®šçš„è¡¨ï¼ˆç”¨æˆ·ç«¯ï¼‰ï¼š`MyPackagesView`ã€`MyHostsView`ã€`TransfersView`ã€`OrdersView`ã€`InvitesView`ã€`FlashSalesView`ã€`HostingWalletView`ã€`InstancesView`ã€`LogsView`ã€`EntertainmentView`ï¼›ï¼ˆç®¡ç†ç«¯ï¼‰`admin/BillingView`ã€`admin/ImagesView`ã€`admin/HelpManageView`ã€`admin/MailView`ã€`admin/PluginCenterView`ï¼›ï¼ˆç»„ä»¶ï¼‰`HostPublicIpv4Tab`ã€`InstanceLogsTab`ã€`ConfigEditModal`ã€‚
+- æ”¹ä»»ä¸€å‰ç«¯æ–‡ä»¶åŽ**å¿…è·‘** `test:frontend-route-guards`ã€‚
+
+---
+
+rg : The term 'rg' is not recognized as the name of a cmdlet, function, script file, or operable program. Check the 
+spelling of the name, or if a path was included, verify that the path is correct and try again.
+At line:3 char:1
++ rg -n -C 28 "GiftCardsView|redeemTitle|revealCode|PAYINCUS_GIFT_CARD_ ...
++ ~~
+    + CategoryInfo          : ObjectNotFound: (rg:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+
+codex
+已确认 §4 的核心约束：移动卡 + `overflow-hidden` 的 PC `table-fixed`，明确禁止横向滚动与 `min-w`。当前环境没有 `rg`，我改用 PowerShell 只读检索继续定位断言。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$test = Get-ChildItem -Path . -Recurse -Filter '"'test-gift-card-guards.ts' -File | Select-Object -First 1; Write-Output \"TEST="'$($test.FullName)"; if ($test) { $lines = Get-Content -LiteralPath $test.FullName -Encoding UTF8; for ($i=215; $i -le [Math]::Min(260,$lines.Length); $i++) { '"'{0,4}: {1}' -f "'$i,$lines[$i-1] } }
+Write-Output '"'--- USER VIEW MATCHES ---'; Select-String -Path 'client/src/views/GiftCardsView.vue' -Pattern 'mt-5|table-fixed|min-w|overflow-x|toggleCodeReveal|copyCode|redeemTitle|TurnstileWidget|truncate' -Context 2,3 -Encoding UTF8
+Write-Output '--- ADMIN VIEW MATCHES ---'; Select-String -Path 'client/src/views/admin/GiftCardsView.vue' -Pattern 'description|mt-5|table-fixed|min-w|overflow-x|toggleSelected|updateCardStatus|deleteCard|revealCode|truncate' -Context 2,3 -Encoding UTF8
+Write-Output '--- LOCALE MATCHES ---'; Get-ChildItem 'client/src' -Recurse -File | Where-Object { "'$_.Name -match '"'locale|i18n|messages' -or "'$_.DirectoryName -match '"'locale|i18n' } | Select-String -Pattern 'redeemTitle|revealCode|PAYINCUS_GIFT_CARD_ADMIN_IDS' -Context 1,1 -Encoding UTF8" in C:\Users\Administrator\Desktop\payinces
+ succeeded in 3852ms:
+TEST=C:\Users\Administrator\Desktop\payinces\server\scripts\test-gift-card-guards.ts
+ 215:   app.includes("await fastify.register(giftCardsRoutes, { prefix: '/api/gift-cards' })") &&
+ 216:     clientTypes.includes('export interface GiftCardRecord') &&
+ 217:     clientApi.includes('giftCards:') &&
+ 218:     clientApi.includes("http.post('/gift-cards/user/redeem'") &&
+ 219:     clientApi.includes("http.post('/gift-cards/user/generate'") &&
+ 220:     clientApi.includes("http.get('/gift-cards/user/mine'") &&
+ 221:     adminApi.includes('giftCards:') &&
+ 222:     adminApi.includes("http.post('/gift-cards/admin/generate'") &&
+ 223:     adminApi.includes("http.post('/gift-cards/admin/batch'") &&
+ 224:     userRouter.includes("path: '/gift-cards'") &&
+ 225: 	    adminRouter.includes("path: '/admin/gift-cards'") &&
+ 226: 	    userNav.includes("path: '/gift-cards'") &&
+ 227: 	    adminNav.includes("path: '/admin/gift-cards'") &&
+ 228: 	    userView.includes('TurnstileWidget') &&
+ 229: 	    userView.includes("t('giftCards.redeemTitle')") &&
+ 230: 	    userView.includes('class="mt-5 space-y-3 lg:hidden"') &&
+ 231: 	    userView.includes('class="mt-5 hidden overflow-hidden lg:block"') &&
+ 232: 	    userView.includes('class="w-full table-fixed text-sm"') &&
+ 233: 	    userView.includes('class="block truncate"') &&
+ 234: 	    userView.includes('@click="toggleCodeReveal(card)"') &&
+ 235: 	    userView.includes('@click="copyCode(card.code)"') &&
+ 236: 	    !userView.includes('class="w-full min-w-[860px] table-fixed text-sm"') &&
+ 237: 	    zhLocale.includes("redeemTitle: '兑换礼品卡'") &&
+ 238: 	    adminView.includes("t('giftCardsAdmin.description')") &&
+ 239: 	    adminView.includes('class="mt-5 space-y-3 lg:hidden"') &&
+ 240: 	    adminView.includes('class="mt-5 hidden overflow-hidden lg:block"') &&
+ 241: 	    adminView.includes('class="w-full table-fixed text-sm"') &&
+ 242: 	    adminView.includes('@change="toggleSelected(card.id, ($event.target as HTMLInputElement).checked)"') &&
+ 243: 	    adminView.includes('@click="updateCardStatus(card)"') &&
+ 244: 	    adminView.includes('@click="deleteCard(card)"') &&
+ 245: 	    zhLocale.includes('PAYINCUS_GIFT_CARD_ADMIN_IDS') &&
+ 246: 	    adminView.includes("t('giftCardsAdmin.revealCode')") &&
+ 247: 	    zhLocale.includes("revealCode: '显示完整兑换码'") &&
+ 248: 	    serverPackage.includes('"test:gift-card-guards"') &&
+ 249: 	    rootPackage.includes('pnpm --filter server test:gift-card-guards'),
+ 250:   'gift card routes, client pages, API wrappers, nav entries, and guard script must be wired into the platform'
+ 251: )
+ 252: 
+ 253: console.log('gift card guard checks passed')
+--- USER VIEW MATCHES ---
+
+  client\src\views\GiftCardsView.vue:5:import { useToast } from '@/stores/toast'
+  client\src\views\GiftCardsView.vue:6:import { useThemeStore } from '@/stores/theme'
+> client\src\views\GiftCardsView.vue:7:import TurnstileWidget from '@/components/TurnstileWidget.vue'
+  client\src\views\GiftCardsView.vue:8:import type { GiftCardRecord, GiftCardStatus } from '@/types/api'
+  client\src\views\GiftCardsView.vue:9:
+  client\src\views\GiftCardsView.vue:10:const { t, locale } = useI18n()
+  client\src\views\GiftCardsView.vue:25:const turnstileSiteKey = ref('')
+  client\src\views\GiftCardsView.vue:26:const turnstileToken = ref('')
+> client\src\views\GiftCardsView.vue:27:const turnstileRef = ref<InstanceType<typeof TurnstileWidget> | null>(null)
+  client\src\views\GiftCardsView.vue:28:const isTurnstileChallengeAvailable = computed<boolean>(() => 
+turnstileEnabled.value && Boolean(turnstileSiteKey.value))
+  client\src\views\GiftCardsView.vue:29:
+  client\src\views\GiftCardsView.vue:30:const statusOptions = computed<Array<{ value: GiftCardStatus | ''; label: 
+string }>>(() => [
+  client\src\views\GiftCardsView.vue:82:}
+  client\src\views\GiftCardsView.vue:83:
+> client\src\views\GiftCardsView.vue:84:function toggleCodeReveal(card: GiftCardRecord): void {
+  client\src\views\GiftCardsView.vue:85:  const next = new Set(revealedCodeIds.value)
+  client\src\views\GiftCardsView.vue:86:  if (next.has(card.id)) {
+  client\src\views\GiftCardsView.vue:87:    next.delete(card.id)
+  client\src\views\GiftCardsView.vue:216:}
+  client\src\views\GiftCardsView.vue:217:
+> client\src\views\GiftCardsView.vue:218:async function copyCode(code: string): Promise<void> {
+  client\src\views\GiftCardsView.vue:219:  await navigator.clipboard.writeText(code)
+  client\src\views\GiftCardsView.vue:220:  toast.success(t('giftCards.toast.copied'))
+  client\src\views\GiftCardsView.vue:221:}
+  client\src\views\GiftCardsView.vue:241:      <div class="font-medium">{{ t('giftCards.lastCodeNotice') }}</div>
+  client\src\views\GiftCardsView.vue:242:      <div class="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+> client\src\views\GiftCardsView.vue:243:        <code class="min-w-0 flex-1 break-all rounded bg-white/70 
+dark:bg-black/30 p-2 font-mono text-xs">{{ lastGeneratedCode }}</code>
+> client\src\views\GiftCardsView.vue:244:        <button class="btn-secondary btn-sm" 
+@click="copyCode(lastGeneratedCode)">{{ t('giftCards.copy') }}</button>
+  client\src\views\GiftCardsView.vue:245:      </div>
+  client\src\views\GiftCardsView.vue:246:    </div>
+  client\src\views\GiftCardsView.vue:247:
+  client\src\views\GiftCardsView.vue:251:        <p class="mt-1 text-sm text-themed-muted">{{ 
+t('giftCards.turnstileDescription') }}</p>
+  client\src\views\GiftCardsView.vue:252:        <div class="mt-4">
+> client\src\views\GiftCardsView.vue:253:          <TurnstileWidget
+  client\src\views\GiftCardsView.vue:254:            ref="turnstileRef"
+  client\src\views\GiftCardsView.vue:255:            v-model="turnstileToken"
+  client\src\views\GiftCardsView.vue:256:            :site-key="turnstileSiteKey"
+  client\src\views\GiftCardsView.vue:265:
+  client\src\views\GiftCardsView.vue:266:      <section class="card p-6">
+> client\src\views\GiftCardsView.vue:267:        <h2 class="text-base font-semibold text-themed">{{ 
+t('giftCards.redeemTitle') }}</h2>
+  client\src\views\GiftCardsView.vue:268:        <div class="mt-4 flex flex-col gap-3 sm:flex-row">
+  client\src\views\GiftCardsView.vue:269:          <input v-model="redeemCode" class="input flex-1 font-mono" 
+:placeholder="t('giftCards.redeemPlaceholder')" />
+  client\src\views\GiftCardsView.vue:270:          <button class="btn-primary" :disabled="redeeming || 
+!redeemCode.trim()" @click="redeemGiftCard">
+  client\src\views\GiftCardsView.vue:297:      </div>
+  client\src\views\GiftCardsView.vue:298:
+> client\src\views\GiftCardsView.vue:299:      <div class="mt-5 space-y-3 lg:hidden">
+  client\src\views\GiftCardsView.vue:300:        <div v-for="card in cards" :key="card.id" class="rounded-lg border 
+border-themed bg-themed-surface p-4">
+  client\src\views\GiftCardsView.vue:301:          <div class="flex items-start justify-between gap-3">
+> client\src\views\GiftCardsView.vue:302:            <div class="min-w-0">
+  client\src\views\GiftCardsView.vue:303:              <div class="text-xs text-themed-muted">{{ t('giftCards.code') 
+}}</div>
+  client\src\views\GiftCardsView.vue:304:              <code class="mt-1 block break-all font-mono text-xs 
+text-themed">{{ displayCardCode(card) }}</code>
+  client\src\views\GiftCardsView.vue:305:            </div>
+  client\src\views\GiftCardsView.vue:317:          </div>
+  client\src\views\GiftCardsView.vue:318:          <div class="mt-4 flex gap-2">
+> client\src\views\GiftCardsView.vue:319:            <button class="btn-secondary btn-sm flex-1" 
+@click="toggleCodeReveal(card)">
+  client\src\views\GiftCardsView.vue:320:              {{ isCodeRevealed(card) ? t('giftCards.hideCode') : 
+t('giftCards.showCode') }}
+  client\src\views\GiftCardsView.vue:321:            </button>
+> client\src\views\GiftCardsView.vue:322:            <button class="btn-secondary btn-sm flex-1" 
+@click="copyCode(card.code)">{{ t('giftCards.copy') }}</button>
+  client\src\views\GiftCardsView.vue:323:          </div>
+  client\src\views\GiftCardsView.vue:324:        </div>
+  client\src\views\GiftCardsView.vue:325:        <div v-if="!loading && cards.length === 0" class="py-8 text-center 
+text-themed-muted">{{ t('giftCards.empty') }}</div>
+  client\src\views\GiftCardsView.vue:326:      </div>
+  client\src\views\GiftCardsView.vue:327:
+> client\src\views\GiftCardsView.vue:328:      <div class="mt-5 hidden overflow-x-auto lg:block">
+> client\src\views\GiftCardsView.vue:329:        <table class="w-full min-w-[720px] text-sm">
+  client\src\views\GiftCardsView.vue:330:          <thead class="border-b border-themed text-left text-themed-muted">
+  client\src\views\GiftCardsView.vue:331:            <tr>
+  client\src\views\GiftCardsView.vue:332:              <th class="py-3 pr-4">{{ t('giftCards.code') }}</th>
+  client\src\views\GiftCardsView.vue:340:            <tr v-for="card in cards" :key="card.id" class="border-b 
+border-themed">
+  client\src\views\GiftCardsView.vue:341:              <td class="py-3 pr-4 font-mono text-xs text-themed">
+> client\src\views\GiftCardsView.vue:342:                <span class="block truncate">{{ displayCardCode(card) 
+}}</span>
+  client\src\views\GiftCardsView.vue:343:              </td>
+  client\src\views\GiftCardsView.vue:344:              <td class="py-3 pr-4 text-themed">{{ 
+formatMoney(card.balanceValue) }}</td>
+  client\src\views\GiftCardsView.vue:345:              <td class="py-3 pr-4" :class="statusClass(card.status)">{{ 
+statusLabel(card.status) }}</td>
+  client\src\views\GiftCardsView.vue:347:              <td class="py-3 pr-4 whitespace-nowrap">
+  client\src\views\GiftCardsView.vue:348:                <div class="flex gap-2">
+> client\src\views\GiftCardsView.vue:349:                  <button class="btn-secondary btn-sm" 
+@click="toggleCodeReveal(card)">
+  client\src\views\GiftCardsView.vue:350:                    {{ isCodeRevealed(card) ? t('giftCards.hideCode') : 
+t('giftCards.showCode') }}
+  client\src\views\GiftCardsView.vue:351:                  </button>
+> client\src\views\GiftCardsView.vue:352:                  <button class="btn-secondary btn-sm" 
+@click="copyCode(card.code)">{{ t('giftCards.copy') }}</button>
+  client\src\views\GiftCardsView.vue:353:                </div>
+  client\src\views\GiftCardsView.vue:354:              </td>
+  client\src\views\GiftCardsView.vue:355:            </tr>
+--- ADMIN VIEW MATCHES ---
+  client\src\views\admin\GiftCardsView.vue:15:const selectedIds = ref<Set<number>>(new Set())
+  client\src\views\admin\GiftCardsView.vue:16:const statusFilter = ref<GiftCardStatus | ''>('')
+> client\src\views\admin\GiftCardsView.vue:17:const revealCode = ref(false)
+  client\src\views\admin\GiftCardsView.vue:18:const batchResult = ref<{ batchId: string; codes: GiftCardRecord[] } | 
+null>(null)
+  client\src\views\admin\GiftCardsView.vue:19:
+  client\src\views\admin\GiftCardsView.vue:20:const form = ref({
+  client\src\views\admin\GiftCardsView.vue:69:        pageSize: 100,
+  client\src\views\admin\GiftCardsView.vue:70:        status: statusFilter.value || undefined,
+> client\src\views\admin\GiftCardsView.vue:71:        revealCode: revealCode.value
+  client\src\views\admin\GiftCardsView.vue:72:      }),
+  client\src\views\admin\GiftCardsView.vue:73:      api.giftCards.stats()
+  client\src\views\admin\GiftCardsView.vue:74:    ])
+  client\src\views\admin\GiftCardsView.vue:119:}
+  client\src\views\admin\GiftCardsView.vue:120:
+> client\src\views\admin\GiftCardsView.vue:121:async function updateCardStatus(card: GiftCardRecord): Promise<void> {
+  client\src\views\admin\GiftCardsView.vue:122:  try {
+  client\src\views\admin\GiftCardsView.vue:123:    if (card.status === 'disabled') {
+  client\src\views\admin\GiftCardsView.vue:124:      await api.giftCards.enable(card.id)
+  client\src\views\admin\GiftCardsView.vue:134:}
+  client\src\views\admin\GiftCardsView.vue:135:
+> client\src\views\admin\GiftCardsView.vue:136:async function deleteCard(card: GiftCardRecord): Promise<void> {
+  client\src\views\admin\GiftCardsView.vue:137:  if (!confirm(t('giftCardsAdmin.confirm.deleteOne', { code: 
+card.codeMasked || card.code }))) return
+  client\src\views\admin\GiftCardsView.vue:138:  try {
+  client\src\views\admin\GiftCardsView.vue:139:    await api.giftCards.delete(card.id)
+  client\src\views\admin\GiftCardsView.vue:169:}
+  client\src\views\admin\GiftCardsView.vue:170:
+> client\src\views\admin\GiftCardsView.vue:171:function toggleSelected(id: number, checked: boolean): void {
+  client\src\views\admin\GiftCardsView.vue:172:  const next = new Set(selectedIds.value)
+  client\src\views\admin\GiftCardsView.vue:173:  if (checked) next.add(id)
+  client\src\views\admin\GiftCardsView.vue:174:  else next.delete(id)
+  client\src\views\admin\GiftCardsView.vue:189:      <div>
+  client\src\views\admin\GiftCardsView.vue:190:        <h1 class="page-title">{{ t('giftCardsAdmin.title') }}</h1>
+> client\src\views\admin\GiftCardsView.vue:191:        <p class="page-description">{{ t('giftCardsAdmin.description') 
+}}</p>
+  client\src\views\admin\GiftCardsView.vue:192:      </div>
+  client\src\views\admin\GiftCardsView.vue:193:      <button class="btn-secondary" :disabled="loading" 
+@click="loadData">
+  client\src\views\admin\GiftCardsView.vue:194:        {{ loading ? t('giftCards.loading') : t('giftCards.refresh') }}
+  client\src\views\admin\GiftCardsView.vue:264:          </select>
+  client\src\views\admin\GiftCardsView.vue:265:          <label class="flex h-10 items-center gap-2 text-sm 
+text-themed">
+> client\src\views\admin\GiftCardsView.vue:266:            <input v-model="revealCode" type="checkbox" class="h-4 w-4 
+rounded text-accent" @change="loadData" />
+> client\src\views\admin\GiftCardsView.vue:267:            {{ t('giftCardsAdmin.revealCode') }}
+  client\src\views\admin\GiftCardsView.vue:268:          </label>
+  client\src\views\admin\GiftCardsView.vue:269:        </div>
+  client\src\views\admin\GiftCardsView.vue:270:        <div class="flex gap-2">
+  client\src\views\admin\GiftCardsView.vue:274:      </div>
+  client\src\views\admin\GiftCardsView.vue:275:
+> client\src\views\admin\GiftCardsView.vue:276:      <div class="mt-5 space-y-3 lg:hidden">
+  client\src\views\admin\GiftCardsView.vue:277:        <div v-for="card in records" :key="card.id" class="rounded-lg 
+border border-themed bg-themed-surface p-4">
+  client\src\views\admin\GiftCardsView.vue:278:          <div class="flex items-start gap-3">
+> client\src\views\admin\GiftCardsView.vue:279:            <input type="checkbox" class="mt-1 h-4 w-4 rounded 
+text-accent" :checked="selectedIds.has(card.id)" @change="toggleSelected(card.id, ($event.target as 
+HTMLInputElement).checked)" />
+> client\src\views\admin\GiftCardsView.vue:280:            <div class="min-w-0 flex-1">
+  client\src\views\admin\GiftCardsView.vue:281:              <div class="flex items-start justify-between gap-3">
+  client\src\views\admin\GiftCardsView.vue:282:                <code class="break-all font-mono text-xs 
+text-themed">{{ card.code }}</code>
+  client\src\views\admin\GiftCardsView.vue:283:                <span class="shrink-0 text-sm" 
+:class="statusClass(card.status)">{{ statusLabel(card.status) }}</span>
+  client\src\views\admin\GiftCardsView.vue:300:              </div>
+  client\src\views\admin\GiftCardsView.vue:301:              <div class="mt-4 flex flex-wrap gap-2">
+> client\src\views\admin\GiftCardsView.vue:302:                <button v-if="card.status === 'active' || card.status 
+=== 'disabled'" class="btn-secondary btn-sm" @click="updateCardStatus(card)">
+  client\src\views\admin\GiftCardsView.vue:303:                  {{ card.status === 'disabled' ? 
+t('giftCardsAdmin.enable') : t('giftCardsAdmin.disable') }}
+  client\src\views\admin\GiftCardsView.vue:304:                </button>
+> client\src\views\admin\GiftCardsView.vue:305:                <button v-if="card.status !== 'used'" class="btn-danger 
+btn-sm" @click="deleteCard(card)">{{ t('giftCardsAdmin.delete') }}</button>
+  client\src\views\admin\GiftCardsView.vue:306:              </div>
+  client\src\views\admin\GiftCardsView.vue:307:            </div>
+  client\src\views\admin\GiftCardsView.vue:308:          </div>
+  client\src\views\admin\GiftCardsView.vue:311:      </div>
+  client\src\views\admin\GiftCardsView.vue:312:
+> client\src\views\admin\GiftCardsView.vue:313:      <div class="mt-5 hidden overflow-hidden lg:block">
+> client\src\views\admin\GiftCardsView.vue:314:        <table class="w-full table-fixed text-sm">
+  client\src\views\admin\GiftCardsView.vue:315:          <thead class="border-b border-themed text-left 
+text-themed-muted">
+  client\src\views\admin\GiftCardsView.vue:316:            <tr>
+  client\src\views\admin\GiftCardsView.vue:317:              <th class="w-[4%] py-3 pr-4"></th>
+  client\src\views\admin\GiftCardsView.vue:327:            <tr v-for="card in records" :key="card.id" class="border-b 
+border-themed">
+  client\src\views\admin\GiftCardsView.vue:328:              <td class="py-3 pr-4">
+> client\src\views\admin\GiftCardsView.vue:329:                <input type="checkbox" class="h-4 w-4 rounded 
+text-accent" :checked="selectedIds.has(card.id)" @change="toggleSelected(card.id, ($event.target as 
+HTMLInputElement).checked)" />
+  client\src\views\admin\GiftCardsView.vue:330:              </td>
+  client\src\views\admin\GiftCardsView.vue:331:              <td class="py-3 pr-4 font-mono text-xs text-themed">
+> client\src\views\admin\GiftCardsView.vue:332:                <span class="block truncate">{{ card.code }}</span>
+  client\src\views\admin\GiftCardsView.vue:333:              </td>
+  client\src\views\admin\GiftCardsView.vue:334:              <td class="py-3 pr-4 text-themed">
+  client\src\views\admin\GiftCardsView.vue:335:                <div>{{ formatMoney(card.balanceValue) }}</div>
+  client\src\views\admin\GiftCardsView.vue:338:              <td class="py-3 pr-4" 
+:class="statusClass(card.status)">{{ statusLabel(card.status) }}</td>
+  client\src\views\admin\GiftCardsView.vue:339:              <td class="py-3 pr-4 text-xs text-themed-muted">
+> client\src\views\admin\GiftCardsView.vue:340:                <div class="truncate">{{ t('giftCardsAdmin.createdBy', 
+{ user: card.createdBy?.username || '-' }) }}</div>
+> client\src\views\admin\GiftCardsView.vue:341:                <div class="truncate">{{ t('giftCardsAdmin.owner', { 
+user: card.owner?.username || '-' }) }}</div>
+> client\src\views\admin\GiftCardsView.vue:342:                <div class="truncate">{{ t('giftCardsAdmin.usedBy', { 
+user: card.usedBy?.username || '-' }) }}</div>
+  client\src\views\admin\GiftCardsView.vue:343:              </td>
+  client\src\views\admin\GiftCardsView.vue:344:              <td class="py-3 pr-4 text-themed-muted">{{ 
+formatDate(card.expiresAt) }}</td>
+  client\src\views\admin\GiftCardsView.vue:345:              <td class="py-3 pr-4">
+  client\src\views\admin\GiftCardsView.vue:346:                <div class="flex flex-wrap gap-2">
+> client\src\views\admin\GiftCardsView.vue:347:                  <button v-if="card.status === 'active' || card.status 
+=== 'disabled'" class="btn-secondary btn-sm" @click="updateCardStatus(card)">
+  client\src\views\admin\GiftCardsView.vue:348:                    {{ card.status === 'disabled' ? 
+t('giftCardsAdmin.enable') : t('giftCardsAdmin.disable') }}
+  client\src\views\admin\GiftCardsView.vue:349:                  </button>
+> client\src\views\admin\GiftCardsView.vue:350:                  <button v-if="card.status !== 'used'" 
+class="btn-danger btn-sm" @click="deleteCard(card)">{{ t('giftCardsAdmin.delete') }}</button>
+  client\src\views\admin\GiftCardsView.vue:351:                </div>
+  client\src\views\admin\GiftCardsView.vue:352:              </td>
+  client\src\views\admin\GiftCardsView.vue:353:            </tr>
+--- LOCALE MATCHES ---
+  client\src\locales\en.ts:490:        turnstileDescription: 'Complete verification before redeeming or creating a 
+gift card.',
+> client\src\locales\en.ts:491:        redeemTitle: 'Redeem Gift Card',
+  client\src\locales\en.ts:492:        redeemPlaceholder: 'gc-...',
+  client\src\locales\en.ts:531:        title: 'Gift Card Management',
+> client\src\locales\en.ts:532:        description: 'Create and manage gift cards that can be redeemed into account 
+balance. Production operations require PAYINCUS_GIFT_CARD_ADMIN_IDS to be configured.',
+  client\src\locales\en.ts:533:        stats: {
+  client\src\locales\en.ts:550:        copyAll: 'Copy All',
+> client\src\locales\en.ts:551:        revealCode: 'Show full codes',
+  client\src\locales\en.ts:552:        batchDisable: 'Disable Selected',
+  client\src\locales\en.ts:1544:                redeem: 'Redeem',
+> client\src\locales\en.ts:1545:                redeemTitle: 'Redeem Resources',
+  client\src\locales\en.ts:1546:            },
+  client\src\locales\en.ts:6765:        // Redeem
+> client\src\locales\en.ts:6766:        redeemTitle: 'Redeem Code',
+  client\src\locales\en.ts:6767:        inputCode: 'Enter redeem code',
+  client\src\locales\zh-CN.ts:492:        turnstileDescription: '兑换或生成礼品卡前需要完成验证。',
+> client\src\locales\zh-CN.ts:493:        redeemTitle: '兑换礼品卡',
+  client\src\locales\zh-CN.ts:494:        redeemPlaceholder: 'gc-...',
+  client\src\locales\zh-CN.ts:533:        title: '礼品卡管理',
+> client\src\locales\zh-CN.ts:534:        description: '生成和管理可兑换到账户余额的礼品卡。生产环境需要配置 PAYINCUS_GIFT_CARD_ADMIN_IDS 
+后才能操作。',
+  client\src\locales\zh-CN.ts:535:        stats: {
+  client\src\locales\zh-CN.ts:552:        copyAll: '复制全部',
+> client\src\locales\zh-CN.ts:553:        revealCode: '显示完整兑换码',
+  client\src\locales\zh-CN.ts:554:        batchDisable: '批量停用',
+  client\src\locales\zh-CN.ts:1548:                redeem: '兑换',
+> client\src\locales\zh-CN.ts:1549:                redeemTitle: '兑换资源',
+  client\src\locales\zh-CN.ts:1550:            },
+  client\src\locales\zh-CN.ts:6773:        // 兑换
+> client\src\locales\zh-CN.ts:6774:        redeemTitle: '兑换兑换码',
+  client\src\locales\zh-CN.ts:6775:        inputCode: '请输入兑换码',
+  client\src\locales\zh-TW.ts:500:        turnstileDescription: '兌換或產生禮品卡前需要完成驗證。',
+> client\src\locales\zh-TW.ts:501:        redeemTitle: '兌換禮品卡',
+  client\src\locales\zh-TW.ts:502:        redeemPlaceholder: 'gc-...',
+  client\src\locales\zh-TW.ts:541:        title: '禮品卡管理',
+> client\src\locales\zh-TW.ts:542:        description: '產生和管理可兌換到帳戶餘額的禮品卡。生產環境需要配置 PAYINCUS_GIFT_CARD_ADMIN_IDS 
+後才能操作。',
+  client\src\locales\zh-TW.ts:543:        stats: {
+  client\src\locales\zh-TW.ts:560:        copyAll: '全部複製',
+> client\src\locales\zh-TW.ts:561:        revealCode: '顯示完整兌換碼',
+  client\src\locales\zh-TW.ts:562:        batchDisable: '批量停用',
+  client\src\locales\zh-TW.ts:1722:                redeem: '兑換',
+> client\src\locales\zh-TW.ts:1723:                redeemTitle: '兑換資源',
+  client\src\locales\zh-TW.ts:1724:            },
+  client\src\locales\zh-TW.ts:7140:        points: '積分',
+> client\src\locales\zh-TW.ts:7141:        redeemTitle: '兌換兌換碼',
+  client\src\locales\zh-TW.ts:7142:        inputCode: '請輸入兌換碼',
+
+
+Get-ChildItem : Could not find a part of the path 'C:\Users\Administrator\Desktop\payinces\docs-site\node_modules\.pnpm
+\@algolia+autocomplete-plugin-algolia-insights@1.17.7_@algolia+client-search@5.55.0_algoliasea_cg7xxdibawihiaedvuj4pbyt
+dm\node_modules\@algolia\autocomplete-plugin-algolia-insights'.
+At line:2 char:9
++ $test = Get-ChildItem -Path . -Recurse -Filter 'test-gift-card-guards ...
++         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ReadError: (C:\Users\Admini...lgolia-insights:String) [Get-ChildItem], DirectoryNotFound 
+   Exception
+    + FullyQualifiedErrorId : DirIOError,Microsoft.PowerShell.Commands.GetChildItemCommand
+ 
+Get-ChildItem : Could not find a part of the path 'C:\Users\Administrator\Desktop\payinces\node_modules\.pnpm\@typescri
+pt-eslint+eslint-plugin@8.48.1_@typescript-eslint+parser@8.48.1_eslint@9.39.1_jiti@1_q5uqgtopkkd7de55b3rp3vw3yi\node_mo
+dules\@typescript-eslint\eslint-plugin\dist\configs'.
+At line:2 char:9
++ $test = Get-ChildItem -Path . -Recurse -Filter 'test-gift-card-guards ...
++         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ReadError: (C:\Users\Admini...in\dist\configs:String) [Get-ChildItem], DirectoryNotFound 
+   Exception
+    + FullyQualifiedErrorId : DirIOError,Microsoft.PowerShell.Commands.GetChildItemCommand
+ 
+Get-ChildItem : Could not find a part of the path 'C:\Users\Administrator\Desktop\payinces\node_modules\.pnpm\@typescri
+pt-eslint+eslint-plugin@8.48.1_@typescript-eslint+parser@8.48.1_eslint@9.39.1_jiti@1_q5uqgtopkkd7de55b3rp3vw3yi\node_mo
+dules\@typescript-eslint\eslint-plugin\dist\rules'.
+At line:2 char:9
++ $test = Get-ChildItem -Path . -Recurse -Filter 'test-gift-card-guards ...
++         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ReadError: (C:\Users\Admini...ugin\dist\rules:String) [Get-ChildItem], DirectoryNotFound 
+   Exception
+    + FullyQualifiedErrorId : DirIOError,Microsoft.PowerShell.Commands.GetChildItemCommand
+ 
+Get-ChildItem : Could not find a part of the path 'C:\Users\Administrator\Desktop\payinces\node_modules\.pnpm\@typescri
+pt-eslint+eslint-plugin@8.48.1_@typescript-eslint+parser@8.48.1_eslint@9.39.1_jiti@1_q5uqgtopkkd7de55b3rp3vw3yi\node_mo
+dules\@typescript-eslint\eslint-plugin\dist\util'.
+At line:2 char:9
++ $test = Get-ChildItem -Path . -Recurse -Filter 'test-gift-card-guards ...
++         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ReadError: (C:\Users\Admini...lugin\dist\util:String) [Get-ChildItem], DirectoryNotFound 
+   Exception
+    + FullyQualifiedErrorId : DirIOError,Microsoft.PowerShell.Commands.GetChildItemCommand
+ 
+Get-ChildItem : Could not find a part of the path 'C:\Users\Administrator\Desktop\payinces\node_modules\.pnpm\@typescri
+pt-eslint+eslint-plugin@8.48.1_@typescript-eslint+parser@8.48.1_eslint@9.39.1_jiti@1_q5uqgtopkkd7de55b3rp3vw3yi\node_mo
+dules\@typescript-eslint\eslint-plugin\node_modules'.
+At line:2 char:9
++ $test = Get-ChildItem -Path . -Recurse -Filter 'test-gift-card-guards ...
++         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ReadError: (C:\Users\Admini...in\node_modules:String) [Get-ChildItem], DirectoryNotFound 
+   Exception
+    + FullyQualifiedErrorId : DirIOError,Microsoft.PowerShell.Commands.GetChildItemCommand
+ 
+Get-ChildItem : Could not find a part of the path 'C:\Users\Administrator\Desktop\payinces\node_modules\.pnpm\@typescri
+pt-eslint+eslint-plugin@8.48.1_@typescript-eslint+parser@8.48.1_eslint@9.39.1_jiti@2_ast3qxp5yvc5o7scdbwnyuigzq\node_mo
+dules\@typescript-eslint\eslint-plugin\dist\configs'.
+At line:2 char:9
++ $test = Get-ChildItem -Path . -Recurse -Filter 'test-gift-card-guards ...
++         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ReadError: (C:\Users\Admini...in\dist\configs:String) [Get-ChildItem], DirectoryNotFound 
+   Exception
+    + FullyQualifiedErrorId : DirIOError,Microsoft.PowerShell.Commands.GetChildItemCommand
+ 
+Get-ChildItem : Could not find a part of the path 'C:\Users\Administrator\Desktop\payinces\node_modules\.pnpm\@typescri
+pt-eslint+eslint-plugin@8.48.1_@typescript-eslint+parser@8.48.1_eslint@9.39.1_jiti@2_ast3qxp5yvc5o7scdbwnyuigzq\node_mo
+dules\@typescript-eslint\eslint-plugin\dist\rules'.
+At line:2 char:9
++ $test = Get-ChildItem -Path . -Recurse -Filter 'test-gift-card-guards ...
++         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ReadError: (C:\Users\Admini...ugin\dist\rules:String) [Get-ChildItem], DirectoryNotFound 
+   Exception
+    + FullyQualifiedErrorId : DirIOError,Microsoft.PowerShell.Commands.GetChildItemCommand
+ 
+Get-ChildItem : Could not find a part of the path 'C:\Users\Administrator\Desktop\payinces\node_modules\.pnpm\@typescri
+pt-eslint+eslint-plugin@8.48.1_@typescript-eslint+parser@8.48.1_eslint@9.39.1_jiti@2_ast3qxp5yvc5o7scdbwnyuigzq\node_mo
+dules\@typescript-eslint\eslint-plugin\dist\util'.
+At line:2 char:9
++ $test = Get-ChildItem -Path . -Recurse -Filter 'test-gift-card-guards ...
++         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ReadError: (C:\Users\Admini...lugin\dist\util:String) [Get-ChildItem], DirectoryNotFound 
+   Exception
+    + FullyQualifiedErrorId : DirIOError,Microsoft.PowerShell.Commands.GetChildItemCommand
+ 
+Get-ChildItem : Could not find a part of the path 'C:\Users\Administrator\Desktop\payinces\node_modules\.pnpm\@typescri
+pt-eslint+eslint-plugin@8.48.1_@typescript-eslint+parser@8.48.1_eslint@9.39.1_jiti@2_ast3qxp5yvc5o7scdbwnyuigzq\node_mo
+dules\@typescript-eslint\eslint-plugin\node_modules'.
+At line:2 char:9
++ $test = Get-ChildItem -Path . -Recurse -Filter 'test-gift-card-guards ...
++         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ReadError: (C:\Users\Admini...in\node_modules:String) [Get-ChildItem], DirectoryNotFound 
+   Exception
+    + FullyQualifiedErrorId : DirIOError,Microsoft.PowerShell.Commands.GetChildItemCommand
+ 
+Get-ChildItem : Could not find a part of the path 'C:\Users\Administrator\Desktop\payinces\node_modules\.pnpm\drizzle-o
+rm@0.38.4_@electric-sql+pglite@0.3.2_@libsql+client@0.14.0_@prisma+client@7.1.0_pris_ghivulwftdiefg6tgvnyithtla\node_mo
+dules\drizzle-orm\pg-core\columns\postgis_extension'.
+At line:2 char:9
++ $test = Get-ChildItem -Path . -Recurse -Filter 'test-gift-card-guards ...
++         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ReadError: (C:\Users\Admini...stgis_extension:String) [Get-ChildItem], DirectoryNotFound 
+   Exception
+    + FullyQualifiedErrorId : DirIOError,Microsoft.PowerShell.Commands.GetChildItemCommand
+ 
+Get-ChildItem : Could not find a part of the path 'C:\Users\Administrator\Desktop\payinces\node_modules\.pnpm\drizzle-o
+rm@0.38.4_@electric-sql+pglite@0.3.2_@libsql+client@0.14.0_@prisma+client@7.1.0_pris_ghivulwftdiefg6tgvnyithtla\node_mo
+dules\drizzle-orm\pg-core\columns\vector_extension'.
+At line:2 char:9
++ $test = Get-ChildItem -Path . -Recurse -Filter 'test-gift-card-guards ...
++         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ReadError: (C:\Users\Admini...ector_extension:String) [Get-ChildItem], DirectoryNotFound 
+   Exception
+    + FullyQualifiedErrorId : DirIOError,Microsoft.PowerShell.Commands.GetChildItemCommand
+ 
+Get-ChildItem : Could not find a part of the path 'C:\Users\Administrator\Desktop\payinces\node_modules\.pnpm\drizzle-o
+rm@0.38.4_@electric-sql+pglite@0.3.2_@libsql+client@0.14.0_@prisma+client@7.1.0_pris_ghivulwftdiefg6tgvnyithtla\node_mo
+dules\drizzle-orm\singlestore-core\query-builders'.
+At line:2 char:9
++ $test = Get-ChildItem -Path . -Recurse -Filter 'test-gift-card-guards ...
++         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ReadError: (C:\Users\Admini...\query-builders:String) [Get-ChildItem], DirectoryNotFound 
+   Exception
+    + FullyQualifiedErrorId : DirIOError,Microsoft.PowerShell.Commands.GetChildItemCommand
+ 
+
+codex
+逐条比对结果：管理页与三语 key 已满足全部指定子条件；用户页仅桌面容器漂移成了 `overflow-x-auto`，表格漂移成了 `min-w-[720px]` 且缺 `table-fixed`。因此只需对用户页做两处最小样式恢复，事件、文案与业务逻辑均保持原样。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'git status --short
+git diff -- client/src/views/GiftCardsView.vue client/src/views/admin/GiftCardsView.vue client/src/locales/en.ts client/src/locales/zh-CN.ts client/src/locales/zh-TW.ts' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 590ms:
+ M client/src/components/instance/TrafficStats.vue
+ M client/src/components/plugins/PluginFrame.vue
+ M client/src/locales/en.ts
+ M client/src/locales/zh-CN.ts
+ M client/src/locales/zh-TW.ts
+ M client/src/utils/validation.ts
+ M client/src/views/InstanceDetailView.vue
+ M client/src/views/admin/DeliveryCenterView.vue
+ M client/src/views/admin/OAuthConfigView.vue
+ M client/src/views/admin/OrdersView.vue
+ M client/src/views/admin/ResourceRiskView.vue
+ M client/src/views/resources/MyPackagesView.vue
+ M client/src/views/resources/PackageFormView.vue
+ M deploy/incudal-backend.service.example
+ M deploy/incudal-online-rollback@.service.example
+ M deploy/incudal-online-update@.service.example
+ M package.json
+ M scripts/install-panel.sh
+ M scripts/test-install-panel-guards.sh
+ M server/package.json
+ M server/prisma/schema.prisma
+ M server/scripts/test-admin-billing-route-id-guards.ts
+ M server/scripts/test-admin-entertainment-route-guards.ts
+ M server/scripts/test-admin-user-delete-resource-guards.ts
+ M server/scripts/test-aff-review-ui-guards.ts
+ M server/scripts/test-agent-report-state-guards.ts
+ M server/scripts/test-backup-task-race-guards.ts
+ M server/scripts/test-balance-adjustment-approval-guards.ts
+ M server/scripts/test-batch-config-route-guards.ts
+ M server/scripts/test-billing-expiry-delete.ts
+ M server/scripts/test-billing-expiry-race-guards.ts
+ M server/scripts/test-billing-query-guards.ts
+ M server/scripts/test-capacity-cost-guards.ts
+ M server/scripts/test-commercial-operations-overview-guards.ts
+ M server/scripts/test-delivery-center-guards.ts
+ M server/scripts/test-flash-sale-guards.ts
+ M server/scripts/test-frontend-i18n-keys.ts
+ M server/scripts/test-frontend-route-guards.ts
+ M server/scripts/test-gift-card-guards.ts
+ M server/scripts/test-host-resource-atomic-guards.ts
+ M server/scripts/test-hosting-balance-guards.ts
+ M server/scripts/test-instance-billing-route-id-guards.ts
+ M server/scripts/test-instance-create-failure-compensation.ts
+ M server/scripts/test-instance-delete-incus-order.ts
+ M server/scripts/test-instance-operation-conflict-guards.ts
+ M server/scripts/test-instance-quota-zero-guards.ts
+ M server/scripts/test-instance-recreate-consistency.ts
+ M server/scripts/test-instance-route-id-guards.ts
+ M server/scripts/test-ip-address-route-guards.ts
+ M server/scripts/test-log-sanitizer.ts
+ M server/scripts/test-mail-plan-financial-guards.ts
+ M server/scripts/test-mail-renewal-month-guards.ts
+ M server/scripts/test-order-payment-operations-guards.ts
+ M server/scripts/test-plan-bandwidth-limit-guards.ts
+ M server/scripts/test-plugin-client-boundary-guards.ts
+ M server/scripts/test-port-mapping-safety.ts
+ M server/scripts/test-proxy-site-route-id-guards.ts
+ M server/scripts/test-recharge-state-transitions.ts
+ M server/scripts/test-resource-pool-apply-consistency.ts
+ M server/scripts/test-resource-quota-bigint-guards.ts
+ M server/scripts/test-resource-risk-guards.ts
+ M server/scripts/test-risk-audit-guards.ts
+ M server/scripts/test-storage-outbound-guards.ts
+ M server/scripts/test-system-config-value-guards.ts
+ M server/scripts/test-system-update-guards.ts
+ M server/scripts/test-terminal-route-id-guards.ts
+ M server/scripts/test-terminal-saved-command-route-id-guards.ts
+ M server/scripts/test-traffic-collector-status-guard.ts
+ M server/scripts/test-traffic-notification-claim-guards.ts
+ M server/scripts/test-traffic-reset-locks.ts
+ M server/scripts/test-traffic-route-limit-guards.ts
+ M server/scripts/test-transfer-query-guards.ts
+ M server/scripts/test-trust-proxy-config.ts
+ M server/scripts/test-user-destroy-incus-order.ts
+ M server/scripts/test-vip-benefit-route-guards.ts
+ M server/src/app.ts
+ M server/src/db/aff.ts
+ M server/src/db/balance.ts
+ M server/src/db/billing-operations.ts
+ M server/src/db/gift-cards.ts
+ M server/src/db/hosts.ts
+ M server/src/db/instances.ts
+ M server/src/db/ipv6-subnets.ts
+ M server/src/db/lottery.ts
+ M server/src/db/resource-pool.ts
+ M server/src/db/terminal-saved-commands.ts
+ M server/src/db/traffic.ts
+ M server/src/db/users.ts
+ M server/src/lib/billing-calc.ts
+ M server/src/lib/caddy-client.ts
+ M server/src/lib/epay.ts
+ M server/src/lib/errors.ts
+ M server/src/lib/heleket.ts
+ M server/src/lib/log-sanitizer.ts
+ M server/src/lib/lottery-notifier.ts
+ M server/src/lib/lsky.ts
+ M server/src/lib/managed-instance-provision.ts
+ M server/src/lib/notifier.ts
+ M server/src/lib/outbound-security.ts
+ M server/src/lib/plugin-market-submission-scan.ts
+ M server/src/lib/redirect-validator.ts
+ M server/src/lib/terminal-proxy.ts
+ M server/src/lib/theme-market-submission-scan.ts
+ M server/src/lib/trust-proxy-config.ts
+ M server/src/routes/admin-billing.ts
+ M server/src/routes/admin-capacity-cost.ts
+ M server/src/routes/admin-delivery.ts
+ M server/src/routes/admin-entertainment.ts
+ M server/src/routes/admin-statistics.ts
+ M server/src/routes/batch-config.ts
+ M server/src/routes/gift-cards.ts
+ M server/src/routes/hosting.ts
+ M server/src/routes/instance-billing.ts
+ M server/src/routes/instance-destroy.ts
+ M server/src/routes/instances.ts
+ M server/src/routes/ip-addresses.ts
+ M server/src/routes/mail.ts
+ M server/src/routes/orders.ts
+ M server/src/routes/proxy-sites.ts
+ M server/src/routes/recharge.ts
+ M server/src/routes/resource-pool.ts
+ M server/src/routes/resource-risk.ts
+ M server/src/routes/system-config.ts
+ M server/src/routes/terminal.ts
+ M server/src/routes/tickets.ts
+ M server/src/routes/traffic.ts
+ M server/src/routes/transfers.ts
+ M server/src/routes/users.ts
+ M server/src/services/agent-instance-report.ts
+ M server/src/services/billing-scheduler.ts
+ M server/src/services/cranemail.ts
+ M server/src/services/flash-sales.ts
+ M server/src/services/instance-traffic-collector.ts
+ M server/src/services/resource-risk.ts
+ M server/src/services/smartermail.ts
+ M server/src/services/system-monitor.ts
+ M server/src/services/traffic-bandwidth.ts
+ M server/src/services/traffic-notifier.ts
+ M server/src/services/traffic-scheduler.ts
+ M server/src/services/traffic-utils.ts
+ M server/src/services/user-order-restrictions.ts
+ M server/src/services/vip-benefits.ts
+ M server/src/workers/restoreTaskWorker.ts
+?? AGENTS.md
+?? BEHAVIOR.md
+?? CLAUDE.md
+?? DEFECTS.md
+?? EXECUTION.md
+?? EXECUTION_LOG.md
+?? FIX_PLAN.md
+?? MAINTENANCE_PLAN.md
+?? artifacts/
+?? audits/
+?? deploy/incudal-online-task.sh.example
+?? deploy/incudal-ota-chown-wrapper.sh.example
+?? deploy/incudal-systemctl-wrapper.sh.example
+?? server/scripts/test-error-response-guards.ts
+?? server/scripts/test-redirect-validator-guards.ts
+?? server/scripts/test-safe-outbound-fetch-guards.ts
+?? skills-lock.json
+diff --git a/client/src/locales/en.ts b/client/src/locales/en.ts
+index ab72869..3e3f208 100644
+--- a/client/src/locales/en.ts
++++ b/client/src/locales/en.ts
+@@ -993,6 +993,7 @@ export default {
+         errorBanner: {
+             title: 'Instance Error',
+             description: 'This instance is in an error state. You can destroy it directly (paid instance refunds will not incur any fees)',
++            reasonLabel: 'Failure reason',
+             destroyNow: 'Destroy Now',
+             confirmDestroy: 'Are you sure you want to destroy this abnormal instance? Remaining value of paid instances will be refunded to your wallet (no fees charged).',
+         },
+@@ -2522,6 +2523,10 @@ export default {
+             statusFailed: 'Failed',
+             statusPending: 'Pending',
+             errorPrefix: 'Error: {error}',
++            trafficMessages: {
++                warning: 'After the quota is exceeded, affected instances will be throttled to {throttleSpeed}. Traffic resets on day {resetDay} of each month, when normal bandwidth will return to {speed}.',
++                throttled: 'This instance has been throttled to {throttleSpeed}. Traffic resets on day {resetDay} of each month, when bandwidth will return to {speed}.',
++            },
+             eventTypes: {
+                 snapshot_created: 'Snapshot created',
+                 snapshot_restored: 'Snapshot restored',
+diff --git a/client/src/locales/zh-CN.ts b/client/src/locales/zh-CN.ts
+index 64ddfbd..261ee3b 100644
+--- a/client/src/locales/zh-CN.ts
++++ b/client/src/locales/zh-CN.ts
+@@ -997,6 +997,7 @@ export default {
+         errorBanner: {
+             title: '实例异常',
+             description: '实例异常，您可直接销毁（付费实例剩余价值退款不扣除手续费）',
++            reasonLabel: '失败原因',
+             destroyNow: '立即销毁',
+             confirmDestroy: '确定要销毁此异常实例吗？付费实例的剩余价值将退款至您的钱包（不扣除手续费）。',
+         },
+@@ -2526,6 +2527,10 @@ export default {
+             statusFailed: '失败',
+             statusPending: '等待',
+             errorPrefix: '错误: {error}',
++            trafficMessages: {
++                warning: '超出限额后，受影响实例将被限速至 {throttleSpeed}。流量于每月 {resetDay} 日重置后，正常带宽将恢复至 {speed}。',
++                throttled: '该实例已被限速至 {throttleSpeed}。流量于每月 {resetDay} 日重置后，带宽将恢复至 {speed}。',
++            },
+             eventTypes: {
+                 snapshot_created: '快照创建',
+                 snapshot_restored: '快照恢复',
+diff --git a/client/src/locales/zh-TW.ts b/client/src/locales/zh-TW.ts
+index 4985b8b..d42d2a6 100644
+--- a/client/src/locales/zh-TW.ts
++++ b/client/src/locales/zh-TW.ts
+@@ -1154,6 +1154,7 @@ export default {
+         errorBanner: {
+             title: '實例異常',
+             description: '實例異常，您可直接銷毀（付費實例剩餘價值退款不扣除手續費）',
++            reasonLabel: '失敗原因',
+             destroyNow: '立即銷毀',
+             confirmDestroy: '確定要銷毀此異常實例嗎？付費實例的剩餘價值將退款至您的錢包（不扣除手續費）。',
+         },
+@@ -3223,6 +3224,10 @@ export default {
+             statusFailed: '失敗',
+             statusPending: '等待',
+             errorPrefix: '錯誤: {error}',
++            trafficMessages: {
++                warning: '超出限額後，受影響實例將被限速至 {throttleSpeed}。流量於每月 {resetDay} 日重設後，正常頻寬將恢復至 {speed}。',
++                throttled: '該實例已被限速至 {throttleSpeed}。流量於每月 {resetDay} 日重設後，頻寬將恢復至 {speed}。',
++            },
+             eventTypes: {
+                 snapshot_created: '快照建立',
+                 snapshot_restored: '快照還原',
+warning: in the working copy of 'client/src/locales/en.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'client/src/locales/zh-CN.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'client/src/locales/zh-TW.ts', LF will be replaced by CRLF the next time Git touches it
+
+apply patch
+patch: completed
+C:\Users\Administrator\Desktop\payinces\client\src\views\GiftCardsView.vue
+diff --git a/client/src/views/GiftCardsView.vue b/client/src/views/GiftCardsView.vue
+index 3261885d69d123ac8c5fd0519d7276f49c69af16..6a0c22b8c451a69f8b12d7d14e5c97fc60f42a98
+--- a/client/src/views/GiftCardsView.vue
++++ b/client/src/views/GiftCardsView.vue
+@@ -325,8 +325,8 @@
+         <div v-if="!loading && cards.length === 0" class="py-8 text-center text-themed-muted">{{ t('giftCards.empty') }}</div>
+       </div>
+ 
+-      <div class="mt-5 hidden overflow-x-auto lg:block">
+-        <table class="w-full min-w-[720px] text-sm">
++      <div class="mt-5 hidden overflow-hidden lg:block">
++        <table class="w-full table-fixed text-sm">
+           <thead class="border-b border-themed text-left text-themed-muted">
+             <tr>
+               <th class="py-3 pr-4">{{ t('giftCards.code') }}</th>
+
+diff --git a/client/src/views/GiftCardsView.vue b/client/src/views/GiftCardsView.vue
+index 3261885d69d123ac8c5fd0519d7276f49c69af16..6a0c22b8c451a69f8b12d7d14e5c97fc60f42a98
+--- a/client/src/views/GiftCardsView.vue
++++ b/client/src/views/GiftCardsView.vue
+@@ -325,8 +325,8 @@
+         <div v-if="!loading && cards.length === 0" class="py-8 text-center text-themed-muted">{{ t('giftCards.empty') }}</div>
+       </div>
+ 
+-      <div class="mt-5 hidden overflow-x-auto lg:block">
+-        <table class="w-full min-w-[720px] text-sm">
++      <div class="mt-5 hidden overflow-hidden lg:block">
++        <table class="w-full table-fixed text-sm">
+           <thead class="border-b border-themed text-left text-themed-muted">
+             <tr>
+               <th class="py-3 pr-4">{{ t('giftCards.code') }}</th>
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$lines = Get-Content -LiteralPath '"'client/src/views/GiftCardsView.vue' -Encoding UTF8; for ("'$i=294; $i -le 360; $i++) { '"'{0,4}: {1}' -f "'$i,$lines[$i-1] }
+$lines = Get-Content -LiteralPath '"'client/src/views/admin/GiftCardsView.vue' -Encoding UTF8; for ("'$i=272; $i -le 355; $i++) { '"'{0,4}: {1}' -f "'$i,$lines[$i-1] }
+git diff -- client/src/views/GiftCardsView.vue client/src/views/admin/GiftCardsView.vue' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 590ms:
+ 294:         <select v-model="statusFilter" class="input w-full md:w-44" @change="loadCards">
+ 295:           <option v-for="item in statusOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+ 296:         </select>
+ 297:       </div>
+ 298: 
+ 299:       <div class="mt-5 space-y-3 lg:hidden">
+ 300:         <div v-for="card in cards" :key="card.id" class="rounded-lg border border-themed bg-themed-surface p-4">
+ 301:           <div class="flex items-start justify-between gap-3">
+ 302:             <div class="min-w-0">
+ 303:               <div class="text-xs text-themed-muted">{{ t('giftCards.code') }}</div>
+ 304:               <code class="mt-1 block break-all font-mono text-xs text-themed">{{ displayCardCode(card) }}</code>
+ 305:             </div>
+ 306:             <span class="shrink-0 text-sm" :class="statusClass(card.status)">{{ statusLabel(card.status) }}</span>
+ 307:           </div>
+ 308:           <div class="mt-3 grid grid-cols-2 gap-3 text-sm">
+ 309:             <div>
+ 310:               <div class="text-xs text-themed-muted">{{ t('giftCards.amount') }}</div>
+ 311:               <div class="font-medium text-themed">{{ formatMoney(card.balanceValue) }}</div>
+ 312:             </div>
+ 313:             <div>
+ 314:               <div class="text-xs text-themed-muted">{{ t('giftCards.expiresAt') }}</div>
+ 315:               <div class="text-themed">{{ formatDate(card.expiresAt) }}</div>
+ 316:             </div>
+ 317:           </div>
+ 318:           <div class="mt-4 flex gap-2">
+ 319:             <button class="btn-secondary btn-sm flex-1" @click="toggleCodeReveal(card)">
+ 320:               {{ isCodeRevealed(card) ? t('giftCards.hideCode') : t('giftCards.showCode') }}
+ 321:             </button>
+ 322:             <button class="btn-secondary btn-sm flex-1" @click="copyCode(card.code)">{{ t('giftCards.copy') }}</button>
+ 323:           </div>
+ 324:         </div>
+ 325:         <div v-if="!loading && cards.length === 0" class="py-8 text-center text-themed-muted">{{ t('giftCards.empty') }}</div>
+ 326:       </div>
+ 327: 
+ 328:       <div class="mt-5 hidden overflow-hidden lg:block">
+ 329:         <table class="w-full table-fixed text-sm">
+ 330:           <thead class="border-b border-themed text-left text-themed-muted">
+ 331:             <tr>
+ 332:               <th class="py-3 pr-4">{{ t('giftCards.code') }}</th>
+ 333:               <th class="py-3 pr-4">{{ t('giftCards.amount') }}</th>
+ 334:               <th class="py-3 pr-4">{{ t('giftCards.statusTitle') }}</th>
+ 335:               <th class="py-3 pr-4">{{ t('giftCards.expiresAt') }}</th>
+ 336:               <th class="py-3 pr-4">{{ t('giftCards.action') }}</th>
+ 337:             </tr>
+ 338:           </thead>
+ 339:           <tbody>
+ 340:             <tr v-for="card in cards" :key="card.id" class="border-b border-themed">
+ 341:               <td class="py-3 pr-4 font-mono text-xs text-themed">
+ 342:                 <span class="block truncate">{{ displayCardCode(card) }}</span>
+ 343:               </td>
+ 344:               <td class="py-3 pr-4 text-themed">{{ formatMoney(card.balanceValue) }}</td>
+ 345:               <td class="py-3 pr-4" :class="statusClass(card.status)">{{ statusLabel(card.status) }}</td>
+ 346:               <td class="py-3 pr-4 text-themed-muted">{{ formatDate(card.expiresAt) }}</td>
+ 347:               <td class="py-3 pr-4 whitespace-nowrap">
+ 348:                 <div class="flex gap-2">
+ 349:                   <button class="btn-secondary btn-sm" @click="toggleCodeReveal(card)">
+ 350:                     {{ isCodeRevealed(card) ? t('giftCards.hideCode') : t('giftCards.showCode') }}
+ 351:                   </button>
+ 352:                   <button class="btn-secondary btn-sm" @click="copyCode(card.code)">{{ t('giftCards.copy') }}</button>
+ 353:                 </div>
+ 354:               </td>
+ 355:             </tr>
+ 356:             <tr v-if="!loading && cards.length === 0">
+ 357:               <td colspan="5" class="py-8 text-center text-themed-muted">{{ t('giftCards.empty') }}</td>
+ 358:             </tr>
+ 359:           </tbody>
+ 360:         </table>
+ 272:           <button class="btn-ghost text-error" :disabled="selectedCount === 0" @click="batchDelete">{{ t('giftCardsAdmin.batchDelete') }}</button>
+ 273:         </div>
+ 274:       </div>
+ 275: 
+ 276:       <div class="mt-5 space-y-3 lg:hidden">
+ 277:         <div v-for="card in records" :key="card.id" class="rounded-lg border border-themed bg-themed-surface p-4">
+ 278:           <div class="flex items-start gap-3">
+ 279:             <input type="checkbox" class="mt-1 h-4 w-4 rounded text-accent" :checked="selectedIds.has(card.id)" @change="toggleSelected(card.id, ($event.target as HTMLInputElement).checked)" />
+ 280:             <div class="min-w-0 flex-1">
+ 281:               <div class="flex items-start justify-between gap-3">
+ 282:                 <code class="break-all font-mono text-xs text-themed">{{ card.code }}</code>
+ 283:                 <span class="shrink-0 text-sm" :class="statusClass(card.status)">{{ statusLabel(card.status) }}</span>
+ 284:               </div>
+ 285:               <div class="mt-3 grid grid-cols-2 gap-3 text-sm">
+ 286:                 <div>
+ 287:                   <div class="text-xs text-themed-muted">{{ t('giftCards.amount') }}</div>
+ 288:                   <div class="font-medium text-themed">{{ formatMoney(card.balanceValue) }}</div>
+ 289:                   <div class="text-xs text-themed-muted">{{ t('giftCardsAdmin.faceValue', { amount: formatMoney(card.faceValue) }) }}</div>
+ 290:                 </div>
+ 291:                 <div>
+ 292:                   <div class="text-xs text-themed-muted">{{ t('giftCards.expiresAt') }}</div>
+ 293:                   <div class="text-themed">{{ formatDate(card.expiresAt) }}</div>
+ 294:                 </div>
+ 295:               </div>
+ 296:               <div class="mt-3 space-y-1 text-xs text-themed-muted">
+ 297:                 <div>{{ t('giftCardsAdmin.createdBy', { user: card.createdBy?.username || '-' }) }}</div>
+ 298:                 <div>{{ t('giftCardsAdmin.owner', { user: card.owner?.username || '-' }) }}</div>
+ 299:                 <div>{{ t('giftCardsAdmin.usedBy', { user: card.usedBy?.username || '-' }) }}</div>
+ 300:               </div>
+ 301:               <div class="mt-4 flex flex-wrap gap-2">
+ 302:                 <button v-if="card.status === 'active' || card.status === 'disabled'" class="btn-secondary btn-sm" @click="updateCardStatus(card)">
+ 303:                   {{ card.status === 'disabled' ? t('giftCardsAdmin.enable') : t('giftCardsAdmin.disable') }}
+ 304:                 </button>
+ 305:                 <button v-if="card.status !== 'used'" class="btn-danger btn-sm" @click="deleteCard(card)">{{ t('giftCardsAdmin.delete') }}</button>
+ 306:               </div>
+ 307:             </div>
+ 308:           </div>
+ 309:         </div>
+ 310:         <div v-if="!loading && records.length === 0" class="py-8 text-center text-themed-muted">{{ t('giftCards.empty') }}</div>
+ 311:       </div>
+ 312: 
+ 313:       <div class="mt-5 hidden overflow-hidden lg:block">
+ 314:         <table class="w-full table-fixed text-sm">
+ 315:           <thead class="border-b border-themed text-left text-themed-muted">
+ 316:             <tr>
+ 317:               <th class="w-[4%] py-3 pr-4"></th>
+ 318:               <th class="w-[28%] py-3 pr-4">{{ t('giftCards.code') }}</th>
+ 319:               <th class="w-[14%] py-3 pr-4">{{ t('giftCards.amount') }}</th>
+ 320:               <th class="w-[12%] py-3 pr-4">{{ t('giftCards.statusTitle') }}</th>
+ 321:               <th class="w-[20%] py-3 pr-4">{{ t('giftCardsAdmin.createdAndUsed') }}</th>
+ 322:               <th class="w-[12%] py-3 pr-4">{{ t('giftCards.expiresAt') }}</th>
+ 323:               <th class="w-[10%] py-3 pr-4">{{ t('giftCards.action') }}</th>
+ 324:             </tr>
+ 325:           </thead>
+ 326:           <tbody>
+ 327:             <tr v-for="card in records" :key="card.id" class="border-b border-themed">
+ 328:               <td class="py-3 pr-4">
+ 329:                 <input type="checkbox" class="h-4 w-4 rounded text-accent" :checked="selectedIds.has(card.id)" @change="toggleSelected(card.id, ($event.target as HTMLInputElement).checked)" />
+ 330:               </td>
+ 331:               <td class="py-3 pr-4 font-mono text-xs text-themed">
+ 332:                 <span class="block truncate">{{ card.code }}</span>
+ 333:               </td>
+ 334:               <td class="py-3 pr-4 text-themed">
+ 335:                 <div>{{ formatMoney(card.balanceValue) }}</div>
+ 336:                 <div class="text-xs text-themed-muted">{{ t('giftCardsAdmin.faceValue', { amount: formatMoney(card.faceValue) }) }}</div>
+ 337:               </td>
+ 338:               <td class="py-3 pr-4" :class="statusClass(card.status)">{{ statusLabel(card.status) }}</td>
+ 339:               <td class="py-3 pr-4 text-xs text-themed-muted">
+ 340:                 <div class="truncate">{{ t('giftCardsAdmin.createdBy', { user: card.createdBy?.username || '-' }) }}</div>
+ 341:                 <div class="truncate">{{ t('giftCardsAdmin.owner', { user: card.owner?.username || '-' }) }}</div>
+ 342:                 <div class="truncate">{{ t('giftCardsAdmin.usedBy', { user: card.usedBy?.username || '-' }) }}</div>
+ 343:               </td>
+ 344:               <td class="py-3 pr-4 text-themed-muted">{{ formatDate(card.expiresAt) }}</td>
+ 345:               <td class="py-3 pr-4">
+ 346:                 <div class="flex flex-wrap gap-2">
+ 347:                   <button v-if="card.status === 'active' || card.status === 'disabled'" class="btn-secondary btn-sm" @click="updateCardStatus(card)">
+ 348:                     {{ card.status === 'disabled' ? t('giftCardsAdmin.enable') : t('giftCardsAdmin.disable') }}
+ 349:                   </button>
+ 350:                   <button v-if="card.status !== 'used'" class="btn-danger btn-sm" @click="deleteCard(card)">{{ t('giftCardsAdmin.delete') }}</button>
+ 351:                 </div>
+ 352:               </td>
+ 353:             </tr>
+ 354:             <tr v-if="!loading && records.length === 0">
+ 355:               <td colspan="7" class="py-8 text-center text-themed-muted">{{ t('giftCards.empty') }}</td>
+diff --git a/client/src/views/GiftCardsView.vue b/client/src/views/GiftCardsView.vue
+index 3261885..6a0c22b 100644
+--- a/client/src/views/GiftCardsView.vue
++++ b/client/src/views/GiftCardsView.vue
+@@ -325,8 +325,8 @@ onMounted(async () => {
+         <div v-if="!loading && cards.length === 0" class="py-8 text-center text-themed-muted">{{ t('giftCards.empty') }}</div>
+       </div>
+ 
+-      <div class="mt-5 hidden overflow-x-auto lg:block">
+-        <table class="w-full min-w-[720px] text-sm">
++      <div class="mt-5 hidden overflow-hidden lg:block">
++        <table class="w-full table-fixed text-sm">
+           <thead class="border-b border-themed text-left text-themed-muted">
+             <tr>
+               <th class="py-3 pr-4">{{ t('giftCards.code') }}</th>
+warning: in the working copy of 'client/src/views/GiftCardsView.vue', LF will be replaced by CRLF the next time Git touches it
+
+diff --git a/client/src/views/GiftCardsView.vue b/client/src/views/GiftCardsView.vue
+index 3261885d69d123ac8c5fd0519d7276f49c69af16..6a0c22b8c451a69f8b12d7d14e5c97fc60f42a98
+--- a/client/src/views/GiftCardsView.vue
++++ b/client/src/views/GiftCardsView.vue
+@@ -325,8 +325,8 @@
+         <div v-if="!loading && cards.length === 0" class="py-8 text-center text-themed-muted">{{ t('giftCards.empty') }}</div>
+       </div>
+ 
+-      <div class="mt-5 hidden overflow-x-auto lg:block">
+-        <table class="w-full min-w-[720px] text-sm">
++      <div class="mt-5 hidden overflow-hidden lg:block">
++        <table class="w-full table-fixed text-sm">
+           <thead class="border-b border-themed text-left text-themed-muted">
+             <tr>
+               <th class="py-3 pr-4">{{ t('giftCards.code') }}</th>
+
+守卫与页面逐条核对完成；管理页和 locales 已满足，用户页完成两处最小恢复。
+  ✓ 读取 AGENTS.md §4、gift card 守卫断言及两页当前结构
+  ✓ 最小化恢复用户端与管理端锁定表结构及必要 i18n
+  → 运行 gift-card 守卫并迭代至通过
+  • 运行 route/dist/i18n 守卫与 client type-check
+diff --git a/client/src/views/GiftCardsView.vue b/client/src/views/GiftCardsView.vue
+index 3261885d69d123ac8c5fd0519d7276f49c69af16..6a0c22b8c451a69f8b12d7d14e5c97fc60f42a98
+--- a/client/src/views/GiftCardsView.vue
++++ b/client/src/views/GiftCardsView.vue
+@@ -325,8 +325,8 @@
+         <div v-if="!loading && cards.length === 0" class="py-8 text-center text-themed-muted">{{ t('giftCards.empty') }}</div>
+       </div>
+ 
+-      <div class="mt-5 hidden overflow-x-auto lg:block">
+-        <table class="w-full min-w-[720px] text-sm">
++      <div class="mt-5 hidden overflow-hidden lg:block">
++        <table class="w-full table-fixed text-sm">
+           <thead class="border-b border-themed text-left text-themed-muted">
+             <tr>
+               <th class="py-3 pr-4">{{ t('giftCards.code') }}</th>
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'pnpm --filter server test:gift-card-guards' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 1396ms:
+
+> server@1.3.7 test:gift-card-guards C:\Users\Administrator\Desktop\payinces\server
+> node --import tsx scripts/test-gift-card-guards.ts
+
+gift card guard checks passed
+
+diff --git a/client/src/views/GiftCardsView.vue b/client/src/views/GiftCardsView.vue
+index 3261885d69d123ac8c5fd0519d7276f49c69af16..6a0c22b8c451a69f8b12d7d14e5c97fc60f42a98
+--- a/client/src/views/GiftCardsView.vue
++++ b/client/src/views/GiftCardsView.vue
+@@ -325,8 +325,8 @@
+         <div v-if="!loading && cards.length === 0" class="py-8 text-center text-themed-muted">{{ t('giftCards.empty') }}</div>
+       </div>
+ 
+-      <div class="mt-5 hidden overflow-x-auto lg:block">
+-        <table class="w-full min-w-[720px] text-sm">
++      <div class="mt-5 hidden overflow-hidden lg:block">
++        <table class="w-full table-fixed text-sm">
+           <thead class="border-b border-themed text-left text-themed-muted">
+             <tr>
+               <th class="py-3 pr-4">{{ t('giftCards.code') }}</th>
+
+codex
+`test:gift-card-guards` 已通过。现在并行跑剩余四项验收：路由表格守卫、双端 dist 边界、i18n key 完整性和 client type-check；这些会基于当前脏工作区整体执行，我会区分本次改动与既有改动导致的结果。
+Gift card 专项守卫已通过，进入其余前端验收。
+  ✓ 读取 AGENTS.md §4、gift card 守卫断言及两页当前结构
+  ✓ 最小化恢复用户端与管理端锁定表结构及必要 i18n
+  ✓ 运行 gift-card 守卫并迭代至通过
+  → 运行 route/dist/i18n 守卫与 client type-check
+diff --git a/client/src/views/GiftCardsView.vue b/client/src/views/GiftCardsView.vue
+index 3261885d69d123ac8c5fd0519d7276f49c69af16..6a0c22b8c451a69f8b12d7d14e5c97fc60f42a98
+--- a/client/src/views/GiftCardsView.vue
++++ b/client/src/views/GiftCardsView.vue
+@@ -325,8 +325,8 @@
+         <div v-if="!loading && cards.length === 0" class="py-8 text-center text-themed-muted">{{ t('giftCards.empty') }}</div>
+       </div>
+ 
+-      <div class="mt-5 hidden overflow-x-auto lg:block">
+-        <table class="w-full min-w-[720px] text-sm">
++      <div class="mt-5 hidden overflow-hidden lg:block">
++        <table class="w-full table-fixed text-sm">
+           <thead class="border-b border-themed text-left text-themed-muted">
+             <tr>
+               <th class="py-3 pr-4">{{ t('giftCards.code') }}</th>
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'pnpm --filter client type-check' in C:\Users\Administrator\Desktop\payinces
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'pnpm --filter server test:frontend-route-guards' in C:\Users\Administrator\Desktop\payinces
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'pnpm --filter server test:frontend-dist-boundary-guards' in C:\Users\Administrator\Desktop\payinces
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'pnpm --filter server test:frontend-i18n-keys' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 2579ms:
+
+> server@1.3.7 test:frontend-route-guards C:\Users\Administrator\Desktop\payinces\server
+> node --import tsx scripts/test-frontend-route-guards.ts
+
+frontend route guard tests passed
+
+ succeeded in 2684ms:
+
+> server@1.3.7 test:frontend-i18n-keys C:\Users\Administrator\Desktop\payinces\server
+> node --import tsx scripts/test-frontend-i18n-keys.ts
+
+frontend i18n key checks passed
+
+ succeeded in 3304ms:
+
+> server@1.3.7 test:frontend-dist-boundary-guards C:\Users\Administrator\Desktop\payinces\server
+> node --import tsx scripts/test-frontend-dist-boundary-guards.ts
+
+frontend dist boundary guard tests passed
+
+diff --git a/client/src/views/GiftCardsView.vue b/client/src/views/GiftCardsView.vue
+index 3261885d69d123ac8c5fd0519d7276f49c69af16..6a0c22b8c451a69f8b12d7d14e5c97fc60f42a98
+--- a/client/src/views/GiftCardsView.vue
++++ b/client/src/views/GiftCardsView.vue
+@@ -325,8 +325,8 @@
+         <div v-if="!loading && cards.length === 0" class="py-8 text-center text-themed-muted">{{ t('giftCards.empty') }}</div>
+       </div>
+ 
+-      <div class="mt-5 hidden overflow-x-auto lg:block">
+-        <table class="w-full min-w-[720px] text-sm">
++      <div class="mt-5 hidden overflow-hidden lg:block">
++        <table class="w-full table-fixed text-sm">
+           <thead class="border-b border-themed text-left text-themed-muted">
+             <tr>
+               <th class="py-3 pr-4">{{ t('giftCards.code') }}</th>
+
+diff --git a/client/src/views/GiftCardsView.vue b/client/src/views/GiftCardsView.vue
+index 3261885d69d123ac8c5fd0519d7276f49c69af16..6a0c22b8c451a69f8b12d7d14e5c97fc60f42a98
+--- a/client/src/views/GiftCardsView.vue
++++ b/client/src/views/GiftCardsView.vue
+@@ -325,8 +325,8 @@
+         <div v-if="!loading && cards.length === 0" class="py-8 text-center text-themed-muted">{{ t('giftCards.empty') }}</div>
+       </div>
+ 
+-      <div class="mt-5 hidden overflow-x-auto lg:block">
+-        <table class="w-full min-w-[720px] text-sm">
++      <div class="mt-5 hidden overflow-hidden lg:block">
++        <table class="w-full table-fixed text-sm">
+           <thead class="border-b border-themed text-left text-themed-muted">
+             <tr>
+               <th class="py-3 pr-4">{{ t('giftCards.code') }}</th>
+
+diff --git a/client/src/views/GiftCardsView.vue b/client/src/views/GiftCardsView.vue
+index 3261885d69d123ac8c5fd0519d7276f49c69af16..6a0c22b8c451a69f8b12d7d14e5c97fc60f42a98
+--- a/client/src/views/GiftCardsView.vue
++++ b/client/src/views/GiftCardsView.vue
+@@ -325,8 +325,8 @@
+         <div v-if="!loading && cards.length === 0" class="py-8 text-center text-themed-muted">{{ t('giftCards.empty') }}</div>
+       </div>
+ 
+-      <div class="mt-5 hidden overflow-x-auto lg:block">
+-        <table class="w-full min-w-[720px] text-sm">
++      <div class="mt-5 hidden overflow-hidden lg:block">
++        <table class="w-full table-fixed text-sm">
+           <thead class="border-b border-themed text-left text-themed-muted">
+             <tr>
+               <th class="py-3 pr-4">{{ t('giftCards.code') }}</th>
+
+diff --git a/client/src/views/GiftCardsView.vue b/client/src/views/GiftCardsView.vue
+index 3261885d69d123ac8c5fd0519d7276f49c69af16..6a0c22b8c451a69f8b12d7d14e5c97fc60f42a98
+--- a/client/src/views/GiftCardsView.vue
++++ b/client/src/views/GiftCardsView.vue
+@@ -325,8 +325,8 @@
+         <div v-if="!loading && cards.length === 0" class="py-8 text-center text-themed-muted">{{ t('giftCards.empty') }}</div>
+       </div>
+ 
+-      <div class="mt-5 hidden overflow-x-auto lg:block">
+-        <table class="w-full min-w-[720px] text-sm">
++      <div class="mt-5 hidden overflow-hidden lg:block">
++        <table class="w-full table-fixed text-sm">
+           <thead class="border-b border-themed text-left text-themed-muted">
+             <tr>
+               <th class="py-3 pr-4">{{ t('giftCards.code') }}</th>
+
+diff --git a/client/src/views/GiftCardsView.vue b/client/src/views/GiftCardsView.vue
+index 3261885d69d123ac8c5fd0519d7276f49c69af16..6a0c22b8c451a69f8b12d7d14e5c97fc60f42a98
+--- a/client/src/views/GiftCardsView.vue
++++ b/client/src/views/GiftCardsView.vue
+@@ -325,8 +325,8 @@
+         <div v-if="!loading && cards.length === 0" class="py-8 text-center text-themed-muted">{{ t('giftCards.empty') }}</div>
+       </div>
+ 
+-      <div class="mt-5 hidden overflow-x-auto lg:block">
+-        <table class="w-full min-w-[720px] text-sm">
++      <div class="mt-5 hidden overflow-hidden lg:block">
++        <table class="w-full table-fixed text-sm">
+           <thead class="border-b border-themed text-left text-themed-muted">
+             <tr>
+               <th class="py-3 pr-4">{{ t('giftCards.code') }}</th>
+
+diff --git a/client/src/views/GiftCardsView.vue b/client/src/views/GiftCardsView.vue
+index 3261885d69d123ac8c5fd0519d7276f49c69af16..6a0c22b8c451a69f8b12d7d14e5c97fc60f42a98
+--- a/client/src/views/GiftCardsView.vue
++++ b/client/src/views/GiftCardsView.vue
+@@ -325,8 +325,8 @@
+         <div v-if="!loading && cards.length === 0" class="py-8 text-center text-themed-muted">{{ t('giftCards.empty') }}</div>
+       </div>
+ 
+-      <div class="mt-5 hidden overflow-x-auto lg:block">
+-        <table class="w-full min-w-[720px] text-sm">
++      <div class="mt-5 hidden overflow-hidden lg:block">
++        <table class="w-full table-fixed text-sm">
+           <thead class="border-b border-themed text-left text-themed-muted">
+             <tr>
+               <th class="py-3 pr-4">{{ t('giftCards.code') }}</th>
+
+diff --git a/client/src/views/GiftCardsView.vue b/client/src/views/GiftCardsView.vue
+index 3261885d69d123ac8c5fd0519d7276f49c69af16..6a0c22b8c451a69f8b12d7d14e5c97fc60f42a98
+--- a/client/src/views/GiftCardsView.vue
++++ b/client/src/views/GiftCardsView.vue
+@@ -325,8 +325,8 @@
+         <div v-if="!loading && cards.length === 0" class="py-8 text-center text-themed-muted">{{ t('giftCards.empty') }}</div>
+       </div>
+ 
+-      <div class="mt-5 hidden overflow-x-auto lg:block">
+-        <table class="w-full min-w-[720px] text-sm">
++      <div class="mt-5 hidden overflow-hidden lg:block">
++        <table class="w-full table-fixed text-sm">
+           <thead class="border-b border-themed text-left text-themed-muted">
+             <tr>
+               <th class="py-3 pr-4">{{ t('giftCards.code') }}</th>
+
+ succeeded in 27532ms:
+
+> client@1.3.7 type-check C:\Users\Administrator\Desktop\payinces\client
+> vue-tsc --noEmit
+
+
+diff --git a/client/src/views/GiftCardsView.vue b/client/src/views/GiftCardsView.vue
+index 3261885d69d123ac8c5fd0519d7276f49c69af16..6a0c22b8c451a69f8b12d7d14e5c97fc60f42a98
+--- a/client/src/views/GiftCardsView.vue
++++ b/client/src/views/GiftCardsView.vue
+@@ -325,8 +325,8 @@
+         <div v-if="!loading && cards.length === 0" class="py-8 text-center text-themed-muted">{{ t('giftCards.empty') }}</div>
+       </div>
+ 
+-      <div class="mt-5 hidden overflow-x-auto lg:block">
+-        <table class="w-full min-w-[720px] text-sm">
++      <div class="mt-5 hidden overflow-hidden lg:block">
++        <table class="w-full table-fixed text-sm">
+           <thead class="border-b border-themed text-left text-themed-muted">
+             <tr>
+               <th class="py-3 pr-4">{{ t('giftCards.code') }}</th>
+
+codex
+四项指定验收均已通过。按仓库“前端改动需双端 build”的完成定义，我再补跑 `pnpm build:client`，然后核对最终 diff 只包含本次两处 class 恢复且没有 commit。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'pnpm build:client' in C:\Users\Administrator\Desktop\payinces
+2026-07-12T00:16:44.551727Z ERROR codex_core::tools::router: error=Exit code: 1
+Wall time: 3.7 seconds
+Output:
+
+> payincus@1.3.7 build:client C:\Users\Administrator\Desktop\payinces
+> pnpm --filter client build
+
+
+> client@1.3.7 build C:\Users\Administrator\Desktop\payinces\client
+> pnpm build:user && pnpm build:admin
+
+
+> client@1.3.7 build:user C:\Users\Administrator\Desktop\payinces\client
+> VITE_APP_ENTRY=user vue-tsc && VITE_APP_ENTRY=user vite build
+
+ ELIFECYCLE  Command failed with exit code 1.
+C:\Users\Administrator\Desktop\payinces\client:
+ ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  client@1.3.7 build: `pnpm build:user && pnpm build:admin`
+Exit status 1
+ ELIFECYCLE  Command failed with exit code 1.
+'VITE_APP_ENTRY' is not recognized as an internal or external command,
+operable program or batch file.
+
+ exited 1 in 3662ms:
+
+> payincus@1.3.7 build:client C:\Users\Administrator\Desktop\payinces
+> pnpm --filter client build
+
+
+> client@1.3.7 build C:\Users\Administrator\Desktop\payinces\client
+> pnpm build:user && pnpm build:admin
+
+
+> client@1.3.7 build:user C:\Users\Administrator\Desktop\payinces\client
+> VITE_APP_ENTRY=user vue-tsc && VITE_APP_ENTRY=user vite build
+
+ ELIFECYCLE  Command failed with exit code 1.
+C:\Users\Administrator\Desktop\payinces\client:
+ ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  client@1.3.7 build: `pnpm build:user && pnpm build:admin`
+Exit status 1
+ ELIFECYCLE  Command failed with exit code 1.
+'VITE_APP_ENTRY' is not recognized as an internal or external command,
+operable program or batch file.
+
+diff --git a/client/src/views/GiftCardsView.vue b/client/src/views/GiftCardsView.vue
+index 3261885d69d123ac8c5fd0519d7276f49c69af16..6a0c22b8c451a69f8b12d7d14e5c97fc60f42a98
+--- a/client/src/views/GiftCardsView.vue
++++ b/client/src/views/GiftCardsView.vue
+@@ -325,8 +325,8 @@
+         <div v-if="!loading && cards.length === 0" class="py-8 text-center text-themed-muted">{{ t('giftCards.empty') }}</div>
+       </div>
+ 
+-      <div class="mt-5 hidden overflow-x-auto lg:block">
+-        <table class="w-full min-w-[720px] text-sm">
++      <div class="mt-5 hidden overflow-hidden lg:block">
++        <table class="w-full table-fixed text-sm">
+           <thead class="border-b border-themed text-left text-themed-muted">
+             <tr>
+               <th class="py-3 pr-4">{{ t('giftCards.code') }}</th>
+
+codex
+仓库的 `build:client` 脚本使用 POSIX 环境变量写法，在当前 Windows PowerShell 下于真正编译前失败（`VITE_APP_ENTRY` 无法识别），不是代码错误。我会用等价的 PowerShell 环境变量方式分别执行 user/admin 的 `vue-tsc + vite build`，不改 package 脚本。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$env:VITE_APP_ENTRY='"'user'; pnpm exec vue-tsc; if ("'$LASTEXITCODE -eq 0) { pnpm exec vite build }' in C:\Users\Administrator\Desktop\payinces\client
+diff --git a/client/src/views/GiftCardsView.vue b/client/src/views/GiftCardsView.vue
+index 3261885d69d123ac8c5fd0519d7276f49c69af16..6a0c22b8c451a69f8b12d7d14e5c97fc60f42a98
+--- a/client/src/views/GiftCardsView.vue
++++ b/client/src/views/GiftCardsView.vue
+@@ -325,8 +325,8 @@
+         <div v-if="!loading && cards.length === 0" class="py-8 text-center text-themed-muted">{{ t('giftCards.empty') }}</div>
+       </div>
+ 
+-      <div class="mt-5 hidden overflow-x-auto lg:block">
+-        <table class="w-full min-w-[720px] text-sm">
++      <div class="mt-5 hidden overflow-hidden lg:block">
++        <table class="w-full table-fixed text-sm">
+           <thead class="border-b border-themed text-left text-themed-muted">
+             <tr>
+               <th class="py-3 pr-4">{{ t('giftCards.code') }}</th>
+
+diff --git a/client/src/views/GiftCardsView.vue b/client/src/views/GiftCardsView.vue
+index 3261885d69d123ac8c5fd0519d7276f49c69af16..6a0c22b8c451a69f8b12d7d14e5c97fc60f42a98
+--- a/client/src/views/GiftCardsView.vue
++++ b/client/src/views/GiftCardsView.vue
+@@ -325,8 +325,8 @@
+         <div v-if="!loading && cards.length === 0" class="py-8 text-center text-themed-muted">{{ t('giftCards.empty') }}</div>
+       </div>
+ 
+-      <div class="mt-5 hidden overflow-x-auto lg:block">
+-        <table class="w-full min-w-[720px] text-sm">
++      <div class="mt-5 hidden overflow-hidden lg:block">
++        <table class="w-full table-fixed text-sm">
+           <thead class="border-b border-themed text-left text-themed-muted">
+             <tr>
+               <th class="py-3 pr-4">{{ t('giftCards.code') }}</th>
+
+diff --git a/client/src/views/GiftCardsView.vue b/client/src/views/GiftCardsView.vue
+index 3261885d69d123ac8c5fd0519d7276f49c69af16..6a0c22b8c451a69f8b12d7d14e5c97fc60f42a98
+--- a/client/src/views/GiftCardsView.vue
++++ b/client/src/views/GiftCardsView.vue
+@@ -325,8 +325,8 @@
+         <div v-if="!loading && cards.length === 0" class="py-8 text-center text-themed-muted">{{ t('giftCards.empty') }}</div>
+       </div>
+ 
+-      <div class="mt-5 hidden overflow-x-auto lg:block">
+-        <table class="w-full min-w-[720px] text-sm">
++      <div class="mt-5 hidden overflow-hidden lg:block">
++        <table class="w-full table-fixed text-sm">
+           <thead class="border-b border-themed text-left text-themed-muted">
+             <tr>
+               <th class="py-3 pr-4">{{ t('giftCards.code') }}</th>
+
+diff --git a/client/src/views/GiftCardsView.vue b/client/src/views/GiftCardsView.vue
+index 3261885d69d123ac8c5fd0519d7276f49c69af16..6a0c22b8c451a69f8b12d7d14e5c97fc60f42a98
+--- a/client/src/views/GiftCardsView.vue
++++ b/client/src/views/GiftCardsView.vue
+@@ -325,8 +325,8 @@
+         <div v-if="!loading && cards.length === 0" class="py-8 text-center text-themed-muted">{{ t('giftCards.empty') }}</div>
+       </div>
+ 
+-      <div class="mt-5 hidden overflow-x-auto lg:block">
+-        <table class="w-full min-w-[720px] text-sm">
++      <div class="mt-5 hidden overflow-hidden lg:block">
++        <table class="w-full table-fixed text-sm">
+           <thead class="border-b border-themed text-left text-themed-muted">
+             <tr>
+               <th class="py-3 pr-4">{{ t('giftCards.code') }}</th>
+
+diff --git a/client/src/views/GiftCardsView.vue b/client/src/views/GiftCardsView.vue
+index 3261885d69d123ac8c5fd0519d7276f49c69af16..6a0c22b8c451a69f8b12d7d14e5c97fc60f42a98
+--- a/client/src/views/GiftCardsView.vue
++++ b/client/src/views/GiftCardsView.vue
+@@ -325,8 +325,8 @@
+         <div v-if="!loading && cards.length === 0" class="py-8 text-center text-themed-muted">{{ t('giftCards.empty') }}</div>
+       </div>
+ 
+-      <div class="mt-5 hidden overflow-x-auto lg:block">
+-        <table class="w-full min-w-[720px] text-sm">
++      <div class="mt-5 hidden overflow-hidden lg:block">
++        <table class="w-full table-fixed text-sm">
+           <thead class="border-b border-themed text-left text-themed-muted">
+             <tr>
+               <th class="py-3 pr-4">{{ t('giftCards.code') }}</th>
+
+diff --git a/client/src/views/GiftCardsView.vue b/client/src/views/GiftCardsView.vue
+index 3261885d69d123ac8c5fd0519d7276f49c69af16..6a0c22b8c451a69f8b12d7d14e5c97fc60f42a98
+--- a/client/src/views/GiftCardsView.vue
++++ b/client/src/views/GiftCardsView.vue
+@@ -325,8 +325,8 @@
+         <div v-if="!loading && cards.length === 0" class="py-8 text-center text-themed-muted">{{ t('giftCards.empty') }}</div>
+       </div>
+ 
+-      <div class="mt-5 hidden overflow-x-auto lg:block">
+-        <table class="w-full min-w-[720px] text-sm">
++      <div class="mt-5 hidden overflow-hidden lg:block">
++        <table class="w-full table-fixed text-sm">
+           <thead class="border-b border-themed text-left text-themed-muted">
+             <tr>
+               <th class="py-3 pr-4">{{ t('giftCards.code') }}</th>
+
+diff --git a/client/src/views/GiftCardsView.vue b/client/src/views/GiftCardsView.vue
+index 3261885d69d123ac8c5fd0519d7276f49c69af16..6a0c22b8c451a69f8b12d7d14e5c97fc60f42a98
+--- a/client/src/views/GiftCardsView.vue
++++ b/client/src/views/GiftCardsView.vue
+@@ -325,8 +325,8 @@
+         <div v-if="!loading && cards.length === 0" class="py-8 text-center text-themed-muted">{{ t('giftCards.empty') }}</div>
+       </div>
+ 
+-      <div class="mt-5 hidden overflow-x-auto lg:block">
+-        <table class="w-full min-w-[720px] text-sm">
++      <div class="mt-5 hidden overflow-hidden lg:block">
++        <table class="w-full table-fixed text-sm">
+           <thead class="border-b border-themed text-left text-themed-muted">
+             <tr>
+               <th class="py-3 pr-4">{{ t('giftCards.code') }}</th>
+
+diff --git a/client/src/views/GiftCardsView.vue b/client/src/views/GiftCardsView.vue
+index 3261885d69d123ac8c5fd0519d7276f49c69af16..6a0c22b8c451a69f8b12d7d14e5c97fc60f42a98
+--- a/client/src/views/GiftCardsView.vue
++++ b/client/src/views/GiftCardsView.vue
+@@ -325,8 +325,8 @@
+         <div v-if="!loading && cards.length === 0" class="py-8 text-center text-themed-muted">{{ t('giftCards.empty') }}</div>
+       </div>
+ 
+-      <div class="mt-5 hidden overflow-x-auto lg:block">
+-        <table class="w-full min-w-[720px] text-sm">
++      <div class="mt-5 hidden overflow-hidden lg:block">
++        <table class="w-full table-fixed text-sm">
+           <thead class="border-b border-themed text-left text-themed-muted">
+             <tr>
+               <th class="py-3 pr-4">{{ t('giftCards.code') }}</th>
+
+2026-07-12T00:17:23.244925Z ERROR codex_core::tools::router: error=Exit code: 1
+Wall time: 31.2 seconds
+Output:
+X [ERROR] Cannot read directory "../../..": Access is denied.
+
+X [ERROR] Could not resolve "C:\\Users\\Administrator\\Desktop\\payinces\\client\\vite.config.ts"
+
+[31mfailed to load config from C:\Users\Administrator\Desktop\payinces\client\vite.config.ts[39m
+[31merror during build:
+Error: Build failed with 2 errors:
+error: Cannot read directory "../../..": Access is denied.
+error: Could not resolve "C:\\Users\\Administrator\\Desktop\\payinces\\client\\vite.config.ts"
+    at failureErrorWithLog (C:\Users\Administrator\Desktop\payinces\node_modules\.pnpm\esbuild@0.25.12\node_modules\esbuild\lib\main.js:1467:15)
+    at C:\Users\Administrator\Desktop\payinces\node_modules\.pnpm\esbuild@0.25.12\node_modules\esbuild\lib\main.js:926:25
+    at runOnEndCallbacks (C:\Users\Administrator\Desktop\payinces\node_modules\.pnpm\esbuild@0.25.12\node_modules\esbuild\lib\main.js:1307:45)
+    at buildResponseToResult (C:\Users\Administrator\Desktop\payinces\node_modules\.pnpm\esbuild@0.25.12\node_modules\esbuild\lib\main.js:924:7)
+    at C:\Users\Administrator\Desktop\payinces\node_modules\.pnpm\esbuild@0.25.12\node_modules\esbuild\lib\main.js:951:16
+    at responseCallbacks.<computed> (C:\Users\Administrator\Desktop\payinces\node_modules\.pnpm\esbuild@0.25.12\node_modules\esbuild\lib\main.js:603:9)
+    at handleIncomingPacket (C:\Users\Administrator\Desktop\payinces\node_modules\.pnpm\esbuild@0.25.12\node_modules\esbuild\lib\main.js:658:12)
+    at Socket.readFromStdout (C:\Users\Administrator\Desktop\payinces\node_modules\.pnpm\esbuild@0.25.12\node_modules\esbuild\lib\main.js:581:7)
+    at Socket.emit (node:events:509:28)
+    at addChunk (node:internal/streams/readable:563:12)[39m
+
+ exited 1 in 31179ms:
+X [ERROR] Cannot read directory "../../..": Access is denied.
+
+X [ERROR] Could not resolve "C:\\Users\\Administrator\\Desktop\\payinces\\client\\vite.config.ts"
+
+[31mfailed to load config from C:\Users\Administrator\Desktop\payinces\client\vite.config.ts[39m
+[31merror during build:
+Error: Build failed with 2 errors:
+error: Cannot read directory "../../..": Access is denied.
+error: Could not resolve "C:\\Users\\Administrator\\Desktop\\payinces\\client\\vite.config.ts"
+    at failureErrorWithLog (C:\Users\Administrator\Desktop\payinces\node_modules\.pnpm\esbuild@0.25.12\node_modules\esbuild\lib\main.js:1467:15)
+    at C:\Users\Administrator\Desktop\payinces\node_modules\.pnpm\esbuild@0.25.12\node_modules\esbuild\lib\main.js:926:25
+    at runOnEndCallbacks (C:\Users\Administrator\Desktop\payinces\node_modules\.pnpm\esbuild@0.25.12\node_modules\esbuild\lib\main.js:1307:45)
+    at buildResponseToResult (C:\Users\Administrator\Desktop\payinces\node_modules\.pnpm\esbuild@0.25.12\node_modules\esbuild\lib\main.js:924:7)
+    at C:\Users\Administrator\Desktop\payinces\node_modules\.pnpm\esbuild@0.25.12\node_modules\esbuild\lib\main.js:951:16
+    at responseCallbacks.<computed> (C:\Users\Administrator\Desktop\payinces\node_modules\.pnpm\esbuild@0.25.12\node_modules\esbuild\lib\main.js:603:9)
+    at handleIncomingPacket (C:\Users\Administrator\Desktop\payinces\node_modules\.pnpm\esbuild@0.25.12\node_modules\esbuild\lib\main.js:658:12)
+    at Socket.readFromStdout (C:\Users\Administrator\Desktop\payinces\node_modules\.pnpm\esbuild@0.25.12\node_modules\esbuild\lib\main.js:581:7)
+    at Socket.emit (node:events:509:28)
+    at addChunk (node:internal/streams/readable:563:12)[39m
+
+diff --git a/client/src/views/GiftCardsView.vue b/client/src/views/GiftCardsView.vue
+index 3261885d69d123ac8c5fd0519d7276f49c69af16..6a0c22b8c451a69f8b12d7d14e5c97fc60f42a98
+--- a/client/src/views/GiftCardsView.vue
++++ b/client/src/views/GiftCardsView.vue
+@@ -325,8 +325,8 @@
+         <div v-if="!loading && cards.length === 0" class="py-8 text-center text-themed-muted">{{ t('giftCards.empty') }}</div>
+       </div>
+ 
+-      <div class="mt-5 hidden overflow-x-auto lg:block">
+-        <table class="w-full min-w-[720px] text-sm">
++      <div class="mt-5 hidden overflow-hidden lg:block">
++        <table class="w-full table-fixed text-sm">
+           <thead class="border-b border-themed text-left text-themed-muted">
+             <tr>
+               <th class="py-3 pr-4">{{ t('giftCards.code') }}</th>
+
+codex
+等价 user 构建中的 `vue-tsc` 已通过，但 Vite 默认用 esbuild 打包配置时尝试读取工作区外的上级目录，被沙箱拒绝。先尝试 Vite 官方的非打包配置加载模式绕开该环境限制；仍不改仓库文件。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'pnpm exec vite build --help' in C:\Users\Administrator\Desktop\payinces\client
+ succeeded in 1350ms:
+vite/6.4.1
+
+Usage:
+  $ vite build [root]
+
+Options:
+  --target <target>             [string] transpile target (default: 'modules') 
+  --outDir <dir>                [string] output directory (default: dist) 
+  --assetsDir <dir>             [string] directory under outDir to place assets in (default: assets) 
+  --assetsInlineLimit <number>  [number] static asset base64 inline threshold in bytes (default: 4096) 
+  --ssr [entry]                 [string] build specified entry for server-side rendering 
+  --sourcemap [output]          [boolean | "inline" | "hidden"] output source maps for build (default: false) 
+  --minify [minifier]           [boolean | "terser" | "esbuild"] enable/disable minification, or specify minifier to use (default: esbuild) 
+  --manifest [name]             [boolean | string] emit build manifest json 
+  --ssrManifest [name]          [boolean | string] emit ssr manifest json 
+  --emptyOutDir                 [boolean] force empty outDir when it's outside of root 
+  -w, --watch                   [boolean] rebuilds when modules have changed on disk 
+  --app                         [boolean] same as `builder: {}` 
+  -c, --config <file>           [string] use specified config file 
+  --base <path>                 [string] public base path (default: /) 
+  -l, --logLevel <level>        [string] info | warn | error | silent 
+  --clearScreen                 [boolean] allow/disable clear screen when logging 
+  --configLoader <loader>       [string] use 'bundle' to bundle the config with esbuild, or 'runner' (experimental) to process it on the fly, or 'native' (experimental) to load using the native runtime (default: bundle) 
+  -d, --debug [feat]            [string | boolean] show debug logs 
+  -f, --filter <filter>         [string] filter debug logs 
+  -m, --mode <mode>             [string] set env mode 
+  -h, --help                    Display this message 
+
+diff --git a/client/src/views/GiftCardsView.vue b/client/src/views/GiftCardsView.vue
+index 3261885d69d123ac8c5fd0519d7276f49c69af16..6a0c22b8c451a69f8b12d7d14e5c97fc60f42a98
+--- a/client/src/views/GiftCardsView.vue
++++ b/client/src/views/GiftCardsView.vue
+@@ -325,8 +325,8 @@
+         <div v-if="!loading && cards.length === 0" class="py-8 text-center text-themed-muted">{{ t('giftCards.empty') }}</div>
+       </div>
+ 
+-      <div class="mt-5 hidden overflow-x-auto lg:block">
+-        <table class="w-full min-w-[720px] text-sm">
++      <div class="mt-5 hidden overflow-hidden lg:block">
++        <table class="w-full table-fixed text-sm">
+           <thead class="border-b border-themed text-left text-themed-muted">
+             <tr>
+               <th class="py-3 pr-4">{{ t('giftCards.code') }}</th>
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$env:VITE_APP_ENTRY='"'user'; pnpm exec vite build --configLoader runner" in C:\Users\Administrator\Desktop\payinces\client
+diff --git a/client/src/views/GiftCardsView.vue b/client/src/views/GiftCardsView.vue
+index 3261885d69d123ac8c5fd0519d7276f49c69af16..6a0c22b8c451a69f8b12d7d14e5c97fc60f42a98
+--- a/client/src/views/GiftCardsView.vue
++++ b/client/src/views/GiftCardsView.vue
+@@ -325,8 +325,8 @@
+         <div v-if="!loading && cards.length === 0" class="py-8 text-center text-themed-muted">{{ t('giftCards.empty') }}</div>
+       </div>
+ 
+-      <div class="mt-5 hidden overflow-x-auto lg:block">
+-        <table class="w-full min-w-[720px] text-sm">
++      <div class="mt-5 hidden overflow-hidden lg:block">
++        <table class="w-full table-fixed text-sm">
+           <thead class="border-b border-themed text-left text-themed-muted">
+             <tr>
+               <th class="py-3 pr-4">{{ t('giftCards.code') }}</th>
+
+diff --git a/client/src/views/GiftCardsView.vue b/client/src/views/GiftCardsView.vue
+index 3261885d69d123ac8c5fd0519d7276f49c69af16..6a0c22b8c451a69f8b12d7d14e5c97fc60f42a98
+--- a/client/src/views/GiftCardsView.vue
++++ b/client/src/views/GiftCardsView.vue
+@@ -325,8 +325,8 @@
+         <div v-if="!loading && cards.length === 0" class="py-8 text-center text-themed-muted">{{ t('giftCards.empty') }}</div>
+       </div>
+ 
+-      <div class="mt-5 hidden overflow-x-auto lg:block">
+-        <table class="w-full min-w-[720px] text-sm">
++      <div class="mt-5 hidden overflow-hidden lg:block">
++        <table class="w-full table-fixed text-sm">
+           <thead class="border-b border-themed text-left text-themed-muted">
+             <tr>
+               <th class="py-3 pr-4">{{ t('giftCards.code') }}</th>
+
+diff --git a/client/src/views/GiftCardsView.vue b/client/src/views/GiftCardsView.vue
+index 3261885d69d123ac8c5fd0519d7276f49c69af16..6a0c22b8c451a69f8b12d7d14e5c97fc60f42a98
+--- a/client/src/views/GiftCardsView.vue
++++ b/client/src/views/GiftCardsView.vue
+@@ -325,8 +325,8 @@
+         <div v-if="!loading && cards.length === 0" class="py-8 text-center text-themed-muted">{{ t('giftCards.empty') }}</div>
+       </div>
+ 
+-      <div class="mt-5 hidden overflow-x-auto lg:block">
+-        <table class="w-full min-w-[720px] text-sm">
++      <div class="mt-5 hidden overflow-hidden lg:block">
++        <table class="w-full table-fixed text-sm">
+           <thead class="border-b border-themed text-left text-themed-muted">
+             <tr>
+               <th class="py-3 pr-4">{{ t('giftCards.code') }}</th>
+
+diff --git a/client/src/views/GiftCardsView.vue b/client/src/views/GiftCardsView.vue
+index 3261885d69d123ac8c5fd0519d7276f49c69af16..6a0c22b8c451a69f8b12d7d14e5c97fc60f42a98
+--- a/client/src/views/GiftCardsView.vue
++++ b/client/src/views/GiftCardsView.vue
+@@ -325,8 +325,8 @@
+         <div v-if="!loading && cards.length === 0" class="py-8 text-center text-themed-muted">{{ t('giftCards.empty') }}</div>
+       </div>
+ 
+-      <div class="mt-5 hidden overflow-x-auto lg:block">
+-        <table class="w-full min-w-[720px] text-sm">
++      <div class="mt-5 hidden overflow-hidden lg:block">
++        <table class="w-full table-fixed text-sm">
+           <thead class="border-b border-themed text-left text-themed-muted">
+             <tr>
+               <th class="py-3 pr-4">{{ t('giftCards.code') }}</th>
+
+diff --git a/client/src/views/GiftCardsView.vue b/client/src/views/GiftCardsView.vue
+index 3261885d69d123ac8c5fd0519d7276f49c69af16..6a0c22b8c451a69f8b12d7d14e5c97fc60f42a98
+--- a/client/src/views/GiftCardsView.vue
++++ b/client/src/views/GiftCardsView.vue
+@@ -325,8 +325,8 @@
+         <div v-if="!loading && cards.length === 0" class="py-8 text-center text-themed-muted">{{ t('giftCards.empty') }}</div>
+       </div>
+ 
+-      <div class="mt-5 hidden overflow-x-auto lg:block">
+-        <table class="w-full min-w-[720px] text-sm">
++      <div class="mt-5 hidden overflow-hidden lg:block">
++        <table class="w-full table-fixed text-sm">
+           <thead class="border-b border-themed text-left text-themed-muted">
+             <tr>
+               <th class="py-3 pr-4">{{ t('giftCards.code') }}</th>
+
+diff --git a/client/src/views/GiftCardsView.vue b/client/src/views/GiftCardsView.vue
+index 3261885d69d123ac8c5fd0519d7276f49c69af16..6a0c22b8c451a69f8b12d7d14e5c97fc60f42a98
+--- a/client/src/views/GiftCardsView.vue
++++ b/client/src/views/GiftCardsView.vue
+@@ -325,8 +325,8 @@
+         <div v-if="!loading && cards.length === 0" class="py-8 text-center text-themed-muted">{{ t('giftCards.empty') }}</div>
+       </div>
+ 
+-      <div class="mt-5 hidden overflow-x-auto lg:block">
+-        <table class="w-full min-w-[720px] text-sm">
++      <div class="mt-5 hidden overflow-hidden lg:block">
++        <table class="w-full table-fixed text-sm">
+           <thead class="border-b border-themed text-left text-themed-muted">
+             <tr>
+               <th class="py-3 pr-4">{{ t('giftCards.code') }}</th>
+
+ succeeded in 25287ms:
+[36mvite v6.4.1 [32mbuilding for production...[36m[39m
+transforming...
+[32m✓[39m 1968 modules transformed.
+rendering chunks...
+computing gzip size...
+[2mdist/user/[22m[32mindex.html           [39m[1m[2m  2.92 kB[22m[1m[22m[2m │ gzip:   1.12 kB[22m
+[2mdist/user/[22m[32massets/SbvrH0uZ.svg  [39m[1m[2m  4.19 kB[22m[1m[22m[2m │ gzip:   1.76 kB[22m
+[2mdist/user/[22m[32massets/Di1JYREk.svg  [39m[1m[2m  4.33 kB[22m[1m[22m[2m │ gzip:   1.84 kB[22m
+[2mdist/user/[22m[32massets/D39eIL5d.svg  [39m[1m[2m  4.63 kB[22m[1m[22m[2m │ gzip:   1.92 kB[22m
+[2mdist/user/[22m[32massets/qxMwa2gs.svg  [39m[1m[2m  4.66 kB[22m[1m[22m[2m │ gzip:   1.92 kB[22m
+[2mdist/user/[22m[32massets/B0FsxZiL.svg  [39m[1m[2m  4.74 kB[22m[1m[22m[2m │ gzip:   1.92 kB[22m
+[2mdist/user/[22m[32massets/CjfitMyT.svg  [39m[1m[2m  4.79 kB[22m[1m[22m[2m │ gzip:   1.95 kB[22m
+[2mdist/user/[22m[32massets/Cag8QTk2.svg  [39m[1m[2m  4.94 kB[22m[1m[22m[2m │ gzip:   2.02 kB[22m
+[2mdist/user/[22m[32massets/CPnMO1hT.svg  [39m[1m[2m  5.07 kB[22m[1m[22m[2m │ gzip:   2.12 kB[22m
+[2mdist/user/[22m[32massets/D8B-0kdx.svg  [39m[1m[2m  5.31 kB[22m[1m[22m[2m │ gzip:   2.25 kB[22m
+[2mdist/user/[22m[32massets/DGrQb42O.svg  [39m[1m[2m  5.37 kB[22m[1m[22m[2m │ gzip:   2.37 kB[22m
+[2mdist/user/[22m[32massets/BmsW91ne.svg  [39m[1m[2m  5.42 kB[22m[1m[22m[2m │ gzip:   2.27 kB[22m
+[2mdist/user/[22m[32massets/bZuP8hmf.svg  [39m[1m[2m  5.47 kB[22m[1m[22m[2m │ gzip:   2.37 kB[22m
+[2mdist/user/[22m[32massets/DJKnEFYW.svg  [39m[1m[2m  5.51 kB[22m[1m[22m[2m │ gzip:   2.42 kB[22m
+[2mdist/user/[22m[32massets/Dl00mlk2.svg  [39m[1m[2m  5.56 kB[22m[1m[22m[2m │ gzip:   2.46 kB[22m
+[2mdist/user/[22m[32massets/p_fAQGbS.svg  [39m[1m[2m  5.63 kB[22m[1m[22m[2m │ gzip:   1.64 kB[22m
+[2mdist/user/[22m[32massets/fuIMkEYQ.svg  [39m[1m[2m  5.81 kB[22m[1m[22m[2m │ gzip:   1.70 kB[22m
+[2mdist/user/[22m[32massets/DxciGbUu.svg  [39m[1m[2m  5.83 kB[22m[1m[22m[2m │ gzip:   2.55 kB[22m
+[2mdist/user/[22m[32massets/B-w7hFKu.svg  [39m[1m[2m  5.91 kB[22m[1m[22m[2m │ gzip:   2.50 kB[22m
+[2mdist/user/[22m[32massets/CSuuaw9K.svg  [39m[1m[2m  6.17 kB[22m[1m[22m[2m │ gzip:   2.46 kB[22m
+[2mdist/user/[22m[32massets/U0m7oJ5e.svg  [39m[1m[2m  6.19 kB[22m[1m[22m[2m │ gzip:   2.49 kB[22m
+[2mdist/user/[22m[32massets/Dr5rMAMb.svg  [39m[1m[2m  6.75 kB[22m[1m[22m[2m │ gzip:   2.21 kB[22m
+[2mdist/user/[22m[32massets/CJHJmJj1.svg  [39m[1m[2m  7.09 kB[22m[1m[22m[2m │ gzip:   2.99 kB[22m
+[2mdist/user/[22m[32massets/CwKXYZ8s.svg  [39m[1m[2m  7.09 kB[22m[1m[22m[2m │ gzip:   2.92 kB[22m
+[2mdist/user/[22m[32massets/Dkyx6q-p.svg  [39m[1m[2m  7.10 kB[22m[1m[22m[2m │ gzip:   2.91 kB[22m
+[2mdist/user/[22m[32massets/dtelpZmc.svg  [39m[1m[2m  7.12 kB[22m[1m[22m[2m │ gzip:   2.99 kB[22m
+[2mdist/user/[22m[32massets/BeWfuE30.svg  [39m[1m[2m  7.12 kB[22m[1m[22m[2m │ gzip:   2.72 kB[22m
+[2mdist/user/[22m[32massets/BBvObpUS.svg  [39m[1m[2m  7.12 kB[22m[1m[22m[2m │ gzip:   2.74 kB[22m
+[2mdist/user/[22m[32massets/Cu5YU29T.svg  [39m[1m[2m  7.14 kB[22m[1m[22m[2m │ gzip:   2.41 kB[22m
+[2mdist/user/[22m[32massets/CHdhvNcr.svg  [39m[1m[2m  7.32 kB[22m[1m[22m[2m │ gzip:   2.96 kB[22m
+[2mdist/user/[22m[32massets/CMlf0YU8.svg  [39m[1m[2m  7.34 kB[22m[1m[22m[2m │ gzip:   2.97 kB[22m
+[2mdist/user/[22m[32massets/Cdz2uTvR.svg  [39m[1m[2m  7.74 kB[22m[1m[22m[2m │ gzip:   3.05 kB[22m
+[2mdist/user/[22m[32massets/DZ2ADgIR.svg  [39m[1m[2m  8.00 kB[22m[1m[22m[2m │ gzip:   3.25 kB[22m
+[2mdist/user/[22m[32massets/Bj15g7cp.svg  [39m[1m[2m  8.27 kB[22m[1m[22m[2m │ gzip:   3.26 kB[22m
+[2mdist/user/[22m[32massets/BTevY6N2.svg  [39m[1m[2m  8.37 kB[22m[1m[22m[2m │ gzip:   3.27 kB[22m
+[2mdist/user/[22m[32massets/BSdsyIxY.svg  [39m[1m[2m  8.45 kB[22m[1m[22m[2m │ gzip:   3.55 kB[22m
+[2mdist/user/[22m[32massets/BC_zcciE.svg  [39m[1m[2m  8.52 kB[22m[1m[22m[2m │ gzip:   3.59 kB[22m
+[2mdist/user/[22m[32massets/YC70hswZ.svg  [39m[1m[2m  8.73 kB[22m[1m[22m[2m │ gzip:   3.55 kB[22m
+[2mdist/user/[22m[32massets/DwOkwyQ0.svg  [39m[1m[2m  8.74 kB[22m[1m[22m[2m │ gzip:   3.57 kB[22m
+[2mdist/user/[22m[32massets/W0PWLK5p.svg  [39m[1m[2m  9.00 kB[22m[1m[22m[2m │ gzip:   1.67 kB[22m
+[2mdist/user/[22m[32massets/CK0XlKT-.svg  [39m[1m[2m  9.01 kB[22m[1m[22m[2m │ gzip:   4.03 kB[22m
+[2mdist/user/[22m[32massets/Bxz9hxvX.svg  [39m[1m[2m  9.10 kB[22m[1m[22m[2m │ gzip:   4.14 kB[22m
+[2mdist/user/[22m[32massets/-VPIqfkF.svg  [39m[1m[2m  9.13 kB[22m[1m[22m[2m │ gzip:   3.51 kB[22m
+[2mdist/user/[22m[32massets/Dd9p-0-T.svg  [39m[1m[2m  9.70 kB[22m[1m[22m[2m │ gzip:   3.81 kB[22m
+[2mdist/user/[22m[32massets/DnlyVVKx.svg  [39m[1m[2m  9.85 kB[22m[1m[22m[2m │ gzip:   4.19 kB[22m
+[2mdist/user/[22m[32massets/Dh79zbT9.svg  [39m[1m[2m  9.97 kB[22m[1m[22m[2m │ gzip:   4.25 kB[22m
+[2mdist/user/[22m[32massets/ClZ-0KpG.svg  [39m[1m[2m 10.00 kB[22m[1m[22m[2m │ gzip:   4.14 kB[22m
+[2mdist/user/[22m[32massets/C7xY6pic.svg  [39m[1m[2m 10.02 kB[22m[1m[22m[2m │ gzip:   4.14 kB[22m
+[2mdist/user/[22m[32massets/CLCX8uk5.svg  [39m[1m[2m 10.36 kB[22m[1m[22m[2m │ gzip:   1.79 kB[22m
+[2mdist/user/[22m[32massets/DUkgV9Tq.svg  [39m[1m[2m 10.72 kB[22m[1m[22m[2m │ gzip:   4.46 kB[22m
+[2mdist/user/[22m[32massets/DSQoDxn_.svg  [39m[1m[2m 10.74 kB[22m[1m[22m[2m │ gzip:   4.46 kB[22m
+[2mdist/user/[22m[32massets/DRlxvNwm.svg  [39m[1m[2m 11.13 kB[22m[1m[22m[2m │ gzip:   2.84 kB[22m
+[2mdist/user/[22m[32massets/DTi94M3M.svg  [39m[1m[2m 11.24 kB[22m[1m[22m[2m │ gzip:   2.71 kB[22m
+[2mdist/user/[22m[32massets/RKKs0ph6.svg  [39m[1m[2m 12.16 kB[22m[1m[22m[2m │ gzip:   4.12 kB[22m
+[2mdist/user/[22m[32massets/nDhIaDNb.svg  [39m[1m[2m 12.21 kB[22m[1m[22m[2m │ gzip:   4.30 kB[22m
+[2mdist/user/[22m[32massets/YDa8zgzO.svg  [39m[1m[2m 12.71 kB[22m[1m[22m[2m │ gzip:   5.37 kB[22m
+[2mdist/user/[22m[32massets/DIMg4gti.svg  [39m[1m[2m 13.30 kB[22m[1m[22m[2m │ gzip:   4.75 kB[22m
+[2mdist/user/[22m[32massets/B6T3O78g.svg  [39m[1m[2m 13.34 kB[22m[1m[22m[2m │ gzip:   5.64 kB[22m
+[2mdist/user/[22m[32massets/BPAlH32D.svg  [39m[1m[2m 13.44 kB[22m[1m[22m[2m │ gzip:   4.93 kB[22m
+[2mdist/user/[22m[32massets/pweRl6ZP.svg  [39m[1m[2m 13.46 kB[22m[1m[22m[2m │ gzip:   4.82 kB[22m
+[2mdist/user/[22m[32massets/CPQcA8Ol.svg  [39m[1m[2m 13.47 kB[22m[1m[22m[2m │ gzip:   5.68 kB[22m
+[2mdist/user/[22m[32massets/DgxdtieE.svg  [39m[1m[2m 13.47 kB[22m[1m[22m[2m │ gzip:   4.98 kB[22m
+[2mdist/user/[22m[32massets/CwGQsyAM.svg  [39m[1m[2m 13.63 kB[22m[1m[22m[2m │ gzip:   4.81 kB[22m
+[2mdist/user/[22m[32massets/h4QKADRE.svg  [39m[1m[2m 13.64 kB[22m[1m[22m[2m │ gzip:   4.81 kB[22m
+[2mdist/user/[22m[32massets/YqzKx9xl.svg  [39m[1m[2m 13.93 kB[22m[1m[22m[2m │ gzip:   5.86 kB[22m
+[2mdist/user/[22m[32massets/Q03Mij62.svg  [39m[1m[2m 15.30 kB[22m[1m[22m[2m │ gzip:   2.28 kB[22m
+[2mdist/user/[22m[32massets/cCIgaNf6.svg  [39m[1m[2m 15.40 kB[22m[1m[22m[2m │ gzip:   2.24 kB[22m
+[2mdist/user/[22m[32massets/BKrUHzrq.svg  [39m[1m[2m 15.54 kB[22m[1m[22m[2m │ gzip:   5.35 kB[22m
+[2mdist/user/[22m[32massets/DGBIRFB_.svg  [39m[1m[2m 15.68 kB[22m[1m[22m[2m │ gzip:   5.27 kB[22m
+[2mdist/user/[22m[32massets/Cbhezfe1.svg  [39m[1m[2m 15.79 kB[22m[1m[22m[2m │ gzip:   3.08 kB[22m
+[2mdist/user/[22m[32massets/mNzh0mZC.svg  [39m[1m[2m 16.18 kB[22m[1m[22m[2m │ gzip:   5.77 kB[22m
+[2mdist/user/[22m[32massets/DPPHwW2M.svg  [39m[1m[2m 16.27 kB[22m[1m[22m[2m │ gzip:   3.23 kB[22m
+[2mdist/user/[22m[32massets/BKi5dxWt.svg  [39m[1m[2m 16.36 kB[22m[1m[22m[2m │ gzip:   5.84 kB[22m
+[2mdist/user/[22m[32massets/CcFCSQxm.svg  [39m[1m[2m 17.25 kB[22m[1m[22m[2m │ gzip:   5.36 kB[22m
+[2mdist/user/[22m[32massets/BX2WCaNt.svg  [39m[1m[2m 17.29 kB[22m[1m[22m[2m │ gzip:   5.43 kB[22m
+[2mdist/user/[22m[32massets/Bqg4Cbbh.svg  [39m[1m[2m 18.70 kB[22m[1m[22m[2m │ gzip:   7.44 kB[22m
+[2mdist/user/[22m[32massets/Bc2fqp73.svg  [39m[1m[2m 18.98 kB[22m[1m[22m[2m │ gzip:   7.68 kB[22m
+[2mdist/user/[22m[32massets/DabL4p35.svg  [39m[1m[2m 19.00 kB[22m[1m[22m[2m │ gzip:   7.58 kB[22m
+[2mdist/user/[22m[32massets/C77Rf6cE.svg  [39m[1m[2m 19.19 kB[22m[1m[22m[2m │ gzip:   7.76 kB[22m
+[2mdist/user/[22m[32massets/nN8zP2Bu.svg  [39m[1m[2m 22.21 kB[22m[1m[22m[2m │ gzip:   4.38 kB[22m
+[2mdist/user/[22m[32massets/DcqxRdQL.svg  [39m[1m[2m 22.22 kB[22m[1m[22m[2m │ gzip:   4.37 kB[22m
+[2mdist/user/[22m[32massets/D4gikpNq.svg  [39m[1m[2m 22.28 kB[22m[1m[22m[2m │ gzip:   5.97 kB[22m
+[2mdist/user/[22m[32massets/DvNWWcPM.svg  [39m[1m[2m 22.39 kB[22m[1m[22m[2m │ gzip:   7.17 kB[22m
+[2mdist/user/[22m[32massets/BeYgB2z9.svg  [39m[1m[2m 22.46 kB[22m[1m[22m[2m │ gzip:   7.18 kB[22m
+[2mdist/user/[22m[32massets/CrOApEqW.svg  [39m[1m[2m 22.57 kB[22m[1m[22m[2m │ gzip:   6.98 kB[22m
+[2mdist/user/[22m[32massets/BImhNBcd.svg  [39m[1m[2m 22.72 kB[22m[1m[22m[2m │ gzip:   4.11 kB[22m
+[2mdist/user/[22m[32massets/DqkWLbnk.svg  [39m[1m[2m 22.72 kB[22m[1m[22m[2m │ gzip:   4.11 kB[22m
+[2mdist/user/[22m[32massets/CuaQmCLf.svg  [39m[1m[2m 22.80 kB[22m[1m[22m[2m │ gzip:   7.02 kB[22m
+[2mdist/user/[22m[32massets/13HOfeJD.svg  [39m[1m[2m 23.02 kB[22m[1m[22m[2m │ gzip:   4.11 kB[22m
+[2mdist/user/[22m[32massets/CJPJrjiZ.svg  [39m[1m[2m 23.02 kB[22m[1m[22m[2m │ gzip:   4.11 kB[22m
+[2mdist/user/[22m[32massets/BqaZHuhf.svg  [39m[1m[2m 23.37 kB[22m[1m[22m[2m │ gzip:   8.57 kB[22m
+[2mdist/user/[22m[32massets/Dpsu1myA.svg  [39m[1m[2m 23.39 kB[22m[1m[22m[2m │ gzip:   8.56 kB[22m
+[2mdist/user/[22m[32massets/vEp1ZXy6.svg  [39m[1m[2m 23.92 kB[22m[1m[22m[2m │ gzip:   5.49 kB[22m
+[2mdist/user/[22m[32massets/DEAVMg38.svg  [39m[1m[2m 24.10 kB[22m[1m[22m[2m │ gzip:   9.09 kB[22m
+[2mdist/user/[22m[32massets/u3dAPoew.svg  [39m[1m[2m 24.14 kB[22m[1m[22m[2m │ gzip:   9.13 kB[22m
+[2mdist/user/[22m[32massets/C4CYPgyC.svg  [39m[1m[2m 24.43 kB[22m[1m[22m[2m │ gzip:   8.53 kB[22m
+[2mdist/user/[22m[32massets/SxWnbWW0.svg  [39m[1m[2m 24.50 kB[22m[1m[22m[2m │ gzip:   9.95 kB[22m
+[2mdist/user/[22m[32massets/C-KgnQEz.svg  [39m[1m[2m 24.59 kB[22m[1m[22m[2m │ gzip:   8.58 kB[22m
+[2mdist/user/[22m[32massets/BTo4qm10.svg  [39m[1m[2m 24.78 kB[22m[1m[22m[2m │ gzip:  10.09 kB[22m
+[2mdist/user/[22m[32massets/D9xG2hYr.svg  [39m[1m[2m 28.21 kB[22m[1m[22m[2m │ gzip:   6.26 kB[22m
+[2mdist/user/[22m[32massets/BFo5zkKU.svg  [39m[1m[2m 28.29 kB[22m[1m[22m[2m │ gzip:  10.82 kB[22m
+[2mdist/user/[22m[32massets/DXhVZ333.svg  [39m[1m[2m 28.34 kB[22m[1m[22m[2m │ gzip:   6.26 kB[22m
+[2mdist/user/[22m[32massets/B-RvQ4Hz.svg  [39m[1m[2m 28.49 kB[22m[1m[22m[2m │ gzip:   8.83 kB[22m
+[2mdist/user/[22m[32massets/s7kyhqIM.svg  [39m[1m[2m 28.66 kB[22m[1m[22m[2m │ gzip:   9.67 kB[22m
+[2mdist/user/[22m[32massets/B9-hqIE-.svg  [39m[1m[2m 28.72 kB[22m[1m[22m[2m │ gzip:   9.68 kB[22m
+[2mdist/user/[22m[32massets/nuUF_Ak3.svg  [39m[1m[2m 28.74 kB[22m[1m[22m[2m │ gzip:   9.20 kB[22m
+[2mdist/user/[22m[32massets/CPJublpi.svg  [39m[1m[2m 28.78 kB[22m[1m[22m[2m │ gzip:  11.03 kB[22m
+[2mdist/user/[22m[32massets/CaVOFQ3t.svg  [39m[1m[2m 28.78 kB[22m[1m[22m[2m │ gzip:   6.83 kB[22m
+[2mdist/user/[22m[32massets/Blhdm5jl.svg  [39m[1m[2m 29.14 kB[22m[1m[22m[2m │ gzip:  10.60 kB[22m
+[2mdist/user/[22m[32massets/cwfBJlvF.svg  [39m[1m[2m 29.35 kB[22m[1m[22m[2m │ gzip:   6.72 kB[22m
+[2mdist/user/[22m[32massets/Dekqy8Of.svg  [39m[1m[2m 30.45 kB[22m[1m[22m[2m │ gzip:  11.46 kB[22m
+[2mdist/user/[22m[32massets/B18i8NGa.svg  [39m[1m[2m 30.51 kB[22m[1m[22m[2m │ gzip:  11.15 kB[22m
+[2mdist/user/[22m[32massets/fzLfaANM.svg  [39m[1m[2m 30.73 kB[22m[1m[22m[2m │ gzip:  13.14 kB[22m
+[2mdist/user/[22m[32massets/BTEVCXG-.svg  [39m[1m[2m 30.98 kB[22m[1m[22m[2m │ gzip:  11.62 kB[22m
+[2mdist/user/[22m[32massets/BpiVVBoV.svg  [39m[1m[2m 31.28 kB[22m[1m[22m[2m │ gzip:  13.31 kB[22m
+[2mdist/user/[22m[32massets/CJo5DI-7.svg  [39m[1m[2m 31.35 kB[22m[1m[22m[2m │ gzip:  11.30 kB[22m
+[2mdist/user/[22m[32massets/BLpn5qMn.svg  [39m[1m[2m 31.35 kB[22m[1m[22m[2m │ gzip:  11.30 kB[22m
+[2mdist/user/[22m[32massets/DiiNa0F5.svg  [39m[1m[2m 31.50 kB[22m[1m[22m[2m │ gzip:  11.41 kB[22m
+[2mdist/user/[22m[32massets/DOgYbHsY.svg  [39m[1m[2m 31.92 kB[22m[1m[22m[2m │ gzip:  11.09 kB[22m
+[2mdist/user/[22m[32massets/DyWbhIiC.svg  [39m[1m[2m 34.19 kB[22m[1m[22m[2m │ gzip:   9.81 kB[22m
+[2mdist/user/[22m[32massets/CgxUDvtv.svg  [39m[1m[2m 34.78 kB[22m[1m[22m[2m │ gzip:  12.58 kB[22m
+[2mdist/user/[22m[32massets/vXe0Dr49.svg  [39m[1m[2m 35.03 kB[22m[1m[22m[2m │ gzip:  10.03 kB[22m
+[2mdist/user/[22m[32massets/CqtQPzWZ.svg  [39m[1m[2m 35.43 kB[22m[1m[22m[2m │ gzip:  12.88 kB[22m
+[2mdist/user/[22m[32massets/DGBJvQay.svg  [39m[1m[2m 38.22 kB[22m[1m[22m[2m │ gzip:  11.99 kB[22m
+[2mdist/user/[22m[32massets/C_WSgUcv.svg  [39m[1m[2m 38.35 kB[22m[1m[22m[2m │ gzip:  12.09 kB[22m
+[2mdist/user/[22m[32massets/B86d445t.svg  [39m[1m[2m 40.35 kB[22m[1m[22m[2m │ gzip:  14.40 kB[22m
+[2mdist/user/[22m[32massets/DeRnbj4d.svg  [39m[1m[2m 41.34 kB[22m[1m[22m[2m │ gzip:  14.76 kB[22m
+[2mdist/user/[22m[32massets/BCKHR4_q.svg  [39m[1m[2m 42.51 kB[22m[1m[22m[2m │ gzip:  15.61 kB[22m
+[2mdist/user/[22m[32massets/CoBdB-p8.svg  [39m[1m[2m 42.68 kB[22m[1m[22m[2m │ gzip:  15.60 kB[22m
+[2mdist/user/[22m[32massets/Cv4Gwqah.svg  [39m[1m[2m 56.37 kB[22m[1m[22m[2m │ gzip:  21.28 kB[22m
+[2mdist/user/[22m[32massets/CfGorN3b.svg  [39m[1m[2m 56.95 kB[22m[1m[22m[2m │ gzip:  21.57 kB[22m
+[2mdist/user/[22m[32massets/CJIHhYwF.svg  [39m[1m[2m 77.27 kB[22m[1m[22m[2m │ gzip:  21.83 kB[22m
+[2mdist/user/[22m[32massets/RZ39q5hO.svg  [39m[1m[2m 77.72 kB[22m[1m[22m[2m │ gzip:  22.08 kB[22m
+[2mdist/user/[22m[32massets/CvCwYHGF.svg  [39m[1m[2m 80.21 kB[22m[1m[22m[2m │ gzip:  27.77 kB[22m
+[2mdist/user/[22m[32massets/d5m8M5h8.svg  [39m[1m[2m 80.96 kB[22m[1m[22m[2m │ gzip:  14.80 kB[22m
+[2mdist/user/[22m[32massets/BuSGTZm_.svg  [39m[1m[2m 82.15 kB[22m[1m[22m[2m │ gzip:  15.47 kB[22m
+[2mdist/user/[22m[32massets/Cc8Ccfe8.svg  [39m[1m[2m 84.75 kB[22m[1m[22m[2m │ gzip:  29.50 kB[22m
+[2mdist/user/[22m[32massets/CcUiMqkJ.svg  [39m[1m[2m102.88 kB[22m[1m[22m[2m │ gzip:  24.83 kB[22m
+[2mdist/user/[22m[32massets/Dry0C6UA.svg  [39m[1m[2m104.73 kB[22m[1m[22m[2m │ gzip:  25.14 kB[22m
+[2mdist/user/[22m[32massets/D-aE2xRW.svg  [39m[1m[2m140.52 kB[22m[1m[22m[2m │ gzip:  47.08 kB[22m
+[2mdist/user/[22m[32massets/FjwY7RYr.svg  [39m[1m[2m143.37 kB[22m[1m[22m[2m │ gzip:  47.70 kB[22m
+[2mdist/user/[22m[32massets/CnTO3ehk.svg  [39m[1m[2m181.48 kB[22m[1m[22m[2m │ gzip:  49.93 kB[22m
+[2mdist/user/[22m[32massets/BfwKwXtn.svg  [39m[1m[2m181.63 kB[22m[1m[22m[2m │ gzip:  50.19 kB[22m
+[2mdist/user/[22m[35massets/HALAC3TX.css  [39m[1m[2m  0.18 kB[22m[1m[22m[2m │ gzip:   0.12 kB[22m
+[2mdist/user/[22m[35massets/B76TsvoU.css  [39m[1m[2m  0.22 kB[22m[1m[22m[2m │ gzip:   0.15 kB[22m
+[2mdist/user/[22m[35massets/DQVB8-1J.css  [39m[1m[2m  0.47 kB[22m[1m[22m[2m │ gzip:   0.21 kB[22m
+[2mdist/user/[22m[35massets/Day5hM6X.css  [39m[1m[2m  0.56 kB[22m[1m[22m[2m │ gzip:   0.28 kB[22m
+[2mdist/user/[22m[35massets/Bx_raz5z.css  [39m[1m[2m  0.93 kB[22m[1m[22m[2m │ gzip:   0.39 kB[22m
+[2mdist/user/[22m[35massets/CgopggJP.css  [39m[1m[2m  1.15 kB[22m[1m[22m[2m │ gzip:   0.45 kB[22m
+[2mdist/user/[22m[35massets/Dgvmxbz5.css  [39m[1m[2m  1.16 kB[22m[1m[22m[2m │ gzip:   0.50 kB[22m
+[2mdist/user/[22m[35massets/Cdpekzvy.css  [39m[1m[2m  1.19 kB[22m[1m[22m[2m │ gzip:   0.46 kB[22m
+[2mdist/user/[22m[35massets/Bom54MRx.css  [39m[1m[2m  1.25 kB[22m[1m[22m[2m │ gzip:   0.48 kB[22m
+[2mdist/user/[22m[35massets/BMPauYuW.css  [39m[1m[2m  1.60 kB[22m[1m[22m[2m │ gzip:   0.48 kB[22m
+[2mdist/user/[22m[35massets/Cxr1LgaW.css  [39m[1m[2m  2.13 kB[22m[1m[22m[2m │ gzip:   0.57 kB[22m
+[2mdist/user/[22m[35massets/B4J6W-ei.css  [39m[1m[2m  2.19 kB[22m[1m[22m[2m │ gzip:   0.67 kB[22m
+[2mdist/user/[22m[35massets/B1_QaVXV.css  [39m[1m[2m  2.92 kB[22m[1m[22m[2m │ gzip:   0.47 kB[22m
+[2mdist/user/[22m[35massets/wO2qFXua.css  [39m[1m[2m  5.21 kB[22m[1m[22m[2m │ gzip:   1.18 kB[22m
+[2mdist/user/[22m[35massets/9CEnUXvW.css  [39m[1m[2m  5.75 kB[22m[1m[22m[2m │ gzip:   1.98 kB[22m
+[2mdist/user/[22m[35massets/C80TR6P-.css  [39m[1m[2m  6.32 kB[22m[1m[22m[2m │ gzip:   1.58 kB[22m
+[2mdist/user/[22m[35massets/BJxZ6Njr.css  [39m[1m[2m  8.04 kB[22m[1m[22m[2m │ gzip:   1.28 kB[22m
+[2mdist/user/[22m[35massets/BfQ05yc8.css  [39m[1m[2m732.19 kB[22m[1m[22m[2m │ gzip: 128.42 kB[22m
+[2mdist/user/[22m[36massets/FtP0oiU5.js   [39m[1m[2m  0.50 kB[22m[1m[22m[2m │ gzip:   0.35 kB[22m
+[2mdist/user/[22m[36massets/XG5gdywr.js   [39m[1m[2m  1.00 kB[22m[1m[22m[2m │ gzip:   0.59 kB[22m
+[2mdist/user/[22m[36massets/CKA6T-ww.js   [39m[1m[2m  1.02 kB[22m[1m[22m[2m │ gzip:   0.45 kB[22m
+[2mdist/user/[22m[36massets/Blb6R2gh.js   [39m[1m[2m  1.03 kB[22m[1m[22m[2m │ gzip:   0.49 kB[22m
+[2mdist/user/[22m[36massets/CCkb5rYF.js   [39m[1m[2m  1.14 kB[22m[1m[22m[2m │ gzip:   0.71 kB[22m
+[2mdist/user/[22m[36massets/COzL9Aay.js   [39m[1m[2m  1.20 kB[22m[1m[22m[2m │ gzip:   0.58 kB[22m
+[2mdist/user/[22m[36massets/BunggeL0.js   [39m[1m[2m  2.00 kB[22m[1m[22m[2m │ gzip:   1.16 kB[22m
+[2mdist/user/[22m[36massets/DOsVwxog.js   [39m[1m[2m  2.06 kB[22m[1m[22m[2m │ gzip:   0.76 kB[22m
+[2mdist/user/[22m[36massets/Cso_J48J.js   [39m[1m[2m  2.54 kB[22m[1m[22m[2m │ gzip:   0.88 kB[22m
+[2mdist/user/[22m[36massets/DLdjMskO.js   [39m[1m[2m  2.54 kB[22m[1m[22m[2m │ gzip:   1.28 kB[22m
+[2mdist/user/[22m[36massets/9n4WfLUL.js   [39m[1m[2m  2.87 kB[22m[1m[22m[2m │ gzip:   1.34 kB[22m
+[2mdist/user/[22m[36massets/BjrWtv0R.js   [39m[1m[2m  3.22 kB[22m[1m[22m[2m │ gzip:   1.11 kB[22m
+[2mdist/user/[22m[36massets/D3efyimQ.js   [39m[1m[2m  3.59 kB[22m[1m[22m[2m │ gzip:   1.73 kB[22m
+[2mdist/user/[22m[36massets/CIVf1_dU.js   [39m[1m[2m  4.78 kB[22m[1m[22m[2m │ gzip:   1.98 kB[22m
+[2mdist/user/[22m[36massets/D6nxhduS.js   [39m[1m[2m  5.44 kB[22m[1m[22m[2m │ gzip:   2.02 kB[22m
+[2mdist/user/[22m[36massets/DBWV2tD3.js   [39m[1m[2m  5.56 kB[22m[1m[22m[2m │ gzip:   1.30 kB[22m
+[2mdist/user/[22m[36massets/C8os8dPq.js   [39m[1m[2m  5.63 kB[22m[1m[22m[2m │ gzip:   2.57 kB[22m
+[2mdist/user/[22m[36massets/CT7IXGAb.js   [39m[1m[2m  6.94 kB[22m[1m[22m[2m │ gzip:   2.60 kB[22m
+[2mdist/user/[22m[36massets/BAqSa7jF.js   [39m[1m[2m  6.95 kB[22m[1m[22m[2m │ gzip:   2.57 kB[22m
+[2mdist/user/[22m[36massets/D6Wt33YS.js   [39m[1m[2m  8.07 kB[22m[1m[22m[2m │ gzip:   2.68 kB[22m
+[2mdist/user/[22m[36massets/BF6pCjRZ.js   [39m[1m[2m  8.93 kB[22m[1m[22m[2m │ gzip:   3.32 kB[22m
+[2mdist/user/[22m[36massets/BHx1nIMn.js   [39m[1m[2m  9.07 kB[22m[1m[22m[2m │ gzip:   3.14 kB[22m
+[2mdist/user/[22m[36massets/CvfcD2kO.js   [39m[1m[2m 11.05 kB[22m[1m[22m[2m │ gzip:   3.60 kB[22m
+[2mdist/user/[22m[36massets/BwLT98aQ.js   [39m[1m[2m 11.30 kB[22m[1m[22m[2m │ gzip:   3.91 kB[22m
+[2mdist/user/[22m[36massets/BidM_7Pk.js   [39m[1m[2m 11.51 kB[22m[1m[22m[2m │ gzip:   3.86 kB[22m
+[2mdist/user/[22m[36massets/B5fsDYie.js   [39m[1m[2m 13.22 kB[22m[1m[22m[2m │ gzip:   4.32 kB[22m
+[2mdist/user/[22m[36massets/u6w7ZDaK.js   [39m[1m[2m 13.95 kB[22m[1m[22m[2m │ gzip:   4.56 kB[22m
+[2mdist/user/[22m[36massets/pWf-wRf2.js   [39m[1m[2m 14.39 kB[22m[1m[22m[2m │ gzip:   5.57 kB[22m
+[2mdist/user/[22m[36massets/Dfh4nGRf.js   [39m[1m[2m 15.11 kB[22m[1m[22m[2m │ gzip:   4.84 kB[22m
+[2mdist/user/[22m[36massets/ChmAKeGR.js   [39m[1m[2m 15.74 kB[22m[1m[22m[2m │ gzip:   5.18 kB[22m
+[2mdist/user/[22m[36massets/xZ3YGKbe.js   [39m[1m[2m 20.44 kB[22m[1m[22m[2m │ gzip:   5.16 kB[22m
+[2mdist/user/[22m[36massets/BVkm6OBv.js   [39m[1m[2m 22.82 kB[22m[1m[22m[2m │ gzip:   6.70 kB[22m
+[2mdist/user/[22m[36massets/BJHZ4P-S.js   [39m[1m[2m 22.82 kB[22m[1m[22m[2m │ gzip:   6.67 kB[22m
+[2mdist/user/[22m[36massets/ZpiZpcCk.js   [39m[1m[2m 23.12 kB[22m[1m[22m[2m │ gzip:   6.25 kB[22m
+[2mdist/user/[22m[36massets/B36tUGu_.js   [39m[1m[2m 25.36 kB[22m[1m[22m[2m │ gzip:  11.80 kB[22m
+[2mdist/user/[22m[36massets/CBHXibeR.js   [39m[1m[2m 26.26 kB[22m[1m[22m[2m │ gzip:   6.19 kB[22m
+[2mdist/user/[22m[36massets/DVsu1S_z.js   [39m[1m[2m 30.91 kB[22m[1m[22m[2m │ gzip:   8.60 kB[22m
+[2mdist/user/[22m[36massets/B-rQ1vJE.js   [39m[1m[2m 31.10 kB[22m[1m[22m[2m │ gzip:   7.68 kB[22m
+[2mdist/user/[22m[36massets/RwfhDNGe.js   [39m[1m[2m 31.10 kB[22m[1m[22m[2m │ gzip:   8.83 kB[22m
+[2mdist/user/[22m[36massets/ER_VlLNj.js   [39m[1m[2m 33.82 kB[22m[1m[22m[2m │ gzip:   8.73 kB[22m
+[2mdist/user/[22m[36massets/BB2AnRMJ.js   [39m[1m[2m 35.88 kB[22m[1m[22m[2m │ gzip:  14.07 kB[22m
+[2mdist/user/[22m[36massets/DG9jNLhS.js   [39m[1m[2m 36.24 kB[22m[1m[22m[2m │ gzip:   9.24 kB[22m
+[2mdist/user/[22m[36massets/BJCHC4Gx.js   [39m[1m[2m 41.83 kB[22m[1m[22m[2m │ gzip:  11.15 kB[22m
+[2mdist/user/[22m[36massets/Cwwe3CS1.js   [39m[1m[2m 41.98 kB[22m[1m[22m[2m │ gzip:   8.05 kB[22m
+[2mdist/user/[22m[36massets/CHSzA3QY.js   [39m[1m[2m 46.10 kB[22m[1m[22m[2m │ gzip:  10.41 kB[22m
+[2mdist/user/[22m[36massets/CyOR3GPa.js   [39m[1m[2m 46.83 kB[22m[1m[22m[2m │ gzip:  14.34 kB[22m
+[2mdist/user/[22m[36massets/DAcJ0r9F.js   [39m[1m[2m 48.82 kB[22m[1m[22m[2m │ gzip:  12.21 kB[22m
+[2mdist/user/[22m[36massets/c_cLzNoE.js   [39m[1m[2m 51.08 kB[22m[1m[22m[2m │ gzip:  11.39 kB[22m
+[2mdist/user/[22m[36massets/BY7_KnkT.js   [39m[1m[2m 58.63 kB[22m[1m[22m[2m │ gzip:  14.34 kB[22m
+[2mdist/user/[22m[36massets/DY4F9FEi.js   [39m[1m[2m 62.24 kB[22m[1m[22m[2m │ gzip:  14.23 kB[22m
+[2mdist/user/[22m[36massets/Bw5LNend.js   [39m[1m[2m 63.28 kB[22m[1m[22m[2m │ gzip:  20.95 kB[22m
+[2mdist/user/[22m[36massets/kV8f6Ew0.js   [39m[1m[2m 64.16 kB[22m[1m[22m[2m │ gzip:  24.31 kB[22m
+[2mdist/user/[22m[36massets/DGtq0UQS.js   [39m[1m[2m 70.87 kB[22m[1m[22m[2m │ gzip:  27.76 kB[22m
+[2mdist/user/[22m[36massets/CEhxWuha.js   [39m[1m[2m 72.90 kB[22m[1m[22m[2m │ gzip:  18.82 kB[22m
+[2mdist/user/[22m[36massets/RJmHh8wy.js   [39m[1m[2m 79.47 kB[22m[1m[22m[2m │ gzip:  17.44 kB[22m
+[2mdist/user/[22m[36massets/DvV3dq3j.js   [39m[1m[2m 79.81 kB[22m[1m[22m[2m │ gzip:  19.59 kB[22m
+[2mdist/user/[22m[36massets/DDUhrJAF.js   [39m[1m[2m 80.98 kB[22m[1m[22m[2m │ gzip:  19.81 kB[22m
+[2mdist/user/[22m[36massets/CxdACPkq.js   [39m[1m[2m 93.63 kB[22m[1m[22m[2m │ gzip:  22.59 kB[22m
+[2mdist/user/[22m[36massets/DzY9Gco2.js   [39m[1m[2m 99.24 kB[22m[1m[22m[2m │ gzip:  22.25 kB[22m
+[2mdist/user/[22m[36massets/BwcaRWCh.js   [39m[1m[2m105.73 kB[22m[1m[22m[2m │ gzip:  30.95 kB[22m
+[2mdist/user/[22m[36massets/BSf3dQCt.js   [39m[1m[2m106.02 kB[22m[1m[22m[2m │ gzip:  25.07 kB[22m
+[2mdist/user/[22m[36massets/CpRxhL4W.js   [39m[1m[2m171.00 kB[22m[1m[22m[2m │ gzip:  63.71 kB[22m
+[2mdist/user/[22m[36massets/Cr5Ich_C.js   [39m[1m[2m190.80 kB[22m[1m[22m[2m │ gzip:  53.31 kB[22m
+[2mdist/user/[22m[36massets/C3mhoYRl.js   [39m[1m[2m209.44 kB[22m[1m[22m[2m │ gzip:  71.88 kB[22m
+[2mdist/user/[22m[36massets/BNBv3cG3.js   [39m[1m[2m219.85 kB[22m[1m[22m[2m │ gzip:  67.54 kB[22m
+[2mdist/user/[22m[36massets/DOBrvDdX.js   [39m[1m[2m227.65 kB[22m[1m[22m[2m │ gzip:  76.76 kB[22m
+[2mdist/user/[22m[36massets/BDHjfqN8.js   [39m[1m[2m330.38 kB[22m[1m[22m[2m │ gzip:  82.22 kB[22m
+[2mdist/user/[22m[36massets/CJqi8LUQ.js   [39m[1m[2m361.75 kB[22m[1m[22m[2m │ gzip:  75.51 kB[22m
+[2mdist/user/[22m[36massets/BQNJkQbL.js   [39m[1m[2m369.10 kB[22m[1m[22m[2m │ gzip:  79.69 kB[22m
+[32m✓ built in 22.15s[39m
+
+diff --git a/client/src/views/GiftCardsView.vue b/client/src/views/GiftCardsView.vue
+index 3261885d69d123ac8c5fd0519d7276f49c69af16..6a0c22b8c451a69f8b12d7d14e5c97fc60f42a98
+--- a/client/src/views/GiftCardsView.vue
++++ b/client/src/views/GiftCardsView.vue
+@@ -325,8 +325,8 @@
+         <div v-if="!loading && cards.length === 0" class="py-8 text-center text-themed-muted">{{ t('giftCards.empty') }}</div>
+       </div>
+ 
+-      <div class="mt-5 hidden overflow-x-auto lg:block">
+-        <table class="w-full min-w-[720px] text-sm">
++      <div class="mt-5 hidden overflow-hidden lg:block">
++        <table class="w-full table-fixed text-sm">
+           <thead class="border-b border-themed text-left text-themed-muted">
+             <tr>
+               <th class="py-3 pr-4">{{ t('giftCards.code') }}</th>
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$env:VITE_APP_ENTRY='"'admin'; pnpm exec vue-tsc; if ("'$LASTEXITCODE -eq 0) { pnpm exec vite build --configLoader runner }' in C:\Users\Administrator\Desktop\payinces\client
+diff --git a/client/src/views/GiftCardsView.vue b/client/src/views/GiftCardsView.vue
+index 3261885d69d123ac8c5fd0519d7276f49c69af16..6a0c22b8c451a69f8b12d7d14e5c97fc60f42a98
+--- a/client/src/views/GiftCardsView.vue
++++ b/client/src/views/GiftCardsView.vue
+@@ -325,8 +325,8 @@
+         <div v-if="!loading && cards.length === 0" class="py-8 text-center text-themed-muted">{{ t('giftCards.empty') }}</div>
+       </div>
+ 
+-      <div class="mt-5 hidden overflow-x-auto lg:block">
+-        <table class="w-full min-w-[720px] text-sm">
++      <div class="mt-5 hidden overflow-hidden lg:block">
++        <table class="w-full table-fixed text-sm">
+           <thead class="border-b border-themed text-left text-themed-muted">
+             <tr>
+               <th class="py-3 pr-4">{{ t('giftCards.code') }}</th>
+
+diff --git a/client/src/views/GiftCardsView.vue b/client/src/views/GiftCardsView.vue
+index 3261885d69d123ac8c5fd0519d7276f49c69af16..6a0c22b8c451a69f8b12d7d14e5c97fc60f42a98
+--- a/client/src/views/GiftCardsView.vue
++++ b/client/src/views/GiftCardsView.vue
+@@ -325,8 +325,8 @@
+         <div v-if="!loading && cards.length === 0" class="py-8 text-center text-themed-muted">{{ t('giftCards.empty') }}</div>
+       </div>
+ 
+-      <div class="mt-5 hidden overflow-x-auto lg:block">
+-        <table class="w-full min-w-[720px] text-sm">
++      <div class="mt-5 hidden overflow-hidden lg:block">
++        <table class="w-full table-fixed text-sm">
+           <thead class="border-b border-themed text-left text-themed-muted">
+             <tr>
+               <th class="py-3 pr-4">{{ t('giftCards.code') }}</th>
+
+diff --git a/client/src/views/GiftCardsView.vue b/client/src/views/GiftCardsView.vue
+index 3261885d69d123ac8c5fd0519d7276f49c69af16..6a0c22b8c451a69f8b12d7d14e5c97fc60f42a98
+--- a/client/src/views/GiftCardsView.vue
++++ b/client/src/views/GiftCardsView.vue
+@@ -325,8 +325,8 @@
+         <div v-if="!loading && cards.length === 0" class="py-8 text-center text-themed-muted">{{ t('giftCards.empty') }}</div>
+       </div>
+ 
+-      <div class="mt-5 hidden overflow-x-auto lg:block">
+-        <table class="w-full min-w-[720px] text-sm">
++      <div class="mt-5 hidden overflow-hidden lg:block">
++        <table class="w-full table-fixed text-sm">
+           <thead class="border-b border-themed text-left text-themed-muted">
+             <tr>
+               <th class="py-3 pr-4">{{ t('giftCards.code') }}</th>
+
+diff --git a/client/src/views/GiftCardsView.vue b/client/src/views/GiftCardsView.vue
+index 3261885d69d123ac8c5fd0519d7276f49c69af16..6a0c22b8c451a69f8b12d7d14e5c97fc60f42a98
+--- a/client/src/views/GiftCardsView.vue
++++ b/client/src/views/GiftCardsView.vue
+@@ -325,8 +325,8 @@
+         <div v-if="!loading && cards.length === 0" class="py-8 text-center text-themed-muted">{{ t('giftCards.empty') }}</div>
+       </div>
+ 
+-      <div class="mt-5 hidden overflow-x-auto lg:block">
+-        <table class="w-full min-w-[720px] text-sm">
++      <div class="mt-5 hidden overflow-hidden lg:block">
++        <table class="w-full table-fixed text-sm">
+           <thead class="border-b border-themed text-left text-themed-muted">
+             <tr>
+               <th class="py-3 pr-4">{{ t('giftCards.code') }}</th>
+
+diff --git a/client/src/views/GiftCardsView.vue b/client/src/views/GiftCardsView.vue
+index 3261885d69d123ac8c5fd0519d7276f49c69af16..6a0c22b8c451a69f8b12d7d14e5c97fc60f42a98
+--- a/client/src/views/GiftCardsView.vue
++++ b/client/src/views/GiftCardsView.vue
+@@ -325,8 +325,8 @@
+         <div v-if="!loading && cards.length === 0" class="py-8 text-center text-themed-muted">{{ t('giftCards.empty') }}</div>
+       </div>
+ 
+-      <div class="mt-5 hidden overflow-x-auto lg:block">
+-        <table class="w-full min-w-[720px] text-sm">
++      <div class="mt-5 hidden overflow-hidden lg:block">
++        <table class="w-full table-fixed text-sm">
+           <thead class="border-b border-themed text-left text-themed-muted">
+             <tr>
+               <th class="py-3 pr-4">{{ t('giftCards.code') }}</th>
+
+diff --git a/client/src/views/GiftCardsView.vue b/client/src/views/GiftCardsView.vue
+index 3261885d69d123ac8c5fd0519d7276f49c69af16..6a0c22b8c451a69f8b12d7d14e5c97fc60f42a98
+--- a/client/src/views/GiftCardsView.vue
++++ b/client/src/views/GiftCardsView.vue
+@@ -325,8 +325,8 @@
+         <div v-if="!loading && cards.length === 0" class="py-8 text-center text-themed-muted">{{ t('giftCards.empty') }}</div>
+       </div>
+ 
+-      <div class="mt-5 hidden overflow-x-auto lg:block">
+-        <table class="w-full min-w-[720px] text-sm">
++      <div class="mt-5 hidden overflow-hidden lg:block">
++        <table class="w-full table-fixed text-sm">
+           <thead class="border-b border-themed text-left text-themed-muted">
+             <tr>
+               <th class="py-3 pr-4">{{ t('giftCards.code') }}</th>
+
+diff --git a/client/src/views/GiftCardsView.vue b/client/src/views/GiftCardsView.vue
+index 3261885d69d123ac8c5fd0519d7276f49c69af16..6a0c22b8c451a69f8b12d7d14e5c97fc60f42a98
+--- a/client/src/views/GiftCardsView.vue
++++ b/client/src/views/GiftCardsView.vue
+@@ -325,8 +325,8 @@
+         <div v-if="!loading && cards.length === 0" class="py-8 text-center text-themed-muted">{{ t('giftCards.empty') }}</div>
+       </div>
+ 
+-      <div class="mt-5 hidden overflow-x-auto lg:block">
+-        <table class="w-full min-w-[720px] text-sm">
++      <div class="mt-5 hidden overflow-hidden lg:block">
++        <table class="w-full table-fixed text-sm">
+           <thead class="border-b border-themed text-left text-themed-muted">
+             <tr>
+               <th class="py-3 pr-4">{{ t('giftCards.code') }}</th>
+
+diff --git a/client/src/views/GiftCardsView.vue b/client/src/views/GiftCardsView.vue
+index 3261885d69d123ac8c5fd0519d7276f49c69af16..6a0c22b8c451a69f8b12d7d14e5c97fc60f42a98
+--- a/client/src/views/GiftCardsView.vue
++++ b/client/src/views/GiftCardsView.vue
+@@ -325,8 +325,8 @@
+         <div v-if="!loading && cards.length === 0" class="py-8 text-center text-themed-muted">{{ t('giftCards.empty') }}</div>
+       </div>
+ 
+-      <div class="mt-5 hidden overflow-x-auto lg:block">
+-        <table class="w-full min-w-[720px] text-sm">
++      <div class="mt-5 hidden overflow-hidden lg:block">
++        <table class="w-full table-fixed text-sm">
+           <thead class="border-b border-themed text-left text-themed-muted">
+             <tr>
+               <th class="py-3 pr-4">{{ t('giftCards.code') }}</th>
+
+diff --git a/client/src/views/GiftCardsView.vue b/client/src/views/GiftCardsView.vue
+index 3261885d69d123ac8c5fd0519d7276f49c69af16..6a0c22b8c451a69f8b12d7d14e5c97fc60f42a98
+--- a/client/src/views/GiftCardsView.vue
++++ b/client/src/views/GiftCardsView.vue
+@@ -325,8 +325,8 @@
+         <div v-if="!loading && cards.length === 0" class="py-8 text-center text-themed-muted">{{ t('giftCards.empty') }}</div>
+       </div>
+ 
+-      <div class="mt-5 hidden overflow-x-auto lg:block">
+-        <table class="w-full min-w-[720px] text-sm">
++      <div class="mt-5 hidden overflow-hidden lg:block">
++        <table class="w-full table-fixed text-sm">
+           <thead class="border-b border-themed text-left text-themed-muted">
+             <tr>
+               <th class="py-3 pr-4">{{ t('giftCards.code') }}</th>
+
+ succeeded in 60818ms:
+[36mvite v6.4.1 [32mbuilding for production...[36m[39m
+transforming...
+[32m✓[39m 399 modules transformed.
+rendering chunks...
+computing gzip size...
+[2mdist/admin/[22m[32mindex.html           [39m[1m[2m  2.92 kB[22m[1m[22m[2m │ gzip:   1.12 kB[22m
+[2mdist/admin/[22m[32massets/SbvrH0uZ.svg  [39m[1m[2m  4.19 kB[22m[1m[22m[2m │ gzip:   1.76 kB[22m
+[2mdist/admin/[22m[32massets/Di1JYREk.svg  [39m[1m[2m  4.33 kB[22m[1m[22m[2m │ gzip:   1.84 kB[22m
+[2mdist/admin/[22m[32massets/D39eIL5d.svg  [39m[1m[2m  4.63 kB[22m[1m[22m[2m │ gzip:   1.92 kB[22m
+[2mdist/admin/[22m[32massets/qxMwa2gs.svg  [39m[1m[2m  4.66 kB[22m[1m[22m[2m │ gzip:   1.92 kB[22m
+[2mdist/admin/[22m[32massets/B0FsxZiL.svg  [39m[1m[2m  4.74 kB[22m[1m[22m[2m │ gzip:   1.92 kB[22m
+[2mdist/admin/[22m[32massets/CjfitMyT.svg  [39m[1m[2m  4.79 kB[22m[1m[22m[2m │ gzip:   1.95 kB[22m
+[2mdist/admin/[22m[32massets/Cag8QTk2.svg  [39m[1m[2m  4.94 kB[22m[1m[22m[2m │ gzip:   2.02 kB[22m
+[2mdist/admin/[22m[32massets/CPnMO1hT.svg  [39m[1m[2m  5.07 kB[22m[1m[22m[2m │ gzip:   2.12 kB[22m
+[2mdist/admin/[22m[32massets/D8B-0kdx.svg  [39m[1m[2m  5.31 kB[22m[1m[22m[2m │ gzip:   2.25 kB[22m
+[2mdist/admin/[22m[32massets/DGrQb42O.svg  [39m[1m[2m  5.37 kB[22m[1m[22m[2m │ gzip:   2.37 kB[22m
+[2mdist/admin/[22m[32massets/BmsW91ne.svg  [39m[1m[2m  5.42 kB[22m[1m[22m[2m │ gzip:   2.27 kB[22m
+[2mdist/admin/[22m[32massets/bZuP8hmf.svg  [39m[1m[2m  5.47 kB[22m[1m[22m[2m │ gzip:   2.37 kB[22m
+[2mdist/admin/[22m[32massets/DJKnEFYW.svg  [39m[1m[2m  5.51 kB[22m[1m[22m[2m │ gzip:   2.42 kB[22m
+[2mdist/admin/[22m[32massets/Dl00mlk2.svg  [39m[1m[2m  5.56 kB[22m[1m[22m[2m │ gzip:   2.46 kB[22m
+[2mdist/admin/[22m[32massets/p_fAQGbS.svg  [39m[1m[2m  5.63 kB[22m[1m[22m[2m │ gzip:   1.64 kB[22m
+[2mdist/admin/[22m[32massets/fuIMkEYQ.svg  [39m[1m[2m  5.81 kB[22m[1m[22m[2m │ gzip:   1.70 kB[22m
+[2mdist/admin/[22m[32massets/DxciGbUu.svg  [39m[1m[2m  5.83 kB[22m[1m[22m[2m │ gzip:   2.55 kB[22m
+[2mdist/admin/[22m[32massets/B-w7hFKu.svg  [39m[1m[2m  5.91 kB[22m[1m[22m[2m │ gzip:   2.50 kB[22m
+[2mdist/admin/[22m[32massets/CSuuaw9K.svg  [39m[1m[2m  6.17 kB[22m[1m[22m[2m │ gzip:   2.46 kB[22m
+[2mdist/admin/[22m[32massets/U0m7oJ5e.svg  [39m[1m[2m  6.19 kB[22m[1m[22m[2m │ gzip:   2.49 kB[22m
+[2mdist/admin/[22m[32massets/Dr5rMAMb.svg  [39m[1m[2m  6.75 kB[22m[1m[22m[2m │ gzip:   2.21 kB[22m
+[2mdist/admin/[22m[32massets/CJHJmJj1.svg  [39m[1m[2m  7.09 kB[22m[1m[22m[2m │ gzip:   2.99 kB[22m
+[2mdist/admin/[22m[32massets/CwKXYZ8s.svg  [39m[1m[2m  7.09 kB[22m[1m[22m[2m │ gzip:   2.92 kB[22m
+[2mdist/admin/[22m[32massets/Dkyx6q-p.svg  [39m[1m[2m  7.10 kB[22m[1m[22m[2m │ gzip:   2.91 kB[22m
+[2mdist/admin/[22m[32massets/dtelpZmc.svg  [39m[1m[2m  7.12 kB[22m[1m[22m[2m │ gzip:   2.99 kB[22m
+[2mdist/admin/[22m[32massets/BeWfuE30.svg  [39m[1m[2m  7.12 kB[22m[1m[22m[2m │ gzip:   2.72 kB[22m
+[2mdist/admin/[22m[32massets/BBvObpUS.svg  [39m[1m[2m  7.12 kB[22m[1m[22m[2m │ gzip:   2.74 kB[22m
+[2mdist/admin/[22m[32massets/Cu5YU29T.svg  [39m[1m[2m  7.14 kB[22m[1m[22m[2m │ gzip:   2.41 kB[22m
+[2mdist/admin/[22m[32massets/CHdhvNcr.svg  [39m[1m[2m  7.32 kB[22m[1m[22m[2m │ gzip:   2.96 kB[22m
+[2mdist/admin/[22m[32massets/CMlf0YU8.svg  [39m[1m[2m  7.34 kB[22m[1m[22m[2m │ gzip:   2.97 kB[22m
+[2mdist/admin/[22m[32massets/Cdz2uTvR.svg  [39m[1m[2m  7.74 kB[22m[1m[22m[2m │ gzip:   3.05 kB[22m
+[2mdist/admin/[22m[32massets/DZ2ADgIR.svg  [39m[1m[2m  8.00 kB[22m[1m[22m[2m │ gzip:   3.25 kB[22m
+[2mdist/admin/[22m[32massets/Bj15g7cp.svg  [39m[1m[2m  8.27 kB[22m[1m[22m[2m │ gzip:   3.26 kB[22m
+[2mdist/admin/[22m[32massets/BTevY6N2.svg  [39m[1m[2m  8.37 kB[22m[1m[22m[2m │ gzip:   3.27 kB[22m
+[2mdist/admin/[22m[32massets/BSdsyIxY.svg  [39m[1m[2m  8.45 kB[22m[1m[22m[2m │ gzip:   3.55 kB[22m
+[2mdist/admin/[22m[32massets/BC_zcciE.svg  [39m[1m[2m  8.52 kB[22m[1m[22m[2m │ gzip:   3.59 kB[22m
+[2mdist/admin/[22m[32massets/YC70hswZ.svg  [39m[1m[2m  8.73 kB[22m[1m[22m[2m │ gzip:   3.55 kB[22m
+[2mdist/admin/[22m[32massets/DwOkwyQ0.svg  [39m[1m[2m  8.74 kB[22m[1m[22m[2m │ gzip:   3.57 kB[22m
+[2mdist/admin/[22m[32massets/W0PWLK5p.svg  [39m[1m[2m  9.00 kB[22m[1m[22m[2m │ gzip:   1.67 kB[22m
+[2mdist/admin/[22m[32massets/CK0XlKT-.svg  [39m[1m[2m  9.01 kB[22m[1m[22m[2m │ gzip:   4.03 kB[22m
+[2mdist/admin/[22m[32massets/Bxz9hxvX.svg  [39m[1m[2m  9.10 kB[22m[1m[22m[2m │ gzip:   4.14 kB[22m
+[2mdist/admin/[22m[32massets/-VPIqfkF.svg  [39m[1m[2m  9.13 kB[22m[1m[22m[2m │ gzip:   3.51 kB[22m
+[2mdist/admin/[22m[32massets/Dd9p-0-T.svg  [39m[1m[2m  9.70 kB[22m[1m[22m[2m │ gzip:   3.81 kB[22m
+[2mdist/admin/[22m[32massets/DnlyVVKx.svg  [39m[1m[2m  9.85 kB[22m[1m[22m[2m │ gzip:   4.19 kB[22m
+[2mdist/admin/[22m[32massets/Dh79zbT9.svg  [39m[1m[2m  9.97 kB[22m[1m[22m[2m │ gzip:   4.25 kB[22m
+[2mdist/admin/[22m[32massets/ClZ-0KpG.svg  [39m[1m[2m 10.00 kB[22m[1m[22m[2m │ gzip:   4.14 kB[22m
+[2mdist/admin/[22m[32massets/C7xY6pic.svg  [39m[1m[2m 10.02 kB[22m[1m[22m[2m │ gzip:   4.14 kB[22m
+[2mdist/admin/[22m[32massets/CLCX8uk5.svg  [39m[1m[2m 10.36 kB[22m[1m[22m[2m │ gzip:   1.79 kB[22m
+[2mdist/admin/[22m[32massets/DUkgV9Tq.svg  [39m[1m[2m 10.72 kB[22m[1m[22m[2m │ gzip:   4.46 kB[22m
+[2mdist/admin/[22m[32massets/DSQoDxn_.svg  [39m[1m[2m 10.74 kB[22m[1m[22m[2m │ gzip:   4.46 kB[22m
+[2mdist/admin/[22m[32massets/DRlxvNwm.svg  [39m[1m[2m 11.13 kB[22m[1m[22m[2m │ gzip:   2.84 kB[22m
+[2mdist/admin/[22m[32massets/DTi94M3M.svg  [39m[1m[2m 11.24 kB[22m[1m[22m[2m │ gzip:   2.71 kB[22m
+[2mdist/admin/[22m[32massets/RKKs0ph6.svg  [39m[1m[2m 12.16 kB[22m[1m[22m[2m │ gzip:   4.12 kB[22m
+[2mdist/admin/[22m[32massets/nDhIaDNb.svg  [39m[1m[2m 12.21 kB[22m[1m[22m[2m │ gzip:   4.30 kB[22m
+[2mdist/admin/[22m[32massets/YDa8zgzO.svg  [39m[1m[2m 12.71 kB[22m[1m[22m[2m │ gzip:   5.37 kB[22m
+[2mdist/admin/[22m[32massets/DIMg4gti.svg  [39m[1m[2m 13.30 kB[22m[1m[22m[2m │ gzip:   4.75 kB[22m
+[2mdist/admin/[22m[32massets/B6T3O78g.svg  [39m[1m[2m 13.34 kB[22m[1m[22m[2m │ gzip:   5.64 kB[22m
+[2mdist/admin/[22m[32massets/BPAlH32D.svg  [39m[1m[2m 13.44 kB[22m[1m[22m[2m │ gzip:   4.93 kB[22m
+[2mdist/admin/[22m[32massets/pweRl6ZP.svg  [39m[1m[2m 13.46 kB[22m[1m[22m[2m │ gzip:   4.82 kB[22m
+[2mdist/admin/[22m[32massets/CPQcA8Ol.svg  [39m[1m[2m 13.47 kB[22m[1m[22m[2m │ gzip:   5.68 kB[22m
+[2mdist/admin/[22m[32massets/DgxdtieE.svg  [39m[1m[2m 13.47 kB[22m[1m[22m[2m │ gzip:   4.98 kB[22m
+[2mdist/admin/[22m[32massets/CwGQsyAM.svg  [39m[1m[2m 13.63 kB[22m[1m[22m[2m │ gzip:   4.81 kB[22m
+[2mdist/admin/[22m[32massets/h4QKADRE.svg  [39m[1m[2m 13.64 kB[22m[1m[22m[2m │ gzip:   4.81 kB[22m
+[2mdist/admin/[22m[32massets/YqzKx9xl.svg  [39m[1m[2m 13.93 kB[22m[1m[22m[2m │ gzip:   5.86 kB[22m
+[2mdist/admin/[22m[32massets/Q03Mij62.svg  [39m[1m[2m 15.30 kB[22m[1m[22m[2m │ gzip:   2.28 kB[22m
+[2mdist/admin/[22m[32massets/cCIgaNf6.svg  [39m[1m[2m 15.40 kB[22m[1m[22m[2m │ gzip:   2.24 kB[22m
+[2mdist/admin/[22m[32massets/BKrUHzrq.svg  [39m[1m[2m 15.54 kB[22m[1m[22m[2m │ gzip:   5.35 kB[22m
+[2mdist/admin/[22m[32massets/DGBIRFB_.svg  [39m[1m[2m 15.68 kB[22m[1m[22m[2m │ gzip:   5.27 kB[22m
+[2mdist/admin/[22m[32massets/Cbhezfe1.svg  [39m[1m[2m 15.79 kB[22m[1m[22m[2m │ gzip:   3.08 kB[22m
+[2mdist/admin/[22m[32massets/mNzh0mZC.svg  [39m[1m[2m 16.18 kB[22m[1m[22m[2m │ gzip:   5.77 kB[22m
+[2mdist/admin/[22m[32massets/DPPHwW2M.svg  [39m[1m[2m 16.27 kB[22m[1m[22m[2m │ gzip:   3.23 kB[22m
+[2mdist/admin/[22m[32massets/BKi5dxWt.svg  [39m[1m[2m 16.36 kB[22m[1m[22m[2m │ gzip:   5.84 kB[22m
+[2mdist/admin/[22m[32massets/CcFCSQxm.svg  [39m[1m[2m 17.25 kB[22m[1m[22m[2m │ gzip:   5.36 kB[22m
+[2mdist/admin/[22m[32massets/BX2WCaNt.svg  [39m[1m[2m 17.29 kB[22m[1m[22m[2m │ gzip:   5.43 kB[22m
+[2mdist/admin/[22m[32massets/Bqg4Cbbh.svg  [39m[1m[2m 18.70 kB[22m[1m[22m[2m │ gzip:   7.44 kB[22m
+[2mdist/admin/[22m[32massets/Bc2fqp73.svg  [39m[1m[2m 18.98 kB[22m[1m[22m[2m │ gzip:   7.68 kB[22m
+[2mdist/admin/[22m[32massets/DabL4p35.svg  [39m[1m[2m 19.00 kB[22m[1m[22m[2m │ gzip:   7.58 kB[22m
+[2mdist/admin/[22m[32massets/C77Rf6cE.svg  [39m[1m[2m 19.19 kB[22m[1m[22m[2m │ gzip:   7.76 kB[22m
+[2mdist/admin/[22m[32massets/nN8zP2Bu.svg  [39m[1m[2m 22.21 kB[22m[1m[22m[2m │ gzip:   4.38 kB[22m
+[2mdist/admin/[22m[32massets/DcqxRdQL.svg  [39m[1m[2m 22.22 kB[22m[1m[22m[2m │ gzip:   4.37 kB[22m
+[2mdist/admin/[22m[32massets/D4gikpNq.svg  [39m[1m[2m 22.28 kB[22m[1m[22m[2m │ gzip:   5.97 kB[22m
+[2mdist/admin/[22m[32massets/DvNWWcPM.svg  [39m[1m[2m 22.39 kB[22m[1m[22m[2m │ gzip:   7.17 kB[22m
+[2mdist/admin/[22m[32massets/BeYgB2z9.svg  [39m[1m[2m 22.46 kB[22m[1m[22m[2m │ gzip:   7.18 kB[22m
+[2mdist/admin/[22m[32massets/CrOApEqW.svg  [39m[1m[2m 22.57 kB[22m[1m[22m[2m │ gzip:   6.98 kB[22m
+[2mdist/admin/[22m[32massets/BImhNBcd.svg  [39m[1m[2m 22.72 kB[22m[1m[22m[2m │ gzip:   4.11 kB[22m
+[2mdist/admin/[22m[32massets/DqkWLbnk.svg  [39m[1m[2m 22.72 kB[22m[1m[22m[2m │ gzip:   4.11 kB[22m
+[2mdist/admin/[22m[32massets/CuaQmCLf.svg  [39m[1m[2m 22.80 kB[22m[1m[22m[2m │ gzip:   7.02 kB[22m
+[2mdist/admin/[22m[32massets/13HOfeJD.svg  [39m[1m[2m 23.02 kB[22m[1m[22m[2m │ gzip:   4.11 kB[22m
+[2mdist/admin/[22m[32massets/CJPJrjiZ.svg  [39m[1m[2m 23.02 kB[22m[1m[22m[2m │ gzip:   4.11 kB[22m
+[2mdist/admin/[22m[32massets/BqaZHuhf.svg  [39m[1m[2m 23.37 kB[22m[1m[22m[2m │ gzip:   8.57 kB[22m
+[2mdist/admin/[22m[32massets/Dpsu1myA.svg  [39m[1m[2m 23.39 kB[22m[1m[22m[2m │ gzip:   8.56 kB[22m
+[2mdist/admin/[22m[32massets/vEp1ZXy6.svg  [39m[1m[2m 23.92 kB[22m[1m[22m[2m │ gzip:   5.49 kB[22m
+[2mdist/admin/[22m[32massets/DEAVMg38.svg  [39m[1m[2m 24.10 kB[22m[1m[22m[2m │ gzip:   9.09 kB[22m
+[2mdist/admin/[22m[32massets/u3dAPoew.svg  [39m[1m[2m 24.14 kB[22m[1m[22m[2m │ gzip:   9.13 kB[22m
+[2mdist/admin/[22m[32massets/C4CYPgyC.svg  [39m[1m[2m 24.43 kB[22m[1m[22m[2m │ gzip:   8.53 kB[22m
+[2mdist/admin/[22m[32massets/SxWnbWW0.svg  [39m[1m[2m 24.50 kB[22m[1m[22m[2m │ gzip:   9.95 kB[22m
+[2mdist/admin/[22m[32massets/C-KgnQEz.svg  [39m[1m[2m 24.59 kB[22m[1m[22m[2m │ gzip:   8.58 kB[22m
+[2mdist/admin/[22m[32massets/BTo4qm10.svg  [39m[1m[2m 24.78 kB[22m[1m[22m[2m │ gzip:  10.09 kB[22m
+[2mdist/admin/[22m[32massets/D9xG2hYr.svg  [39m[1m[2m 28.21 kB[22m[1m[22m[2m │ gzip:   6.26 kB[22m
+[2mdist/admin/[22m[32massets/BFo5zkKU.svg  [39m[1m[2m 28.29 kB[22m[1m[22m[2m │ gzip:  10.82 kB[22m
+[2mdist/admin/[22m[32massets/DXhVZ333.svg  [39m[1m[2m 28.34 kB[22m[1m[22m[2m │ gzip:   6.26 kB[22m
+[2mdist/admin/[22m[32massets/B-RvQ4Hz.svg  [39m[1m[2m 28.49 kB[22m[1m[22m[2m │ gzip:   8.83 kB[22m
+[2mdist/admin/[22m[32massets/s7kyhqIM.svg  [39m[1m[2m 28.66 kB[22m[1m[22m[2m │ gzip:   9.67 kB[22m
+[2mdist/admin/[22m[32massets/B9-hqIE-.svg  [39m[1m[2m 28.72 kB[22m[1m[22m[2m │ gzip:   9.68 kB[22m
+[2mdist/admin/[22m[32massets/nuUF_Ak3.svg  [39m[1m[2m 28.74 kB[22m[1m[22m[2m │ gzip:   9.20 kB[22m
+[2mdist/admin/[22m[32massets/CPJublpi.svg  [39m[1m[2m 28.78 kB[22m[1m[22m[2m │ gzip:  11.03 kB[22m
+[2mdist/admin/[22m[32massets/CaVOFQ3t.svg  [39m[1m[2m 28.78 kB[22m[1m[22m[2m │ gzip:   6.83 kB[22m
+[2mdist/admin/[22m[32massets/Blhdm5jl.svg  [39m[1m[2m 29.14 kB[22m[1m[22m[2m │ gzip:  10.60 kB[22m
+[2mdist/admin/[22m[32massets/cwfBJlvF.svg  [39m[1m[2m 29.35 kB[22m[1m[22m[2m │ gzip:   6.72 kB[22m
+[2mdist/admin/[22m[32massets/Dekqy8Of.svg  [39m[1m[2m 30.45 kB[22m[1m[22m[2m │ gzip:  11.46 kB[22m
+[2mdist/admin/[22m[32massets/B18i8NGa.svg  [39m[1m[2m 30.51 kB[22m[1m[22m[2m │ gzip:  11.15 kB[22m
+[2mdist/admin/[22m[32massets/fzLfaANM.svg  [39m[1m[2m 30.73 kB[22m[1m[22m[2m │ gzip:  13.14 kB[22m
+[2mdist/admin/[22m[32massets/BTEVCXG-.svg  [39m[1m[2m 30.98 kB[22m[1m[22m[2m │ gzip:  11.62 kB[22m
+[2mdist/admin/[22m[32massets/BpiVVBoV.svg  [39m[1m[2m 31.28 kB[22m[1m[22m[2m │ gzip:  13.31 kB[22m
+[2mdist/admin/[22m[32massets/CJo5DI-7.svg  [39m[1m[2m 31.35 kB[22m[1m[22m[2m │ gzip:  11.30 kB[22m
+[2mdist/admin/[22m[32massets/BLpn5qMn.svg  [39m[1m[2m 31.35 kB[22m[1m[22m[2m │ gzip:  11.30 kB[22m
+[2mdist/admin/[22m[32massets/DiiNa0F5.svg  [39m[1m[2m 31.50 kB[22m[1m[22m[2m │ gzip:  11.41 kB[22m
+[2mdist/admin/[22m[32massets/DOgYbHsY.svg  [39m[1m[2m 31.92 kB[22m[1m[22m[2m │ gzip:  11.09 kB[22m
+[2mdist/admin/[22m[32massets/DyWbhIiC.svg  [39m[1m[2m 34.19 kB[22m[1m[22m[2m │ gzip:   9.81 kB[22m
+[2mdist/admin/[22m[32massets/CgxUDvtv.svg  [39m[1m[2m 34.78 kB[22m[1m[22m[2m │ gzip:  12.58 kB[22m
+[2mdist/admin/[22m[32massets/vXe0Dr49.svg  [39m[1m[2m 35.03 kB[22m[1m[22m[2m │ gzip:  10.03 kB[22m
+[2mdist/admin/[22m[32massets/CqtQPzWZ.svg  [39m[1m[2m 35.43 kB[22m[1m[22m[2m │ gzip:  12.88 kB[22m
+[2mdist/admin/[22m[32massets/DGBJvQay.svg  [39m[1m[2m 38.22 kB[22m[1m[22m[2m │ gzip:  11.99 kB[22m
+[2mdist/admin/[22m[32massets/C_WSgUcv.svg  [39m[1m[2m 38.35 kB[22m[1m[22m[2m │ gzip:  12.09 kB[22m
+[2mdist/admin/[22m[32massets/B86d445t.svg  [39m[1m[2m 40.35 kB[22m[1m[22m[2m │ gzip:  14.40 kB[22m
+[2mdist/admin/[22m[32massets/DeRnbj4d.svg  [39m[1m[2m 41.34 kB[22m[1m[22m[2m │ gzip:  14.76 kB[22m
+[2mdist/admin/[22m[32massets/BCKHR4_q.svg  [39m[1m[2m 42.51 kB[22m[1m[22m[2m │ gzip:  15.61 kB[22m
+[2mdist/admin/[22m[32massets/CoBdB-p8.svg  [39m[1m[2m 42.68 kB[22m[1m[22m[2m │ gzip:  15.60 kB[22m
+[2mdist/admin/[22m[32massets/Cv4Gwqah.svg  [39m[1m[2m 56.37 kB[22m[1m[22m[2m │ gzip:  21.28 kB[22m
+[2mdist/admin/[22m[32massets/CfGorN3b.svg  [39m[1m[2m 56.95 kB[22m[1m[22m[2m │ gzip:  21.57 kB[22m
+[2mdist/admin/[22m[32massets/CJIHhYwF.svg  [39m[1m[2m 77.27 kB[22m[1m[22m[2m │ gzip:  21.83 kB[22m
+[2mdist/admin/[22m[32massets/RZ39q5hO.svg  [39m[1m[2m 77.72 kB[22m[1m[22m[2m │ gzip:  22.08 kB[22m
+[2mdist/admin/[22m[32massets/CvCwYHGF.svg  [39m[1m[2m 80.21 kB[22m[1m[22m[2m │ gzip:  27.77 kB[22m
+[2mdist/admin/[22m[32massets/d5m8M5h8.svg  [39m[1m[2m 80.96 kB[22m[1m[22m[2m │ gzip:  14.80 kB[22m
+[2mdist/admin/[22m[32massets/BuSGTZm_.svg  [39m[1m[2m 82.15 kB[22m[1m[22m[2m │ gzip:  15.47 kB[22m
+[2mdist/admin/[22m[32massets/Cc8Ccfe8.svg  [39m[1m[2m 84.75 kB[22m[1m[22m[2m │ gzip:  29.50 kB[22m
+[2mdist/admin/[22m[32massets/CcUiMqkJ.svg  [39m[1m[2m102.88 kB[22m[1m[22m[2m │ gzip:  24.83 kB[22m
+[2mdist/admin/[22m[32massets/Dry0C6UA.svg  [39m[1m[2m104.73 kB[22m[1m[22m[2m │ gzip:  25.14 kB[22m
+[2mdist/admin/[22m[32massets/D-aE2xRW.svg  [39m[1m[2m140.52 kB[22m[1m[22m[2m │ gzip:  47.08 kB[22m
+[2mdist/admin/[22m[32massets/FjwY7RYr.svg  [39m[1m[2m143.37 kB[22m[1m[22m[2m │ gzip:  47.70 kB[22m
+[2mdist/admin/[22m[32massets/CnTO3ehk.svg  [39m[1m[2m181.48 kB[22m[1m[22m[2m │ gzip:  49.93 kB[22m
+[2mdist/admin/[22m[32massets/BfwKwXtn.svg  [39m[1m[2m181.63 kB[22m[1m[22m[2m │ gzip:  50.19 kB[22m
+[2mdist/admin/[22m[35massets/HALAC3TX.css  [39m[1m[2m  0.18 kB[22m[1m[22m[2m │ gzip:   0.12 kB[22m
+[2mdist/admin/[22m[35massets/B76TsvoU.css  [39m[1m[2m  0.22 kB[22m[1m[22m[2m │ gzip:   0.15 kB[22m
+[2mdist/admin/[22m[35massets/DQVB8-1J.css  [39m[1m[2m  0.47 kB[22m[1m[22m[2m │ gzip:   0.21 kB[22m
+[2mdist/admin/[22m[35massets/G2rQTk2w.css  [39m[1m[2m  0.68 kB[22m[1m[22m[2m │ gzip:   0.20 kB[22m
+[2mdist/admin/[22m[35massets/DQJoV0US.css  [39m[1m[2m  0.77 kB[22m[1m[22m[2m │ gzip:   0.35 kB[22m
+[2mdist/admin/[22m[35massets/CgopggJP.css  [39m[1m[2m  1.15 kB[22m[1m[22m[2m │ gzip:   0.45 kB[22m
+[2mdist/admin/[22m[35massets/B2MTTrDO.css  [39m[1m[2m  1.66 kB[22m[1m[22m[2m │ gzip:   0.67 kB[22m
+[2mdist/admin/[22m[35massets/S5M2N5lf.css  [39m[1m[2m  2.09 kB[22m[1m[22m[2m │ gzip:   0.77 kB[22m
+[2mdist/admin/[22m[35massets/CZQ3d-sL.css  [39m[1m[2m  4.15 kB[22m[1m[22m[2m │ gzip:   1.08 kB[22m
+[2mdist/admin/[22m[35massets/e97ungwh.css  [39m[1m[2m  4.90 kB[22m[1m[22m[2m │ gzip:   1.27 kB[22m
+[2mdist/admin/[22m[35massets/wO2qFXua.css  [39m[1m[2m  5.21 kB[22m[1m[22m[2m │ gzip:   1.18 kB[22m
+[2mdist/admin/[22m[35massets/9CEnUXvW.css  [39m[1m[2m  5.75 kB[22m[1m[22m[2m │ gzip:   1.98 kB[22m
+[2mdist/admin/[22m[35massets/BfQ05yc8.css  [39m[1m[2m732.19 kB[22m[1m[22m[2m │ gzip: 128.42 kB[22m
+[2mdist/admin/[22m[36massets/BP1_YADf.js   [39m[1m[2m  0.82 kB[22m[1m[22m[2m │ gzip:   0.55 kB[22m
+[2mdist/admin/[22m[36massets/CbnvbGAi.js   [39m[1m[2m  1.00 kB[22m[1m[22m[2m │ gzip:   0.59 kB[22m
+[2mdist/admin/[22m[36massets/BmttL_jV.js   [39m[1m[2m  1.03 kB[22m[1m[22m[2m │ gzip:   0.50 kB[22m
+[2mdist/admin/[22m[36massets/BtiqWeEW.js   [39m[1m[2m  1.03 kB[22m[1m[22m[2m │ gzip:   0.45 kB[22m
+[2mdist/admin/[22m[36massets/DeG44OmF.js   [39m[1m[2m  1.14 kB[22m[1m[22m[2m │ gzip:   0.71 kB[22m
+[2mdist/admin/[22m[36massets/CJ46nNRk.js   [39m[1m[2m  1.36 kB[22m[1m[22m[2m │ gzip:   0.30 kB[22m
+[2mdist/admin/[22m[36massets/D7wT3vc6.js   [39m[1m[2m  2.03 kB[22m[1m[22m[2m │ gzip:   1.16 kB[22m
+[2mdist/admin/[22m[36massets/Cqir_uf4.js   [39m[1m[2m  2.06 kB[22m[1m[22m[2m │ gzip:   0.76 kB[22m
+[2mdist/admin/[22m[36massets/C7LBz6lE.js   [39m[1m[2m  2.54 kB[22m[1m[22m[2m │ gzip:   1.28 kB[22m
+[2mdist/admin/[22m[36massets/BsCg12c8.js   [39m[1m[2m  2.87 kB[22m[1m[22m[2m │ gzip:   1.34 kB[22m
+[2mdist/admin/[22m[36massets/iNWxW7mI.js   [39m[1m[2m  3.21 kB[22m[1m[22m[2m │ gzip:   1.12 kB[22m
+[2mdist/admin/[22m[36massets/Cl44MQUz.js   [39m[1m[2m  5.56 kB[22m[1m[22m[2m │ gzip:   1.30 kB[22m
+[2mdist/admin/[22m[36massets/DFcuqBdK.js   [39m[1m[2m 10.49 kB[22m[1m[22m[2m │ gzip:   3.48 kB[22m
+[2mdist/admin/[22m[36massets/DVL1cw3t.js   [39m[1m[2m 10.61 kB[22m[1m[22m[2m │ gzip:   3.34 kB[22m
+[2mdist/admin/[22m[36massets/CALMMFLv.js   [39m[1m[2m 11.05 kB[22m[1m[22m[2m │ gzip:   3.60 kB[22m
+[2mdist/admin/[22m[36massets/CZX-Jgj2.js   [39m[1m[2m 14.94 kB[22m[1m[22m[2m │ gzip:   4.14 kB[22m
+[2mdist/admin/[22m[36massets/DRG4M2Z0.js   [39m[1m[2m 15.51 kB[22m[1m[22m[2m │ gzip:   3.71 kB[22m
+[2mdist/admin/[22m[36massets/IoSF_9ih.js   [39m[1m[2m 15.60 kB[22m[1m[22m[2m │ gzip:   5.08 kB[22m
+[2mdist/admin/[22m[36massets/BCEyYxUc.js   [39m[1m[2m 15.72 kB[22m[1m[22m[2m │ gzip:   5.35 kB[22m
+[2mdist/admin/[22m[36massets/BrzN44vF.js   [39m[1m[2m 15.79 kB[22m[1m[22m[2m │ gzip:   4.89 kB[22m
+[2mdist/admin/[22m[36massets/DGqGgM_9.js   [39m[1m[2m 15.84 kB[22m[1m[22m[2m │ gzip:   6.39 kB[22m
+[2mdist/admin/[22m[36massets/MR5Lyjz2.js   [39m[1m[2m 16.29 kB[22m[1m[22m[2m │ gzip:   4.56 kB[22m
+[2mdist/admin/[22m[36massets/CO0yGv-G.js   [39m[1m[2m 17.20 kB[22m[1m[22m[2m │ gzip:   5.61 kB[22m
+[2mdist/admin/[22m[36massets/3E8-5Mf1.js   [39m[1m[2m 18.63 kB[22m[1m[22m[2m │ gzip:   5.81 kB[22m
+[2mdist/admin/[22m[36massets/CvluKBcZ.js   [39m[1m[2m 18.98 kB[22m[1m[22m[2m │ gzip:   6.72 kB[22m
+[2mdist/admin/[22m[36massets/BwASW-sA.js   [39m[1m[2m 19.52 kB[22m[1m[22m[2m │ gzip:   4.86 kB[22m
+[2mdist/admin/[22m[36massets/BlzjJt_t.js   [39m[1m[2m 22.67 kB[22m[1m[22m[2m │ gzip:   6.66 kB[22m
+[2mdist/admin/[22m[36massets/Ck3fEzwr.js   [39m[1m[2m 22.82 kB[22m[1m[22m[2m │ gzip:   6.68 kB[22m
+[2mdist/admin/[22m[36massets/CYiog0Mt.js   [39m[1m[2m 23.14 kB[22m[1m[22m[2m │ gzip:   6.26 kB[22m
+[2mdist/admin/[22m[36massets/BQXfYDZ_.js   [39m[1m[2m 25.36 kB[22m[1m[22m[2m │ gzip:  11.80 kB[22m
+[2mdist/admin/[22m[36massets/Btl5JaFZ.js   [39m[1m[2m 25.78 kB[22m[1m[22m[2m │ gzip:   8.08 kB[22m
+[2mdist/admin/[22m[36massets/Cc14MvOr.js   [39m[1m[2m 26.01 kB[22m[1m[22m[2m │ gzip:   8.03 kB[22m
+[2mdist/admin/[22m[36massets/5pXIsBOi.js   [39m[1m[2m 26.42 kB[22m[1m[22m[2m │ gzip:   6.67 kB[22m
+[2mdist/admin/[22m[36massets/Do1fTb7n.js   [39m[1m[2m 27.50 kB[22m[1m[22m[2m │ gzip:   6.52 kB[22m
+[2mdist/admin/[22m[36massets/DJit8Kim.js   [39m[1m[2m 29.16 kB[22m[1m[22m[2m │ gzip:   8.71 kB[22m
+[2mdist/admin/[22m[36massets/Xz8DoQRb.js   [39m[1m[2m 29.27 kB[22m[1m[22m[2m │ gzip:   7.52 kB[22m
+[2mdist/admin/[22m[36massets/BSIiHihv.js   [39m[1m[2m 29.46 kB[22m[1m[22m[2m │ gzip:   7.94 kB[22m
+[2mdist/admin/[22m[36massets/BKweZ_UK.js   [39m[1m[2m 33.30 kB[22m[1m[22m[2m │ gzip:   8.31 kB[22m
+[2mdist/admin/[22m[36massets/C3APesre.js   [39m[1m[2m 33.43 kB[22m[1m[22m[2m │ gzip:   7.74 kB[22m
+[2mdist/admin/[22m[36massets/BB2AnRMJ.js   [39m[1m[2m 35.88 kB[22m[1m[22m[2m │ gzip:  14.07 kB[22m
+[2mdist/admin/[22m[36massets/DM13gx-Y.js   [39m[1m[2m 37.19 kB[22m[1m[22m[2m │ gzip:   9.26 kB[22m
+[2mdist/admin/[22m[36massets/5GZTSr_I.js   [39m[1m[2m 37.94 kB[22m[1m[22m[2m │ gzip:   7.86 kB[22m
+[2mdist/admin/[22m[36massets/aaX9Nvwr.js   [39m[1m[2m 38.83 kB[22m[1m[22m[2m │ gzip:  10.50 kB[22m
+[2mdist/admin/[22m[36massets/BGMtL3r3.js   [39m[1m[2m 41.23 kB[22m[1m[22m[2m │ gzip:   7.56 kB[22m
+[2mdist/admin/[22m[36massets/BId71lb1.js   [39m[1m[2m 45.48 kB[22m[1m[22m[2m │ gzip:  10.64 kB[22m
+[2mdist/admin/[22m[36massets/Cb7nDaxE.js   [39m[1m[2m 48.33 kB[22m[1m[22m[2m │ gzip:  12.51 kB[22m
+[2mdist/admin/[22m[36massets/BQ79gurQ.js   [39m[1m[2m 51.10 kB[22m[1m[22m[2m │ gzip:  11.40 kB[22m
+[2mdist/admin/[22m[36massets/Dy-Ov_8w.js   [39m[1m[2m 61.96 kB[22m[1m[22m[2m │ gzip:  14.10 kB[22m
+[2mdist/admin/[22m[36massets/DqduiHLC.js   [39m[1m[2m 63.28 kB[22m[1m[22m[2m │ gzip:  20.96 kB[22m
+[2mdist/admin/[22m[36massets/JgSnHBKC.js   [39m[1m[2m 70.69 kB[22m[1m[22m[2m │ gzip:  15.46 kB[22m
+[2mdist/admin/[22m[36massets/C_r2U21y.js   [39m[1m[2m 70.87 kB[22m[1m[22m[2m │ gzip:  27.76 kB[22m
+[2mdist/admin/[22m[36massets/Bt_QwTw7.js   [39m[1m[2m 72.25 kB[22m[1m[22m[2m │ gzip:  18.55 kB[22m
+[2mdist/admin/[22m[36massets/h_b-OF-L.js   [39m[1m[2m 73.57 kB[22m[1m[22m[2m │ gzip:  21.10 kB[22m
+[2mdist/admin/[22m[36massets/DVVG4B9p.js   [39m[1m[2m 74.16 kB[22m[1m[22m[2m │ gzip:  14.95 kB[22m
+[2mdist/admin/[22m[36massets/fmh1LZvl.js   [39m[1m[2m 74.40 kB[22m[1m[22m[2m │ gzip:  14.12 kB[22m
+[2mdist/admin/[22m[36massets/5t2HIzsU.js   [39m[1m[2m 85.22 kB[22m[1m[22m[2m │ gzip:  25.68 kB[22m
+[2mdist/admin/[22m[36massets/DKOTDH4r.js   [39m[1m[2m 87.68 kB[22m[1m[22m[2m │ gzip:  21.13 kB[22m
+[2mdist/admin/[22m[36massets/BvP8oRdA.js   [39m[1m[2m 98.12 kB[22m[1m[22m[2m │ gzip:  23.72 kB[22m
+[2mdist/admin/[22m[36massets/D0veQxjn.js   [39m[1m[2m 99.14 kB[22m[1m[22m[2m │ gzip:  22.24 kB[22m
+[2mdist/admin/[22m[36massets/B5pZQ80d.js   [39m[1m[2m107.49 kB[22m[1m[22m[2m │ gzip:  25.96 kB[22m
+[2mdist/admin/[22m[36massets/BER_gJXc.js   [39m[1m[2m110.00 kB[22m[1m[22m[2m │ gzip:  29.95 kB[22m
+[2mdist/admin/[22m[36massets/CumJjNmX.js   [39m[1m[2m124.22 kB[22m[1m[22m[2m │ gzip:  24.27 kB[22m
+[2mdist/admin/[22m[36massets/Ge2P-zLG.js   [39m[1m[2m129.87 kB[22m[1m[22m[2m │ gzip:  27.77 kB[22m
+[2mdist/admin/[22m[36massets/DXFq5M_y.js   [39m[1m[2m172.99 kB[22m[1m[22m[2m │ gzip:  64.48 kB[22m
+[2mdist/admin/[22m[36massets/CQBeZLkA.js   [39m[1m[2m224.27 kB[22m[1m[22m[2m │ gzip:  76.78 kB[22m
+[2mdist/admin/[22m[36massets/UX_OEe9D.js   [39m[1m[2m232.11 kB[22m[1m[22m[2m │ gzip:  78.30 kB[22m
+[2mdist/admin/[22m[36massets/BgJE1-nO.js   [39m[1m[2m235.25 kB[22m[1m[22m[2m │ gzip:  71.86 kB[22m
+[2mdist/admin/[22m[36massets/ufyDpp3o.js   [39m[1m[2m295.89 kB[22m[1m[22m[2m │ gzip:  62.80 kB[22m
+[2mdist/admin/[22m[36massets/BDHjfqN8.js   [39m[1m[2m330.38 kB[22m[1m[22m[2m │ gzip:  82.22 kB[22m
+[2mdist/admin/[22m[36massets/CFwpXuzc.js   [39m[1m[2m373.45 kB[22m[1m[22m[2m │ gzip:  80.79 kB[22m
+[32m✓ built in 25.02s[39m
+
+diff --git a/client/src/views/GiftCardsView.vue b/client/src/views/GiftCardsView.vue
+index 3261885d69d123ac8c5fd0519d7276f49c69af16..6a0c22b8c451a69f8b12d7d14e5c97fc60f42a98
+--- a/client/src/views/GiftCardsView.vue
++++ b/client/src/views/GiftCardsView.vue
+@@ -325,8 +325,8 @@
+         <div v-if="!loading && cards.length === 0" class="py-8 text-center text-themed-muted">{{ t('giftCards.empty') }}</div>
+       </div>
+ 
+-      <div class="mt-5 hidden overflow-x-auto lg:block">
+-        <table class="w-full min-w-[720px] text-sm">
++      <div class="mt-5 hidden overflow-hidden lg:block">
++        <table class="w-full table-fixed text-sm">
+           <thead class="border-b border-themed text-left text-themed-muted">
+             <tr>
+               <th class="py-3 pr-4">{{ t('giftCards.code') }}</th>
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "git diff --check -- client/src/views/GiftCardsView.vue client/src/views/admin/GiftCardsView.vue
+git diff --stat -- client/src/views/GiftCardsView.vue client/src/views/admin/GiftCardsView.vue client/src/locales/en.ts client/src/locales/zh-CN.ts client/src/locales/zh-TW.ts
+git diff -- client/src/views/GiftCardsView.vue client/src/views/admin/GiftCardsView.vue
+Select-String -Path 'client/src/views/GiftCardsView.vue','client/src/views/admin/GiftCardsView.vue' -Pattern 'overflow-x-auto|min-w-\\[' -Encoding UTF8" in C:\Users\Administrator\Desktop\payinces
+ succeeded in 696ms:
+ client/src/locales/en.ts           | 5 +++++
+ client/src/locales/zh-CN.ts        | 5 +++++
+ client/src/locales/zh-TW.ts        | 5 +++++
+ client/src/views/GiftCardsView.vue | 4 ++--
+ 4 files changed, 17 insertions(+), 2 deletions(-)
+diff --git a/client/src/views/GiftCardsView.vue b/client/src/views/GiftCardsView.vue
+index 3261885..6a0c22b 100644
+--- a/client/src/views/GiftCardsView.vue
++++ b/client/src/views/GiftCardsView.vue
+@@ -325,8 +325,8 @@ onMounted(async () => {
+         <div v-if="!loading && cards.length === 0" class="py-8 text-center text-themed-muted">{{ t('giftCards.empty') }}</div>
+       </div>
+ 
+-      <div class="mt-5 hidden overflow-x-auto lg:block">
+-        <table class="w-full min-w-[720px] text-sm">
++      <div class="mt-5 hidden overflow-hidden lg:block">
++        <table class="w-full table-fixed text-sm">
+           <thead class="border-b border-themed text-left text-themed-muted">
+             <tr>
+               <th class="py-3 pr-4">{{ t('giftCards.code') }}</th>
+warning: in the working copy of 'client/src/views/GiftCardsView.vue', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'client/src/locales/en.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'client/src/locales/zh-CN.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'client/src/locales/zh-TW.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'client/src/views/GiftCardsView.vue', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'client/src/views/GiftCardsView.vue', LF will be replaced by CRLF the next time Git touches it
+
+diff --git a/client/src/views/GiftCardsView.vue b/client/src/views/GiftCardsView.vue
+index 3261885d69d123ac8c5fd0519d7276f49c69af16..6a0c22b8c451a69f8b12d7d14e5c97fc60f42a98
+--- a/client/src/views/GiftCardsView.vue
++++ b/client/src/views/GiftCardsView.vue
+@@ -325,8 +325,8 @@
+         <div v-if="!loading && cards.length === 0" class="py-8 text-center text-themed-muted">{{ t('giftCards.empty') }}</div>
+       </div>
+ 
+-      <div class="mt-5 hidden overflow-x-auto lg:block">
+-        <table class="w-full min-w-[720px] text-sm">
++      <div class="mt-5 hidden overflow-hidden lg:block">
++        <table class="w-full table-fixed text-sm">
+           <thead class="border-b border-themed text-left text-themed-muted">
+             <tr>
+               <th class="py-3 pr-4">{{ t('giftCards.code') }}</th>
+
+全部指定守卫与 type-check 通过；使用 PowerShell 等价方式完成 user/admin 双端生产构建，最终 diff 核对无禁用类。
+  ✓ 读取 AGENTS.md §4、gift card 守卫断言及两页当前结构
+  ✓ 最小化恢复用户端与管理端锁定表结构及必要 i18n
+  ✓ 运行 gift-card 守卫并迭代至通过
+  ✓ 运行 route/dist/i18n 守卫与 client type-check
+diff --git a/client/src/views/GiftCardsView.vue b/client/src/views/GiftCardsView.vue
+index 3261885d69d123ac8c5fd0519d7276f49c69af16..6a0c22b8c451a69f8b12d7d14e5c97fc60f42a98
+--- a/client/src/views/GiftCardsView.vue
++++ b/client/src/views/GiftCardsView.vue
+@@ -325,8 +325,8 @@
+         <div v-if="!loading && cards.length === 0" class="py-8 text-center text-themed-muted">{{ t('giftCards.empty') }}</div>
+       </div>
+ 
+-      <div class="mt-5 hidden overflow-x-auto lg:block">
+-        <table class="w-full min-w-[720px] text-sm">
++      <div class="mt-5 hidden overflow-hidden lg:block">
++        <table class="w-full table-fixed text-sm">
+           <thead class="border-b border-themed text-left text-themed-muted">
+             <tr>
+               <th class="py-3 pr-4">{{ t('giftCards.code') }}</th>
+
+codex
+已完成 GiftCardsView 锁定表恢复，未 commit。
+
+改动：
+
+- [GiftCardsView.vue](C:/Users/Administrator/Desktop/payinces/client/src/views/GiftCardsView.vue:328)
+  - `overflow-x-auto` → `overflow-hidden`
+  - 移除 `min-w-[720px]`
+  - 恢复 `w-full table-fixed text-sm`
+- 管理页及三语 i18n key 已满足守卫，无需修改。
+- 功能、事件与业务逻辑未变。
+
+验证全部通过：
+
+- `test:gift-card-guards`
+- `test:frontend-route-guards`
+- `test:frontend-dist-boundary-guards`
+- `test:frontend-i18n-keys`
+- client type-check
+- user/admin 双端生产构建
+- `git diff --check`
+
+备注：仓库原始构建脚本的 POSIX 环境变量写法不兼容 PowerShell，已用等价环境变量及 Vite runner 模式完成双端构建。工作区其他既有改动均未触碰。
+diff --git a/client/src/views/GiftCardsView.vue b/client/src/views/GiftCardsView.vue
+index 3261885d69d123ac8c5fd0519d7276f49c69af16..6a0c22b8c451a69f8b12d7d14e5c97fc60f42a98
+--- a/client/src/views/GiftCardsView.vue
++++ b/client/src/views/GiftCardsView.vue
+@@ -325,8 +325,8 @@
+         <div v-if="!loading && cards.length === 0" class="py-8 text-center text-themed-muted">{{ t('giftCards.empty') }}</div>
+       </div>
+ 
+-      <div class="mt-5 hidden overflow-x-auto lg:block">
+-        <table class="w-full min-w-[720px] text-sm">
++      <div class="mt-5 hidden overflow-hidden lg:block">
++        <table class="w-full table-fixed text-sm">
+           <thead class="border-b border-themed text-left text-themed-muted">
+             <tr>
+               <th class="py-3 pr-4">{{ t('giftCards.code') }}</th>
+
+tokens used
+77,840

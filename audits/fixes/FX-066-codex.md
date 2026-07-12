@@ -1,0 +1,1 @@
+已完成 FX-066，未 commit：衰减锚改为 `lastTriggeredAt`，仅触发分数上升时刷新；通过 evidence 记录已应用衰减，按累计时长每小时扣 5 分且避免每轮重复扣分。默认策略在代码创建时显式使用 5，未改 schema；`scoreDecayPerHour` 已加入管理策略更新白名单。守卫已追加累计衰减、默认 5、可编辑断言。`server type-check` 通过；资源风控新增断言通过，但完整守卫仍在既有管理端移动卡/定宽表断言处失败，与修改前基线红因一致。仅修改两个 `resource-risk.ts` 和对应守卫，未碰 `terminal.ts`。

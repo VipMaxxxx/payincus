@@ -1,0 +1,1 @@
+已完成 FX-010：在 [balance.ts](C:/Users/Administrator/Desktop/payinces/server/src/db/balance.ts) 中新增 `isRechargeRefund` 判定，充值退款以 `admin_adjust` 和负数金额收回余额，并补充“充值退款收回余额”备注；余额不足沿用现有错误传播与事务回滚，不允许负余额。对应审批守卫已更新。`getUsersTotalConsumeMap`（D-176）未触碰。server type-check、审批守卫、余额金额守卫及充值会计守卫均通过；未 commit/push/发版。

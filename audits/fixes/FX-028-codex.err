@@ -1,0 +1,3690 @@
+OpenAI Codex v0.144.0-alpha.4
+--------
+workdir: C:\Users\Administrator\Desktop\payinces
+model: gpt-5.6-sol
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: high
+reasoning summaries: none
+session id: 019f5308-33c0-7e11-8f3a-ed1b4d281699
+--------
+user
+你是 PayIncus 实现工程师。先读 AGENTS.md(不 commit/push/发版、不大重构;不改 schema)。参照 FX-027 套路。严格按规格只改删抽奖奖品逻辑与守卫,保留中奖记录。不要碰 recharge.ts(并行)。改完跑守卫报告。不要 commit。
+---
+# FX-028 规格：删抽奖奖品级联抹中奖记录(P1 / D-025)
+
+## 根因
+删除抽奖奖品(LotteryPrize)配置时,其中奖/发放记录被级联删除 → 影响库存/发放核算、可能重复发放或统计失真(与 FX-027 的 VIP 奖励同类问题)。
+
+## 修法（bounded:不改 schema Cascade;参照 FX-027 做法软删/停用;改 server/src/db/lottery.ts 或 server/src/routes/admin-entertainment.ts 的删奖品逻辑)
+1. 先只读:抽奖奖品的删除接口、奖品与中奖记录(LotteryRecord/发放记录)的关系(Cascade)、库存/发放如何据记录核算。
+2. 把"删除奖品"改为**软删/停用**(复用现有 enabled/status 字段;删除接口置 disabled,不硬删):
+   - 停用奖品不再参与抽奖(抽奖池过滤停用);
+   - 中奖/发放记录**保留**(核算/审计完整,防级联抹掉)。
+   若无现成状态字段,则改为**阻断硬删**:有中奖记录的奖品不可硬删,只能停用。
+3. 不改抽奖运行时/发放逻辑本身、不改 FX-029 已加的配置校验。
+
+## 加守卫
+在现有 server/scripts/test-entertainment-route-guards.ts 或 admin-entertainment 守卫追加断言:删/停用抽奖奖品不抹中奖记录(软删/停用 or 阻断硬删)。不改 package.json。
+
+## 不许动
+- 不改 schema Cascade;不碰 recharge.ts(并行)、admin-entertainment 的 FX-029 校验(只加删奖品软删)。不做大重构。
+
+## 验收
+- pnpm --filter server type-check 通过;pnpm --filter server test:entertainment-route-guards、test:admin-entertainment-route-guards 通过。
+
+## 交付
+一段话:软删/停用还是阻断硬删、中奖记录如何保留、守卫结果。不要 commit。
+
+codex
+我会先按仓库规矩只读定位 FX-027、抽奖奖品删除路径、记录关联与现有守卫；随后做最小改动，避开 `recharge.ts`、schema 和 FX-029 校验。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Content -Raw AGENTS.md; rg -n "FX-027|LotteryPrize|LotteryRecord|lotteryPrize|lotteryRecord|delete.*prize|奖品" server/src server/scripts server/prisma --glob "!**/recharge.ts"' in C:\Users\Administrator\Desktop\payinces
+2026-07-11T21:14:41.248480Z ERROR codex_core::tools::router: error=Exit code: 1
+Wall time: 0.6 seconds
+Output:
+# PayIncus / Incudal â€” é¡¹ç›®ç»Ÿä¸€è§„çŸ©ï¼ˆAGENTS.mdï¼‰
+
+> æœ¬æ–‡ä»¶æ˜¯æœ¬ä»“åº“**æ‰€æœ‰ AI agentï¼ˆClaude Codeã€codex ç­‰ï¼‰çš„ç»Ÿä¸€å·¥ä½œè§„èŒƒ**ã€‚
+> `CLAUDE.md` é€šè¿‡ `@AGENTS.md` å¼•ç”¨æœ¬æ–‡ä»¶ â€”â€” Claude Code ä¸Ž codex è¯»åˆ°çš„æ˜¯**åŒä¸€å¥—è§„çŸ©**ï¼Œæ”¹è¿™ä¸€ä¸ªæ–‡ä»¶å³å¯ã€‚
+> æƒå¨è¿ç»´/å‘ç‰ˆäº‹å®žä»¥ä»“åº“æ ¹çš„ `OPERATIONS_HANDOFF.md`ï¼ˆæ“ä½œæ‰‹å†Œï¼‰ä¸Ž `HANDOFF.md`ï¼ˆç‰ˆæœ¬è¯æ®å°è´¦ï¼‰ä¸ºå‡†ã€‚
+
+---
+
+## 0. æ²Ÿé€šè¯­è¨€
+- ä¸Ž owner é»˜è®¤ç”¨**ä¸­æ–‡**æ²Ÿé€šã€‚
+
+## 1. è¿™æ˜¯ä»€ä¹ˆé¡¹ç›®
+**PayIncus**ï¼ˆå†…éƒ¨ä»£å· `incudal`ï¼‰â€”â€”å•†ç”¨ Incusï¼ˆLXC/KVMï¼‰NAT VPS å”®å–ä¸Žäº¤ä»˜å¹³å°ï¼Œ**çº¿ä¸Šè¿è¥ä¸­**ã€‚å½“å‰ç”Ÿäº§ç‰ˆæœ¬ **v1.3.7**ã€‚pnpm monorepoï¼š
+
+| ç›®å½• | æŠ€æœ¯æ ˆ / ä½œç”¨ |
+|------|----------------|
+| `client/` | Vue 3 + Vite SPAã€‚åŒç«¯æž„å»ºï¼ˆ`VITE_APP_ENTRY`ï¼‰â†’ `dist/user`ï¼ˆpay.payincus.comï¼‰+ `dist/admin`ï¼ˆadmin.payincus.comï¼‰ã€‚ä¸¤ç«¯ç‹¬ç«‹æºã€**ä¸å…±äº« cookie åŸŸ**ã€‚ |
+| `server/` | Fastify 5 + Prisma 7 + PostgreSQLï¼Œ~300 TS æ–‡ä»¶ã€~70 è·¯ç”±ã€~15 è°ƒåº¦/workerã€‚æ—  Redisï¼ˆç”¨ PG advisory lockï¼‰ã€‚ä¸‰å¥—é‰´æƒé¢ï¼šWeb çš„ JWT+refresh cookieã€Public API çš„ `pat_`/`poa_` tokenã€host agent çš„ HMACã€‚ |
+| `agent/` | Go å®¿ä¸» agentï¼Œåªè¯»ç›‘æŽ§ï¼ˆå¿ƒè·³/èµ„æº/å®žä¾‹æ€/æµé‡ï¼‰ï¼ŒHMAC ç­¾åï¼Œè‡ªå‡çº§ã€‚ |
+| å…¶å®ƒ | `docs-site/`ï¼ˆVitePressï¼‰ã€`deploy/`ï¼ˆsystemd+Nginxï¼‰ã€`scripts/`ï¼ˆå®‰è£…/æ ¡éªŒ/OTAï¼‰ã€`plugin-templates/`ã€`theme-templates/`ã€‚ |
+
+éƒ¨ç½²ï¼šä¸‰å±‚æ‹†åˆ†ï¼ˆuser / admin / ç§æœ‰åŽç«¯ `127.0.0.1:3001`ï¼‰ï¼Œè£…æœºæ ¹ `/opt/incudal`ï¼ŒåŽŸå­ OTAï¼ˆ`releases/<ver-ts>` + `current` è½¯é“¾ï¼‰+ è‡ªåŠ¨å›žæ»šã€‚
+
+---
+
+## 2. ðŸ”´ ç¡¬è§„çŸ©ï¼ˆä¸å¯åå•†ï¼Œè¿åå³äº‹æ•…ï¼‰
+
+1. **ä¸ç¢°ç”Ÿäº§**ï¼šæœªç» owner æ˜Žç¡®è¦æ±‚ï¼Œ**ç»ä¸** OTAã€å‘å¸ƒã€pushã€æ‰“ tagã€æ”¹ç”Ÿäº§çŽ¯å¢ƒã€‚
+2. **ä¸åšç ´åæ€§ git**ï¼šæœªç» owner æ˜Žç¡®è¦æ±‚ï¼Œ**ç»ä¸** `git reset`ã€`git checkout --`ã€å¼ºåˆ¶åˆ é™¤ã€æ¸…ç†æœªè·Ÿè¸ªæ–‡ä»¶ã€`git commit`/`git push`ã€‚
+3. **é«˜å±è·¯å¾„å…ˆè¯»åŽå†™**ï¼šæ”¹åŠ¨ä»¥ä¸‹ä»»ä¸€é¢†åŸŸï¼Œ**å¿…é¡»å…ˆè¯»ç›¸å…³ä»£ç  + å¯¹åº”å®ˆå«æµ‹è¯•**å†åŠ¨æ‰‹ï¼š
+   > é‰´æƒ Â· æ”¯ä»˜ Â· æƒé™ Â· é£ŽæŽ§ Â· èµ„æºäº¤ä»˜ Â· å…‘æ¢æµç¨‹ Â· å®žä¾‹åˆ›å»º Â· OTA
+4. **æ”¹åŠ¨æœ€å°åŒ–**ï¼šä¿® bug / å‘ç‰ˆæœŸé—´**ä¸åšå¤§èŒƒå›´é‡æž„**ï¼Œåªæ”¹å¿…è¦çš„ã€‚
+5. **ç»ä¸æ³„å¯†**ï¼šä»»ä½• commitã€handoffã€æ€»ç»“ã€æˆªå›¾ä¸­éƒ½**ä¸å¾—**å‡ºçŽ°å‡­è¯ / token / cookie / å¯†é’¥ã€‚
+6. **æœ¬åœ°è¿‡ â‰  ç”Ÿäº§éªŒè¯**ï¼šæœ¬åœ°é€šè¿‡ã€GitHub Actionsã€Release èµ„äº§ã€OTAã€çº¿ä¸Šå®žè¯æ˜¯**åˆ†å¼€çš„è¯æ®**ï¼Œä¸å¯æ··ä¸ºä¸€è°ˆã€‚
+7. **æ¯æ¬¡æ”¹åŠ¨å¿…é¡»è¿‡å¯¹åº”å®ˆå«**ï¼ˆè§ Â§4ï¼‰ï¼Œå¦åˆ™è§†ä¸º**æœªå®Œæˆ**ã€‚
+8. `RUN_DB_CHECKS=0 bash scripts/apply-online-update.sh <ver>` ä¼š**è·³è¿‡ DB/æ”¯ä»˜å°±ç»ªæ ¡éªŒ**ï¼Œä»…åœ¨ owner æ˜Žç¡®æ‰¹å‡†æ—¶ä½¿ç”¨ã€‚
+
+---
+
+## 3. æœ¬åœ°æ€Žä¹ˆè·‘
+
+- **çŽ¯å¢ƒ**ï¼šNode â‰¥ 20ã€pnpm 9.14.2ã€æœ¬åœ° PostgreSQL 16ã€‚
+- **è£…ä¾èµ–**ï¼š`pnpm install`
+- **ä¸€æŠŠèµ·å…¨éƒ¨ï¼ˆserver + user + adminï¼‰**ï¼š`pnpm dev`
+- **åˆ†å¼€èµ·**ï¼š
+  - åŽç«¯ï¼š`NODE_ENV=development JWT_SECRET=dev-secret-12345678 HOST=127.0.0.1 PORT=3001 pnpm --filter server exec tsx watch src/app.ts`
+  - ç”¨æˆ·å‰ç«¯ï¼š`pnpm dev:user`
+  - ç®¡ç†å‰ç«¯ï¼š`pnpm dev:admin`
+- **ç«¯å£**ï¼šåŽç«¯ API **3001** Â· ç”¨æˆ·å‰ç«¯ **3000** Â· ç®¡ç†å‰ç«¯ **3002**ï¼ˆå‰ç«¯ dev ç» proxy æ‰“åˆ° 3001ï¼‰ã€‚
+
+---
+
+## 4. ðŸ›¡ï¸ å®ˆå«æµ‹è¯•çºªå¾‹ï¼ˆæœ¬ä»“åº“çš„å‘½é—¨ï¼‰
+
+`server/package.json` é‡Œæœ‰ **200+ ä¸ªç‹¬ç«‹ `test-*-guards.ts`**ã€‚å®ƒä»¬æŠŠå…³é”®ä¸šåŠ¡/å‰ç«¯ç»“æž„â€œé’‰æ­»â€ï¼Œ`pnpm test` ä¼šè·‘å…¨å¥—ï¼ˆclient+server type-check + å…¨éƒ¨å®ˆå«ï¼‰ã€‚**ä»»ä½•æ”¹åŠ¨å¿…é¡»è®©ç›¸å…³å®ˆå«é€šè¿‡ã€‚**
+
+- **å…¨é‡**ï¼ˆæ…¢ï¼Œå‘ç‰ˆå‰è·‘ï¼‰ï¼š`pnpm test`
+- **å•ä¸ª**ï¼š`pnpm --filter server test:<guard-name>`
+- **å‰ç«¯æœ€å¸¸ç”¨ä¸‰ä¸ª**ï¼š
+  - `test:frontend-route-guards` â€”â€” è·¯ç”± / **è¡¨æ ¼å¸ƒå±€** / `@click` è·¯å¾„æ–­è¨€
+  - `test:frontend-dist-boundary-guards` â€”â€” åŒç«¯ dist è¾¹ç•Œ
+  - `test:frontend-i18n-keys` â€”â€” i18n key å®Œæ•´æ€§
+- **Go agent**ï¼š`pnpm test:agent`
+
+### âš ï¸ è¡¨æ ¼å¸ƒå±€å®ˆå«ï¼ˆæœ€å®¹æ˜“è¸©é›·ï¼‰
+ä¸€æ‰¹è¡¨è¢«å®ˆå«**é”å®š**ä¸ºâ€œ**ç§»åŠ¨å¡ + PC å®šå®½è¡¨ï¼ˆ`table-fixed` / `overflow-hidden`ï¼‰ï¼Œç»ä¸æ¨ªå‘æ»šåŠ¨**â€ï¼Œå¹¶**åå‘ç¦æ­¢** `overflow-x-auto` / `min-w-[...]` / åŽ»æŽ‰ `table-fixed`ã€‚
+- æƒ³ä¿®â€œå®½è¡¨æŒ¤åŽ‹â€æ—¶ï¼š**å…ˆåˆ¤æ–­è¯¥è¡¨æ˜¯å¦åœ¨å®ˆå«æ¸…å•é‡Œ**ã€‚é”å®šè¡¨**åªèƒ½åœ¨ `table-fixed` å†…å¹³è¡¡åˆ—å®½**ï¼ˆåˆ—å®½ç™¾åˆ†æ¯”åˆè®¡ = 100%ï¼‰+ å…è®¸å•å…ƒæ ¼æ¢è¡Œ + é ç§»åŠ¨å¡åº”å¯¹çª„å±ï¼›**ä¸èƒ½**æ”¹æˆæ¨ªå‘æ»šåŠ¨ã€‚
+- å—é”å®šçš„è¡¨ï¼ˆç”¨æˆ·ç«¯ï¼‰ï¼š`MyPackagesView`ã€`MyHostsView`ã€`TransfersView`ã€`OrdersView`ã€`InvitesView`ã€`FlashSalesView`ã€`HostingWalletView`ã€`InstancesView`ã€`LogsView`ã€`EntertainmentView`ï¼›ï¼ˆç®¡ç†ç«¯ï¼‰`admin/BillingView`ã€`admin/ImagesView`ã€`admin/HelpManageView`ã€`admin/MailView`ã€`admin/PluginCenterView`ï¼›ï¼ˆç»„ä»¶ï¼‰`HostPublicIpv4Tab`ã€`InstanceLogsTab`ã€`ConfigEditModal`ã€‚
+- æ”¹ä»»ä¸€å‰ç«¯æ–‡ä»¶åŽ**å¿…è·‘** `test:frontend-route-guards`ã€‚
+
+---
+
+## 5. æž„å»º / æ ¡éªŒå‘½ä»¤
+
+| ç›®çš„ | å‘½ä»¤ |
+|------|------|
+| æž„å»ºï¼ˆå« dist è¾¹ç•Œå®ˆå«ï¼‰| `pnpm build` |
+| åªæž„å»ºå‰ç«¯ / åŽç«¯ | `pnpm build:client` / `pnpm build:server` |
+| Lintï¼ˆæ£€æŸ¥ / è‡ªåŠ¨ä¿®ï¼‰| `pnpm lint` / `pnpm lint:fix` |
+| ç±»åž‹æ£€æŸ¥ | `pnpm --filter client type-check` Â· `pnpm --filter server type-check` |
+| å…¨å¥—å®ˆå« | `pnpm test` |
+| æ–‡æ¡£ç«™å¼€å‘ / æž„å»º | `pnpm docs:dev` / `pnpm docs:build` |
+
+---
+
+## 6. UI æ”¹åŠ¨çº¦æŸï¼ˆå•è‰²é‡åšè¿›è¡Œä¸­ï¼‰
+
+- **æ–¹å‘**ï¼šè‹¹æžœå¼**çº¯é»‘ç™½å•è‰²**ï¼ˆæµ…è‰²=ç™½åº•é»‘å­—ï¼Œæ·±è‰²=é»‘åº•ç™½å­—ï¼‰ï¼ŒåŽ»äºŒæ¬¡å…ƒ/å‰ç¥¥ç‰©/ç«‹ç»˜ã€‚çŠ¶æ€è‰²**åªä¿ç•™ç»¿/ç¥ç€/çº¢**ä¸‰ç§ï¼ˆè¿è¡Œ/å¾…å¤„ç†/å¤±è´¥ï¼‰ã€‚
+- **çº¢çº¿**ï¼šåªæ”¹**æ ·å¼ / å¸ƒå±€ / æ–‡æ¡ˆå±‚çº§**ï¼Œ**ä¸ç¢°**åŽç«¯æŽ¥å£ã€æƒé™ã€æ”¯ä»˜/è®¢å•/å®žä¾‹åˆ›å»º/OTA ç­‰ä¸šåŠ¡é€»è¾‘ä¸Žè·¯ç”±è¡Œä¸ºâ€”â€”**åŠŸèƒ½ 100% ä¸å˜**ã€‚
+- **é…è‰²èµ° token å±‚**ï¼ˆ`client/tailwind.config.js`ï¼‰ï¼šä¸€å †å½©è‰² ramp å·²æ˜ å°„åˆ°ä¸­æ€§ç°ï¼›`rose â†’ çœŸçº¢`ï¼ˆå±é™©/äºæŸè¯­ä¹‰ï¼‰**ä¿ç•™ä¸å¯ç°åŒ–**ï¼›æ¸¸æˆåŒ–æ¨¡å—ï¼ˆæˆå°±/ç­¾åˆ°/æŠ½å¥–/ç¨€æœ‰åº¦ï¼‰å½©è‰²**åˆ»æ„ä¿ç•™**ã€‚
+- `kawaii-cloud.css` **æ¸è¿›æ”¹é€ ã€ä¸é‡å†™**ï¼›å•é¡µåŽ»è‰²ç”¨é¡µé¢ `<style scoped>`ã€‚
+- åŠ¨æ•ˆå¯ç”¨ **GSAP**ï¼ˆå·²è£… gsap-skillsï¼Œè§ `.claude/skills/`ï¼‰ï¼›å°Šé‡ `prefers-reduced-motion`ã€‚
+
+---
+
+## 7. åä½œæ¨¡åž‹ï¼ˆClaude Code â‡„ codexï¼‰
+
+- **Claude Code = æŠ€æœ¯è´Ÿè´£äºº / é›†æˆæ–¹**ï¼šå®šæ ¹å› ã€åˆ‡ä»»åŠ¡ã€å†™è§„æ ¼ã€å®ˆä¸å˜é‡ã€å®¡ diffã€è·‘å®ˆå«ã€çœŸæœºéªŒè¯ã€ç®¡ gitï¼ˆ**ä»…åœ¨ owner åŒæ„æ—¶** commit / pushï¼‰ã€‚
+- **codex = å®žçŽ°å·¥äºº**ï¼šæŒ‰ Claude ç»™çš„è§„æ ¼å®žçŽ°æ”¹åŠ¨ï¼Œå°¤å…¶**ä½Ž/ä¸­å±ã€è‡ªåŒ…å«ã€å¯å¹¶è¡Œ**çš„å—ã€‚
+- **é£Žé™©åˆ†æ¡£**ï¼šé«˜å±è·¯å¾„ç”± Claude å®šæ ¹å›  + æ”¶ç´§è§„æ ¼ï¼›ä½Ž/ä¸­å± codex å¯ç«¯åˆ°ç«¯ä¿®ã€‚**ä»»ä½•ä¸€æ–¹æ”¹å®Œéƒ½è¦è·‘ç›¸å…³å®ˆå«ï¼ŒClaude ç»Ÿä¸€å®¡æŸ¥åŽæ‰è¿›å…¥ä¸‹ä¸€æ­¥ã€‚**
+- **é¿å…å†²çª**ï¼šåŒä¸€æ‰¹æ–‡ä»¶ä¸€æ¬¡åªè®©ä¸€ä¸ª agent æ”¹ã€‚
+
+---
+
+## 8. ä¸€ä¸ªæ”¹åŠ¨çš„ã€Œå®Œæˆã€å®šä¹‰
+
+1. ç›¸å…³ **type-check** é€šè¿‡ï¼›
+2. ç›¸å…³ **å®ˆå«æµ‹è¯•** é€šè¿‡ï¼›
+3. è‹¥åŠ¨å‰ç«¯ â†’ **åŒç«¯ build** é€šè¿‡ï¼›
+4. **çœŸæœºè·‘è¿‡**å—å½±å“æµç¨‹ï¼ˆä¸æ˜¯åªçœ‹æµ‹è¯•ï¼‰ï¼›
+5. **æŠ¥å‘Š**ï¼šæ”¹äº†å“ªäº›æ–‡ä»¶ / ä¸ºä»€ä¹ˆ / é£Žé™© / æ€Žä¹ˆéªŒè¯çš„ã€‚
+
+ä»¥ä¸Šä»»ä¸€æœªæ»¡è¶³ = **æœªå®Œæˆ**ã€‚
+
+rg : The term 'rg' is not recognized as the name of a cmdlet, function, script file, or operable program. Check the 
+spelling of the name, or if a path was included, verify that the path is correct and try again.
+At line:2 char:29
++ Get-Content -Raw AGENTS.md; rg -n "FX-027|LotteryPrize|LotteryRecord| ...
++                             ~~
+    + CategoryInfo          : ObjectNotFound: (rg:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+
+ exited 1 in 596ms:
+# PayIncus / Incudal â€” é¡¹ç›®ç»Ÿä¸€è§„çŸ©ï¼ˆAGENTS.mdï¼‰
+
+> æœ¬æ–‡ä»¶æ˜¯æœ¬ä»“åº“**æ‰€æœ‰ AI agentï¼ˆClaude Codeã€codex ç­‰ï¼‰çš„ç»Ÿä¸€å·¥ä½œè§„èŒƒ**ã€‚
+> `CLAUDE.md` é€šè¿‡ `@AGENTS.md` å¼•ç”¨æœ¬æ–‡ä»¶ â€”â€” Claude Code ä¸Ž codex è¯»åˆ°çš„æ˜¯**åŒä¸€å¥—è§„çŸ©**ï¼Œæ”¹è¿™ä¸€ä¸ªæ–‡ä»¶å³å¯ã€‚
+> æƒå¨è¿ç»´/å‘ç‰ˆäº‹å®žä»¥ä»“åº“æ ¹çš„ `OPERATIONS_HANDOFF.md`ï¼ˆæ“ä½œæ‰‹å†Œï¼‰ä¸Ž `HANDOFF.md`ï¼ˆç‰ˆæœ¬è¯æ®å°è´¦ï¼‰ä¸ºå‡†ã€‚
+
+---
+
+## 0. æ²Ÿé€šè¯­è¨€
+- ä¸Ž owner é»˜è®¤ç”¨**ä¸­æ–‡**æ²Ÿé€šã€‚
+
+## 1. è¿™æ˜¯ä»€ä¹ˆé¡¹ç›®
+**PayIncus**ï¼ˆå†…éƒ¨ä»£å· `incudal`ï¼‰â€”â€”å•†ç”¨ Incusï¼ˆLXC/KVMï¼‰NAT VPS å”®å–ä¸Žäº¤ä»˜å¹³å°ï¼Œ**çº¿ä¸Šè¿è¥ä¸­**ã€‚å½“å‰ç”Ÿäº§ç‰ˆæœ¬ **v1.3.7**ã€‚pnpm monorepoï¼š
+
+| ç›®å½• | æŠ€æœ¯æ ˆ / ä½œç”¨ |
+|------|----------------|
+| `client/` | Vue 3 + Vite SPAã€‚åŒç«¯æž„å»ºï¼ˆ`VITE_APP_ENTRY`ï¼‰â†’ `dist/user`ï¼ˆpay.payincus.comï¼‰+ `dist/admin`ï¼ˆadmin.payincus.comï¼‰ã€‚ä¸¤ç«¯ç‹¬ç«‹æºã€**ä¸å…±äº« cookie åŸŸ**ã€‚ |
+| `server/` | Fastify 5 + Prisma 7 + PostgreSQLï¼Œ~300 TS æ–‡ä»¶ã€~70 è·¯ç”±ã€~15 è°ƒåº¦/workerã€‚æ—  Redisï¼ˆç”¨ PG advisory lockï¼‰ã€‚ä¸‰å¥—é‰´æƒé¢ï¼šWeb çš„ JWT+refresh cookieã€Public API çš„ `pat_`/`poa_` tokenã€host agent çš„ HMACã€‚ |
+| `agent/` | Go å®¿ä¸» agentï¼Œåªè¯»ç›‘æŽ§ï¼ˆå¿ƒè·³/èµ„æº/å®žä¾‹æ€/æµé‡ï¼‰ï¼ŒHMAC ç­¾åï¼Œè‡ªå‡çº§ã€‚ |
+| å…¶å®ƒ | `docs-site/`ï¼ˆVitePressï¼‰ã€`deploy/`ï¼ˆsystemd+Nginxï¼‰ã€`scripts/`ï¼ˆå®‰è£…/æ ¡éªŒ/OTAï¼‰ã€`plugin-templates/`ã€`theme-templates/`ã€‚ |
+
+éƒ¨ç½²ï¼šä¸‰å±‚æ‹†åˆ†ï¼ˆuser / admin / ç§æœ‰åŽç«¯ `127.0.0.1:3001`ï¼‰ï¼Œè£…æœºæ ¹ `/opt/incudal`ï¼ŒåŽŸå­ OTAï¼ˆ`releases/<ver-ts>` + `current` è½¯é“¾ï¼‰+ è‡ªåŠ¨å›žæ»šã€‚
+
+---
+
+## 2. ðŸ”´ ç¡¬è§„çŸ©ï¼ˆä¸å¯åå•†ï¼Œè¿åå³äº‹æ•…ï¼‰
+
+1. **ä¸ç¢°ç”Ÿäº§**ï¼šæœªç» owner æ˜Žç¡®è¦æ±‚ï¼Œ**ç»ä¸** OTAã€å‘å¸ƒã€pushã€æ‰“ tagã€æ”¹ç”Ÿäº§çŽ¯å¢ƒã€‚
+2. **ä¸åšç ´åæ€§ git**ï¼šæœªç» owner æ˜Žç¡®è¦æ±‚ï¼Œ**ç»ä¸** `git reset`ã€`git checkout --`ã€å¼ºåˆ¶åˆ é™¤ã€æ¸…ç†æœªè·Ÿè¸ªæ–‡ä»¶ã€`git commit`/`git push`ã€‚
+3. **é«˜å±è·¯å¾„å…ˆè¯»åŽå†™**ï¼šæ”¹åŠ¨ä»¥ä¸‹ä»»ä¸€é¢†åŸŸï¼Œ**å¿…é¡»å…ˆè¯»ç›¸å…³ä»£ç  + å¯¹åº”å®ˆå«æµ‹è¯•**å†åŠ¨æ‰‹ï¼š
+   > é‰´æƒ Â· æ”¯ä»˜ Â· æƒé™ Â· é£ŽæŽ§ Â· èµ„æºäº¤ä»˜ Â· å…‘æ¢æµç¨‹ Â· å®žä¾‹åˆ›å»º Â· OTA
+4. **æ”¹åŠ¨æœ€å°åŒ–**ï¼šä¿® bug / å‘ç‰ˆæœŸé—´**ä¸åšå¤§èŒƒå›´é‡æž„**ï¼Œåªæ”¹å¿…è¦çš„ã€‚
+5. **ç»ä¸æ³„å¯†**ï¼šä»»ä½• commitã€handoffã€æ€»ç»“ã€æˆªå›¾ä¸­éƒ½**ä¸å¾—**å‡ºçŽ°å‡­è¯ / token / cookie / å¯†é’¥ã€‚
+6. **æœ¬åœ°è¿‡ â‰  ç”Ÿäº§éªŒè¯**ï¼šæœ¬åœ°é€šè¿‡ã€GitHub Actionsã€Release èµ„äº§ã€OTAã€çº¿ä¸Šå®žè¯æ˜¯**åˆ†å¼€çš„è¯æ®**ï¼Œä¸å¯æ··ä¸ºä¸€è°ˆã€‚
+7. **æ¯æ¬¡æ”¹åŠ¨å¿…é¡»è¿‡å¯¹åº”å®ˆå«**ï¼ˆè§ Â§4ï¼‰ï¼Œå¦åˆ™è§†ä¸º**æœªå®Œæˆ**ã€‚
+8. `RUN_DB_CHECKS=0 bash scripts/apply-online-update.sh <ver>` ä¼š**è·³è¿‡ DB/æ”¯ä»˜å°±ç»ªæ ¡éªŒ**ï¼Œä»…åœ¨ owner æ˜Žç¡®æ‰¹å‡†æ—¶ä½¿ç”¨ã€‚
+
+---
+
+## 3. æœ¬åœ°æ€Žä¹ˆè·‘
+
+- **çŽ¯å¢ƒ**ï¼šNode â‰¥ 20ã€pnpm 9.14.2ã€æœ¬åœ° PostgreSQL 16ã€‚
+- **è£…ä¾èµ–**ï¼š`pnpm install`
+- **ä¸€æŠŠèµ·å…¨éƒ¨ï¼ˆserver + user + adminï¼‰**ï¼š`pnpm dev`
+- **åˆ†å¼€èµ·**ï¼š
+  - åŽç«¯ï¼š`NODE_ENV=development JWT_SECRET=dev-secret-12345678 HOST=127.0.0.1 PORT=3001 pnpm --filter server exec tsx watch src/app.ts`
+  - ç”¨æˆ·å‰ç«¯ï¼š`pnpm dev:user`
+  - ç®¡ç†å‰ç«¯ï¼š`pnpm dev:admin`
+- **ç«¯å£**ï¼šåŽç«¯ API **3001** Â· ç”¨æˆ·å‰ç«¯ **3000** Â· ç®¡ç†å‰ç«¯ **3002**ï¼ˆå‰ç«¯ dev ç» proxy æ‰“åˆ° 3001ï¼‰ã€‚
+
+---
+
+## 4. ðŸ›¡ï¸ å®ˆå«æµ‹è¯•çºªå¾‹ï¼ˆæœ¬ä»“åº“çš„å‘½é—¨ï¼‰
+
+`server/package.json` é‡Œæœ‰ **200+ ä¸ªç‹¬ç«‹ `test-*-guards.ts`**ã€‚å®ƒä»¬æŠŠå…³é”®ä¸šåŠ¡/å‰ç«¯ç»“æž„â€œé’‰æ­»â€ï¼Œ`pnpm test` ä¼šè·‘å…¨å¥—ï¼ˆclient+server type-check + å…¨éƒ¨å®ˆå«ï¼‰ã€‚**ä»»ä½•æ”¹åŠ¨å¿…é¡»è®©ç›¸å…³å®ˆå«é€šè¿‡ã€‚**
+
+- **å…¨é‡**ï¼ˆæ…¢ï¼Œå‘ç‰ˆå‰è·‘ï¼‰ï¼š`pnpm test`
+- **å•ä¸ª**ï¼š`pnpm --filter server test:<guard-name>`
+- **å‰ç«¯æœ€å¸¸ç”¨ä¸‰ä¸ª**ï¼š
+  - `test:frontend-route-guards` â€”â€” è·¯ç”± / **è¡¨æ ¼å¸ƒå±€** / `@click` è·¯å¾„æ–­è¨€
+  - `test:frontend-dist-boundary-guards` â€”â€” åŒç«¯ dist è¾¹ç•Œ
+  - `test:frontend-i18n-keys` â€”â€” i18n key å®Œæ•´æ€§
+- **Go agent**ï¼š`pnpm test:agent`
+
+### âš ï¸ è¡¨æ ¼å¸ƒå±€å®ˆå«ï¼ˆæœ€å®¹æ˜“è¸©é›·ï¼‰
+ä¸€æ‰¹è¡¨è¢«å®ˆå«**é”å®š**ä¸ºâ€œ**ç§»åŠ¨å¡ + PC å®šå®½è¡¨ï¼ˆ`table-fixed` / `overflow-hidden`ï¼‰ï¼Œç»ä¸æ¨ªå‘æ»šåŠ¨**â€ï¼Œå¹¶**åå‘ç¦æ­¢** `overflow-x-auto` / `min-w-[...]` / åŽ»æŽ‰ `table-fixed`ã€‚
+- æƒ³ä¿®â€œå®½è¡¨æŒ¤åŽ‹â€æ—¶ï¼š**å…ˆåˆ¤æ–­è¯¥è¡¨æ˜¯å¦åœ¨å®ˆå«æ¸…å•é‡Œ**ã€‚é”å®šè¡¨**åªèƒ½åœ¨ `table-fixed` å†…å¹³è¡¡åˆ—å®½**ï¼ˆåˆ—å®½ç™¾åˆ†æ¯”åˆè®¡ = 100%ï¼‰+ å…è®¸å•å…ƒæ ¼æ¢è¡Œ + é ç§»åŠ¨å¡åº”å¯¹çª„å±ï¼›**ä¸èƒ½**æ”¹æˆæ¨ªå‘æ»šåŠ¨ã€‚
+- å—é”å®šçš„è¡¨ï¼ˆç”¨æˆ·ç«¯ï¼‰ï¼š`MyPackagesView`ã€`MyHostsView`ã€`TransfersView`ã€`OrdersView`ã€`InvitesView`ã€`FlashSalesView`ã€`HostingWalletView`ã€`InstancesView`ã€`LogsView`ã€`EntertainmentView`ï¼›ï¼ˆç®¡ç†ç«¯ï¼‰`admin/BillingView`ã€`admin/ImagesView`ã€`admin/HelpManageView`ã€`admin/MailView`ã€`admin/PluginCenterView`ï¼›ï¼ˆç»„ä»¶ï¼‰`HostPublicIpv4Tab`ã€`InstanceLogsTab`ã€`ConfigEditModal`ã€‚
+- æ”¹ä»»ä¸€å‰ç«¯æ–‡ä»¶åŽ**å¿…è·‘** `test:frontend-route-guards`ã€‚
+
+---
+
+## 5. æž„å»º / æ ¡éªŒå‘½ä»¤
+
+| ç›®çš„ | å‘½ä»¤ |
+|------|------|
+| æž„å»ºï¼ˆå« dist è¾¹ç•Œå®ˆå«ï¼‰| `pnpm build` |
+| åªæž„å»ºå‰ç«¯ / åŽç«¯ | `pnpm build:client` / `pnpm build:server` |
+| Lintï¼ˆæ£€æŸ¥ / è‡ªåŠ¨ä¿®ï¼‰| `pnpm lint` / `pnpm lint:fix` |
+| ç±»åž‹æ£€æŸ¥ | `pnpm --filter client type-check` Â· `pnpm --filter server type-check` |
+| å…¨å¥—å®ˆå« | `pnpm test` |
+| æ–‡æ¡£ç«™å¼€å‘ / æž„å»º | `pnpm docs:dev` / `pnpm docs:build` |
+
+---
+
+## 6. UI æ”¹åŠ¨çº¦æŸï¼ˆå•è‰²é‡åšè¿›è¡Œä¸­ï¼‰
+
+- **æ–¹å‘**ï¼šè‹¹æžœå¼**çº¯é»‘ç™½å•è‰²**ï¼ˆæµ…è‰²=ç™½åº•é»‘å­—ï¼Œæ·±è‰²=é»‘åº•ç™½å­—ï¼‰ï¼ŒåŽ»äºŒæ¬¡å…ƒ/å‰ç¥¥ç‰©/ç«‹ç»˜ã€‚çŠ¶æ€è‰²**åªä¿ç•™ç»¿/ç¥ç€/çº¢**ä¸‰ç§ï¼ˆè¿è¡Œ/å¾…å¤„ç†/å¤±è´¥ï¼‰ã€‚
+- **çº¢çº¿**ï¼šåªæ”¹**æ ·å¼ / å¸ƒå±€ / æ–‡æ¡ˆå±‚çº§**ï¼Œ**ä¸ç¢°**åŽç«¯æŽ¥å£ã€æƒé™ã€æ”¯ä»˜/è®¢å•/å®žä¾‹åˆ›å»º/OTA ç­‰ä¸šåŠ¡é€»è¾‘ä¸Žè·¯ç”±è¡Œä¸ºâ€”â€”**åŠŸèƒ½ 100% ä¸å˜**ã€‚
+- **é…è‰²èµ° token å±‚**ï¼ˆ`client/tailwind.config.js`ï¼‰ï¼šä¸€å †å½©è‰² ramp å·²æ˜ å°„åˆ°ä¸­æ€§ç°ï¼›`rose â†’ çœŸçº¢`ï¼ˆå±é™©/äºæŸè¯­ä¹‰ï¼‰**ä¿ç•™ä¸å¯ç°åŒ–**ï¼›æ¸¸æˆåŒ–æ¨¡å—ï¼ˆæˆå°±/ç­¾åˆ°/æŠ½å¥–/ç¨€æœ‰åº¦ï¼‰å½©è‰²**åˆ»æ„ä¿ç•™**ã€‚
+- `kawaii-cloud.css` **æ¸è¿›æ”¹é€ ã€ä¸é‡å†™**ï¼›å•é¡µåŽ»è‰²ç”¨é¡µé¢ `<style scoped>`ã€‚
+- åŠ¨æ•ˆå¯ç”¨ **GSAP**ï¼ˆå·²è£… gsap-skillsï¼Œè§ `.claude/skills/`ï¼‰ï¼›å°Šé‡ `prefers-reduced-motion`ã€‚
+
+---
+
+## 7. åä½œæ¨¡åž‹ï¼ˆClaude Code â‡„ codexï¼‰
+
+- **Claude Code = æŠ€æœ¯è´Ÿè´£äºº / é›†æˆæ–¹**ï¼šå®šæ ¹å› ã€åˆ‡ä»»åŠ¡ã€å†™è§„æ ¼ã€å®ˆä¸å˜é‡ã€å®¡ diffã€è·‘å®ˆå«ã€çœŸæœºéªŒè¯ã€ç®¡ gitï¼ˆ**ä»…åœ¨ owner åŒæ„æ—¶** commit / pushï¼‰ã€‚
+- **codex = å®žçŽ°å·¥äºº**ï¼šæŒ‰ Claude ç»™çš„è§„æ ¼å®žçŽ°æ”¹åŠ¨ï¼Œå°¤å…¶**ä½Ž/ä¸­å±ã€è‡ªåŒ…å«ã€å¯å¹¶è¡Œ**çš„å—ã€‚
+- **é£Žé™©åˆ†æ¡£**ï¼šé«˜å±è·¯å¾„ç”± Claude å®šæ ¹å›  + æ”¶ç´§è§„æ ¼ï¼›ä½Ž/ä¸­å± codex å¯ç«¯åˆ°ç«¯ä¿®ã€‚**ä»»ä½•ä¸€æ–¹æ”¹å®Œéƒ½è¦è·‘ç›¸å…³å®ˆå«ï¼ŒClaude ç»Ÿä¸€å®¡æŸ¥åŽæ‰è¿›å…¥ä¸‹ä¸€æ­¥ã€‚**
+- **é¿å…å†²çª**ï¼šåŒä¸€æ‰¹æ–‡ä»¶ä¸€æ¬¡åªè®©ä¸€ä¸ª agent æ”¹ã€‚
+
+---
+
+## 8. ä¸€ä¸ªæ”¹åŠ¨çš„ã€Œå®Œæˆã€å®šä¹‰
+
+1. ç›¸å…³ **type-check** é€šè¿‡ï¼›
+2. ç›¸å…³ **å®ˆå«æµ‹è¯•** é€šè¿‡ï¼›
+3. è‹¥åŠ¨å‰ç«¯ â†’ **åŒç«¯ build** é€šè¿‡ï¼›
+4. **çœŸæœºè·‘è¿‡**å—å½±å“æµç¨‹ï¼ˆä¸æ˜¯åªçœ‹æµ‹è¯•ï¼‰ï¼›
+5. **æŠ¥å‘Š**ï¼šæ”¹äº†å“ªäº›æ–‡ä»¶ / ä¸ºä»€ä¹ˆ / é£Žé™© / æ€Žä¹ˆéªŒè¯çš„ã€‚
+
+ä»¥ä¸Šä»»ä¸€æœªæ»¡è¶³ = **æœªå®Œæˆ**ã€‚
+
+rg : The term 'rg' is not recognized as the name of a cmdlet, function, script file, or operable program. Check the 
+spelling of the name, or if a path was included, verify that the path is correct and try again.
+At line:2 char:29
++ Get-Content -Raw AGENTS.md; rg -n "FX-027|LotteryPrize|LotteryRecord| ...
++                             ~~
+    + CategoryInfo          : ObjectNotFound: (rg:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+
+codex
+`rg` 在当前环境不可用；我已完整读取规矩，改用 PowerShell 只读检索，并会先确认工作区现有改动，避免覆盖并行工作。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'git status --short; $files = Get-ChildItem server/src,server/scripts,server/prisma -Recurse -File | Where-Object { $_.FullName -notlike '"'*\\recharge.ts' }; "'$files | Select-String -Pattern '"'FX-027|LotteryPrize|LotteryRecord|lotteryPrize|lotteryRecord|deletePrize|delete.*prize' -CaseSensitive:"'$false | Select-Object Path,LineNumber,Line' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 1251ms:
+ M client/src/components/plugins/PluginFrame.vue
+ M client/src/utils/validation.ts
+ M deploy/incudal-backend.service.example
+ M deploy/incudal-online-rollback@.service.example
+ M deploy/incudal-online-update@.service.example
+ M package.json
+ M scripts/install-panel.sh
+ M scripts/test-install-panel-guards.sh
+ M server/package.json
+ M server/scripts/test-admin-billing-route-id-guards.ts
+ M server/scripts/test-admin-entertainment-route-guards.ts
+ M server/scripts/test-admin-user-delete-resource-guards.ts
+ M server/scripts/test-aff-review-ui-guards.ts
+ M server/scripts/test-balance-adjustment-approval-guards.ts
+ M server/scripts/test-billing-expiry-delete.ts
+ M server/scripts/test-billing-expiry-race-guards.ts
+ M server/scripts/test-billing-query-guards.ts
+ M server/scripts/test-capacity-cost-guards.ts
+ M server/scripts/test-commercial-operations-overview-guards.ts
+ M server/scripts/test-gift-card-guards.ts
+ M server/scripts/test-hosting-balance-guards.ts
+ M server/scripts/test-instance-billing-route-id-guards.ts
+ M server/scripts/test-log-sanitizer.ts
+ M server/scripts/test-mail-plan-financial-guards.ts
+ M server/scripts/test-mail-renewal-month-guards.ts
+ M server/scripts/test-order-payment-operations-guards.ts
+ M server/scripts/test-plugin-client-boundary-guards.ts
+ M server/scripts/test-system-config-value-guards.ts
+ M server/scripts/test-system-update-guards.ts
+ M server/scripts/test-trust-proxy-config.ts
+ M server/scripts/test-user-destroy-incus-order.ts
+ M server/scripts/test-vip-benefit-route-guards.ts
+ M server/src/app.ts
+ M server/src/db/aff.ts
+ M server/src/db/balance.ts
+ M server/src/db/billing-operations.ts
+ M server/src/db/gift-cards.ts
+ M server/src/db/users.ts
+ M server/src/lib/billing-calc.ts
+ M server/src/lib/epay.ts
+ M server/src/lib/errors.ts
+ M server/src/lib/heleket.ts
+ M server/src/lib/log-sanitizer.ts
+ M server/src/lib/lottery-notifier.ts
+ M server/src/lib/lsky.ts
+ M server/src/lib/notifier.ts
+ M server/src/lib/outbound-security.ts
+ M server/src/lib/plugin-market-submission-scan.ts
+ M server/src/lib/redirect-validator.ts
+ M server/src/lib/theme-market-submission-scan.ts
+ M server/src/lib/trust-proxy-config.ts
+ M server/src/routes/admin-billing.ts
+ M server/src/routes/admin-capacity-cost.ts
+ M server/src/routes/admin-entertainment.ts
+ M server/src/routes/admin-statistics.ts
+ M server/src/routes/gift-cards.ts
+ M server/src/routes/hosting.ts
+ M server/src/routes/instance-billing.ts
+ M server/src/routes/instance-destroy.ts
+ M server/src/routes/mail.ts
+ M server/src/routes/orders.ts
+ M server/src/routes/system-config.ts
+ M server/src/routes/tickets.ts
+ M server/src/routes/users.ts
+ M server/src/services/billing-scheduler.ts
+ M server/src/services/cranemail.ts
+ M server/src/services/smartermail.ts
+ M server/src/services/system-monitor.ts
+ M server/src/services/traffic-notifier.ts
+ M server/src/services/vip-benefits.ts
+?? AGENTS.md
+?? BEHAVIOR.md
+?? CLAUDE.md
+?? DEFECTS.md
+?? EXECUTION.md
+?? EXECUTION_LOG.md
+?? FIX_PLAN.md
+?? MAINTENANCE_PLAN.md
+?? artifacts/
+?? audits/
+?? deploy/incudal-online-task.sh.example
+?? deploy/incudal-ota-chown-wrapper.sh.example
+?? deploy/incudal-systemctl-wrapper.sh.example
+?? server/scripts/test-error-response-guards.ts
+?? server/scripts/test-redirect-validator-guards.ts
+?? server/scripts/test-safe-outbound-fetch-guards.ts
+?? skills-lock.json
+
+Path                                                                                            LineNumber Line        
+----                                                                                            ---------- ----        
+C:\Users\Administrator\Desktop\payinces\server\src\db\lottery.ts                                         6 import ty...
+C:\Users\Administrator\Desktop\payinces\server\src\db\lottery.ts                                        17 const LOT...
+C:\Users\Administrator\Desktop\payinces\server\src\db\lottery.ts                                        28 const LOT...
+C:\Users\Administrator\Desktop\payinces\server\src\db\lottery.ts                                        44 function ...
+C:\Users\Administrator\Desktop\payinces\server\src\db\lottery.ts                                        48 function ...
+C:\Users\Administrator\Desktop\payinces\server\src\db\lottery.ts                                       201   type: L...
+C:\Users\Administrator\Desktop\payinces\server\src\db\lottery.ts                                       208   return ...
+C:\Users\Administrator\Desktop\payinces\server\src\db\lottery.ts                                       228   type?: ...
+C:\Users\Administrator\Desktop\payinces\server\src\db\lottery.ts                                       236   return ...
+C:\Users\Administrator\Desktop\payinces\server\src\db\lottery.ts                                       245 export as...
+C:\Users\Administrator\Desktop\payinces\server\src\db\lottery.ts                                       246   return ...
+C:\Users\Administrator\Desktop\payinces\server\src\db\lottery.ts                                       253   return ...
+C:\Users\Administrator\Desktop\payinces\server\src\db\lottery.ts                                       308 export as...
+C:\Users\Administrator\Desktop\payinces\server\src\db\lottery.ts                                       312   prizeTy...
+C:\Users\Administrator\Desktop\payinces\server\src\db\lottery.ts                                       315   status:...
+C:\Users\Administrator\Desktop\payinces\server\src\db\lottery.ts                                       319   return ...
+C:\Users\Administrator\Desktop\payinces\server\src\db\lottery.ts                                       337 export as...
+C:\Users\Administrator\Desktop\payinces\server\src\db\lottery.ts                                       339   status:...
+C:\Users\Administrator\Desktop\payinces\server\src\db\lottery.ts                                       343   return ...
+C:\Users\Administrator\Desktop\payinces\server\src\db\lottery.ts                                       358   return ...
+C:\Users\Administrator\Desktop\payinces\server\src\db\lottery.ts                                       367 export as...
+C:\Users\Administrator\Desktop\payinces\server\src\db\lottery.ts                                       369   options...
+C:\Users\Administrator\Desktop\payinces\server\src\db\lottery.ts                                       372   const p...
+C:\Users\Administrator\Desktop\payinces\server\src\db\lottery.ts                                       375   const w...
+C:\Users\Administrator\Desktop\payinces\server\src\db\lottery.ts                                       381     prism...
+C:\Users\Administrator\Desktop\payinces\server\src\db\lottery.ts                                       395     prism...
+C:\Users\Administrator\Desktop\payinces\server\src\db\lottery.ts                                       404 export as...
+C:\Users\Administrator\Desktop\payinces\server\src\db\lottery.ts                                       408   prizeTy...
+C:\Users\Administrator\Desktop\payinces\server\src\db\lottery.ts                                       409   status?...
+C:\Users\Administrator\Desktop\payinces\server\src\db\lottery.ts                                       416   const p...
+C:\Users\Administrator\Desktop\payinces\server\src\db\lottery.ts                                       417   const s...
+C:\Users\Administrator\Desktop\payinces\server\src\db\lottery.ts                                       421   const w...
+C:\Users\Administrator\Desktop\payinces\server\src\db\lottery.ts                                       432     prism...
+C:\Users\Administrator\Desktop\payinces\server\src\db\lottery.ts                                       449     prism...
+C:\Users\Administrator\Desktop\payinces\server\src\db\lottery.ts                                       459   return ...
+C:\Users\Administrator\Desktop\payinces\server\src\db\lottery.ts                                       487   type: L...
+C:\Users\Administrator\Desktop\payinces\server\src\db\lottery.ts                                       533   record?...
+C:\Users\Administrator\Desktop\payinces\server\src\db\lottery.ts                                       537     type:...
+C:\Users\Administrator\Desktop\payinces\server\src\db\lottery.ts                                       609       con...
+C:\Users\Administrator\Desktop\payinces\server\src\db\lottery.ts                                       630     let s...
+C:\Users\Administrator\Desktop\payinces\server\src\db\lottery.ts                                       732     const...
+C:\Users\Administrator\Desktop\payinces\server\src\db\lottery.ts                                       775     // 统计...
+C:\Users\Administrator\Desktop\payinces\server\src\db\lottery.ts                                       804     prism...
+C:\Users\Administrator\Desktop\payinces\server\src\db\lottery.ts                                       805     prism...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-entertainment.ts                         8 import ty...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-entertainment.ts                        11 const LOT...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-entertainment.ts                        22 const LOT...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-entertainment.ts                        30 type Lott...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-entertainment.ts                        31   type: L...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-entertainment.ts                        43   prizes:...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-entertainment.ts                       137 function ...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-entertainment.ts                       138   return ...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-entertainment.ts                       139     ? val...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-entertainment.ts                       143 function ...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-entertainment.ts                       145   return ...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-entertainment.ts                       148 function ...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-entertainment.ts                       150   return ...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-entertainment.ts                       469       typ...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-entertainment.ts                       482       typ...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-entertainment.ts                       502     const...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-entertainment.ts                       579       typ...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-entertainment.ts                       593       typ...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-entertainment.ts                       614     const...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-entertainment.ts                       690   fastify...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-entertainment.ts                       719     await...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-entertainment.ts                       725       `De...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-entertainment.ts                       823     const...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-entertainment.ts                       824     const...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-entertainment.ts                       836     const...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-entertainment.ts                       894     const...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-entertainment.ts                       911     await...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\entertainment.ts                               6 import ty...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\entertainment.ts                              23 const LOT...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\entertainment.ts                              68 function ...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\entertainment.ts                              70   return ...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\entertainment.ts                             552     const...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\entertainment.ts                             558     const...
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-admin-entertainment-route-guards.ts         23   'admin ...
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-admin-entertainment-route-guards.ts         29   'admin ...
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-admin-entertainment-route-guards.ts         53   routeSo...
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-admin-entertainment-route-guards.ts         54     route...
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-admin-entertainment-route-guards.ts         55     route...
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-admin-entertainment-route-guards.ts         61   routeSo...
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-admin-entertainment-route-guards.ts         62     route...
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-admin-entertainment-route-guards.ts        130   'prizeT...
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-admin-entertainment-route-guards.ts        131   'status...
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-admin-entertainment-route-guards.ts        143     lotte...
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-admin-entertainment-route-guards.ts        144     lotte...
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-entertainment-route-guards.ts               37   routeSo...
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-entertainment-route-guards.ts               38     route...
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-entertainment-route-guards.ts               81     lotte...
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-entertainment-route-guards.ts               82     lotte...
+C:\Users\Administrator\Desktop\payinces\server\prisma\schema.prisma                                    843   lottery...
+C:\Users\Administrator\Desktop\payinces\server\prisma\schema.prisma                                   4609 enum Lott...
+C:\Users\Administrator\Desktop\payinces\server\prisma\schema.prisma                                   4622 enum Lott...
+C:\Users\Administrator\Desktop\payinces\server\prisma\schema.prisma                                   4642   prizes ...
+C:\Users\Administrator\Desktop\payinces\server\prisma\schema.prisma                                   4643   records...
+C:\Users\Administrator\Desktop\payinces\server\prisma\schema.prisma                                   4650 model Lot...
+C:\Users\Administrator\Desktop\payinces\server\prisma\schema.prisma                                   4654   type   ...
+C:\Users\Administrator\Desktop\payinces\server\prisma\schema.prisma                                   4666   records...
+C:\Users\Administrator\Desktop\payinces\server\prisma\schema.prisma                                   4673 model Lot...
+C:\Users\Administrator\Desktop\payinces\server\prisma\schema.prisma                                   4678   prizeTy...
+C:\Users\Administrator\Desktop\payinces\server\prisma\schema.prisma                                   4681   status ...
+C:\Users\Administrator\Desktop\payinces\server\prisma\schema.prisma                                   4690   prize  ...
+C:\Users\Administrator\Desktop\payinces\server\prisma\migrations\20260130200000_add_entertai...          5 CREATE TY...
+C:\Users\Administrator\Desktop\payinces\server\prisma\migrations\20260130200000_add_entertai...          8 CREATE TY...
+C:\Users\Administrator\Desktop\payinces\server\prisma\migrations\20260130200000_add_entertai...         61     "type...
+C:\Users\Administrator\Desktop\payinces\server\prisma\migrations\20260130200000_add_entertai...         79     "priz...
+C:\Users\Administrator\Desktop\payinces\server\prisma\migrations\20260130200000_add_entertai...         82     "stat...
+C:\Users\Administrator\Desktop\payinces\server\prisma\migrations\20260222180000_add_lottery_...          1 -- AlterE...
+C:\Users\Administrator\Desktop\payinces\server\prisma\migrations\20260222180000_add_lottery_...          2 ALTER TYP...
+C:\Users\Administrator\Desktop\payinces\server\prisma\migrations\20260222180000_add_lottery_...          3 ALTER TYP...
+C:\Users\Administrator\Desktop\payinces\server\prisma\migrations\20260222180000_add_lottery_...          4 ALTER TYP...
+C:\Users\Administrator\Desktop\payinces\server\prisma\migrations\20260222180000_add_lottery_...          5 ALTER TYP...
+C:\Users\Administrator\Desktop\payinces\server\prisma\migrations\20260413143000_add_lottery_...          2 ALTER TYP...
+
+
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$targets = @('"'server/src/db/lottery.ts','server/src/routes/admin-entertainment.ts','server/scripts/test-admin-entertainment-route-guards.ts','server/scripts/test-entertainment-route-guards.ts','server/src/services/vip-benefits.ts','server/scripts/test-vip-benefit-route-guards.ts','server/prisma/schema.prisma'); foreach ("'$f in $targets) { Write-Output "FILE $f"; $lines = Get-Content $f; $ranges = switch ($f) { '"'server/src/db/lottery.ts' { @(@(180,275),@(300,470),@(520,830)) } 'server/src/routes/admin-entertainment.ts' { @(@(660,750),@(800,930)) } 'server/scripts/test-admin-entertainment-route-guards.ts' { @(@(1,175)) } 'server/scripts/test-entertainment-route-guards.ts' { @(@(1,110)) } 'server/src/services/vip-benefits.ts' { @(@(1,240)) } 'server/scripts/test-vip-benefit-route-guards.ts' { @(@(1,220)) } 'server/prisma/schema.prisma' { @(@(4630,4700)) } }; foreach ("'$range in $ranges) { for ($i=$range[0]; $i -le [Math]::Min($range[1],$lines.Length); $i++) { '"'{0,5}: {1}' -f "'$i,$lines[$i-1] } } }; Write-Output '"'DIFF admin route'; git diff -- server/src/routes/admin-entertainment.ts; Write-Output 'DIFF admin guard'; git diff -- server/scripts/test-admin-entertainment-route-guards.ts" in C:\Users\Administrator\Desktop\payinces
+ succeeded in 791ms:
+FILE server/src/db/lottery.ts
+  180:     },
+  181:     include: {
+  182:       prizes: {
+  183:         orderBy: { displayOrder: 'asc' }
+  184:       },
+  185:       _count: {
+  186:         select: { records: true }
+  187:       }
+  188:     },
+  189:     orderBy: { createdAt: 'desc' }
+  190:   })
+  191: }
+  192: 
+  193: // ==================== å¥–å“ç®¡ç† ====================
+  194: 
+  195: /**
+  196:  * æ·»åŠ å¥–å“
+  197:  */
+  198: export async function createPrize(data: {
+  199:   lotteryId: number
+  200:   name: string
+  201:   type: LotteryPrizeType
+  202:   value?: number
+  203:   probability: number
+  204:   totalQuantity?: number
+  205:   displayOrder?: number
+  206:   instanceDesc?: string
+  207: }) {
+  208:   return prisma.lotteryPrize.create({
+  209:     data: {
+  210:       lotteryId: data.lotteryId,
+  211:       name: data.name,
+  212:       type: data.type,
+  213:       value: data.value ?? 0,
+  214:       probability: data.probability,
+  215:       totalQuantity: data.totalQuantity,
+  216:       remainQuantity: data.totalQuantity, // åˆå§‹å‰©ä½™ç­‰äºŽæ€»æ•°
+  217:       displayOrder: data.displayOrder ?? 0,
+  218:       instanceDesc: data.instanceDesc
+  219:     }
+  220:   })
+  221: }
+  222: 
+  223: /**
+  224:  * æ›´æ–°å¥–å“
+  225:  */
+  226: export async function updatePrize(id: number, data: {
+  227:   name?: string
+  228:   type?: LotteryPrizeType
+  229:   value?: number
+  230:   probability?: number
+  231:   totalQuantity?: number | null
+  232:   remainQuantity?: number | null
+  233:   displayOrder?: number
+  234:   instanceDesc?: string | null
+  235: }) {
+  236:   return prisma.lotteryPrize.update({
+  237:     where: { id },
+  238:     data
+  239:   })
+  240: }
+  241: 
+  242: /**
+  243:  * åˆ é™¤å¥–å“
+  244:  */
+  245: export async function deletePrize(id: number) {
+  246:   return prisma.lotteryPrize.delete({ where: { id } })
+  247: }
+  248: 
+  249: /**
+  250:  * èŽ·å–å¥–å“è¯¦æƒ…
+  251:  */
+  252: export async function getPrizeById(id: number) {
+  253:   return prisma.lotteryPrize.findUnique({
+  254:     where: { id },
+  255:     include: { lottery: true }
+  256:   })
+  257: }
+  258: 
+  259: // ==================== æŠ½å¥–é€šçŸ¥é…ç½® ====================
+  260: 
+  261: /**
+  262:  * æ›´æ–°æˆ–åˆ›å»ºæŠ½å¥–é€šçŸ¥é…ç½®
+  263:  */
+  264: export async function upsertLotteryNotificationConfig(
+  265:   lotteryId: number,
+  266:   data: {
+  267:     enabled: boolean
+  268:     type: string
+  269:     config: Record<string, unknown>
+  270:     notifyBalance: boolean
+  271:     notifyInstance: boolean
+  272:   }
+  273: ) {
+  274:   return prisma.lotteryNotificationConfig.upsert({
+  275:     where: { lotteryId },
+  300:   })
+  301: }
+  302: 
+  303: // ==================== ä¸­å¥–è®°å½• ====================
+  304: 
+  305: /**
+  306:  * åˆ›å»ºä¸­å¥–è®°å½•
+  307:  */
+  308: export async function createLotteryRecord(data: {
+  309:   lotteryId: number
+  310:   prizeId: number
+  311:   userId: number
+  312:   prizeType: LotteryPrizeType
+  313:   prizeValue: number
+  314:   prizeName: string
+  315:   status: LotteryRecordStatus
+  316:   pointsSpent: number
+  317:   deliveredAt?: Date
+  318: }) {
+  319:   return prisma.lotteryRecord.create({
+  320:     data: {
+  321:       lotteryId: data.lotteryId,
+  322:       prizeId: data.prizeId,
+  323:       userId: data.userId,
+  324:       prizeType: data.prizeType,
+  325:       prizeValue: data.prizeValue,
+  326:       prizeName: data.prizeName,
+  327:       status: data.status,
+  328:       pointsSpent: data.pointsSpent,
+  329:       deliveredAt: data.deliveredAt
+  330:     }
+  331:   })
+  332: }
+  333: 
+  334: /**
+  335:  * æ›´æ–°ä¸­å¥–è®°å½•çŠ¶æ€
+  336:  */
+  337: export async function updateLotteryRecordStatus(
+  338:   id: number,
+  339:   status: LotteryRecordStatus,
+  340:   deliveredBy?: number,
+  341:   ticketId?: number
+  342: ) {
+  343:   return prisma.lotteryRecord.update({
+  344:     where: { id },
+  345:     data: {
+  346:       status,
+  347:       deliveredAt: status === 'delivered' || status === 'claimed' ? new Date() : undefined,
+  348:       deliveredBy,
+  349:       ticketId
+  350:     }
+  351:   })
+  352: }
+  353: 
+  354: /**
+  355:  * æ ‡è®°é€šçŸ¥å·²å‘é€
+  356:  */
+  357: export async function markRecordNotificationSent(id: number) {
+  358:   return prisma.lotteryRecord.update({
+  359:     where: { id },
+  360:     data: { notificationSent: true }
+  361:   })
+  362: }
+  363: 
+  364: /**
+  365:  * èŽ·å–ç”¨æˆ·ä¸­å¥–è®°å½•
+  366:  */
+  367: export async function getUserLotteryRecords(
+  368:   userId: number,
+  369:   options: { page?: number; pageSize?: number; prizeType?: LotteryPrizeType } = {}
+  370: ) {
+  371:   const { page, pageSize } = clampPagination(options.page, options.pageSize)
+  372:   const prizeType = normalizeLotteryPrizeType(options.prizeType)
+  373:   const skip = (page - 1) * pageSize
+  374: 
+  375:   const where: Prisma.LotteryRecordWhereInput = { userId }
+  376:   if (prizeType) {
+  377:     where.prizeType = prizeType
+  378:   }
+  379: 
+  380:   const [records, total] = await Promise.all([
+  381:     prisma.lotteryRecord.findMany({
+  382:       where,
+  383:       include: {
+  384:         lottery: {
+  385:           select: { id: true, name: true }
+  386:         },
+  387:         prize: {
+  388:           select: { instanceDesc: true }
+  389:         }
+  390:       },
+  391:       orderBy: { createdAt: 'desc' },
+  392:       take: pageSize,
+  393:       skip
+  394:     }),
+  395:     prisma.lotteryRecord.count({ where })
+  396:   ])
+  397: 
+  398:   return { records, total, page, pageSize }
+  399: }
+  400: 
+  401: /**
+  402:  * èŽ·å–æ‰€æœ‰ä¸­å¥–è®°å½•ï¼ˆç®¡ç†ç«¯ï¼‰
+  403:  */
+  404: export async function getAllLotteryRecords(options: {
+  405:   page?: number
+  406:   pageSize?: number
+  407:   lotteryId?: number
+  408:   prizeType?: LotteryPrizeType
+  409:   status?: LotteryRecordStatus
+  410:   search?: string
+  411: } = {}) {
+  412:   const { page, pageSize } = clampPagination(options.page, options.pageSize)
+  413:   const lotteryId = Number.isInteger(options.lotteryId) && options.lotteryId !== undefined && options.lotteryId > 0
+  414:     ? options.lotteryId
+  415:     : undefined
+  416:   const prizeType = normalizeLotteryPrizeType(options.prizeType)
+  417:   const status = normalizeLotteryRecordStatus(options.status)
+  418:   const search = typeof options.search === 'string' ? options.search.trim().slice(0, 128) : undefined
+  419:   const skip = (page - 1) * pageSize
+  420: 
+  421:   const where: Prisma.LotteryRecordWhereInput = {}
+  422:   if (lotteryId) where.lotteryId = lotteryId
+  423:   if (prizeType) where.prizeType = prizeType
+  424:   if (status) where.status = status
+  425:   if (search) {
+  426:     where.user = {
+  427:       username: { contains: search, mode: 'insensitive' }
+  428:     }
+  429:   }
+  430: 
+  431:   const [records, total] = await Promise.all([
+  432:     prisma.lotteryRecord.findMany({
+  433:       where,
+  434:       include: {
+  435:         lottery: {
+  436:           select: { id: true, name: true }
+  437:         },
+  438:         user: {
+  439:           select: { id: true, username: true, avatarStyle: true }
+  440:         },
+  441:         prize: {
+  442:           select: { instanceDesc: true }
+  443:         }
+  444:       },
+  445:       orderBy: { createdAt: 'desc' },
+  446:       take: pageSize,
+  447:       skip
+  448:     }),
+  449:     prisma.lotteryRecord.count({ where })
+  450:   ])
+  451: 
+  452:   return { records, total, page, pageSize }
+  453: }
+  454: 
+  455: /**
+  456:  * èŽ·å–å¾…å‘æ”¾çš„å®žä¾‹å¥–åŠ±è®°å½•
+  457:  */
+  458: export async function getPendingInstancePrizes() {
+  459:   return prisma.lotteryRecord.findMany({
+  460:     where: {
+  461:       prizeType: 'instance',
+  462:       status: 'pending'
+  463:     },
+  464:     include: {
+  465:       lottery: {
+  466:         select: { id: true, name: true }
+  467:       },
+  468:       user: {
+  469:         select: { id: true, username: true }
+  470:       }
+  520:   // éšæœºæ•°è¶…å‡ºæ‰€æœ‰æ¦‚çŽ‡ä¹‹å’Œï¼Œè¿”å›ž"è°¢è°¢å‚ä¸Ž"
+  521:   if (nothingPrize) return nothingPrize
+  522: 
+  523:   // æ²¡æœ‰"è°¢è°¢å‚ä¸Ž"å¥–å“ä¸”æ¦‚çŽ‡æ€»å’Œä¸è¶³100%ï¼Œè¿™æ˜¯é…ç½®é”™è¯¯
+  524:   // æŠ›å‡ºæ˜Žç¡®é”™è¯¯ï¼Œé¿å…æ„å¤–å°†å‰©ä½™æ¦‚çŽ‡åˆ†é…ç»™å…¶ä»–å¥–å“
+  525:   throw new Error('LOTTERY_CONFIG_ERROR: å¥–å“æ¦‚çŽ‡æ€»å’Œä¸è¶³100%ä¸”ç¼ºå°‘"è°¢è°¢å‚ä¸Ž"å¥–å“ï¼Œè¯·æ·»åŠ ä¸€ä¸ªtypeä¸ºnothingçš„å¥–å“æ¥è¡¥è¶³å‰©ä½™æ¦‚çŽ‡')
+  526: }
+  527: 
+  528: /**
+  529:  * æ‰§è¡ŒæŠ½å¥–
+  530:  */
+  531: export async function performDraw(userId: number, lotteryId: number): Promise<{
+  532:   success: boolean
+  533:   record?: Awaited<ReturnType<typeof createLotteryRecord>>
+  534:   prize?: {
+  535:     id: number
+  536:     name: string
+  537:     type: LotteryPrizeType
+  538:     value: number
+  539:     instanceDesc: string | null
+  540:     badgeOwnership: BadgeOwnershipView | null
+  541:   }
+  542:   currentPoints?: number
+  543:   message?: string
+  544: }> {
+  545:   // ä½¿ç”¨ RepeatableRead + ä¹è§‚é”ç¡®ä¿å¹¶å‘å®‰å…¨ï¼Œé˜²æ­¢å¥–å“è¶…å‘
+  546:   // äº‹åŠ¡å†²çªä¼šåœ¨è·¯ç”±å±‚é€šè¿‡æŒ‡æ•°é€€é¿é‡è¯•æœºåˆ¶å¤„ç†
+  547:   return prisma.$transaction(
+  548:     async (tx) => {
+  549:       await advisoryTransactionLock(tx, USER_POINTS_LOCK_NAMESPACE, userId)
+  550: 
+  551:     // 1. æ£€æŸ¥æŠ½å¥–æ˜¯å¦æœ‰æ•ˆ
+  552:     const lottery = await tx.lottery.findUnique({
+  553:       where: { id: lotteryId },
+  554:       include: { prizes: true }
+  555:     })
+  556: 
+  557:     if (!lottery) {
+  558:       return { success: false, message: 'æŠ½å¥–æ´»åŠ¨ä¸å­˜åœ¨' }
+  559:     }
+  560: 
+  561:     if (!lottery.isActive) {
+  562:       return { success: false, message: 'æŠ½å¥–æ´»åŠ¨å·²å…³é—­' }
+  563:     }
+  564: 
+  565:     const now = new Date()
+  566:     if (lottery.startAt && lottery.startAt > now) {
+  567:       return { success: false, message: 'æŠ½å¥–æ´»åŠ¨å°šæœªå¼€å§‹' }
+  568:     }
+  569:     if (lottery.endAt && lottery.endAt < now) {
+  570:       return { success: false, message: 'æŠ½å¥–æ´»åŠ¨å·²ç»“æŸ' }
+  571:     }
+  572: 
+  573:     if (lottery.prizes.length === 0) {
+  574:       return { success: false, message: 'å¥–æ± ä¸ºç©º' }
+  575:     }
+  576: 
+  577:     // 2. æ£€æŸ¥ç”¨æˆ·ç§¯åˆ†ï¼ˆä½¿ç”¨ upsert é¿å…å¹¶å‘æ—¶çš„å”¯ä¸€çº¦æŸå†²çªï¼‰
+  578:     const userPoints = await tx.userPoints.upsert({
+  579:       where: { userId },
+  580:       update: {},
+  581:       create: { userId }
+  582:     })
+  583: 
+  584:     if (userPoints.points < lottery.costPoints) {
+  585:       return { success: false, message: 'ç§¯åˆ†ä¸è¶³' }
+  586:     }
+  587: 
+  588:     // 3. æ‰£é™¤ç§¯åˆ†
+  589:     await tx.userPoints.update({
+  590:       where: { userId },
+  591:       data: {
+  592:         points: { decrement: lottery.costPoints },
+  593:         totalSpent: { increment: lottery.costPoints }
+  594:       }
+  595:     })
+  596: 
+  597:     // 4. éšæœºæŠ½å–å¥–å“
+  598:     const selectedPrize = weightedRandomSelect(lottery.prizes.map(p => ({
+  599:       id: p.id,
+  600:       type: p.type,
+  601:       probability: p.probability,
+  602:       remainQuantity: p.remainQuantity
+  603:     })))
+  604: 
+  605:     let prize = lottery.prizes.find(p => p.id === selectedPrize.id)!
+  606: 
+  607:     // 5. ä½¿ç”¨ä¹è§‚é”æ‰£å‡åº“å­˜ï¼ˆé˜²æ­¢è¶…å‘ï¼‰
+  608:     if (prize.remainQuantity !== null) {
+  609:       const updateResult = await tx.lotteryPrize.updateMany({
+  610:         where: { 
+  611:           id: prize.id,
+  612:           remainQuantity: { gt: 0 }  // åªæœ‰åº“å­˜ > 0 æ‰æ‰£å‡
+  613:         },
+  614:         data: { remainQuantity: { decrement: 1 } }
+  615:       })
+  616:       
+  617:       // å¦‚æžœæ‰£å‡å¤±è´¥ï¼ˆåº“å­˜å·²ç©ºï¼‰ï¼Œå›žé€€åˆ°"è°¢è°¢å‚ä¸Ž"å¥–å“
+  618:       if (updateResult.count === 0) {
+  619:         const nothingPrize = lottery.prizes.find(p => p.type === 'nothing')
+  620:         if (nothingPrize) {
+  621:           prize = nothingPrize
+  622:         } else {
+  623:           // æ²¡æœ‰è°¢è°¢å‚ä¸Žå¥–å“ï¼Œè¿”å›žå¤±è´¥
+  624:           return { success: false, message: 'å¥–å“åº“å­˜ä¸è¶³ï¼Œè¯·ç¨åŽå†è¯•' }
+  625:         }
+  626:       }
+  627:     }
+  628: 
+  629:     // 6. å¤„ç†å¥–å“å‘æ”¾
+  630:     let status: LotteryRecordStatus = 'delivered'
+  631:     let currentPoints = userPoints.points - lottery.costPoints
+  632:     let resolvedPrizeName = prize.name
+  633:     const resolvedPrizeValue = prize.type === 'badge' ? 0 : prize.value
+  634:     let badgeOwnership: BadgeOwnershipView | null = null
+  635: 
+  636:     if (prize.type === 'balance') {
+  637:       // è‡ªåŠ¨å‘æ”¾ä½™é¢ï¼ˆvalue å­˜å‚¨åˆ†ï¼Œè½¬æ¢ä¸ºå…ƒï¼‰
+  638:       const balanceAmount = prize.value / 100
+  639:       const balanceLocked = await tryAdvisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, userId)
+  640:       if (!balanceLocked) {
+  641:         throw new Error('BALANCE_CONFLICT: ä½™é¢æ­£åœ¨å¤„ç†ï¼Œè¯·ç¨åŽé‡è¯•')
+  642:       }
+  643: 
+  644:       const user = await tx.user.findUnique({
+  645:         where: { id: userId },
+  646:         select: { balance: true }
+  647:       })
+  648:       if (user) {
+  649:         const balanceBefore = Number(user.balance)
+  650:         const updatedUser = await tx.user.update({
+  651:           where: { id: userId },
+  652:           data: { balance: { increment: balanceAmount } },
+  653:           select: { balance: true }
+  654:         })
+  655:         const balanceAfter = Number(updatedUser.balance)
+  656:         // è®°å½•ä½™é¢æ—¥å¿—
+  657:         await tx.balanceLog.create({
+  658:           data: {
+  659:             userId,
+  660:             type: 'gift',
+  661:             amount: balanceAmount,
+  662:             balanceBefore,
+  663:             balanceAfter,
+  664:             remark: `æŠ½å¥–ä¸­å¥–ï¼š${prize.name}`
+  665:           }
+  666:         })
+  667:       }
+  668:     } else if (prize.type === 'points') {
+  669:       // è‡ªåŠ¨å‘æ”¾ç§¯åˆ†
+  670:       await tx.userPoints.update({
+  671:         where: { userId },
+  672:         data: {
+  673:           points: { increment: prize.value },
+  674:           totalEarned: { increment: prize.value }
+  675:         }
+  676:       })
+  677:       currentPoints += prize.value
+  678:     } else if (prize.type === 'badge') {
+  679:       const selectedBadge = await selectRandomBadgeOrThrow(tx)
+  680:       badgeOwnership = await createBadgeOwnership(tx, userId, selectedBadge.id, 'lottery', selectedBadge)
+  681:       resolvedPrizeName = selectedBadge.fullLabel
+  682:     } else if (prize.type === 'instance') {
+  683:       // å®žä¾‹å¥–åŠ±éœ€æ‰‹åŠ¨å‘æ”¾
+  684:       status = 'pending'
+  685:     } else if (prize.type === 'cpu' || prize.type === 'memory' || prize.type === 'disk' || prize.type === 'traffic') {
+  686:       // èµ„æºå¥–å“ï¼šå­˜å…¥ç”¨æˆ·èµ„æºæ± 
+  687:       const resourceFieldMap: Record<string, 'cpu' | 'memory' | 'disk' | 'traffic'> = {
+  688:         cpu: 'cpu',
+  689:         memory: 'memory',
+  690:         disk: 'disk',
+  691:         traffic: 'traffic'
+  692:       }
+  693:       const field = resourceFieldMap[prize.type]
+  694:       const resourceTypeMap: Record<string, 'c' | 'r' | 'd' | 't'> = {
+  695:         cpu: 'c',
+  696:         memory: 'r',
+  697:         disk: 'd',
+  698:         traffic: 't'
+  699:       }
+  700:       const resourceType = resourceTypeMap[prize.type]
+  701: 
+  702:       await advisoryTransactionLock(tx, USER_RESOURCE_POOL_LOCK_NAMESPACE, userId)
+  703: 
+  704:       // æ›´æ–°èµ„æºæ± 
+  705:       await tx.userResourcePool.upsert({
+  706:         where: { userId },
+  707:         update: {
+  708:           [field]: field === 'traffic'
+  709:             ? { increment: BigInt(prize.value) }
+  710:             : { increment: prize.value }
+  711:         },
+  712:         create: {
+  713:           userId,
+  714:           [field]: field === 'traffic' ? BigInt(prize.value) : prize.value
+  715:         }
+  716:       })
+  717: 
+  718:       // è®°å½•èµ„æºæ± æ—¥å¿—
+  719:       await tx.resourcePoolLog.create({
+  720:         data: {
+  721:           userId,
+  722:           action: 'lottery',
+  723:           resourceType,
+  724:           amount: prize.value,
+  725:           remark: `æŠ½å¥–ä¸­å¥–ï¼š${prize.name}`
+  726:         }
+  727:       })
+  728:     }
+  729:     // nothing ç±»åž‹ä¸éœ€è¦ä»»ä½•æ“ä½œ
+  730: 
+  731:     // 7. åˆ›å»ºä¸­å¥–è®°å½•
+  732:     const record = await tx.lotteryRecord.create({
+  733:       data: {
+  734:         lotteryId,
+  735:         prizeId: prize.id,
+  736:         userId,
+  737:         prizeType: prize.type,
+  738:         prizeValue: resolvedPrizeValue,
+  739:         prizeName: resolvedPrizeName,
+  740:         status,
+  741:         pointsSpent: lottery.costPoints,
+  742:         deliveredAt: status === 'delivered' ? new Date() : null
+  743:       }
+  744:     })
+  745: 
+  746:     // 8. è®°å½•ç§¯åˆ†æ—¥å¿—
+  747:     await tx.pointsLog.create({
+  748:       data: {
+  749:         userId,
+  750:         type: 'lottery_spend',
+  751:         amount: -lottery.costPoints,
+  752:         pointsBefore: userPoints.points,
+  753:         pointsAfter: userPoints.points - lottery.costPoints,
+  754:         relatedId: record.id,
+  755:         remark: `æŠ½å¥–æ¶ˆè€—ï¼š${lottery.name}`
+  756:       }
+  757:     })
+  758: 
+  759:     // å¦‚æžœä¸­äº†ç§¯åˆ†å¥–åŠ±ï¼Œå†è®°ä¸€æ¡èŽ·å¾—æ—¥å¿—
+  760:     if (prize.type === 'points') {
+  761:       await tx.pointsLog.create({
+  762:         data: {
+  763:           userId,
+  764:           type: 'lottery_win',
+  765:           amount: prize.value,
+  766:           pointsBefore: userPoints.points - lottery.costPoints,
+  767:           pointsAfter: userPoints.points - lottery.costPoints + prize.value,
+  768:           relatedId: record.id,
+  769:           remark: `æŠ½å¥–ä¸­å¥–ï¼š${prize.name}`
+  770:         }
+  771:       })
+  772:     }
+  773: 
+  774:     // æ³¨æ„ï¼štotalDraws ä¸åœ¨äº‹åŠ¡ä¸­æ›´æ–°ï¼Œé¿å…çƒ­ç‚¹æ•°æ®å†²çªå¯¼è‡´æ­»é”
+  775:     // ç»Ÿè®¡æ•°æ®å¯é€šè¿‡ count(lotteryRecord) å®žæ—¶è®¡ç®—
+  776: 
+  777:     return {
+  778:       success: true,
+  779:       record,
+  780:       prize: {
+  781:         id: prize.id,
+  782:         name: resolvedPrizeName,
+  783:         type: prize.type,
+  784:         value: resolvedPrizeValue,
+  785:         instanceDesc: prize.instanceDesc,
+  786:         badgeOwnership
+  787:       },
+  788:       currentPoints
+  789:     }
+  790:   },
+  791:   {
+  792:     // RepeatableRead æ¯” Serializable å†²çªæ›´å°‘ï¼Œé…åˆä¹è§‚é”é˜²è¶…å‘
+  793:     isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead,
+  794:     maxWait: 5000,
+  795:     timeout: 10000
+  796:   })
+  797: }
+  798: 
+  799: /**
+  800:  * èŽ·å–æŠ½å¥–ç»Ÿè®¡ï¼ˆç®¡ç†ç«¯ï¼‰
+  801:  */
+  802: export async function getLotteryStats(lotteryId: number) {
+  803:   const [totalRecords, prizeStats] = await Promise.all([
+  804:     prisma.lotteryRecord.count({ where: { lotteryId } }),
+  805:     prisma.lotteryRecord.groupBy({
+  806:       by: ['prizeType'],
+  807:       where: { lotteryId },
+  808:       _count: true
+  809:     })
+  810:   ])
+  811: 
+  812:   return {
+  813:     totalDraws: totalRecords,
+  814:     prizeStats: prizeStats.map(s => ({
+  815:       type: s.prizeType,
+  816:       count: s._count
+  817:     }))
+  818:   }
+  819: }
+FILE server/src/routes/admin-entertainment.ts
+  660:         : prize.value,
+  661:       probability: prize.id === prizeId ? parsedProbability ?? Number(prize.probability) : Number(prize.probability)
+  662:     })))
+  663:     if (configError) return reply.code(400).send(configError)
+  664: 
+  665:     await db.updatePrize(prizeId, {
+  666:       name: name?.trim(),
+  667:       type: parsedType ?? undefined,
+  668:       value: prizeType === 'badge' || prizeType === 'nothing' ? 0 : parsedValue ?? undefined,
+  669:       probability: parsedProbability ?? undefined,
+  670:       totalQuantity: parsedTotalQuantity,
+  671:       remainQuantity: parsedRemainQuantity,
+  672:       displayOrder: parsedDisplayOrder ?? undefined,
+  673:       instanceDesc
+  674:     })
+  675: 
+  676:     await createLog(
+  677:       request.user.id,
+  678:       'admin',
+  679:       'lottery.prize.update',
+  680:       `Updated prize "${existing.name}" (ID: ${prizeId})`,
+  681:       'success'
+  682:     )
+  683: 
+  684:     return { success: true }
+  685:   })
+  686: 
+  687:   /**
+  688:    * åˆ é™¤å¥–å“
+  689:    */
+  690:   fastify.delete<{ Params: { id: string } }>('/prizes/:id', {
+  691:     onRequest: [fastify.authenticate, fastify.requireAdmin]
+  692:   }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+  693:     const prizeId = parsePositiveRouteId(request.params.id)
+  694: 
+  695:     if (!prizeId) {
+  696:       return reply.code(400).send({ error: 'INVALID_ID', message: 'Invalid prize ID' })
+  697:     }
+  698: 
+  699:     const existing = await db.getPrizeById(prizeId)
+  700:     if (!existing) {
+  701:       return reply.code(404).send({ error: 'NOT_FOUND', message: 'Prize not found' })
+  702:     }
+  703: 
+  704:     const lottery = await db.getLotteryById(existing.lotteryId)
+  705:     if (!lottery) {
+  706:       return reply.code(404).send({ error: 'NOT_FOUND', message: 'Lottery not found' })
+  707:     }
+  708: 
+  709:     const remainingPrizes = lottery.prizes.filter(prize => prize.id !== prizeId)
+  710:     if (remainingPrizes.length > 0) {
+  711:       const configError = validateLotteryConfig(lottery.costPoints, remainingPrizes.map(prize => ({
+  712:         type: prize.type,
+  713:         value: prize.value,
+  714:         probability: Number(prize.probability)
+  715:       })))
+  716:       if (configError) return reply.code(400).send(configError)
+  717:     }
+  718: 
+  719:     await db.deletePrize(prizeId)
+  720: 
+  721:     await createLog(
+  722:       request.user.id,
+  723:       'admin',
+  724:       'lottery.prize.delete',
+  725:       `Deleted prize "${existing.name}" (ID: ${prizeId})`,
+  726:       'success'
+  727:     )
+  728: 
+  729:     return { success: true }
+  730:   })
+  731: 
+  732:   // ==================== é€šçŸ¥é…ç½® API ====================
+  733: 
+  734:   /**
+  735:    * æ›´æ–°æŠ½å¥–é€šçŸ¥é…ç½®
+  736:    */
+  737:   fastify.put<{
+  738:     Params: { id: string }
+  739:     Body: {
+  740:       enabled: boolean
+  741:       type: string
+  742:       config: Record<string, unknown>
+  743:       notifyBalance: boolean
+  744:       notifyInstance: boolean
+  745:     }
+  746:   }>('/lotteries/:id/notification', {
+  747:     onRequest: [fastify.authenticate, fastify.requireAdmin]
+  748:   }, async (request: FastifyRequest<{
+  749:     Params: { id: string }
+  750:     Body: {
+  800:   fastify.get<{
+  801:     Querystring: {
+  802:       page?: string
+  803:       pageSize?: string
+  804:       lotteryId?: string
+  805:       prizeType?: string
+  806:       status?: string
+  807:       search?: string
+  808:     }
+  809:   }>('/lottery-records', {
+  810:     onRequest: [fastify.authenticate, fastify.requireAdmin]
+  811:   }, async (request: FastifyRequest<{
+  812:     Querystring: {
+  813:       page?: string
+  814:       pageSize?: string
+  815:       lotteryId?: string
+  816:       prizeType?: string
+  817:       status?: string
+  818:       search?: string
+  819:     }
+  820:   }>, reply: FastifyReply) => {
+  821:     const { page = '1', pageSize = '20', lotteryId, prizeType, status, search } = request.query
+  822:     const filterLotteryId = parseOptionalPositiveId(lotteryId)
+  823:     const filterPrizeType = parseOptionalLotteryPrizeType(prizeType)
+  824:     const filterStatus = parseOptionalLotteryRecordStatus(status)
+  825: 
+  826:     if (filterLotteryId === null) {
+  827:       return reply.code(400).send({ error: 'INVALID_ID', message: 'Invalid lottery ID' })
+  828:     }
+  829:     if (filterPrizeType === null) {
+  830:       return reply.code(400).send({ error: 'INVALID_PRIZE_TYPE', message: 'Invalid prize type' })
+  831:     }
+  832:     if (filterStatus === null) {
+  833:       return reply.code(400).send({ error: 'INVALID_STATUS', message: 'Invalid record status' })
+  834:     }
+  835: 
+  836:     const result = await db.getAllLotteryRecords({
+  837:       page: parsePositiveIntegerQuery(page, 1, 100000),
+  838:       pageSize: parsePositiveIntegerQuery(pageSize, 20, 100),
+  839:       lotteryId: filterLotteryId,
+  840:       prizeType: filterPrizeType,
+  841:       status: filterStatus,
+  842:       search
+  843:     })
+  844: 
+  845:     return {
+  846:       records: result.records.map(record => ({
+  847:         id: record.id,
+  848:         lotteryId: record.lotteryId,
+  849:         lotteryName: record.lottery.name,
+  850:         userId: record.userId,
+  851:         username: record.user.username,
+  852:         userAvatar: record.user.avatarStyle,
+  853:         prizeType: record.prizeType,
+  854:         prizeName: record.prizeName,
+  855:         prizeValue: record.prizeValue,
+  856:         instanceDesc: record.prize?.instanceDesc || null,
+  857:         status: record.status,
+  858:         pointsSpent: record.pointsSpent,
+  859:         deliveredAt: record.deliveredAt?.toISOString() || null,
+  860:         deliveredBy: record.deliveredBy,
+  861:         ticketId: record.ticketId,
+  862:         createdAt: record.createdAt.toISOString()
+  863:       })),
+  864:       total: result.total,
+  865:       page: result.page,
+  866:       pageSize: result.pageSize
+  867:     }
+  868:   })
+  869: 
+  870:   /**
+  871:    * æ ‡è®°å®žä¾‹å¥–åŠ±ä¸ºå·²å‘æ”¾
+  872:    */
+  873:   fastify.post<{
+  874:     Params: { id: string }
+  875:     Body: {
+  876:       ticketId?: number
+  877:     }
+  878:   }>('/lottery-records/:id/deliver', {
+  879:     onRequest: [fastify.authenticate, fastify.requireAdmin]
+  880:   }, async (request: FastifyRequest<{
+  881:     Params: { id: string }
+  882:     Body: { ticketId?: number }
+  883:   }>, reply: FastifyReply) => {
+  884:     const recordId = parsePositiveRouteId(request.params.id)
+  885:     const ticketId = parseOptionalPositiveBodyId(request.body.ticketId)
+  886: 
+  887:     if (!recordId) {
+  888:       return reply.code(400).send({ error: 'INVALID_ID', message: 'Invalid record ID' })
+  889:     }
+  890:     if (ticketId === null) {
+  891:       return reply.code(400).send({ error: 'INVALID_TICKET_ID', message: 'Invalid ticket ID' })
+  892:     }
+  893: 
+  894:     const record = await db.prisma.lotteryRecord.findUnique({
+  895:       where: { id: recordId },
+  896:       include: { user: { select: { username: true } } }
+  897:     })
+  898: 
+  899:     if (!record) {
+  900:       return reply.code(404).send({ error: 'NOT_FOUND', message: 'Record not found' })
+  901:     }
+  902: 
+  903:     if (record.prizeType !== 'instance') {
+  904:       return reply.code(400).send({ error: 'NOT_INSTANCE_PRIZE', message: 'This is not an instance prize' })
+  905:     }
+  906: 
+  907:     if (record.status !== 'pending') {
+  908:       return reply.code(400).send({ error: 'ALREADY_DELIVERED', message: 'Prize has already been delivered' })
+  909:     }
+  910: 
+  911:     await db.updateLotteryRecordStatus(
+  912:       recordId,
+  913:       'delivered',
+  914:       request.user.id,
+  915:       ticketId
+  916:     )
+  917: 
+  918:     await createLog(
+  919:       request.user.id,
+  920:       'admin',
+  921:       'lottery.record.deliver',
+  922:       `Delivered instance prize to user "${record.user.username}" (Record ID: ${recordId})`,
+  923:       'success'
+  924:     )
+  925: 
+  926:     return { success: true }
+  927:   })
+  928: 
+  929:   // ==================== ç”¨æˆ·ç§¯åˆ†ç®¡ç† API ====================
+  930: 
+FILE server/scripts/test-admin-entertainment-route-guards.ts
+FILE server/scripts/test-entertainment-route-guards.ts
+FILE server/src/services/vip-benefits.ts
+FILE server/scripts/test-vip-benefit-route-guards.ts
+FILE server/prisma/schema.prisma
+DIFF admin route
+diff --git a/server/src/routes/admin-entertainment.ts b/server/src/routes/admin-entertainment.ts
+index 4e2cff6..27e9c32 100644
+--- a/server/src/routes/admin-entertainment.ts
++++ b/server/src/routes/admin-entertainment.ts
+@@ -24,6 +24,64 @@ const NOTIFICATION_TYPES = new Set(['telegram', 'discord', 'webhook'])
+ const USER_POINTS_ORDER_BY_FIELDS = new Set(['points', 'totalEarned', 'totalSpent'])
+ const SORT_ORDERS = new Set(['asc', 'desc'])
+ const MAX_POINTS_ADJUST_AMOUNT = 1_000_000
++const LOTTERY_TOTAL_PROBABILITY = 100
++const MAX_BALANCE_PRIZE_COST_MULTIPLIER = 100
++
++type LotteryPrizeConfig = {
++  type: LotteryPrizeType
++  value: number
++  probability: number
++}
++
++type LotteryConfigValidationError = {
++  error: string
++  message: string
++}
++
++function validateLotteryConfig(
++  costPoints: number,
++  prizes: LotteryPrizeConfig[]
++): LotteryConfigValidationError | null {
++  const totalProbability = prizes.reduce((sum, prize) => sum + prize.probability, 0)
++
++  if (totalProbability > LOTTERY_TOTAL_PROBABILITY) {
++    return {
++      error: 'INVALID_PROBABILITY_TOTAL',
++      message: 'Total prize probability must not exceed 100%'
++    }
++  }
++
++  if (totalProbability < LOTTERY_TOTAL_PROBABILITY && !prizes.some(prize => prize.type === 'nothing')) {
++    return {
++      error: 'MISSING_NOTHING_PRIZE',
++      message: 'A nothing prize is required when total prize probability is below 100%'
++    }
++  }
++
++  const balancePrizes = prizes.filter(prize => prize.type === 'balance')
++  const expectedBalanceValue = balancePrizes.reduce(
++    (sum, prize) => sum + (prize.probability / 100) * (prize.value / 100),
++    0
++  )
++  const drawCostValue = costPoints / 100
++
++  if (expectedBalanceValue > drawCostValue) {
++    return {
++      error: 'BALANCE_EXPECTED_VALUE_EXCEEDED',
++      message: 'Expected balance payout per draw must not exceed the point cost value'
++    }
++  }
++
++  const maxBalancePrizeValue = costPoints * MAX_BALANCE_PRIZE_COST_MULTIPLIER
++  if (balancePrizes.some(prize => prize.value > maxBalancePrizeValue)) {
++    return {
++      error: 'BALANCE_PRIZE_VALUE_EXCEEDED',
++      message: `A balance prize must not exceed ${MAX_BALANCE_PRIZE_COST_MULTIPLIER} times the point cost value`
++    }
++  }
++
++  return null
++}
+ 
+ function parsePositiveRouteId(value: string): number | null {
+   if (!POSITIVE_ROUTE_ID_PATTERN.test(value)) {
+@@ -283,6 +341,18 @@ export default async function adminEntertainmentRoutes(fastify: FastifyInstance)
+       return reply.code(400).send({ error: 'INVALID_COST', message: 'Cost points must be at least 1' })
+     }
+ 
++    if (existing.prizes.length > 0) {
++      const configError = validateLotteryConfig(
++        parsedCostPoints ?? existing.costPoints,
++        existing.prizes.map(prize => ({
++          type: prize.type,
++          value: prize.value,
++          probability: Number(prize.probability)
++        }))
++      )
++      if (configError) return reply.code(400).send(configError)
++    }
++
+     await db.updateLottery(lotteryId, {
+       name: name?.trim(),
+       description: description?.trim(),
+@@ -463,6 +533,20 @@ export default async function adminEntertainmentRoutes(fastify: FastifyInstance)
+       return reply.code(400).send({ error: 'INVALID_VALUE', message: 'Prize value must be a non-negative integer' })
+     }
+ 
++    const configError = validateLotteryConfig(lottery.costPoints, [
++      ...lottery.prizes.map(prize => ({
++        type: prize.type,
++        value: prize.value,
++        probability: Number(prize.probability)
++      })),
++      {
++        type: prizeType,
++        value: prizeType === 'badge' || prizeType === 'nothing' || prizeType === 'instance' ? 0 : parsedValue ?? 0,
++        probability: parsedProbability
++      }
++    ])
++    if (configError) return reply.code(400).send(configError)
++
+     const prize = await db.createPrize({
+       lotteryId,
+       name: name.trim(),
+@@ -564,6 +648,20 @@ export default async function adminEntertainmentRoutes(fastify: FastifyInstance)
+       return reply.code(400).send({ error: 'INVALID_DISPLAY_ORDER', message: 'Display order must be an integer' })
+     }
+ 
++    const lottery = await db.getLotteryById(existing.lotteryId)
++    if (!lottery) {
++      return reply.code(404).send({ error: 'NOT_FOUND', message: 'Lottery not found' })
++    }
++
++    const configError = validateLotteryConfig(lottery.costPoints, lottery.prizes.map(prize => ({
++      type: prize.id === prizeId ? prizeType : prize.type,
++      value: prize.id === prizeId
++        ? (prizeType === 'badge' || prizeType === 'nothing' ? 0 : parsedValue ?? prize.value)
++        : prize.value,
++      probability: prize.id === prizeId ? parsedProbability ?? Number(prize.probability) : Number(prize.probability)
++    })))
++    if (configError) return reply.code(400).send(configError)
++
+     await db.updatePrize(prizeId, {
+       name: name?.trim(),
+       type: parsedType ?? undefined,
+@@ -603,6 +701,21 @@ export default async function adminEntertainmentRoutes(fastify: FastifyInstance)
+       return reply.code(404).send({ error: 'NOT_FOUND', message: 'Prize not found' })
+     }
+ 
++    const lottery = await db.getLotteryById(existing.lotteryId)
++    if (!lottery) {
++      return reply.code(404).send({ error: 'NOT_FOUND', message: 'Lottery not found' })
++    }
++
++    const remainingPrizes = lottery.prizes.filter(prize => prize.id !== prizeId)
++    if (remainingPrizes.length > 0) {
++      const configError = validateLotteryConfig(lottery.costPoints, remainingPrizes.map(prize => ({
++        type: prize.type,
++        value: prize.value,
++        probability: Number(prize.probability)
++      })))
++      if (configError) return reply.code(400).send(configError)
++    }
++
+     await db.deletePrize(prizeId)
+ 
+     await createLog(
+DIFF admin guard
+diff --git a/server/scripts/test-admin-entertainment-route-guards.ts b/server/scripts/test-admin-entertainment-route-guards.ts
+index 0bbf651..fcaa099 100644
+--- a/server/scripts/test-admin-entertainment-route-guards.ts
++++ b/server/scripts/test-admin-entertainment-route-guards.ts
+@@ -88,6 +88,36 @@ assert.ok(
+   'admin prize mutation routes must validate inventory and prize values'
+ )
+ 
++assert.ok(
++  routeSource.includes('function validateLotteryConfig(') &&
++    routeSource.includes('totalProbability > LOTTERY_TOTAL_PROBABILITY') &&
++    routeSource.includes("totalProbability < LOTTERY_TOTAL_PROBABILITY && !prizes.some(prize => prize.type === 'nothing')") &&
++    routeSource.includes("error: 'INVALID_PROBABILITY_TOTAL'") &&
++    routeSource.includes("error: 'MISSING_NOTHING_PRIZE'"),
++  'admin lottery configuration saves must reject probability totals above 100% and require a nothing fallback below 100%'
++)
++
++assert.ok(
++  routeSource.includes('(prize.probability / 100) * (prize.value / 100)') &&
++    routeSource.includes('const drawCostValue = costPoints / 100') &&
++    routeSource.includes('expectedBalanceValue > drawCostValue') &&
++    routeSource.includes("error: 'BALANCE_EXPECTED_VALUE_EXCEEDED'"),
++  'admin lottery configuration saves must cap expected balance payout at the point cost value'
++)
++
++assert.ok(
++  routeSource.includes('const MAX_BALANCE_PRIZE_COST_MULTIPLIER = 100') &&
++    routeSource.includes('const maxBalancePrizeValue = costPoints * MAX_BALANCE_PRIZE_COST_MULTIPLIER') &&
++    routeSource.includes('balancePrizes.some(prize => prize.value > maxBalancePrizeValue)') &&
++    routeSource.includes("error: 'BALANCE_PRIZE_VALUE_EXCEEDED'"),
++  'admin lottery configuration saves must cap each balance prize at 100 times the draw cost value'
++)
++
++assert.ok(
++  (routeSource.match(/const configError = validateLotteryConfig\(/g)?.length ?? 0) === 4,
++  'lottery cost update and prize create/update/delete routes must validate the resulting lottery configuration before persistence'
++)
++
+ for (const forbiddenPattern of [
+   'Number(request.params.id)',
+   'Number(request.params.userId)',
+Argument types do not match
+At line:2 char:917
++ ... or ($i=$range[0]; $i -le [Math]::Min($range[1],$lines.Length); $i++)  ...
++                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+Argument types do not match
+At line:2 char:917
++ ... or ($i=$range[0]; $i -le [Math]::Min($range[1],$lines.Length); $i++)  ...
++                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+Argument types do not match
+At line:2 char:917
++ ... or ($i=$range[0]; $i -le [Math]::Min($range[1],$lines.Length); $i++)  ...
++                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+Argument types do not match
+At line:2 char:917
++ ... or ($i=$range[0]; $i -le [Math]::Min($range[1],$lines.Length); $i++)  ...
++                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+Argument types do not match
+At line:2 char:917
++ ... or ($i=$range[0]; $i -le [Math]::Min($range[1],$lines.Length); $i++)  ...
++                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+Argument types do not match
+At line:2 char:917
++ ... or ($i=$range[0]; $i -le [Math]::Min($range[1],$lines.Length); $i++)  ...
++                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+Argument types do not match
+At line:2 char:917
++ ... or ($i=$range[0]; $i -le [Math]::Min($range[1],$lines.Length); $i++)  ...
++                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+Argument types do not match
+At line:2 char:917
++ ... or ($i=$range[0]; $i -le [Math]::Min($range[1],$lines.Length); $i++)  ...
++                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+Argument types do not match
+At line:2 char:917
++ ... or ($i=$range[0]; $i -le [Math]::Min($range[1],$lines.Length); $i++)  ...
++                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+Argument types do not match
+At line:2 char:917
++ ... or ($i=$range[0]; $i -le [Math]::Min($range[1],$lines.Length); $i++)  ...
++                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (:) [], ArgumentException
+    + FullyQualifiedErrorId : System.ArgumentException
+ 
+warning: in the working copy of 'server/src/routes/admin-entertainment.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/scripts/test-admin-entertainment-route-guards.ts', LF will be replaced by CRLF the next time Git touches it
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$queries = @(@{File='"'server/prisma/schema.prisma';Start=4635;End=4698},@{File='server/scripts/test-admin-entertainment-route-guards.ts';Start=1;End=175},@{File='server/scripts/test-entertainment-route-guards.ts';Start=1;End=115},@{File='server/src/services/vip-benefits.ts';Start=1;End=260},@{File='server/scripts/test-vip-benefit-route-guards.ts';Start=1;End=230}); foreach ("'$q in $queries) { Write-Output "FILE $($q.File)"; $lines=Get-Content $q.File; $end=[int][Math]::Min([int]$q.End,[int]$lines.Count); for($i=[int]$q.Start;$i -le $end;$i++){ '"'{0,5}: {1}' -f "'$i,$lines[$i-1] } }; Write-Output '"'FX027 candidates'; Get-ChildItem server/src,server/scripts -Recurse -File | Where-Object { "'$_.FullName -notlike '"'*\\recharge.ts' } | Select-String -Pattern 'deleteMany|updateMany|isActive: false|enabled: false|records:.*some|cannot.*delete|soft delete|disable' -CaseSensitive:"'$false | Where-Object { $_.Path -match '"'vip|benefit' } | Select-Object Path,LineNumber,Line" in C:\Users\Administrator\Desktop\payinces
+ succeeded in 1846ms:
+FILE server/prisma/schema.prisma
+ 4635:   startAt         DateTime? @map("start_at")                         // å¼€å§‹æ—¶é—´ï¼ˆå¯é€‰ï¼‰
+ 4636:   endAt           DateTime? @map("end_at")                           // ç»“æŸæ—¶é—´ï¼ˆå¯é€‰ï¼‰
+ 4637:   totalDraws      Int       @default(0) @map("total_draws")          // æ€»æŠ½å¥–æ¬¡æ•°
+ 4638:   createdAt       DateTime  @default(now()) @map("created_at")
+ 4639:   updatedAt       DateTime  @updatedAt @map("updated_at")
+ 4640:   createdBy       Int       @map("created_by")                       // åˆ›å»ºè€…ç®¡ç†å‘˜ID
+ 4641: 
+ 4642:   prizes             LotteryPrize[]
+ 4643:   records            LotteryRecord[]
+ 4644:   notificationConfig LotteryNotificationConfig?
+ 4645: 
+ 4646:   @@map("lotteries")
+ 4647: }
+ 4648: 
+ 4649: // æŠ½å¥–å¥–å“
+ 4650: model LotteryPrize {
+ 4651:   id              Int              @id @default(autoincrement())
+ 4652:   lotteryId       Int              @map("lottery_id")
+ 4653:   name            String                                             // å¥–å“åç§°
+ 4654:   type            LotteryPrizeType                                   // å¥–å“ç±»åž‹
+ 4655:   value           Int              @default(0)                       // å¥–å“å€¼ï¼ˆç§¯åˆ†æ•°/ä½™é¢åˆ†/å®žä¾‹é…ç½®IDï¼‰
+ 4656:   probability     Decimal          @db.Decimal(5, 2)                 // ä¸­å¥–æ¦‚çŽ‡ï¼ˆç™¾åˆ†æ¯”ï¼Œå¦‚ 30.00 è¡¨ç¤º 30%ï¼‰
+ 4657:   totalQuantity   Int?             @map("total_quantity")            // æ€»æ•°é‡ï¼ˆnullè¡¨ç¤ºæ— é™ï¼‰
+ 4658:   remainQuantity  Int?             @map("remain_quantity")           // å‰©ä½™æ•°é‡
+ 4659:   displayOrder    Int              @default(0) @map("display_order") // æ˜¾ç¤ºé¡ºåº
+ 4660:   createdAt       DateTime         @default(now()) @map("created_at")
+ 4661: 
+ 4662:   // å®žä¾‹å¥–åŠ±ä¸“ç”¨å­—æ®µ
+ 4663:   instanceDesc    String?          @map("instance_desc")             // å®žä¾‹æè¿°ï¼ˆå¦‚ï¼š1æ ¸1G 30å¤©ï¼‰
+ 4664: 
+ 4665:   lottery         Lottery          @relation(fields: [lotteryId], references: [id], onDelete: Cascade)
+ 4666:   records         LotteryRecord[]
+ 4667: 
+ 4668:   @@index([lotteryId])
+ 4669:   @@map("lottery_prizes")
+ 4670: }
+ 4671: 
+ 4672: // ä¸­å¥–è®°å½•
+ 4673: model LotteryRecord {
+ 4674:   id               Int                 @id @default(autoincrement())
+ 4675:   lotteryId        Int                 @map("lottery_id")
+ 4676:   prizeId          Int                 @map("prize_id")
+ 4677:   userId           Int                 @map("user_id")
+ 4678:   prizeType        LotteryPrizeType    @map("prize_type")
+ 4679:   prizeValue       Int                 @map("prize_value")            // ä¸­å¥–æ—¶çš„å¥–å“å€¼ï¼ˆå¿«ç…§ï¼‰
+ 4680:   prizeName        String              @map("prize_name")             // ä¸­å¥–æ—¶çš„å¥–å“åç§°ï¼ˆå¿«ç…§ï¼‰
+ 4681:   status           LotteryRecordStatus @default(delivered)
+ 4682:   pointsSpent      Int                 @map("points_spent")           // æ¶ˆè€—çš„ç§¯åˆ†
+ 4683:   deliveredAt      DateTime?           @map("delivered_at")           // å‘æ”¾æ—¶é—´
+ 4684:   deliveredBy      Int?                @map("delivered_by")           // å‘æ”¾ç®¡ç†å‘˜ï¼ˆå®žä¾‹å¥–åŠ±ï¼‰
+ 4685:   ticketId         Int?                @map("ticket_id")              // å…³è”å·¥å•IDï¼ˆå®žä¾‹å¥–åŠ±ï¼‰
+ 4686:   notificationSent Boolean             @default(false) @map("notification_sent")
+ 4687:   createdAt        DateTime            @default(now()) @map("created_at")
+ 4688: 
+ 4689:   lottery Lottery      @relation(fields: [lotteryId], references: [id], onDelete: Cascade)
+ 4690:   prize   LotteryPrize @relation(fields: [prizeId], references: [id], onDelete: Cascade)
+ 4691:   user    User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+ 4692: 
+ 4693:   @@index([userId, createdAt(sort: Desc)])
+ 4694:   @@index([lotteryId])
+ 4695:   @@index([status])
+ 4696:   @@map("lottery_records")
+ 4697: }
+ 4698: 
+FILE server/scripts/test-admin-entertainment-route-guards.ts
+    1: import assert from 'node:assert/strict'
+    2: import { readFileSync } from 'node:fs'
+    3: import { resolve } from 'node:path'
+    4: 
+    5: const routeSource = readFileSync(resolve(process.cwd(), 'src/routes/admin-entertainment.ts'), 'utf8')
+    6: const lotteryDbSource = readFileSync(resolve(process.cwd(), 'src/db/lottery.ts'), 'utf8')
+    7: const pointsDbSource = readFileSync(resolve(process.cwd(), 'src/db/points.ts'), 'utf8')
+    8: const adminEntertainmentViewSource = readFileSync(
+    9:   resolve(process.cwd(), '../client/src/views/admin/EntertainmentView.vue'),
+   10:   'utf8'
+   11: )
+   12: 
+   13: assert.ok(
+   14:   routeSource.includes('function parsePositiveRouteId(value: string): number | null') &&
+   15:     routeSource.includes('const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\\d*$/') &&
+   16:     routeSource.includes('Number.isSafeInteger(parsed)'),
+   17:   'admin entertainment routes must define strict positive safe-integer route ID parsing'
+   18: )
+   19: 
+   20: assert.equal(
+   21:   routeSource.match(/const lotteryId = parsePositiveRouteId\(request\.params\.id\)/g)?.length ?? 0,
+   22:   5,
+   23:   'admin lottery update/delete/detail/prize-create/notification routes must strictly validate lottery IDs'
+   24: )
+   25: 
+   26: assert.equal(
+   27:   routeSource.match(/const prizeId = parsePositiveRouteId\(request\.params\.id\)/g)?.length ?? 0,
+   28:   2,
+   29:   'admin prize update/delete routes must strictly validate prize IDs'
+   30: )
+   31: 
+   32: assert.equal(
+   33:   routeSource.match(/const userId = parsePositiveRouteId\(request\.params\.userId\)/g)?.length ?? 0,
+   34:   3,
+   35:   'admin user points adjust/detail/log routes must strictly validate user IDs'
+   36: )
+   37: 
+   38: assert.ok(
+   39:   routeSource.includes('const recordId = parsePositiveRouteId(request.params.id)') &&
+   40:     routeSource.includes('const ticketId = parseOptionalPositiveBodyId(request.body.ticketId)') &&
+   41:     routeSource.includes("return reply.code(400).send({ error: 'INVALID_TICKET_ID', message: 'Invalid ticket ID' })"),
+   42:   'admin lottery prize delivery route must strictly validate record and ticket IDs'
+   43: )
+   44: 
+   45: assert.ok(
+   46:     routeSource.includes('function parsePositiveIntegerQuery(value: string | undefined, fallback: number, max: number): number') &&
+   47:     routeSource.match(/page: parsePositiveIntegerQuery\(page, 1, 100000\)/g)?.length === 5 &&
+   48:     routeSource.match(/pageSize: parsePositiveIntegerQuery\(pageSize, 20, 100\)/g)?.length === 5,
+   49:   'admin entertainment list routes must clamp pagination before DB access'
+   50: )
+   51: 
+   52: assert.ok(
+   53:   routeSource.includes('const LOTTERY_PRIZE_TYPES = new Set<LotteryPrizeType>') &&
+   54:     routeSource.includes('function parseLotteryPrizeType(value: unknown): LotteryPrizeType | null') &&
+   55:     routeSource.includes('function parseOptionalLotteryPrizeType(value: string | undefined): LotteryPrizeType | undefined | null') &&
+   56:     routeSource.includes("return reply.code(400).send({ error: 'INVALID_PRIZE_TYPE', message: 'Invalid prize type' })"),
+   57:   'admin lottery prize routes and record filters must validate prize types'
+   58: )
+   59: 
+   60: assert.ok(
+   61:   routeSource.includes('const LOTTERY_RECORD_STATUSES = new Set<LotteryRecordStatus>') &&
+   62:     routeSource.includes('function parseOptionalLotteryRecordStatus(value: string | undefined): LotteryRecordStatus | undefined | null') &&
+   63:     routeSource.includes("return reply.code(400).send({ error: 'INVALID_STATUS', message: 'Invalid record status' })"),
+   64:   'admin lottery record filters must validate record status'
+   65: )
+   66: 
+   67: assert.ok(
+   68:   routeSource.includes('const NOTIFICATION_TYPES = new Set([\'telegram\', \'discord\', \'webhook\'])') &&
+   69:     routeSource.includes('function parseNotificationType(value: unknown): string | null') &&
+   70:     routeSource.includes('type: notificationType'),
+   71:   'admin lottery notification route must validate notification type before persistence'
+   72: )
+   73: 
+   74: assert.ok(
+   75:   routeSource.includes('const MAX_POINTS_ADJUST_AMOUNT = 1_000_000') &&
+   76:     routeSource.includes('const parsedAmount = parseIntegerBody(amount)') &&
+   77:     routeSource.includes('Math.abs(parsedAmount) > MAX_POINTS_ADJUST_AMOUNT') &&
+   78:     routeSource.includes('parsedAmount,') &&
+   79:     routeSource.includes('USER_POINTS_ORDER_BY_FIELDS') &&
+   80:     routeSource.includes('SORT_ORDERS'),
+   81:   'admin user points routes must validate adjustment amount and sort options'
+   82: )
+   83: 
+   84: assert.ok(
+   85:   routeSource.includes('parseOptionalPositiveBodyId(totalQuantity)') &&
+   86:     routeSource.includes('parseOptionalNonNegativeIntegerBody(remainQuantity)') &&
+   87:     routeSource.includes("return reply.code(400).send({ error: 'INVALID_VALUE', message: 'Prize value must be a non-negative integer' })"),
+   88:   'admin prize mutation routes must validate inventory and prize values'
+   89: )
+   90: 
+   91: assert.ok(
+   92:   routeSource.includes('function validateLotteryConfig(') &&
+   93:     routeSource.includes('totalProbability > LOTTERY_TOTAL_PROBABILITY') &&
+   94:     routeSource.includes("totalProbability < LOTTERY_TOTAL_PROBABILITY && !prizes.some(prize => prize.type === 'nothing')") &&
+   95:     routeSource.includes("error: 'INVALID_PROBABILITY_TOTAL'") &&
+   96:     routeSource.includes("error: 'MISSING_NOTHING_PRIZE'"),
+   97:   'admin lottery configuration saves must reject probability totals above 100% and require a nothing fallback below 100%'
+   98: )
+   99: 
+  100: assert.ok(
+  101:   routeSource.includes('(prize.probability / 100) * (prize.value / 100)') &&
+  102:     routeSource.includes('const drawCostValue = costPoints / 100') &&
+  103:     routeSource.includes('expectedBalanceValue > drawCostValue') &&
+  104:     routeSource.includes("error: 'BALANCE_EXPECTED_VALUE_EXCEEDED'"),
+  105:   'admin lottery configuration saves must cap expected balance payout at the point cost value'
+  106: )
+  107: 
+  108: assert.ok(
+  109:   routeSource.includes('const MAX_BALANCE_PRIZE_COST_MULTIPLIER = 100') &&
+  110:     routeSource.includes('const maxBalancePrizeValue = costPoints * MAX_BALANCE_PRIZE_COST_MULTIPLIER') &&
+  111:     routeSource.includes('balancePrizes.some(prize => prize.value > maxBalancePrizeValue)') &&
+  112:     routeSource.includes("error: 'BALANCE_PRIZE_VALUE_EXCEEDED'"),
+  113:   'admin lottery configuration saves must cap each balance prize at 100 times the draw cost value'
+  114: )
+  115: 
+  116: assert.ok(
+  117:   (routeSource.match(/const configError = validateLotteryConfig\(/g)?.length ?? 0) === 4,
+  118:   'lottery cost update and prize create/update/delete routes must validate the resulting lottery configuration before persistence'
+  119: )
+  120: 
+  121: for (const forbiddenPattern of [
+  122:   'Number(request.params.id)',
+  123:   'Number(request.params.userId)',
+  124:   'Number(request.query',
+  125:   'Number(request.body',
+  126:   'isNaN(',
+  127:   'page: Number(page)',
+  128:   'pageSize: Number(pageSize)',
+  129:   'lotteryId: lotteryId ? Number(lotteryId) : undefined',
+  130:   'prizeType: prizeType as LotteryPrizeType | undefined',
+  131:   'status: status as LotteryRecordStatus | undefined',
+  132:   "orderBy: orderBy as 'points' | 'totalEarned' | 'totalSpent'",
+  133:   "order: order as 'asc' | 'desc'"
+  134: ]) {
+  135:   assert.ok(
+  136:     !routeSource.includes(forbiddenPattern),
+  137:     `admin entertainment routes must not keep loose parsing: ${forbiddenPattern}`
+  138:   )
+  139: }
+  140: 
+  141: assert.ok(
+  142:   lotteryDbSource.includes('function clampPagination(') &&
+  143:     lotteryDbSource.includes('function normalizeLotteryPrizeType(type: LotteryPrizeType | undefined): LotteryPrizeType | undefined') &&
+  144:     lotteryDbSource.includes('function normalizeLotteryRecordStatus(status: LotteryRecordStatus | undefined): LotteryRecordStatus | undefined') &&
+  145:     lotteryDbSource.includes('const { page, pageSize } = clampPagination(options.page, options.pageSize)') &&
+  146:     lotteryDbSource.includes('const search = typeof options.search === \'string\' ? options.search.trim().slice(0, 128) : undefined'),
+  147:   'lottery admin DB helpers must clamp pagination and normalize filters'
+  148: )
+  149: 
+  150: assert.ok(
+  151:   pointsDbSource.includes('await advisoryTransactionLock(tx, USER_POINTS_LOCK_NAMESPACE, userId)') &&
+  152:     pointsDbSource.includes('type: \'admin_adjust\'') &&
+  153:     pointsDbSource.includes('if (amount < 0 && userPoints.points + amount < 0)'),
+  154:   'admin points adjustment DB helper must keep the points lock and non-negative balance guard'
+  155: )
+  156: 
+  157: assert.ok(
+  158:   adminEntertainmentViewSource.includes('table class="w-full table-fixed"') &&
+  159:     adminEntertainmentViewSource.includes('table class="w-full table-fixed"') &&
+  160:     adminEntertainmentViewSource.includes('table class="w-full table-fixed"') &&
+  161:     adminEntertainmentViewSource.includes('table class="w-full table-fixed"') &&
+  162:     adminEntertainmentViewSource.includes('table class="w-full table-fixed"'),
+  163:   'admin entertainment checkin, lotteries, records, users, and badges tables must keep fixed desktop table layouts'
+  164: )
+  165: 
+  166: assert.ok(
+  167:   (adminEntertainmentViewSource.match(/class="space-y-3 p-4 lg:hidden"/g)?.length ?? 0) >= 5 &&
+  168:     (adminEntertainmentViewSource.match(/class="hidden overflow-hidden lg:block"/g)?.length ?? 0) >= 5 &&
+  169:     !adminEntertainmentViewSource.includes('v-else class="overflow-x-auto"') &&
+  170:     !adminEntertainmentViewSource.includes('table class="w-full"'),
+  171:   'admin entertainment list sections must keep mobile cards and avoid unconstrained desktop overflow tables'
+  172: )
+  173: 
+  174: assert.ok(
+  175:   adminEntertainmentViewSource.includes('@click="openPrizesModal(lottery)"') &&
+FILE server/scripts/test-entertainment-route-guards.ts
+    1: import assert from 'node:assert/strict'
+    2: import { readFileSync } from 'node:fs'
+    3: import { resolve } from 'node:path'
+    4: 
+    5: const routeSource = readFileSync(resolve(process.cwd(), 'src/routes/entertainment.ts'), 'utf8')
+    6: const lotteryDbSource = readFileSync(resolve(process.cwd(), 'src/db/lottery.ts'), 'utf8')
+    7: const badgesDbSource = readFileSync(resolve(process.cwd(), 'src/db/badges.ts'), 'utf8')
+    8: 
+    9: assert.ok(
+   10:   routeSource.includes('function parsePositiveRouteId(value: string): number | null') &&
+   11:     routeSource.includes('const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\\d*$/') &&
+   12:     routeSource.includes('Number.isSafeInteger(parsed)'),
+   13:   'entertainment routes must use a strict positive safe-integer route ID parser'
+   14: )
+   15: 
+   16: assert.equal(
+   17:   routeSource.match(/const lotteryId = parsePositiveRouteId\(request\.params\.id\)/g)?.length ?? 0,
+   18:   3,
+   19:   'lottery detail, draw, and multi-draw routes must strictly validate lottery IDs'
+   20: )
+   21: 
+   22: assert.ok(
+   23:   routeSource.includes('function parsePositiveIntegerQuery(value: string | undefined, fallback: number, max: number): number') &&
+   24:     routeSource.includes('page: parsePositiveIntegerQuery(page, 1, 100000)') &&
+   25:     routeSource.includes('pageSize: parsePositiveIntegerQuery(pageSize, 20, 100)'),
+   26:   'entertainment list routes must clamp pagination before DB access'
+   27: )
+   28: 
+   29: assert.ok(
+   30:   routeSource.includes('const POINTS_LOG_TYPES = new Set<PointsLogType>') &&
+   31:     routeSource.includes('function parsePointsLogType(value: string | undefined): PointsLogType | undefined | null') &&
+   32:     routeSource.includes("return reply.code(400).send({ error: 'INVALID_POINTS_LOG_TYPE', message: 'Invalid points log type' })"),
+   33:   'points log route must reject unsupported log types'
+   34: )
+   35: 
+   36: assert.ok(
+   37:   routeSource.includes('const LOTTERY_PRIZE_TYPES = new Set<LotteryPrizeType>') &&
+   38:     routeSource.includes('function parseLotteryPrizeType(value: string | undefined): LotteryPrizeType | undefined | null') &&
+   39:     routeSource.includes("return reply.code(400).send({ error: 'INVALID_PRIZE_TYPE', message: 'Invalid prize type' })"),
+   40:   'lottery record route must reject unsupported prize types'
+   41: )
+   42: 
+   43: assert.ok(
+   44:   routeSource.includes('function parsePositiveBodyId(value: unknown): number | null') &&
+   45:     routeSource.includes('Number.isSafeInteger(value)'),
+   46:   'badge apply routes must strictly validate body IDs'
+   47: )
+   48: 
+   49: assert.equal(
+   50:   routeSource.match(/const ownershipId = parsePositiveBodyId\(request\.body\.ownershipId\)/g)?.length ?? 0,
+   51:   3,
+   52:   'badge avatar apply, instance apply, and unapply routes must validate ownership IDs'
+   53: )
+   54: 
+   55: assert.equal(
+   56:   routeSource.match(/const instanceId = parsePositiveBodyId\(request\.body\.instanceId\)/g)?.length ?? 0,
+   57:   1,
+   58:   'badge instance apply route must validate instance IDs'
+   59: )
+   60: 
+   61: for (const forbiddenPattern of [
+   62:   'Number(request.params.id)',
+   63:   'isNaN(lotteryId)',
+   64:   'page: Number(page)',
+   65:   'pageSize: Number(pageSize)',
+   66:   'type: type as any',
+   67:   'prizeType: prizeType || undefined',
+   68:   'Number(request.body.ownershipId)',
+   69:   'Number(request.body.instanceId)',
+   70:   'isNaN(ownershipId)',
+   71:   'isNaN(instanceId)'
+   72: ]) {
+   73:   assert.ok(
+   74:     !routeSource.includes(forbiddenPattern),
+   75:     `entertainment routes must not keep loose parsing: ${forbiddenPattern}`
+   76:   )
+   77: }
+   78: 
+   79: assert.ok(
+   80:   lotteryDbSource.includes('function clampPagination(') &&
+   81:     lotteryDbSource.includes('function normalizeLotteryPrizeType(type: LotteryPrizeType | undefined): LotteryPrizeType | undefined') &&
+   82:     lotteryDbSource.includes('const where: Prisma.LotteryRecordWhereInput = { userId }'),
+   83:   'lottery record DB helper must keep pagination and prize-type defense in depth'
+   84: )
+   85: 
+   86: assert.ok(
+   87:   badgesDbSource.includes('where: { id: ownershipId, userId }') &&
+   88:     badgesDbSource.includes('where: {') &&
+   89:     badgesDbSource.includes('id: instanceId,') &&
+   90:     badgesDbSource.includes('userId,') &&
+   91:     badgesDbSource.includes('status: { not: \'deleted\' }'),
+   92:   'badge DB helpers must keep ownership and instance ownership filters'
+   93: )
+   94: 
+   95: console.log('entertainment route guard tests passed')
+FILE server/src/services/vip-benefits.ts
+    1: import { Prisma, type VipBenefitClaim, type VipBenefitClaimStatus, type VipBenefitReward } from '@prisma/client'
+    2: import { prisma } from '../db/prisma.js'
+    3: import {
+    4:   MAX_VIP_LEVEL,
+    5:   calculateUserVipLevelByMetric,
+    6:   getUserVipMetric,
+    7:   getUserVipStats,
+    8:   getVipBadgeStyleForLevel,
+    9:   getVipRules,
+   10:   type UserVipMetric,
+   11:   type UserVipStats,
+   12:   type VipBadgeStyle
+   13: } from './vip-levels.js'
+   14: import {
+   15:   USER_BALANCE_LOCK_NAMESPACE,
+   16:   USER_POINTS_LOCK_NAMESPACE,
+   17:   USER_VIP_BENEFIT_CLAIM_LOCK_NAMESPACE,
+   18:   advisoryTransactionLock,
+   19:   tryAdvisoryTransactionLock
+   20: } from '../db/advisory-locks.js'
+   21: 
+   22: type DbClient = Prisma.TransactionClient | typeof prisma
+   23: 
+   24: export type VipBenefitRewardTypeValue = 'balance' | 'points' | 'instance'
+   25: export type VipBenefitRewardState = 'claimable' | 'claimed' | 'locked' | 'blocked'
+   26: 
+   27: export interface VipBenefitRewardInput {
+   28:   level?: number
+   29:   type?: VipBenefitRewardTypeValue
+   30:   title?: string
+   31:   description?: string | null
+   32:   claimLimit?: number
+   33:   sortOrder?: number
+   34:   enabled?: boolean
+   35:   config?: Record<string, unknown> | null
+   36: }
+   37: 
+   38: export interface VipBenefitRewardConfig {
+   39:   amount?: number
+   40:   packageId?: number | null
+   41:   packageName?: string | null
+   42:   planId?: number | null
+   43:   planName?: string | null
+   44:   days?: number
+   45:   quantity?: number
+   46: }
+   47: 
+   48: export interface VipBenefitClaimView {
+   49:   id: number
+   50:   rewardId: number
+   51:   level: number
+   52:   status: VipBenefitClaimStatus
+   53:   claimNo: number
+   54:   snapshot: Record<string, unknown>
+   55:   deliveredAt: string | null
+   56:   createdAt: string
+   57: }
+   58: 
+   59: export interface VipBenefitRewardView {
+   60:   id: number
+   61:   level: number
+   62:   type: VipBenefitRewardTypeValue
+   63:   title: string
+   64:   description: string | null
+   65:   claimLimit: number
+   66:   sortOrder: number
+   67:   enabled: boolean
+   68:   config: VipBenefitRewardConfig
+   69:   createdAt: string
+   70:   updatedAt: string
+   71:   claimedCount: number
+   72:   remainingClaims: number
+   73:   state: VipBenefitRewardState
+   74:   blockedByLevel: number | null
+   75:   claims: VipBenefitClaimView[]
+   76: }
+   77: 
+   78: export interface VipBenefitAmountSummary {
+   79:   balanceAmount: number
+   80:   pointsAmount: number
+   81:   instanceQuantity: number
+   82: }
+   83: 
+   84: export interface VipBenefitOverview {
+   85:   currentLevel: number
+   86:   userVipMetric: UserVipMetric
+   87:   userStats: UserVipStats
+   88:   userVipBadgeStyle: VipBadgeStyle | null
+   89:   rewards: VipBenefitRewardView[]
+   90:   summary: {
+   91:     totalRewards: number
+   92:     unlockedRewards: number
+   93:     claimableRewards: number
+   94:     claimedRewards: number
+   95:     lockedRewards: number
+   96:     blockedRewards: number
+   97:     pendingRewards: number
+   98:     entitlement: VipBenefitAmountSummary
+   99:     remaining: VipBenefitAmountSummary
+  100:   }
+  101: }
+  102: 
+  103: const REWARD_TYPES = new Set<VipBenefitRewardTypeValue>(['balance', 'points', 'instance'])
+  104: const MAX_MONEY_AMOUNT = 99999999.99
+  105: const MAX_POINTS_AMOUNT = 1000000000
+  106: const MAX_CLAIM_LIMIT = 100
+  107: const MAX_SORT_ORDER = 1000000
+  108: const MAX_INSTANCE_DAYS = 3650
+  109: const MAX_INSTANCE_QUANTITY = 10
+  110: const MAX_TITLE_LENGTH = 80
+  111: const MAX_DESCRIPTION_LENGTH = 300
+  112: const MAX_BULK_CLAIMS = 1000
+  113: 
+  114: export class VipBenefitError extends Error {
+  115:   constructor(
+  116:     public readonly code: string,
+  117:     message: string,
+  118:     public readonly statusCode = 400
+  119:   ) {
+  120:     super(message)
+  121:   }
+  122: }
+  123: 
+  124: function toNumber(value: unknown): number {
+  125:   if (value === null || value === undefined) return 0
+  126:   const numberValue = Number(value)
+  127:   return Number.isFinite(numberValue) ? numberValue : 0
+  128: }
+  129: 
+  130: function roundMoney(value: number): number {
+  131:   return Math.round(value * 100) / 100
+  132: }
+  133: 
+  134: function getRecord(value: unknown): Record<string, unknown> {
+  135:   return value && typeof value === 'object' && !Array.isArray(value)
+  136:     ? value as Record<string, unknown>
+  137:     : {}
+  138: }
+  139: 
+  140: function requireSafeInteger(value: unknown, field: string): number {
+  141:   if (typeof value !== 'number' || !Number.isSafeInteger(value)) {
+  142:     throw new VipBenefitError('INVALID_NUMBER', `${field} must be a safe integer`)
+  143:   }
+  144:   return value
+  145: }
+  146: 
+  147: function requireFiniteNumber(value: unknown, field: string): number {
+  148:   if (typeof value !== 'number' || !Number.isFinite(value)) {
+  149:     throw new VipBenefitError('INVALID_NUMBER', `${field} must be a finite number`)
+  150:   }
+  151:   return value
+  152: }
+  153: 
+  154: function normalizeLevel(value: unknown): number {
+  155:   const level = requireSafeInteger(value, 'VIP level')
+  156:   if (level < 1 || level > MAX_VIP_LEVEL) {
+  157:     throw new VipBenefitError('INVALID_LEVEL', `VIP level must be between 1 and ${MAX_VIP_LEVEL}`)
+  158:   }
+  159:   return level
+  160: }
+  161: 
+  162: function normalizeRewardType(value: unknown): VipBenefitRewardTypeValue {
+  163:   if (typeof value === 'string' && REWARD_TYPES.has(value as VipBenefitRewardTypeValue)) {
+  164:     return value as VipBenefitRewardTypeValue
+  165:   }
+  166:   throw new VipBenefitError('INVALID_REWARD_TYPE', 'Invalid VIP benefit reward type')
+  167: }
+  168: 
+  169: function normalizeTitle(value: unknown): string {
+  170:   if (typeof value !== 'string') {
+  171:     throw new VipBenefitError('INVALID_TITLE', 'Reward title is required')
+  172:   }
+  173:   const title = value.trim()
+  174:   if (!title) {
+  175:     throw new VipBenefitError('INVALID_TITLE', 'Reward title is required')
+  176:   }
+  177:   if (title.length > MAX_TITLE_LENGTH) {
+  178:     throw new VipBenefitError('INVALID_TITLE', `Reward title cannot exceed ${MAX_TITLE_LENGTH} characters`)
+  179:   }
+  180:   return title
+  181: }
+  182: 
+  183: function normalizeDescription(value: unknown): string | null {
+  184:   if (value === null || value === undefined) return null
+  185:   if (typeof value !== 'string') return null
+  186:   const description = value.trim()
+  187:   if (!description) return null
+  188:   return description.slice(0, MAX_DESCRIPTION_LENGTH)
+  189: }
+  190: 
+  191: function normalizePositiveInteger(value: unknown, field: string, max: number): number {
+  192:   const parsed = requireSafeInteger(value, field)
+  193:   if (parsed <= 0 || parsed > max) {
+  194:     throw new VipBenefitError('INVALID_NUMBER', `${field} must be an integer between 1 and ${max}`)
+  195:   }
+  196:   return parsed
+  197: }
+  198: 
+  199: function normalizeOptionalPositiveInteger(value: unknown, fallback: number, field: string, max: number): number {
+  200:   if (value === null || value === undefined || value === '') return fallback
+  201:   return normalizePositiveInteger(value, field, max)
+  202: }
+  203: 
+  204: function normalizeMoney(value: unknown, field: string): number {
+  205:   const parsed = requireFiniteNumber(value, field)
+  206:   if (parsed <= 0 || parsed > MAX_MONEY_AMOUNT) {
+  207:     throw new VipBenefitError('INVALID_AMOUNT', `${field} must be between 0.01 and ${MAX_MONEY_AMOUNT}`)
+  208:   }
+  209:   return roundMoney(parsed)
+  210: }
+  211: 
+  212: function normalizeSortOrder(value: unknown): number {
+  213:   if (value === null || value === undefined || value === '') return 0
+  214:   const parsed = requireSafeInteger(value, 'Sort order')
+  215:   if (parsed < 0 || parsed > MAX_SORT_ORDER) {
+  216:     throw new VipBenefitError('INVALID_SORT_ORDER', `Sort order must be an integer between 0 and ${MAX_SORT_ORDER}`)
+  217:   }
+  218:   return parsed
+  219: }
+  220: 
+  221: function normalizeLabel(value: unknown): string | null {
+  222:   if (typeof value !== 'string') return null
+  223:   const trimmed = value.trim()
+  224:   return trimmed ? trimmed.slice(0, 100) : null
+  225: }
+  226: 
+  227: function normalizeRewardConfig(type: VipBenefitRewardTypeValue, value: unknown): VipBenefitRewardConfig {
+  228:   const config = getRecord(value)
+  229:   if (type === 'balance') {
+  230:     return { amount: normalizeMoney(config.amount, 'Balance reward amount') }
+  231:   }
+  232:   if (type === 'points') {
+  233:     return { amount: normalizePositiveInteger(config.amount, 'Points reward amount', MAX_POINTS_AMOUNT) }
+  234:   }
+  235: 
+  236:   return {
+  237:     packageId: normalizePositiveInteger(config.packageId, 'Package ID', 2147483647),
+  238:     packageName: normalizeLabel(config.packageName),
+  239:     planId: normalizePositiveInteger(config.planId, 'Plan ID', 2147483647),
+  240:     planName: normalizeLabel(config.planName),
+  241:     days: normalizeOptionalPositiveInteger(config.days, 30, 'Instance reward days', MAX_INSTANCE_DAYS),
+  242:     quantity: normalizeOptionalPositiveInteger(config.quantity, 1, 'Instance reward quantity', MAX_INSTANCE_QUANTITY)
+  243:   }
+  244: }
+  245: 
+  246: function normalizeStoredRewardConfig(type: VipBenefitRewardTypeValue, value: unknown): VipBenefitRewardConfig {
+  247:   const config = getRecord(value)
+  248:   if (type === 'balance') {
+  249:     return { amount: roundMoney(Math.max(0, toNumber(config.amount))) }
+  250:   }
+  251:   if (type === 'points') {
+  252:     return { amount: Math.max(0, Math.floor(toNumber(config.amount))) }
+  253:   }
+  254:   return {
+  255:     packageId: Number.isInteger(Number(config.packageId)) ? Number(config.packageId) : null,
+  256:     packageName: normalizeLabel(config.packageName),
+  257:     planId: Number.isInteger(Number(config.planId)) ? Number(config.planId) : null,
+  258:     planName: normalizeLabel(config.planName),
+  259:     days: Math.max(1, Math.min(MAX_INSTANCE_DAYS, Math.floor(toNumber(config.days) || 30))),
+  260:     quantity: Math.max(1, Math.min(MAX_INSTANCE_QUANTITY, Math.floor(toNumber(config.quantity) || 1)))
+FILE server/scripts/test-vip-benefit-route-guards.ts
+    1: import assert from 'node:assert/strict'
+    2: import { readFileSync } from 'node:fs'
+    3: import { resolve } from 'node:path'
+    4: 
+    5: const routeSource = readFileSync(resolve(process.cwd(), 'src/routes/vip-benefits.ts'), 'utf8')
+    6: const serviceSource = readFileSync(resolve(process.cwd(), 'src/services/vip-benefits.ts'), 'utf8')
+    7: const schemaSource = readFileSync(resolve(process.cwd(), 'prisma/schema.prisma'), 'utf8')
+    8: 
+    9: assert.ok(
+   10:   routeSource.includes('const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\\d*$/') &&
+   11:     routeSource.includes('function parsePositiveRouteId(value: string): number | null') &&
+   12:     routeSource.includes('Number.isSafeInteger(parsed)'),
+   13:   'VIP benefit routes must define strict positive safe-integer route ID parsing'
+   14: )
+   15: 
+   16: assert.equal(
+   17:   routeSource.match(/const rewardId = parsePositiveRouteId\(request\.params\.rewardId\)/g)?.length ?? 0,
+   18:   1,
+   19:   'VIP benefit claim route must strictly validate reward IDs'
+   20: )
+   21: 
+   22: assert.equal(
+   23:   routeSource.match(/const id = parsePositiveRouteId\(request\.params\.id\)/g)?.length ?? 0,
+   24:   2,
+   25:   'VIP benefit admin update/delete routes must strictly validate reward IDs'
+   26: )
+   27: 
+   28: for (const forbiddenPattern of [
+   29:   'function parseId(value: unknown)',
+   30:   'Number(request.params'
+   31: ]) {
+   32:   assert.ok(
+   33:     !routeSource.includes(forbiddenPattern),
+   34:     `VIP benefit routes must not keep loose route ID parsing: ${forbiddenPattern}`
+   35:   )
+   36: }
+   37: 
+   38: assert.ok(
+   39:   serviceSource.includes('function requireSafeInteger(value: unknown, field: string): number') &&
+   40:     serviceSource.includes("typeof value !== 'number' || !Number.isSafeInteger(value)") &&
+   41:     serviceSource.includes('function requireFiniteNumber(value: unknown, field: string): number') &&
+   42:     serviceSource.includes("typeof value !== 'number' || !Number.isFinite(value)"),
+   43:   'VIP benefit reward normalization must require JSON number inputs instead of string coercion'
+   44: )
+   45: 
+   46: assert.ok(
+   47:   serviceSource.includes("const level = requireSafeInteger(value, 'VIP level')") &&
+   48:     serviceSource.includes('const parsed = requireSafeInteger(value, field)') &&
+   49:     serviceSource.includes('const parsed = requireFiniteNumber(value, field)') &&
+   50:     serviceSource.includes("const parsed = requireSafeInteger(value, 'Sort order')"),
+   51:   'VIP benefit level, integer, money, and sort-order normalizers must use strict numeric helpers'
+   52: )
+   53: 
+   54: for (const forbiddenPattern of [
+   55:   'const level = Number(value)',
+   56:   'const parsed = Number(value)',
+   57:   'const parsed = Number(value ?? 0)',
+   58:   'const parsedRewardId = Number(rewardId)'
+   59: ]) {
+   60:   assert.ok(
+   61:     !serviceSource.includes(forbiddenPattern),
+   62:     `VIP benefit service must not keep loose reward config parsing: ${forbiddenPattern}`
+   63:   )
+   64: }
+   65: 
+   66: assert.ok(
+   67:   serviceSource.includes('if (!Number.isSafeInteger(rewardId) || rewardId <= 0)') &&
+   68:     serviceSource.includes('await advisoryTransactionLock(tx, USER_VIP_BENEFIT_CLAIM_LOCK_NAMESPACE, userId)') &&
+   69:     serviceSource.includes('tryAdvisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, userId)') &&
+   70:     serviceSource.includes('await advisoryTransactionLock(tx, USER_POINTS_LOCK_NAMESPACE, userId)') &&
+   71:     serviceSource.includes("if (error?.code === 'P2002')"),
+   72:   'VIP benefit claim path must keep safe reward IDs, user claim lock, accounting locks, and unique-conflict handling'
+   73: )
+   74: 
+   75: assert.ok(
+   76:   serviceSource.includes('export async function deleteVipBenefitReward(id: number): Promise<void>') &&
+   77:     serviceSource.includes('await prisma.vipBenefitReward.update({') &&
+   78:     serviceSource.includes('data: { enabled: false }') &&
+   79:     !serviceSource.includes('prisma.vipBenefitReward.delete('),
+   80:   'Deleting a VIP benefit reward must disable it instead of cascading deletion to claim records'
+   81: )
+   82: 
+   83: assert.ok(
+   84:   serviceSource.includes('prisma.vipBenefitReward.findMany({\n      where: { enabled: true },') &&
+   85:     serviceSource.includes('const reward = await tx.vipBenefitReward.findFirst({') &&
+   86:     serviceSource.includes('          enabled: true') &&
+   87:     serviceSource.includes('const existingCount = claimCounts.get(reward.id) || 0') &&
+   88:     serviceSource.includes('if (existingCount >= reward.claimLimit)') &&
+   89:     serviceSource.includes('claimNo: existingCount + 1'),
+   90:   'Disabled VIP benefit rewards must stay hidden and unclaimable while retained claims enforce claimLimit'
+   91: )
+   92: 
+   93: assert.ok(
+   94:   schemaSource.includes('model VipBenefitClaim') &&
+   95:     schemaSource.includes('@@unique([userId, rewardId, claimNo])') &&
+   96:     schemaSource.includes('enum VipBenefitRewardType') &&
+   97:     schemaSource.includes('enum VipBenefitClaimStatus'),
+   98:   'VIP benefit schema must keep claim idempotency and enum-backed reward/claim statuses'
+   99: )
+  100: 
+  101: console.log('VIP benefit route guard tests passed')
+FX027 candidates
+
+Path                                                                                    LineNumber Line                
+----                                                                                    ---------- ----                
+C:\Users\Administrator\Desktop\payinces\server\src\services\vip-benefits.ts                    296     throw new Vip...
+C:\Users\Administrator\Desktop\payinces\server\src\services\vip-benefits.ts                    299     throw new Vip...
+C:\Users\Administrator\Desktop\payinces\server\src\services\vip-benefits.ts                    452       data: { ena...
+C:\Users\Administrator\Desktop\payinces\server\src\services\vip-levels.ts                      344       throw new E...
+C:\Users\Administrator\Desktop\payinces\server\src\services\vip-levels.ts                      347       throw new E...
+C:\Users\Administrator\Desktop\payinces\server\src\services\vip-levels.ts                      618       await tx.vi...
+C:\Users\Administrator\Desktop\payinces\server\src\services\vip-levels.ts                      622     await tx.vipL...
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-vip-benefit-route-guards.ts         78     serviceSource...
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-vip-benefit-route-guards.ts         80   'Deleting a VIP...
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-vip-benefit-route-guards.ts         90   'Disabled VIP b...
+
+
+
+codex
+只读结论：`LotteryPrize` 没有 `enabled/status` 字段，`LotteryRecord.prizeId` 对奖品是 `onDelete: Cascade`；中奖记录还直接用于后台记录查询、待发实例奖品以及发放状态更新。因此按规格的无状态字段分支，采用“已有中奖记录则阻断硬删”；无记录奖品仍沿用原删除，FX-029 的删除后配置校验保持原样。目标路由和守卫已有并行改动，我只会在相关位置追加最小差异。
+apply patch
+patch: completed
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-admin-entertainment-route-guards.ts
+C:\Users\Administrator\Desktop\payinces\server\src\db\lottery.ts
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-entertainment.ts
+diff --git a/server/scripts/test-admin-entertainment-route-guards.ts b/server/scripts/test-admin-entertainment-route-guards.ts
+index fcaa0991bd583fb3b32b9f1775fbcb9fd4a95fef..07c6ccbb610a7c738d652073878a274a21311d40
+--- a/server/scripts/test-admin-entertainment-route-guards.ts
++++ b/server/scripts/test-admin-entertainment-route-guards.ts
+@@ -118,6 +118,14 @@
+   'lottery cost update and prize create/update/delete routes must validate the resulting lottery configuration before persistence'
+ )
+ 
++assert.ok(
++  lotteryDbSource.includes('select: { records: true }') &&
++    routeSource.includes('if (existing._count.records > 0)') &&
++    routeSource.includes("error: 'PRIZE_HAS_RECORDS'") &&
++    routeSource.indexOf('if (existing._count.records > 0)') < routeSource.indexOf('await db.deletePrize(prizeId)'),
++  'prizes with lottery records must be rejected before hard deletion can cascade to retained records'
++)
++
+ for (const forbiddenPattern of [
+   'Number(request.params.id)',
+   'Number(request.params.userId)',
+diff --git a/server/src/db/lottery.ts b/server/src/db/lottery.ts
+index 0d1bf610e50f39e292d1bbde2bf325f610a55028..50ae56c474de9bfb46ed343766d6b375f3ca1b5b
+--- a/server/src/db/lottery.ts
++++ b/server/src/db/lottery.ts
+@@ -252,7 +252,12 @@
+ export async function getPrizeById(id: number) {
+   return prisma.lotteryPrize.findUnique({
+     where: { id },
+-    include: { lottery: true }
++    include: {
++      lottery: true,
++      _count: {
++        select: { records: true }
++      }
++    }
+   })
+ }
+ 
+diff --git a/server/src/routes/admin-entertainment.ts b/server/src/routes/admin-entertainment.ts
+index 27e9c320104030f98f6623e1a0494c2e8b793b3b..cce15d583cfc8dc99173e022136f7d62afabe924
+--- a/server/src/routes/admin-entertainment.ts
++++ b/server/src/routes/admin-entertainment.ts
+@@ -701,6 +701,13 @@
+       return reply.code(404).send({ error: 'NOT_FOUND', message: 'Prize not found' })
+     }
+ 
++    if (existing._count.records > 0) {
++      return reply.code(409).send({
++        error: 'PRIZE_HAS_RECORDS',
++        message: 'Prize with lottery records cannot be deleted; set its probability to 0 to disable it'
++      })
++    }
++
+     const lottery = await db.getLotteryById(existing.lotteryId)
+     if (!lottery) {
+       return reply.code(404).send({ error: 'NOT_FOUND', message: 'Lottery not found' })
+
+diff --git a/server/scripts/test-admin-entertainment-route-guards.ts b/server/scripts/test-admin-entertainment-route-guards.ts
+index fcaa0991bd583fb3b32b9f1775fbcb9fd4a95fef..07c6ccbb610a7c738d652073878a274a21311d40
+--- a/server/scripts/test-admin-entertainment-route-guards.ts
++++ b/server/scripts/test-admin-entertainment-route-guards.ts
+@@ -118,6 +118,14 @@
+   'lottery cost update and prize create/update/delete routes must validate the resulting lottery configuration before persistence'
+ )
+ 
++assert.ok(
++  lotteryDbSource.includes('select: { records: true }') &&
++    routeSource.includes('if (existing._count.records > 0)') &&
++    routeSource.includes("error: 'PRIZE_HAS_RECORDS'") &&
++    routeSource.indexOf('if (existing._count.records > 0)') < routeSource.indexOf('await db.deletePrize(prizeId)'),
++  'prizes with lottery records must be rejected before hard deletion can cascade to retained records'
++)
++
+ for (const forbiddenPattern of [
+   'Number(request.params.id)',
+   'Number(request.params.userId)',
+diff --git a/server/src/db/lottery.ts b/server/src/db/lottery.ts
+index 0d1bf610e50f39e292d1bbde2bf325f610a55028..50ae56c474de9bfb46ed343766d6b375f3ca1b5b
+--- a/server/src/db/lottery.ts
++++ b/server/src/db/lottery.ts
+@@ -252,7 +252,12 @@
+ export async function getPrizeById(id: number) {
+   return prisma.lotteryPrize.findUnique({
+     where: { id },
+-    include: { lottery: true }
++    include: {
++      lottery: true,
++      _count: {
++        select: { records: true }
++      }
++    }
+   })
+ }
+ 
+diff --git a/server/src/routes/admin-entertainment.ts b/server/src/routes/admin-entertainment.ts
+index 27e9c320104030f98f6623e1a0494c2e8b793b3b..cce15d583cfc8dc99173e022136f7d62afabe924
+--- a/server/src/routes/admin-entertainment.ts
++++ b/server/src/routes/admin-entertainment.ts
+@@ -701,6 +701,13 @@
+       return reply.code(404).send({ error: 'NOT_FOUND', message: 'Prize not found' })
+     }
+ 
++    if (existing._count.records > 0) {
++      return reply.code(409).send({
++        error: 'PRIZE_HAS_RECORDS',
++        message: 'Prize with lottery records cannot be deleted; set its probability to 0 to disable it'
++      })
++    }
++
+     const lottery = await db.getLotteryById(existing.lotteryId)
+     if (!lottery) {
+       return reply.code(404).send({ error: 'NOT_FOUND', message: 'Lottery not found' })
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$lines=Get-Content server/src/routes/admin-entertainment.ts; for($i=570;$i -le 735;$i++){ '"'{0,5}: {1}' -f "'$i,$lines[$i-1] }; git diff -- server/src/db/lottery.ts server/src/routes/admin-entertainment.ts server/scripts/test-admin-entertainment-route-guards.ts' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 475ms:
+  570:   })
+  571: 
+  572:   /**
+  573:    * æ›´æ–°å¥–å“
+  574:    */
+  575:   fastify.put<{
+  576:     Params: { id: string }
+  577:     Body: {
+  578:       name?: string
+  579:       type?: LotteryPrizeType
+  580:       value?: number
+  581:       probability?: number
+  582:       totalQuantity?: number | null
+  583:       remainQuantity?: number | null
+  584:       displayOrder?: number
+  585:       instanceDesc?: string | null
+  586:     }
+  587:   }>('/prizes/:id', {
+  588:     onRequest: [fastify.authenticate, fastify.requireAdmin]
+  589:   }, async (request: FastifyRequest<{
+  590:     Params: { id: string }
+  591:     Body: {
+  592:       name?: string
+  593:       type?: LotteryPrizeType
+  594:       value?: number
+  595:       probability?: number
+  596:       totalQuantity?: number | null
+  597:       remainQuantity?: number | null
+  598:       displayOrder?: number
+  599:       instanceDesc?: string | null
+  600:     }
+  601:   }>, reply: FastifyReply) => {
+  602:     const prizeId = parsePositiveRouteId(request.params.id)
+  603: 
+  604:     if (!prizeId) {
+  605:       return reply.code(400).send({ error: 'INVALID_ID', message: 'Invalid prize ID' })
+  606:     }
+  607: 
+  608:     const existing = await db.getPrizeById(prizeId)
+  609:     if (!existing) {
+  610:       return reply.code(404).send({ error: 'NOT_FOUND', message: 'Prize not found' })
+  611:     }
+  612: 
+  613:     const { name, type, value, probability, totalQuantity, remainQuantity, displayOrder, instanceDesc } = request.body
+  614:     const parsedType = type === undefined ? undefined : parseLotteryPrizeType(type)
+  615:     const parsedProbability = parseOptionalFiniteNumber(probability)
+  616:     const parsedValue = value === undefined ? undefined : parseIntegerBody(value)
+  617:     const parsedTotalQuantity = totalQuantity === undefined || totalQuantity === null ? totalQuantity : parseOptionalPositiveBodyId(totalQuantity)
+  618:     const parsedRemainQuantity = remainQuantity === undefined || remainQuantity === null ? remainQuantity : parseOptionalNonNegativeIntegerBody(remainQuantity)
+  619:     const parsedDisplayOrder = displayOrder === undefined ? undefined : parseIntegerBody(displayOrder)
+  620: 
+  621:     if (parsedType === null) {
+  622:       return reply.code(400).send({ error: 'INVALID_PRIZE_TYPE', message: 'Invalid prize type' })
+  623:     }
+  624: 
+  625:     if (parsedProbability === null || (parsedProbability !== undefined && (parsedProbability < 0 || parsedProbability > 100))) {
+  626:       return reply.code(400).send({ error: 'INVALID_PROBABILITY', message: 'Probability must be between 0 and 100' })
+  627:     }
+  628: 
+  629:     // æ£€æŸ¥å¥–å“ç±»åž‹ä¸Žæ•°é‡é™åˆ¶çš„åŒ¹é…æ€§
+  630:     const prizeType = parsedType ?? existing.type
+  631:     if ((prizeType === 'points' || prizeType === 'nothing') && 
+  632:         (parsedTotalQuantity !== undefined && parsedTotalQuantity !== null)) {
+  633:       return reply.code(400).send({ 
+  634:         error: 'INVALID_QUANTITY', 
+  635:         message: 'Points and nothing prizes cannot have quantity limits' 
+  636:       })
+  637:     }
+  638: 
+  639:     if (parsedTotalQuantity === null || parsedRemainQuantity === null) {
+  640:       return reply.code(400).send({ error: 'INVALID_QUANTITY', message: 'Quantity must be a positive integer or null' })
+  641:     }
+  642: 
+  643:     if (value !== undefined && prizeType !== 'badge' && prizeType !== 'nothing' && (parsedValue === null || parsedValue === undefined || parsedValue < 0)) {
+  644:       return reply.code(400).send({ error: 'INVALID_VALUE', message: 'Prize value must be a non-negative integer' })
+  645:     }
+  646: 
+  647:     if (parsedDisplayOrder === null) {
+  648:       return reply.code(400).send({ error: 'INVALID_DISPLAY_ORDER', message: 'Display order must be an integer' })
+  649:     }
+  650: 
+  651:     const lottery = await db.getLotteryById(existing.lotteryId)
+  652:     if (!lottery) {
+  653:       return reply.code(404).send({ error: 'NOT_FOUND', message: 'Lottery not found' })
+  654:     }
+  655: 
+  656:     const configError = validateLotteryConfig(lottery.costPoints, lottery.prizes.map(prize => ({
+  657:       type: prize.id === prizeId ? prizeType : prize.type,
+  658:       value: prize.id === prizeId
+  659:         ? (prizeType === 'badge' || prizeType === 'nothing' ? 0 : parsedValue ?? prize.value)
+  660:         : prize.value,
+  661:       probability: prize.id === prizeId ? parsedProbability ?? Number(prize.probability) : Number(prize.probability)
+  662:     })))
+  663:     if (configError) return reply.code(400).send(configError)
+  664: 
+  665:     await db.updatePrize(prizeId, {
+  666:       name: name?.trim(),
+  667:       type: parsedType ?? undefined,
+  668:       value: prizeType === 'badge' || prizeType === 'nothing' ? 0 : parsedValue ?? undefined,
+  669:       probability: parsedProbability ?? undefined,
+  670:       totalQuantity: parsedTotalQuantity,
+  671:       remainQuantity: parsedRemainQuantity,
+  672:       displayOrder: parsedDisplayOrder ?? undefined,
+  673:       instanceDesc
+  674:     })
+  675: 
+  676:     await createLog(
+  677:       request.user.id,
+  678:       'admin',
+  679:       'lottery.prize.update',
+  680:       `Updated prize "${existing.name}" (ID: ${prizeId})`,
+  681:       'success'
+  682:     )
+  683: 
+  684:     return { success: true }
+  685:   })
+  686: 
+  687:   /**
+  688:    * åˆ é™¤å¥–å“
+  689:    */
+  690:   fastify.delete<{ Params: { id: string } }>('/prizes/:id', {
+  691:     onRequest: [fastify.authenticate, fastify.requireAdmin]
+  692:   }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+  693:     const prizeId = parsePositiveRouteId(request.params.id)
+  694: 
+  695:     if (!prizeId) {
+  696:       return reply.code(400).send({ error: 'INVALID_ID', message: 'Invalid prize ID' })
+  697:     }
+  698: 
+  699:     const existing = await db.getPrizeById(prizeId)
+  700:     if (!existing) {
+  701:       return reply.code(404).send({ error: 'NOT_FOUND', message: 'Prize not found' })
+  702:     }
+  703: 
+  704:     if (existing._count.records > 0) {
+  705:       return reply.code(409).send({
+  706:         error: 'PRIZE_HAS_RECORDS',
+  707:         message: 'Prize with lottery records cannot be deleted; set its probability to 0 to disable it'
+  708:       })
+  709:     }
+  710: 
+  711:     const lottery = await db.getLotteryById(existing.lotteryId)
+  712:     if (!lottery) {
+  713:       return reply.code(404).send({ error: 'NOT_FOUND', message: 'Lottery not found' })
+  714:     }
+  715: 
+  716:     const remainingPrizes = lottery.prizes.filter(prize => prize.id !== prizeId)
+  717:     if (remainingPrizes.length > 0) {
+  718:       const configError = validateLotteryConfig(lottery.costPoints, remainingPrizes.map(prize => ({
+  719:         type: prize.type,
+  720:         value: prize.value,
+  721:         probability: Number(prize.probability)
+  722:       })))
+  723:       if (configError) return reply.code(400).send(configError)
+  724:     }
+  725: 
+  726:     await db.deletePrize(prizeId)
+  727: 
+  728:     await createLog(
+  729:       request.user.id,
+  730:       'admin',
+  731:       'lottery.prize.delete',
+  732:       `Deleted prize "${existing.name}" (ID: ${prizeId})`,
+  733:       'success'
+  734:     )
+  735: 
+diff --git a/server/scripts/test-admin-entertainment-route-guards.ts b/server/scripts/test-admin-entertainment-route-guards.ts
+index 0bbf651..07c6ccb 100644
+--- a/server/scripts/test-admin-entertainment-route-guards.ts
++++ b/server/scripts/test-admin-entertainment-route-guards.ts
+@@ -88,6 +88,44 @@ assert.ok(
+   'admin prize mutation routes must validate inventory and prize values'
+ )
+ 
++assert.ok(
++  routeSource.includes('function validateLotteryConfig(') &&
++    routeSource.includes('totalProbability > LOTTERY_TOTAL_PROBABILITY') &&
++    routeSource.includes("totalProbability < LOTTERY_TOTAL_PROBABILITY && !prizes.some(prize => prize.type === 'nothing')") &&
++    routeSource.includes("error: 'INVALID_PROBABILITY_TOTAL'") &&
++    routeSource.includes("error: 'MISSING_NOTHING_PRIZE'"),
++  'admin lottery configuration saves must reject probability totals above 100% and require a nothing fallback below 100%'
++)
++
++assert.ok(
++  routeSource.includes('(prize.probability / 100) * (prize.value / 100)') &&
++    routeSource.includes('const drawCostValue = costPoints / 100') &&
++    routeSource.includes('expectedBalanceValue > drawCostValue') &&
++    routeSource.includes("error: 'BALANCE_EXPECTED_VALUE_EXCEEDED'"),
++  'admin lottery configuration saves must cap expected balance payout at the point cost value'
++)
++
++assert.ok(
++  routeSource.includes('const MAX_BALANCE_PRIZE_COST_MULTIPLIER = 100') &&
++    routeSource.includes('const maxBalancePrizeValue = costPoints * MAX_BALANCE_PRIZE_COST_MULTIPLIER') &&
++    routeSource.includes('balancePrizes.some(prize => prize.value > maxBalancePrizeValue)') &&
++    routeSource.includes("error: 'BALANCE_PRIZE_VALUE_EXCEEDED'"),
++  'admin lottery configuration saves must cap each balance prize at 100 times the draw cost value'
++)
++
++assert.ok(
++  (routeSource.match(/const configError = validateLotteryConfig\(/g)?.length ?? 0) === 4,
++  'lottery cost update and prize create/update/delete routes must validate the resulting lottery configuration before persistence'
++)
++
++assert.ok(
++  lotteryDbSource.includes('select: { records: true }') &&
++    routeSource.includes('if (existing._count.records > 0)') &&
++    routeSource.includes("error: 'PRIZE_HAS_RECORDS'") &&
++    routeSource.indexOf('if (existing._count.records > 0)') < routeSource.indexOf('await db.deletePrize(prizeId)'),
++  'prizes with lottery records must be rejected before hard deletion can cascade to retained records'
++)
++
+ for (const forbiddenPattern of [
+   'Number(request.params.id)',
+   'Number(request.params.userId)',
+diff --git a/server/src/db/lottery.ts b/server/src/db/lottery.ts
+index 0d1bf61..50ae56c 100644
+--- a/server/src/db/lottery.ts
++++ b/server/src/db/lottery.ts
+@@ -252,7 +252,12 @@ export async function deletePrize(id: number) {
+ export async function getPrizeById(id: number) {
+   return prisma.lotteryPrize.findUnique({
+     where: { id },
+-    include: { lottery: true }
++    include: {
++      lottery: true,
++      _count: {
++        select: { records: true }
++      }
++    }
+   })
+ }
+ 
+diff --git a/server/src/routes/admin-entertainment.ts b/server/src/routes/admin-entertainment.ts
+index 4e2cff6..cce15d5 100644
+--- a/server/src/routes/admin-entertainment.ts
++++ b/server/src/routes/admin-entertainment.ts
+@@ -24,6 +24,64 @@ const NOTIFICATION_TYPES = new Set(['telegram', 'discord', 'webhook'])
+ const USER_POINTS_ORDER_BY_FIELDS = new Set(['points', 'totalEarned', 'totalSpent'])
+ const SORT_ORDERS = new Set(['asc', 'desc'])
+ const MAX_POINTS_ADJUST_AMOUNT = 1_000_000
++const LOTTERY_TOTAL_PROBABILITY = 100
++const MAX_BALANCE_PRIZE_COST_MULTIPLIER = 100
++
++type LotteryPrizeConfig = {
++  type: LotteryPrizeType
++  value: number
++  probability: number
++}
++
++type LotteryConfigValidationError = {
++  error: string
++  message: string
++}
++
++function validateLotteryConfig(
++  costPoints: number,
++  prizes: LotteryPrizeConfig[]
++): LotteryConfigValidationError | null {
++  const totalProbability = prizes.reduce((sum, prize) => sum + prize.probability, 0)
++
++  if (totalProbability > LOTTERY_TOTAL_PROBABILITY) {
++    return {
++      error: 'INVALID_PROBABILITY_TOTAL',
++      message: 'Total prize probability must not exceed 100%'
++    }
++  }
++
++  if (totalProbability < LOTTERY_TOTAL_PROBABILITY && !prizes.some(prize => prize.type === 'nothing')) {
++    return {
++      error: 'MISSING_NOTHING_PRIZE',
++      message: 'A nothing prize is required when total prize probability is below 100%'
++    }
++  }
++
++  const balancePrizes = prizes.filter(prize => prize.type === 'balance')
++  const expectedBalanceValue = balancePrizes.reduce(
++    (sum, prize) => sum + (prize.probability / 100) * (prize.value / 100),
++    0
++  )
++  const drawCostValue = costPoints / 100
++
++  if (expectedBalanceValue > drawCostValue) {
++    return {
++      error: 'BALANCE_EXPECTED_VALUE_EXCEEDED',
++      message: 'Expected balance payout per draw must not exceed the point cost value'
++    }
++  }
++
++  const maxBalancePrizeValue = costPoints * MAX_BALANCE_PRIZE_COST_MULTIPLIER
++  if (balancePrizes.some(prize => prize.value > maxBalancePrizeValue)) {
++    return {
++      error: 'BALANCE_PRIZE_VALUE_EXCEEDED',
++      message: `A balance prize must not exceed ${MAX_BALANCE_PRIZE_COST_MULTIPLIER} times the point cost value`
++    }
++  }
++
++  return null
++}
+ 
+ function parsePositiveRouteId(value: string): number | null {
+   if (!POSITIVE_ROUTE_ID_PATTERN.test(value)) {
+@@ -283,6 +341,18 @@ export default async function adminEntertainmentRoutes(fastify: FastifyInstance)
+       return reply.code(400).send({ error: 'INVALID_COST', message: 'Cost points must be at least 1' })
+     }
+ 
++    if (existing.prizes.length > 0) {
++      const configError = validateLotteryConfig(
++        parsedCostPoints ?? existing.costPoints,
++        existing.prizes.map(prize => ({
++          type: prize.type,
++          value: prize.value,
++          probability: Number(prize.probability)
++        }))
++      )
++      if (configError) return reply.code(400).send(configError)
++    }
++
+     await db.updateLottery(lotteryId, {
+       name: name?.trim(),
+       description: description?.trim(),
+@@ -463,6 +533,20 @@ export default async function adminEntertainmentRoutes(fastify: FastifyInstance)
+       return reply.code(400).send({ error: 'INVALID_VALUE', message: 'Prize value must be a non-negative integer' })
+     }
+ 
++    const configError = validateLotteryConfig(lottery.costPoints, [
++      ...lottery.prizes.map(prize => ({
++        type: prize.type,
++        value: prize.value,
++        probability: Number(prize.probability)
++      })),
++      {
++        type: prizeType,
++        value: prizeType === 'badge' || prizeType === 'nothing' || prizeType === 'instance' ? 0 : parsedValue ?? 0,
++        probability: parsedProbability
++      }
++    ])
++    if (configError) return reply.code(400).send(configError)
++
+     const prize = await db.createPrize({
+       lotteryId,
+       name: name.trim(),
+@@ -564,6 +648,20 @@ export default async function adminEntertainmentRoutes(fastify: FastifyInstance)
+       return reply.code(400).send({ error: 'INVALID_DISPLAY_ORDER', message: 'Display order must be an integer' })
+     }
+ 
++    const lottery = await db.getLotteryById(existing.lotteryId)
++    if (!lottery) {
++      return reply.code(404).send({ error: 'NOT_FOUND', message: 'Lottery not found' })
++    }
++
++    const configError = validateLotteryConfig(lottery.costPoints, lottery.prizes.map(prize => ({
++      type: prize.id === prizeId ? prizeType : prize.type,
++      value: prize.id === prizeId
++        ? (prizeType === 'badge' || prizeType === 'nothing' ? 0 : parsedValue ?? prize.value)
++        : prize.value,
++      probability: prize.id === prizeId ? parsedProbability ?? Number(prize.probability) : Number(prize.probability)
++    })))
++    if (configError) return reply.code(400).send(configError)
++
+     await db.updatePrize(prizeId, {
+       name: name?.trim(),
+       type: parsedType ?? undefined,
+@@ -603,6 +701,28 @@ export default async function adminEntertainmentRoutes(fastify: FastifyInstance)
+       return reply.code(404).send({ error: 'NOT_FOUND', message: 'Prize not found' })
+     }
+ 
++    if (existing._count.records > 0) {
++      return reply.code(409).send({
++        error: 'PRIZE_HAS_RECORDS',
++        message: 'Prize with lottery records cannot be deleted; set its probability to 0 to disable it'
++      })
++    }
++
++    const lottery = await db.getLotteryById(existing.lotteryId)
++    if (!lottery) {
++      return reply.code(404).send({ error: 'NOT_FOUND', message: 'Lottery not found' })
++    }
++
++    const remainingPrizes = lottery.prizes.filter(prize => prize.id !== prizeId)
++    if (remainingPrizes.length > 0) {
++      const configError = validateLotteryConfig(lottery.costPoints, remainingPrizes.map(prize => ({
++        type: prize.type,
++        value: prize.value,
++        probability: Number(prize.probability)
++      })))
++      if (configError) return reply.code(400).send(configError)
++    }
++
+     await db.deletePrize(prizeId)
+ 
+     await createLog(
+warning: in the working copy of 'server/scripts/test-admin-entertainment-route-guards.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/db/lottery.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/admin-entertainment.ts', LF will be replaced by CRLF the next time Git touches it
+
+diff --git a/server/scripts/test-admin-entertainment-route-guards.ts b/server/scripts/test-admin-entertainment-route-guards.ts
+index fcaa0991bd583fb3b32b9f1775fbcb9fd4a95fef..07c6ccbb610a7c738d652073878a274a21311d40
+--- a/server/scripts/test-admin-entertainment-route-guards.ts
++++ b/server/scripts/test-admin-entertainment-route-guards.ts
+@@ -118,6 +118,14 @@
+   'lottery cost update and prize create/update/delete routes must validate the resulting lottery configuration before persistence'
+ )
+ 
++assert.ok(
++  lotteryDbSource.includes('select: { records: true }') &&
++    routeSource.includes('if (existing._count.records > 0)') &&
++    routeSource.includes("error: 'PRIZE_HAS_RECORDS'") &&
++    routeSource.indexOf('if (existing._count.records > 0)') < routeSource.indexOf('await db.deletePrize(prizeId)'),
++  'prizes with lottery records must be rejected before hard deletion can cascade to retained records'
++)
++
+ for (const forbiddenPattern of [
+   'Number(request.params.id)',
+   'Number(request.params.userId)',
+diff --git a/server/src/db/lottery.ts b/server/src/db/lottery.ts
+index 0d1bf610e50f39e292d1bbde2bf325f610a55028..50ae56c474de9bfb46ed343766d6b375f3ca1b5b
+--- a/server/src/db/lottery.ts
++++ b/server/src/db/lottery.ts
+@@ -252,7 +252,12 @@
+ export async function getPrizeById(id: number) {
+   return prisma.lotteryPrize.findUnique({
+     where: { id },
+-    include: { lottery: true }
++    include: {
++      lottery: true,
++      _count: {
++        select: { records: true }
++      }
++    }
+   })
+ }
+ 
+diff --git a/server/src/routes/admin-entertainment.ts b/server/src/routes/admin-entertainment.ts
+index 27e9c320104030f98f6623e1a0494c2e8b793b3b..cce15d583cfc8dc99173e022136f7d62afabe924
+--- a/server/src/routes/admin-entertainment.ts
++++ b/server/src/routes/admin-entertainment.ts
+@@ -701,6 +701,13 @@
+       return reply.code(404).send({ error: 'NOT_FOUND', message: 'Prize not found' })
+     }
+ 
++    if (existing._count.records > 0) {
++      return reply.code(409).send({
++        error: 'PRIZE_HAS_RECORDS',
++        message: 'Prize with lottery records cannot be deleted; set its probability to 0 to disable it'
++      })
++    }
++
+     const lottery = await db.getLotteryById(existing.lotteryId)
+     if (!lottery) {
+       return reply.code(404).send({ error: 'NOT_FOUND', message: 'Lottery not found' })
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "Get-ChildItem server/src -Recurse -File | Select-String -Pattern 'deletePrize\\(' | Select-Object Path,LineNumber,Line; "'$lines=Get-Content server/src/services/vip-benefits.ts; for($i=420;$i -le 465;$i++){ '"'{0,5}: {1}' -f "'$i,$lines[$i-1] }' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 648ms:
+
+Path                                                                             LineNumber Line                       
+----                                                                             ---------- ----                       
+C:\Users\Administrator\Desktop\payinces\server\src\db\lottery.ts                        245 export async function de...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-entertainment.ts        726     await db.deletePrize...
+  420: export async function createVipBenefitReward(input: VipBenefitRewardInput): Promise<VipBenefitRewardView> {
+  421:   const data = await normalizeRewardData(input)
+  422:   const reward = await prisma.vipBenefitReward.create({
+  423:     data: {
+  424:       ...data,
+  425:       config: data.config as Prisma.InputJsonObject
+  426:     }
+  427:   })
+  428:   return rewardToAdminView(reward)
+  429: }
+  430: 
+  431: export async function updateVipBenefitReward(id: number, input: VipBenefitRewardInput): Promise<VipBenefitRewardView> {
+  432:   const existing = await prisma.vipBenefitReward.findUnique({ where: { id } })
+  433:   if (!existing) {
+  434:     throw new VipBenefitError('REWARD_NOT_FOUND', 'VIP benefit reward not found', 404)
+  435:   }
+  436: 
+  437:   const data = await normalizeRewardData(input, existing)
+  438:   const reward = await prisma.vipBenefitReward.update({
+  439:     where: { id },
+  440:     data: {
+  441:       ...data,
+  442:       config: data.config as Prisma.InputJsonObject
+  443:     }
+  444:   })
+  445:   return rewardToAdminView(reward)
+  446: }
+  447: 
+  448: export async function deleteVipBenefitReward(id: number): Promise<void> {
+  449:   try {
+  450:     await prisma.vipBenefitReward.update({
+  451:       where: { id },
+  452:       data: { enabled: false }
+  453:     })
+  454:   } catch (error: any) {
+  455:     if (error?.code === 'P2025') {
+  456:       throw new VipBenefitError('REWARD_NOT_FOUND', 'VIP benefit reward not found', 404)
+  457:     }
+  458:     throw error
+  459:   }
+  460: }
+  461: 
+  462: export async function getVipBenefitOverview(userId: number): Promise<VipBenefitOverview> {
+  463:   const [vip, rewards, claims] = await Promise.all([
+  464:     getCurrentUserVip(userId),
+  465:     prisma.vipBenefitReward.findMany({
+
+
+
+diff --git a/server/scripts/test-admin-entertainment-route-guards.ts b/server/scripts/test-admin-entertainment-route-guards.ts
+index fcaa0991bd583fb3b32b9f1775fbcb9fd4a95fef..07c6ccbb610a7c738d652073878a274a21311d40
+--- a/server/scripts/test-admin-entertainment-route-guards.ts
++++ b/server/scripts/test-admin-entertainment-route-guards.ts
+@@ -118,6 +118,14 @@
+   'lottery cost update and prize create/update/delete routes must validate the resulting lottery configuration before persistence'
+ )
+ 
++assert.ok(
++  lotteryDbSource.includes('select: { records: true }') &&
++    routeSource.includes('if (existing._count.records > 0)') &&
++    routeSource.includes("error: 'PRIZE_HAS_RECORDS'") &&
++    routeSource.indexOf('if (existing._count.records > 0)') < routeSource.indexOf('await db.deletePrize(prizeId)'),
++  'prizes with lottery records must be rejected before hard deletion can cascade to retained records'
++)
++
+ for (const forbiddenPattern of [
+   'Number(request.params.id)',
+   'Number(request.params.userId)',
+diff --git a/server/src/db/lottery.ts b/server/src/db/lottery.ts
+index 0d1bf610e50f39e292d1bbde2bf325f610a55028..50ae56c474de9bfb46ed343766d6b375f3ca1b5b
+--- a/server/src/db/lottery.ts
++++ b/server/src/db/lottery.ts
+@@ -252,7 +252,12 @@
+ export async function getPrizeById(id: number) {
+   return prisma.lotteryPrize.findUnique({
+     where: { id },
+-    include: { lottery: true }
++    include: {
++      lottery: true,
++      _count: {
++        select: { records: true }
++      }
++    }
+   })
+ }
+ 
+diff --git a/server/src/routes/admin-entertainment.ts b/server/src/routes/admin-entertainment.ts
+index 27e9c320104030f98f6623e1a0494c2e8b793b3b..cce15d583cfc8dc99173e022136f7d62afabe924
+--- a/server/src/routes/admin-entertainment.ts
++++ b/server/src/routes/admin-entertainment.ts
+@@ -701,6 +701,13 @@
+       return reply.code(404).send({ error: 'NOT_FOUND', message: 'Prize not found' })
+     }
+ 
++    if (existing._count.records > 0) {
++      return reply.code(409).send({
++        error: 'PRIZE_HAS_RECORDS',
++        message: 'Prize with lottery records cannot be deleted; set its probability to 0 to disable it'
++      })
++    }
++
+     const lottery = await db.getLotteryById(existing.lotteryId)
+     if (!lottery) {
+       return reply.code(404).send({ error: 'NOT_FOUND', message: 'Lottery not found' })
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "Get-Content server/src/db/lottery.ts -TotalCount 35; Get-Content server/package.json | Select-String -Pattern 'entertainment-route-guards|admin-entertainment-route-guards'" in C:\Users\Administrator\Desktop\payinces
+ succeeded in 496ms:
+/**
+ * æŠ½å¥–ç³»ç»Ÿæ•°æ®åº“æ“ä½œ
+ */
+import { prisma } from './prisma.js'
+import { Prisma } from '@prisma/client'
+import type { LotteryPrizeType, LotteryRecordStatus } from '@prisma/client'
+import { createBadgeOwnership, selectRandomBadgeOrThrow } from './badges.js'
+import type { BadgeOwnershipView } from './badges.js'
+import {
+  USER_BALANCE_LOCK_NAMESPACE,
+  USER_POINTS_LOCK_NAMESPACE,
+  USER_RESOURCE_POOL_LOCK_NAMESPACE,
+  advisoryTransactionLock,
+  tryAdvisoryTransactionLock
+} from './advisory-locks.js'
+
+const LOTTERY_PRIZE_TYPES = new Set<LotteryPrizeType>([
+  'nothing',
+  'points',
+  'balance',
+  'badge',
+  'instance',
+  'cpu',
+  'memory',
+  'disk',
+  'traffic'
+])
+const LOTTERY_RECORD_STATUSES = new Set<LotteryRecordStatus>(['pending', 'delivered', 'claimed'])
+
+function clampPagination(
+  page: number | undefined,
+  pageSize: number | undefined,
+  fallbackPageSize: number = 20,
+  maxPageSize: number = 100
+): { page: number; pageSize: number } {
+
+    "test:admin-entertainment-route-guards": "node --import tsx scripts/test-admin-entertainment-route-guards.ts",
+    "test:entertainment-route-guards": "node --import tsx scripts/test-entertainment-route-guards.ts",
+
+
+
+diff --git a/server/scripts/test-admin-entertainment-route-guards.ts b/server/scripts/test-admin-entertainment-route-guards.ts
+index fcaa0991bd583fb3b32b9f1775fbcb9fd4a95fef..07c6ccbb610a7c738d652073878a274a21311d40
+--- a/server/scripts/test-admin-entertainment-route-guards.ts
++++ b/server/scripts/test-admin-entertainment-route-guards.ts
+@@ -118,6 +118,14 @@
+   'lottery cost update and prize create/update/delete routes must validate the resulting lottery configuration before persistence'
+ )
+ 
++assert.ok(
++  lotteryDbSource.includes('select: { records: true }') &&
++    routeSource.includes('if (existing._count.records > 0)') &&
++    routeSource.includes("error: 'PRIZE_HAS_RECORDS'") &&
++    routeSource.indexOf('if (existing._count.records > 0)') < routeSource.indexOf('await db.deletePrize(prizeId)'),
++  'prizes with lottery records must be rejected before hard deletion can cascade to retained records'
++)
++
+ for (const forbiddenPattern of [
+   'Number(request.params.id)',
+   'Number(request.params.userId)',
+diff --git a/server/src/db/lottery.ts b/server/src/db/lottery.ts
+index 0d1bf610e50f39e292d1bbde2bf325f610a55028..50ae56c474de9bfb46ed343766d6b375f3ca1b5b
+--- a/server/src/db/lottery.ts
++++ b/server/src/db/lottery.ts
+@@ -252,7 +252,12 @@
+ export async function getPrizeById(id: number) {
+   return prisma.lotteryPrize.findUnique({
+     where: { id },
+-    include: { lottery: true }
++    include: {
++      lottery: true,
++      _count: {
++        select: { records: true }
++      }
++    }
+   })
+ }
+ 
+diff --git a/server/src/routes/admin-entertainment.ts b/server/src/routes/admin-entertainment.ts
+index 27e9c320104030f98f6623e1a0494c2e8b793b3b..cce15d583cfc8dc99173e022136f7d62afabe924
+--- a/server/src/routes/admin-entertainment.ts
++++ b/server/src/routes/admin-entertainment.ts
+@@ -701,6 +701,13 @@
+       return reply.code(404).send({ error: 'NOT_FOUND', message: 'Prize not found' })
+     }
+ 
++    if (existing._count.records > 0) {
++      return reply.code(409).send({
++        error: 'PRIZE_HAS_RECORDS',
++        message: 'Prize with lottery records cannot be deleted; set its probability to 0 to disable it'
++      })
++    }
++
+     const lottery = await db.getLotteryById(existing.lotteryId)
+     if (!lottery) {
+       return reply.code(404).send({ error: 'NOT_FOUND', message: 'Lottery not found' })
+
+codex
+实现已落在删除前置检查：奖品详情查询带上关联中奖记录计数，删除接口遇到历史记录返回 409，并明确引导将概率设为 0 停用；无记录奖品才会继续经过现有 FX-029 校验后硬删。现在并行跑指定 type-check 和两项守卫。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'pnpm --filter server test:admin-entertainment-route-guards' in C:\Users\Administrator\Desktop\payinces
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'pnpm --filter server test:entertainment-route-guards' in C:\Users\Administrator\Desktop\payinces
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'pnpm --filter server type-check' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 1454ms:
+
+> server@1.3.7 test:entertainment-route-guards C:\Users\Administrator\Desktop\payinces\server
+> node --import tsx scripts/test-entertainment-route-guards.ts
+
+entertainment route guard tests passed
+
+ succeeded in 1503ms:
+
+> server@1.3.7 test:admin-entertainment-route-guards C:\Users\Administrator\Desktop\payinces\server
+> node --import tsx scripts/test-admin-entertainment-route-guards.ts
+
+admin entertainment route guard tests passed
+
+diff --git a/server/scripts/test-admin-entertainment-route-guards.ts b/server/scripts/test-admin-entertainment-route-guards.ts
+index fcaa0991bd583fb3b32b9f1775fbcb9fd4a95fef..07c6ccbb610a7c738d652073878a274a21311d40
+--- a/server/scripts/test-admin-entertainment-route-guards.ts
++++ b/server/scripts/test-admin-entertainment-route-guards.ts
+@@ -118,6 +118,14 @@
+   'lottery cost update and prize create/update/delete routes must validate the resulting lottery configuration before persistence'
+ )
+ 
++assert.ok(
++  lotteryDbSource.includes('select: { records: true }') &&
++    routeSource.includes('if (existing._count.records > 0)') &&
++    routeSource.includes("error: 'PRIZE_HAS_RECORDS'") &&
++    routeSource.indexOf('if (existing._count.records > 0)') < routeSource.indexOf('await db.deletePrize(prizeId)'),
++  'prizes with lottery records must be rejected before hard deletion can cascade to retained records'
++)
++
+ for (const forbiddenPattern of [
+   'Number(request.params.id)',
+   'Number(request.params.userId)',
+diff --git a/server/src/db/lottery.ts b/server/src/db/lottery.ts
+index 0d1bf610e50f39e292d1bbde2bf325f610a55028..50ae56c474de9bfb46ed343766d6b375f3ca1b5b
+--- a/server/src/db/lottery.ts
++++ b/server/src/db/lottery.ts
+@@ -252,7 +252,12 @@
+ export async function getPrizeById(id: number) {
+   return prisma.lotteryPrize.findUnique({
+     where: { id },
+-    include: { lottery: true }
++    include: {
++      lottery: true,
++      _count: {
++        select: { records: true }
++      }
++    }
+   })
+ }
+ 
+diff --git a/server/src/routes/admin-entertainment.ts b/server/src/routes/admin-entertainment.ts
+index 27e9c320104030f98f6623e1a0494c2e8b793b3b..cce15d583cfc8dc99173e022136f7d62afabe924
+--- a/server/src/routes/admin-entertainment.ts
++++ b/server/src/routes/admin-entertainment.ts
+@@ -701,6 +701,13 @@
+       return reply.code(404).send({ error: 'NOT_FOUND', message: 'Prize not found' })
+     }
+ 
++    if (existing._count.records > 0) {
++      return reply.code(409).send({
++        error: 'PRIZE_HAS_RECORDS',
++        message: 'Prize with lottery records cannot be deleted; set its probability to 0 to disable it'
++      })
++    }
++
+     const lottery = await db.getLotteryById(existing.lotteryId)
+     if (!lottery) {
+       return reply.code(404).send({ error: 'NOT_FOUND', message: 'Lottery not found' })
+
+diff --git a/server/scripts/test-admin-entertainment-route-guards.ts b/server/scripts/test-admin-entertainment-route-guards.ts
+index fcaa0991bd583fb3b32b9f1775fbcb9fd4a95fef..07c6ccbb610a7c738d652073878a274a21311d40
+--- a/server/scripts/test-admin-entertainment-route-guards.ts
++++ b/server/scripts/test-admin-entertainment-route-guards.ts
+@@ -118,6 +118,14 @@
+   'lottery cost update and prize create/update/delete routes must validate the resulting lottery configuration before persistence'
+ )
+ 
++assert.ok(
++  lotteryDbSource.includes('select: { records: true }') &&
++    routeSource.includes('if (existing._count.records > 0)') &&
++    routeSource.includes("error: 'PRIZE_HAS_RECORDS'") &&
++    routeSource.indexOf('if (existing._count.records > 0)') < routeSource.indexOf('await db.deletePrize(prizeId)'),
++  'prizes with lottery records must be rejected before hard deletion can cascade to retained records'
++)
++
+ for (const forbiddenPattern of [
+   'Number(request.params.id)',
+   'Number(request.params.userId)',
+diff --git a/server/src/db/lottery.ts b/server/src/db/lottery.ts
+index 0d1bf610e50f39e292d1bbde2bf325f610a55028..50ae56c474de9bfb46ed343766d6b375f3ca1b5b
+--- a/server/src/db/lottery.ts
++++ b/server/src/db/lottery.ts
+@@ -252,7 +252,12 @@
+ export async function getPrizeById(id: number) {
+   return prisma.lotteryPrize.findUnique({
+     where: { id },
+-    include: { lottery: true }
++    include: {
++      lottery: true,
++      _count: {
++        select: { records: true }
++      }
++    }
+   })
+ }
+ 
+diff --git a/server/src/routes/admin-entertainment.ts b/server/src/routes/admin-entertainment.ts
+index 27e9c320104030f98f6623e1a0494c2e8b793b3b..cce15d583cfc8dc99173e022136f7d62afabe924
+--- a/server/src/routes/admin-entertainment.ts
++++ b/server/src/routes/admin-entertainment.ts
+@@ -701,6 +701,13 @@
+       return reply.code(404).send({ error: 'NOT_FOUND', message: 'Prize not found' })
+     }
+ 
++    if (existing._count.records > 0) {
++      return reply.code(409).send({
++        error: 'PRIZE_HAS_RECORDS',
++        message: 'Prize with lottery records cannot be deleted; set its probability to 0 to disable it'
++      })
++    }
++
+     const lottery = await db.getLotteryById(existing.lotteryId)
+     if (!lottery) {
+       return reply.code(404).send({ error: 'NOT_FOUND', message: 'Lottery not found' })
+
+diff --git a/server/scripts/test-admin-entertainment-route-guards.ts b/server/scripts/test-admin-entertainment-route-guards.ts
+index fcaa0991bd583fb3b32b9f1775fbcb9fd4a95fef..07c6ccbb610a7c738d652073878a274a21311d40
+--- a/server/scripts/test-admin-entertainment-route-guards.ts
++++ b/server/scripts/test-admin-entertainment-route-guards.ts
+@@ -118,6 +118,14 @@
+   'lottery cost update and prize create/update/delete routes must validate the resulting lottery configuration before persistence'
+ )
+ 
++assert.ok(
++  lotteryDbSource.includes('select: { records: true }') &&
++    routeSource.includes('if (existing._count.records > 0)') &&
++    routeSource.includes("error: 'PRIZE_HAS_RECORDS'") &&
++    routeSource.indexOf('if (existing._count.records > 0)') < routeSource.indexOf('await db.deletePrize(prizeId)'),
++  'prizes with lottery records must be rejected before hard deletion can cascade to retained records'
++)
++
+ for (const forbiddenPattern of [
+   'Number(request.params.id)',
+   'Number(request.params.userId)',
+diff --git a/server/src/db/lottery.ts b/server/src/db/lottery.ts
+index 0d1bf610e50f39e292d1bbde2bf325f610a55028..50ae56c474de9bfb46ed343766d6b375f3ca1b5b
+--- a/server/src/db/lottery.ts
++++ b/server/src/db/lottery.ts
+@@ -252,7 +252,12 @@
+ export async function getPrizeById(id: number) {
+   return prisma.lotteryPrize.findUnique({
+     where: { id },
+-    include: { lottery: true }
++    include: {
++      lottery: true,
++      _count: {
++        select: { records: true }
++      }
++    }
+   })
+ }
+ 
+diff --git a/server/src/routes/admin-entertainment.ts b/server/src/routes/admin-entertainment.ts
+index 27e9c320104030f98f6623e1a0494c2e8b793b3b..cce15d583cfc8dc99173e022136f7d62afabe924
+--- a/server/src/routes/admin-entertainment.ts
++++ b/server/src/routes/admin-entertainment.ts
+@@ -701,6 +701,13 @@
+       return reply.code(404).send({ error: 'NOT_FOUND', message: 'Prize not found' })
+     }
+ 
++    if (existing._count.records > 0) {
++      return reply.code(409).send({
++        error: 'PRIZE_HAS_RECORDS',
++        message: 'Prize with lottery records cannot be deleted; set its probability to 0 to disable it'
++      })
++    }
++
+     const lottery = await db.getLotteryById(existing.lotteryId)
+     if (!lottery) {
+       return reply.code(404).send({ error: 'NOT_FOUND', message: 'Lottery not found' })
+
+diff --git a/server/scripts/test-admin-entertainment-route-guards.ts b/server/scripts/test-admin-entertainment-route-guards.ts
+index fcaa0991bd583fb3b32b9f1775fbcb9fd4a95fef..07c6ccbb610a7c738d652073878a274a21311d40
+--- a/server/scripts/test-admin-entertainment-route-guards.ts
++++ b/server/scripts/test-admin-entertainment-route-guards.ts
+@@ -118,6 +118,14 @@
+   'lottery cost update and prize create/update/delete routes must validate the resulting lottery configuration before persistence'
+ )
+ 
++assert.ok(
++  lotteryDbSource.includes('select: { records: true }') &&
++    routeSource.includes('if (existing._count.records > 0)') &&
++    routeSource.includes("error: 'PRIZE_HAS_RECORDS'") &&
++    routeSource.indexOf('if (existing._count.records > 0)') < routeSource.indexOf('await db.deletePrize(prizeId)'),
++  'prizes with lottery records must be rejected before hard deletion can cascade to retained records'
++)
++
+ for (const forbiddenPattern of [
+   'Number(request.params.id)',
+   'Number(request.params.userId)',
+diff --git a/server/src/db/lottery.ts b/server/src/db/lottery.ts
+index 0d1bf610e50f39e292d1bbde2bf325f610a55028..50ae56c474de9bfb46ed343766d6b375f3ca1b5b
+--- a/server/src/db/lottery.ts
++++ b/server/src/db/lottery.ts
+@@ -252,7 +252,12 @@
+ export async function getPrizeById(id: number) {
+   return prisma.lotteryPrize.findUnique({
+     where: { id },
+-    include: { lottery: true }
++    include: {
++      lottery: true,
++      _count: {
++        select: { records: true }
++      }
++    }
+   })
+ }
+ 
+diff --git a/server/src/routes/admin-entertainment.ts b/server/src/routes/admin-entertainment.ts
+index 27e9c320104030f98f6623e1a0494c2e8b793b3b..cce15d583cfc8dc99173e022136f7d62afabe924
+--- a/server/src/routes/admin-entertainment.ts
++++ b/server/src/routes/admin-entertainment.ts
+@@ -701,6 +701,13 @@
+       return reply.code(404).send({ error: 'NOT_FOUND', message: 'Prize not found' })
+     }
+ 
++    if (existing._count.records > 0) {
++      return reply.code(409).send({
++        error: 'PRIZE_HAS_RECORDS',
++        message: 'Prize with lottery records cannot be deleted; set its probability to 0 to disable it'
++      })
++    }
++
+     const lottery = await db.getLotteryById(existing.lotteryId)
+     if (!lottery) {
+       return reply.code(404).send({ error: 'NOT_FOUND', message: 'Lottery not found' })
+
+diff --git a/server/scripts/test-admin-entertainment-route-guards.ts b/server/scripts/test-admin-entertainment-route-guards.ts
+index fcaa0991bd583fb3b32b9f1775fbcb9fd4a95fef..07c6ccbb610a7c738d652073878a274a21311d40
+--- a/server/scripts/test-admin-entertainment-route-guards.ts
++++ b/server/scripts/test-admin-entertainment-route-guards.ts
+@@ -118,6 +118,14 @@
+   'lottery cost update and prize create/update/delete routes must validate the resulting lottery configuration before persistence'
+ )
+ 
++assert.ok(
++  lotteryDbSource.includes('select: { records: true }') &&
++    routeSource.includes('if (existing._count.records > 0)') &&
++    routeSource.includes("error: 'PRIZE_HAS_RECORDS'") &&
++    routeSource.indexOf('if (existing._count.records > 0)') < routeSource.indexOf('await db.deletePrize(prizeId)'),
++  'prizes with lottery records must be rejected before hard deletion can cascade to retained records'
++)
++
+ for (const forbiddenPattern of [
+   'Number(request.params.id)',
+   'Number(request.params.userId)',
+diff --git a/server/src/db/lottery.ts b/server/src/db/lottery.ts
+index 0d1bf610e50f39e292d1bbde2bf325f610a55028..50ae56c474de9bfb46ed343766d6b375f3ca1b5b
+--- a/server/src/db/lottery.ts
++++ b/server/src/db/lottery.ts
+@@ -252,7 +252,12 @@
+ export async function getPrizeById(id: number) {
+   return prisma.lotteryPrize.findUnique({
+     where: { id },
+-    include: { lottery: true }
++    include: {
++      lottery: true,
++      _count: {
++        select: { records: true }
++      }
++    }
+   })
+ }
+ 
+diff --git a/server/src/routes/admin-entertainment.ts b/server/src/routes/admin-entertainment.ts
+index 27e9c320104030f98f6623e1a0494c2e8b793b3b..cce15d583cfc8dc99173e022136f7d62afabe924
+--- a/server/src/routes/admin-entertainment.ts
++++ b/server/src/routes/admin-entertainment.ts
+@@ -701,6 +701,13 @@
+       return reply.code(404).send({ error: 'NOT_FOUND', message: 'Prize not found' })
+     }
+ 
++    if (existing._count.records > 0) {
++      return reply.code(409).send({
++        error: 'PRIZE_HAS_RECORDS',
++        message: 'Prize with lottery records cannot be deleted; set its probability to 0 to disable it'
++      })
++    }
++
+     const lottery = await db.getLotteryById(existing.lotteryId)
+     if (!lottery) {
+       return reply.code(404).send({ error: 'NOT_FOUND', message: 'Lottery not found' })
+
+diff --git a/server/scripts/test-admin-entertainment-route-guards.ts b/server/scripts/test-admin-entertainment-route-guards.ts
+index fcaa0991bd583fb3b32b9f1775fbcb9fd4a95fef..07c6ccbb610a7c738d652073878a274a21311d40
+--- a/server/scripts/test-admin-entertainment-route-guards.ts
++++ b/server/scripts/test-admin-entertainment-route-guards.ts
+@@ -118,6 +118,14 @@
+   'lottery cost update and prize create/update/delete routes must validate the resulting lottery configuration before persistence'
+ )
+ 
++assert.ok(
++  lotteryDbSource.includes('select: { records: true }') &&
++    routeSource.includes('if (existing._count.records > 0)') &&
++    routeSource.includes("error: 'PRIZE_HAS_RECORDS'") &&
++    routeSource.indexOf('if (existing._count.records > 0)') < routeSource.indexOf('await db.deletePrize(prizeId)'),
++  'prizes with lottery records must be rejected before hard deletion can cascade to retained records'
++)
++
+ for (const forbiddenPattern of [
+   'Number(request.params.id)',
+   'Number(request.params.userId)',
+diff --git a/server/src/db/lottery.ts b/server/src/db/lottery.ts
+index 0d1bf610e50f39e292d1bbde2bf325f610a55028..50ae56c474de9bfb46ed343766d6b375f3ca1b5b
+--- a/server/src/db/lottery.ts
++++ b/server/src/db/lottery.ts
+@@ -252,7 +252,12 @@
+ export async function getPrizeById(id: number) {
+   return prisma.lotteryPrize.findUnique({
+     where: { id },
+-    include: { lottery: true }
++    include: {
++      lottery: true,
++      _count: {
++        select: { records: true }
++      }
++    }
+   })
+ }
+ 
+diff --git a/server/src/routes/admin-entertainment.ts b/server/src/routes/admin-entertainment.ts
+index 27e9c320104030f98f6623e1a0494c2e8b793b3b..cce15d583cfc8dc99173e022136f7d62afabe924
+--- a/server/src/routes/admin-entertainment.ts
++++ b/server/src/routes/admin-entertainment.ts
+@@ -701,6 +701,13 @@
+       return reply.code(404).send({ error: 'NOT_FOUND', message: 'Prize not found' })
+     }
+ 
++    if (existing._count.records > 0) {
++      return reply.code(409).send({
++        error: 'PRIZE_HAS_RECORDS',
++        message: 'Prize with lottery records cannot be deleted; set its probability to 0 to disable it'
++      })
++    }
++
+     const lottery = await db.getLotteryById(existing.lotteryId)
+     if (!lottery) {
+       return reply.code(404).send({ error: 'NOT_FOUND', message: 'Lottery not found' })
+
+diff --git a/server/scripts/test-admin-entertainment-route-guards.ts b/server/scripts/test-admin-entertainment-route-guards.ts
+index fcaa0991bd583fb3b32b9f1775fbcb9fd4a95fef..07c6ccbb610a7c738d652073878a274a21311d40
+--- a/server/scripts/test-admin-entertainment-route-guards.ts
++++ b/server/scripts/test-admin-entertainment-route-guards.ts
+@@ -118,6 +118,14 @@
+   'lottery cost update and prize create/update/delete routes must validate the resulting lottery configuration before persistence'
+ )
+ 
++assert.ok(
++  lotteryDbSource.includes('select: { records: true }') &&
++    routeSource.includes('if (existing._count.records > 0)') &&
++    routeSource.includes("error: 'PRIZE_HAS_RECORDS'") &&
++    routeSource.indexOf('if (existing._count.records > 0)') < routeSource.indexOf('await db.deletePrize(prizeId)'),
++  'prizes with lottery records must be rejected before hard deletion can cascade to retained records'
++)
++
+ for (const forbiddenPattern of [
+   'Number(request.params.id)',
+   'Number(request.params.userId)',
+diff --git a/server/src/db/lottery.ts b/server/src/db/lottery.ts
+index 0d1bf610e50f39e292d1bbde2bf325f610a55028..50ae56c474de9bfb46ed343766d6b375f3ca1b5b
+--- a/server/src/db/lottery.ts
++++ b/server/src/db/lottery.ts
+@@ -252,7 +252,12 @@
+ export async function getPrizeById(id: number) {
+   return prisma.lotteryPrize.findUnique({
+     where: { id },
+-    include: { lottery: true }
++    include: {
++      lottery: true,
++      _count: {
++        select: { records: true }
++      }
++    }
+   })
+ }
+ 
+diff --git a/server/src/routes/admin-entertainment.ts b/server/src/routes/admin-entertainment.ts
+index 27e9c320104030f98f6623e1a0494c2e8b793b3b..cce15d583cfc8dc99173e022136f7d62afabe924
+--- a/server/src/routes/admin-entertainment.ts
++++ b/server/src/routes/admin-entertainment.ts
+@@ -701,6 +701,13 @@
+       return reply.code(404).send({ error: 'NOT_FOUND', message: 'Prize not found' })
+     }
+ 
++    if (existing._count.records > 0) {
++      return reply.code(409).send({
++        error: 'PRIZE_HAS_RECORDS',
++        message: 'Prize with lottery records cannot be deleted; set its probability to 0 to disable it'
++      })
++    }
++
+     const lottery = await db.getLotteryById(existing.lotteryId)
+     if (!lottery) {
+       return reply.code(404).send({ error: 'NOT_FOUND', message: 'Lottery not found' })
+
+ succeeded in 27517ms:
+
+> server@1.3.7 type-check C:\Users\Administrator\Desktop\payinces\server
+> tsc --noEmit
+
+
+diff --git a/server/scripts/test-admin-entertainment-route-guards.ts b/server/scripts/test-admin-entertainment-route-guards.ts
+index fcaa0991bd583fb3b32b9f1775fbcb9fd4a95fef..07c6ccbb610a7c738d652073878a274a21311d40
+--- a/server/scripts/test-admin-entertainment-route-guards.ts
++++ b/server/scripts/test-admin-entertainment-route-guards.ts
+@@ -118,6 +118,14 @@
+   'lottery cost update and prize create/update/delete routes must validate the resulting lottery configuration before persistence'
+ )
+ 
++assert.ok(
++  lotteryDbSource.includes('select: { records: true }') &&
++    routeSource.includes('if (existing._count.records > 0)') &&
++    routeSource.includes("error: 'PRIZE_HAS_RECORDS'") &&
++    routeSource.indexOf('if (existing._count.records > 0)') < routeSource.indexOf('await db.deletePrize(prizeId)'),
++  'prizes with lottery records must be rejected before hard deletion can cascade to retained records'
++)
++
+ for (const forbiddenPattern of [
+   'Number(request.params.id)',
+   'Number(request.params.userId)',
+diff --git a/server/src/db/lottery.ts b/server/src/db/lottery.ts
+index 0d1bf610e50f39e292d1bbde2bf325f610a55028..50ae56c474de9bfb46ed343766d6b375f3ca1b5b
+--- a/server/src/db/lottery.ts
++++ b/server/src/db/lottery.ts
+@@ -252,7 +252,12 @@
+ export async function getPrizeById(id: number) {
+   return prisma.lotteryPrize.findUnique({
+     where: { id },
+-    include: { lottery: true }
++    include: {
++      lottery: true,
++      _count: {
++        select: { records: true }
++      }
++    }
+   })
+ }
+ 
+diff --git a/server/src/routes/admin-entertainment.ts b/server/src/routes/admin-entertainment.ts
+index 27e9c320104030f98f6623e1a0494c2e8b793b3b..cce15d583cfc8dc99173e022136f7d62afabe924
+--- a/server/src/routes/admin-entertainment.ts
++++ b/server/src/routes/admin-entertainment.ts
+@@ -701,6 +701,13 @@
+       return reply.code(404).send({ error: 'NOT_FOUND', message: 'Prize not found' })
+     }
+ 
++    if (existing._count.records > 0) {
++      return reply.code(409).send({
++        error: 'PRIZE_HAS_RECORDS',
++        message: 'Prize with lottery records cannot be deleted; set its probability to 0 to disable it'
++      })
++    }
++
+     const lottery = await db.getLotteryById(existing.lotteryId)
+     if (!lottery) {
+       return reply.code(404).send({ error: 'NOT_FOUND', message: 'Lottery not found' })
+
+codex
+三项验收均已通过。最后我会做一次限定文件的差异/空白检查，并确认没有触碰 `recharge.ts`、schema、package.json 或提交操作。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'git diff --check -- server/src/db/lottery.ts server/src/routes/admin-entertainment.ts server/scripts/test-admin-entertainment-route-guards.ts; git status --short -- server/src/db/lottery.ts server/src/routes/admin-entertainment.ts server/scripts/test-admin-entertainment-route-guards.ts server/src/**/recharge.ts server/prisma/schema.prisma; git diff --numstat -- server/src/db/lottery.ts server/src/routes/admin-entertainment.ts server/scripts/test-admin-entertainment-route-guards.ts' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 449ms:
+ M server/scripts/test-admin-entertainment-route-guards.ts
+ M server/src/db/lottery.ts
+ M server/src/routes/admin-entertainment.ts
+38	0	server/scripts/test-admin-entertainment-route-guards.ts
+6	1	server/src/db/lottery.ts
+120	0	server/src/routes/admin-entertainment.ts
+warning: in the working copy of 'server/scripts/test-admin-entertainment-route-guards.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/db/lottery.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/admin-entertainment.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/scripts/test-admin-entertainment-route-guards.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/db/lottery.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/admin-entertainment.ts', LF will be replaced by CRLF the next time Git touches it
+
+diff --git a/server/scripts/test-admin-entertainment-route-guards.ts b/server/scripts/test-admin-entertainment-route-guards.ts
+index fcaa0991bd583fb3b32b9f1775fbcb9fd4a95fef..07c6ccbb610a7c738d652073878a274a21311d40
+--- a/server/scripts/test-admin-entertainment-route-guards.ts
++++ b/server/scripts/test-admin-entertainment-route-guards.ts
+@@ -118,6 +118,14 @@
+   'lottery cost update and prize create/update/delete routes must validate the resulting lottery configuration before persistence'
+ )
+ 
++assert.ok(
++  lotteryDbSource.includes('select: { records: true }') &&
++    routeSource.includes('if (existing._count.records > 0)') &&
++    routeSource.includes("error: 'PRIZE_HAS_RECORDS'") &&
++    routeSource.indexOf('if (existing._count.records > 0)') < routeSource.indexOf('await db.deletePrize(prizeId)'),
++  'prizes with lottery records must be rejected before hard deletion can cascade to retained records'
++)
++
+ for (const forbiddenPattern of [
+   'Number(request.params.id)',
+   'Number(request.params.userId)',
+diff --git a/server/src/db/lottery.ts b/server/src/db/lottery.ts
+index 0d1bf610e50f39e292d1bbde2bf325f610a55028..50ae56c474de9bfb46ed343766d6b375f3ca1b5b
+--- a/server/src/db/lottery.ts
++++ b/server/src/db/lottery.ts
+@@ -252,7 +252,12 @@
+ export async function getPrizeById(id: number) {
+   return prisma.lotteryPrize.findUnique({
+     where: { id },
+-    include: { lottery: true }
++    include: {
++      lottery: true,
++      _count: {
++        select: { records: true }
++      }
++    }
+   })
+ }
+ 
+diff --git a/server/src/routes/admin-entertainment.ts b/server/src/routes/admin-entertainment.ts
+index 27e9c320104030f98f6623e1a0494c2e8b793b3b..cce15d583cfc8dc99173e022136f7d62afabe924
+--- a/server/src/routes/admin-entertainment.ts
++++ b/server/src/routes/admin-entertainment.ts
+@@ -701,6 +701,13 @@
+       return reply.code(404).send({ error: 'NOT_FOUND', message: 'Prize not found' })
+     }
+ 
++    if (existing._count.records > 0) {
++      return reply.code(409).send({
++        error: 'PRIZE_HAS_RECORDS',
++        message: 'Prize with lottery records cannot be deleted; set its probability to 0 to disable it'
++      })
++    }
++
+     const lottery = await db.getLotteryById(existing.lotteryId)
+     if (!lottery) {
+       return reply.code(404).send({ error: 'NOT_FOUND', message: 'Lottery not found' })
+
+codex
+采用“有中奖记录则阻断硬删”方案：因奖品无 `enabled/status` 字段，删除接口检测到关联记录时返回 409，可将概率设为 0 停用，从而保留中奖/发放记录；仅无记录奖品允许删除，FX-029 校验保持不变。已修改 `lottery.ts`、`admin-entertainment.ts` 及对应守卫；server type-check、两项 entertainment 守卫及 `git diff --check` 全部通过。未碰 `recharge.ts`、schema，未 commit。
+diff --git a/server/scripts/test-admin-entertainment-route-guards.ts b/server/scripts/test-admin-entertainment-route-guards.ts
+index fcaa0991bd583fb3b32b9f1775fbcb9fd4a95fef..07c6ccbb610a7c738d652073878a274a21311d40
+--- a/server/scripts/test-admin-entertainment-route-guards.ts
++++ b/server/scripts/test-admin-entertainment-route-guards.ts
+@@ -118,6 +118,14 @@
+   'lottery cost update and prize create/update/delete routes must validate the resulting lottery configuration before persistence'
+ )
+ 
++assert.ok(
++  lotteryDbSource.includes('select: { records: true }') &&
++    routeSource.includes('if (existing._count.records > 0)') &&
++    routeSource.includes("error: 'PRIZE_HAS_RECORDS'") &&
++    routeSource.indexOf('if (existing._count.records > 0)') < routeSource.indexOf('await db.deletePrize(prizeId)'),
++  'prizes with lottery records must be rejected before hard deletion can cascade to retained records'
++)
++
+ for (const forbiddenPattern of [
+   'Number(request.params.id)',
+   'Number(request.params.userId)',
+diff --git a/server/src/db/lottery.ts b/server/src/db/lottery.ts
+index 0d1bf610e50f39e292d1bbde2bf325f610a55028..50ae56c474de9bfb46ed343766d6b375f3ca1b5b
+--- a/server/src/db/lottery.ts
++++ b/server/src/db/lottery.ts
+@@ -252,7 +252,12 @@
+ export async function getPrizeById(id: number) {
+   return prisma.lotteryPrize.findUnique({
+     where: { id },
+-    include: { lottery: true }
++    include: {
++      lottery: true,
++      _count: {
++        select: { records: true }
++      }
++    }
+   })
+ }
+ 
+diff --git a/server/src/routes/admin-entertainment.ts b/server/src/routes/admin-entertainment.ts
+index 27e9c320104030f98f6623e1a0494c2e8b793b3b..cce15d583cfc8dc99173e022136f7d62afabe924
+--- a/server/src/routes/admin-entertainment.ts
++++ b/server/src/routes/admin-entertainment.ts
+@@ -701,6 +701,13 @@
+       return reply.code(404).send({ error: 'NOT_FOUND', message: 'Prize not found' })
+     }
+ 
++    if (existing._count.records > 0) {
++      return reply.code(409).send({
++        error: 'PRIZE_HAS_RECORDS',
++        message: 'Prize with lottery records cannot be deleted; set its probability to 0 to disable it'
++      })
++    }
++
+     const lottery = await db.getLotteryById(existing.lotteryId)
+     if (!lottery) {
+       return reply.code(404).send({ error: 'NOT_FOUND', message: 'Lottery not found' })
+
+tokens used
+65,333

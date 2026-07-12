@@ -1,0 +1,1815 @@
+OpenAI Codex v0.144.0-alpha.4
+--------
+workdir: C:\Users\Administrator\Desktop\payinces
+model: gpt-5.6-sol
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: high
+reasoning summaries: none
+session id: 019f5300-20b5-7ec2-aeaf-fac5c2abcd9a
+--------
+user
+你是 PayIncus 实现工程师。先读 AGENTS.md(计费高危;不 commit/push/发版、不大重构)。严格按规格只改 billing-operations.ts 冻结期计算与守卫。改完跑守卫报告。不要 commit。
+---
+# FX-020 规格：Hosting 冻结期"自然月 vs 精确30天"口径分叉(E22 剩余 / BF-10-05)
+
+## owner 裁决(BEHAVIOR.md E22)
+统一计费"月"口径。(退款/剩余价值按实际时间比例已由 FX-017/019b/销毁退款/FX-025 达成;本条只统一 Hosting 收入冻结期。)
+
+## 根因
+Hosting 收入冻结到期:业务侧 billing-operations.ts:1313 用 addMonths(now,1)(自然月 28~31 天),管理侧 users.ts:1725 用精确 30*24h;
+文案统一称"30天"→ 2 月购买者只冻 28 天、1 月冻 31 天,与"30天"承诺有偏差、两处口径不一致。
+
+## 修法（统一为精确 30 天,与文案一致;改 billing-operations.ts 冻结到期计算;不碰 package.json)
+1. 先只读:billing-operations.ts:1313 冻结到期用 addMonths(now,1) 的上下文,以及是否有公共"冻结天数"常量。
+2. 把 Hosting 收入冻结到期改为 **now + 精确 30 天**(30*24*60*60*1000,或复用 users.ts 已用的常量/或抽一个公共常量 HOSTING_FREEZE_DAYS=30),与管理侧一致、与"30天"文案一致。
+3. 若已有可配的冻结天数配置就复用;没有则用常量 30。不改解冻调度器逻辑(它按 unfreezeAt 判定,只是 unfreezeAt 的计算口径统一)。
+
+## 加守卫
+在现有 server/scripts/test-hosting-balance-guards.ts 追加断言:Hosting 冻结到期用精确 30 天(不用 addMonths 自然月)。不改 package.json。
+
+## 不许动
+- 不改实例计费"月"=31天(D8 已定保持);不改退款/剩余价值(已按实付时间比例);不改解冻调度。不做大重构。
+
+## 验收
+- pnpm --filter server type-check 通过;pnpm --filter server test:hosting-balance-guards 通过。
+
+## 交付
+一段话:冻结到期如何改为精确30天、是否抽公共常量、守卫结果。不要 commit。
+
+codex
+我先按计费高危规则只读业务实现与现有守卫，确认当前冻结期写法及可复用常量；随后只改这两个指定文件，并运行 server type-check 与 hosting balance 守卫。不会 commit、push 或发版。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$files = @('"'server/src/services/billing-operations.ts','server/scripts/test-hosting-balance-guards.ts','server/src/routes/admin/users.ts'); foreach ("'$f in $files) { Write-Output "FILE $f"; rg -n -C 8 "addMonths|unfreezeAt|freeze|30 '"\\* 24|HOSTING_FREEZE\" "'$f }; Write-Output '"'GIT STATUS'; git status --short" in C:\Users\Administrator\Desktop\payinces
+ succeeded in 657ms:
+FILE server/src/services/billing-operations.ts
+FILE server/scripts/test-hosting-balance-guards.ts
+FILE server/src/routes/admin/users.ts
+GIT STATUS
+ M client/src/components/plugins/PluginFrame.vue
+ M client/src/utils/validation.ts
+ M deploy/incudal-backend.service.example
+ M deploy/incudal-online-rollback@.service.example
+ M deploy/incudal-online-update@.service.example
+ M package.json
+ M scripts/install-panel.sh
+ M scripts/test-install-panel-guards.sh
+ M server/package.json
+ M server/scripts/test-admin-billing-route-id-guards.ts
+ M server/scripts/test-admin-entertainment-route-guards.ts
+ M server/scripts/test-aff-review-ui-guards.ts
+ M server/scripts/test-balance-adjustment-approval-guards.ts
+ M server/scripts/test-billing-expiry-delete.ts
+ M server/scripts/test-billing-expiry-race-guards.ts
+ M server/scripts/test-billing-query-guards.ts
+ M server/scripts/test-capacity-cost-guards.ts
+ M server/scripts/test-commercial-operations-overview-guards.ts
+ M server/scripts/test-gift-card-guards.ts
+ M server/scripts/test-hosting-balance-guards.ts
+ M server/scripts/test-instance-billing-route-id-guards.ts
+ M server/scripts/test-log-sanitizer.ts
+ M server/scripts/test-mail-plan-financial-guards.ts
+ M server/scripts/test-mail-renewal-month-guards.ts
+ M server/scripts/test-order-payment-operations-guards.ts
+ M server/scripts/test-plugin-client-boundary-guards.ts
+ M server/scripts/test-system-config-value-guards.ts
+ M server/scripts/test-system-update-guards.ts
+ M server/scripts/test-trust-proxy-config.ts
+ M server/scripts/test-user-destroy-incus-order.ts
+ M server/src/app.ts
+ M server/src/db/aff.ts
+ M server/src/db/balance.ts
+ M server/src/db/billing-operations.ts
+ M server/src/db/gift-cards.ts
+ M server/src/lib/billing-calc.ts
+ M server/src/lib/epay.ts
+ M server/src/lib/errors.ts
+ M server/src/lib/heleket.ts
+ M server/src/lib/log-sanitizer.ts
+ M server/src/lib/lottery-notifier.ts
+ M server/src/lib/lsky.ts
+ M server/src/lib/notifier.ts
+ M server/src/lib/outbound-security.ts
+ M server/src/lib/plugin-market-submission-scan.ts
+ M server/src/lib/redirect-validator.ts
+ M server/src/lib/theme-market-submission-scan.ts
+ M server/src/lib/trust-proxy-config.ts
+ M server/src/routes/admin-billing.ts
+ M server/src/routes/admin-capacity-cost.ts
+ M server/src/routes/admin-entertainment.ts
+ M server/src/routes/admin-statistics.ts
+ M server/src/routes/gift-cards.ts
+ M server/src/routes/hosting.ts
+ M server/src/routes/instance-billing.ts
+ M server/src/routes/instance-destroy.ts
+ M server/src/routes/mail.ts
+ M server/src/routes/orders.ts
+ M server/src/routes/system-config.ts
+ M server/src/routes/tickets.ts
+ M server/src/routes/users.ts
+ M server/src/services/billing-scheduler.ts
+ M server/src/services/cranemail.ts
+ M server/src/services/smartermail.ts
+ M server/src/services/system-monitor.ts
+ M server/src/services/traffic-notifier.ts
+?? AGENTS.md
+?? BEHAVIOR.md
+?? CLAUDE.md
+?? DEFECTS.md
+?? EXECUTION.md
+?? EXECUTION_LOG.md
+?? FIX_PLAN.md
+?? MAINTENANCE_PLAN.md
+?? artifacts/
+?? audits/
+?? deploy/incudal-online-task.sh.example
+?? deploy/incudal-ota-chown-wrapper.sh.example
+?? deploy/incudal-systemctl-wrapper.sh.example
+?? server/scripts/test-error-response-guards.ts
+?? server/scripts/test-redirect-validator-guards.ts
+?? server/scripts/test-safe-outbound-fetch-guards.ts
+?? skills-lock.json
+rg : The term 'rg' is not recognized as the name of a cmdlet, function, script file, or operable program. Check the 
+spelling of the name, or if a path was included, verify that the path is correct and try again.
+At line:2 char:190
++ ... ers.ts'); foreach ($f in $files) { Write-Output "FILE $f"; rg -n -C 8 ...
++                                                                ~~
+    + CategoryInfo          : ObjectNotFound: (rg:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+rg : The term 'rg' is not recognized as the name of a cmdlet, function, script file, or operable program. Check the 
+spelling of the name, or if a path was included, verify that the path is correct and try again.
+At line:2 char:190
++ ... ers.ts'); foreach ($f in $files) { Write-Output "FILE $f"; rg -n -C 8 ...
++                                                                ~~
+    + CategoryInfo          : ObjectNotFound: (rg:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+rg : The term 'rg' is not recognized as the name of a cmdlet, function, script file, or operable program. Check the 
+spelling of the name, or if a path was included, verify that the path is correct and try again.
+At line:2 char:190
++ ... ers.ts'); foreach ($f in $files) { Write-Output "FILE $f"; rg -n -C 8 ...
++                                                                ~~
+    + CategoryInfo          : ObjectNotFound: (rg:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+
+codex
+工作区已有大量 owner/其他工作的未提交改动，且目标守卫文件本身也已修改。我会保留这些现有改动，只在目标断言附近做最小增量；本机没有 `rg`，改用 PowerShell 只读检索。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "Write-Output 'AGENTS'; Get-Content -LiteralPath AGENTS.md; Write-Output 'BILLING MATCHES'; Get-ChildItem -LiteralPath server/src -Recurse -File -Filter '*.ts' | Select-String -Pattern 'addMonths\\(|unfreezeAt|30 \\* 24 \\* 60 \\* 60 \\* 1000|HOSTING_FREEZE' -Context 6,8 | Where-Object { "'$_.Path -match '"'billing-operations|users\\.ts"'$'"' } | Format-List Path,LineNumber,Line,Context; Write-Output 'GUARD'; Get-Content -LiteralPath server/scripts/test-hosting-balance-guards.ts" in C:\Users\Administrator\Desktop\payinces
+ succeeded in 905ms:
+AGENTS
+# PayIncus / Incudal â€” é¡¹ç›®ç»Ÿä¸€è§„çŸ©ï¼ˆAGENTS.mdï¼‰
+
+> æœ¬æ–‡ä»¶æ˜¯æœ¬ä»“åº“**æ‰€æœ‰ AI agentï¼ˆClaude Codeã€codex ç­‰ï¼‰çš„ç»Ÿä¸€å·¥ä½œè§„èŒƒ**ã€‚
+> `CLAUDE.md` é€šè¿‡ `@AGENTS.md` å¼•ç”¨æœ¬æ–‡ä»¶ â€”â€” Claude Code ä¸Ž codex è¯»åˆ°çš„æ˜¯**åŒä¸€å¥—è§„çŸ©**ï¼Œæ”¹è¿™ä¸€ä¸ªæ–‡ä»¶å³å¯ã€‚
+> æƒå¨è¿ç»´/å‘ç‰ˆäº‹å®žä»¥ä»“åº“æ ¹çš„ `OPERATIONS_HANDOFF.md`ï¼ˆæ“ä½œæ‰‹å†Œï¼‰ä¸Ž `HANDOFF.md`ï¼ˆç‰ˆæœ¬è¯æ®å°è´¦ï¼‰ä¸ºå‡†ã€‚
+
+---
+
+## 0. æ²Ÿé€šè¯­è¨€
+- ä¸Ž owner é»˜è®¤ç”¨**ä¸­æ–‡**æ²Ÿé€šã€‚
+
+## 1. è¿™æ˜¯ä»€ä¹ˆé¡¹ç›®
+**PayIncus**ï¼ˆå†…éƒ¨ä»£å· `incudal`ï¼‰â€”â€”å•†ç”¨ Incusï¼ˆLXC/KVMï¼‰NAT VPS å”®å–ä¸Žäº¤ä»˜å¹³å°ï¼Œ**çº¿ä¸Šè¿è¥ä¸­**ã€‚å½“å‰ç”Ÿäº§ç‰ˆæœ¬ **v1.3.7**ã€‚pnpm monorepoï¼š
+
+| ç›®å½• | æŠ€æœ¯æ ˆ / ä½œç”¨ |
+|------|----------------|
+| `client/` | Vue 3 + Vite SPAã€‚åŒç«¯æž„å»ºï¼ˆ`VITE_APP_ENTRY`ï¼‰â†’ `dist/user`ï¼ˆpay.payincus.comï¼‰+ `dist/admin`ï¼ˆadmin.payincus.comï¼‰ã€‚ä¸¤ç«¯ç‹¬ç«‹æºã€**ä¸å…±äº« cookie åŸŸ**ã€‚ |
+| `server/` | Fastify 5 + Prisma 7 + PostgreSQLï¼Œ~300 TS æ–‡ä»¶ã€~70 è·¯ç”±ã€~15 è°ƒåº¦/workerã€‚æ—  Redisï¼ˆç”¨ PG advisory lockï¼‰ã€‚ä¸‰å¥—é‰´æƒé¢ï¼šWeb çš„ JWT+refresh cookieã€Public API çš„ `pat_`/`poa_` tokenã€host agent çš„ HMACã€‚ |
+| `agent/` | Go å®¿ä¸» agentï¼Œåªè¯»ç›‘æŽ§ï¼ˆå¿ƒè·³/èµ„æº/å®žä¾‹æ€/æµé‡ï¼‰ï¼ŒHMAC ç­¾åï¼Œè‡ªå‡çº§ã€‚ |
+| å…¶å®ƒ | `docs-site/`ï¼ˆVitePressï¼‰ã€`deploy/`ï¼ˆsystemd+Nginxï¼‰ã€`scripts/`ï¼ˆå®‰è£…/æ ¡éªŒ/OTAï¼‰ã€`plugin-templates/`ã€`theme-templates/`ã€‚ |
+
+éƒ¨ç½²ï¼šä¸‰å±‚æ‹†åˆ†ï¼ˆuser / admin / ç§æœ‰åŽç«¯ `127.0.0.1:3001`ï¼‰ï¼Œè£…æœºæ ¹ `/opt/incudal`ï¼ŒåŽŸå­ OTAï¼ˆ`releases/<ver-ts>` + `current` è½¯é“¾ï¼‰+ è‡ªåŠ¨å›žæ»šã€‚
+
+---
+
+## 2. ðŸ”´ ç¡¬è§„çŸ©ï¼ˆä¸å¯åå•†ï¼Œè¿åå³äº‹æ•…ï¼‰
+
+1. **ä¸ç¢°ç”Ÿäº§**ï¼šæœªç» owner æ˜Žç¡®è¦æ±‚ï¼Œ**ç»ä¸** OTAã€å‘å¸ƒã€pushã€æ‰“ tagã€æ”¹ç”Ÿäº§çŽ¯å¢ƒã€‚
+2. **ä¸åšç ´åæ€§ git**ï¼šæœªç» owner æ˜Žç¡®è¦æ±‚ï¼Œ**ç»ä¸** `git reset`ã€`git checkout --`ã€å¼ºåˆ¶åˆ é™¤ã€æ¸…ç†æœªè·Ÿè¸ªæ–‡ä»¶ã€`git commit`/`git push`ã€‚
+3. **é«˜å±è·¯å¾„å…ˆè¯»åŽå†™**ï¼šæ”¹åŠ¨ä»¥ä¸‹ä»»ä¸€é¢†åŸŸï¼Œ**å¿…é¡»å…ˆè¯»ç›¸å…³ä»£ç  + å¯¹åº”å®ˆå«æµ‹è¯•**å†åŠ¨æ‰‹ï¼š
+   > é‰´æƒ Â· æ”¯ä»˜ Â· æƒé™ Â· é£ŽæŽ§ Â· èµ„æºäº¤ä»˜ Â· å…‘æ¢æµç¨‹ Â· å®žä¾‹åˆ›å»º Â· OTA
+4. **æ”¹åŠ¨æœ€å°åŒ–**ï¼šä¿® bug / å‘ç‰ˆæœŸé—´**ä¸åšå¤§èŒƒå›´é‡æž„**ï¼Œåªæ”¹å¿…è¦çš„ã€‚
+5. **ç»ä¸æ³„å¯†**ï¼šä»»ä½• commitã€handoffã€æ€»ç»“ã€æˆªå›¾ä¸­éƒ½**ä¸å¾—**å‡ºçŽ°å‡­è¯ / token / cookie / å¯†é’¥ã€‚
+6. **æœ¬åœ°è¿‡ â‰  ç”Ÿäº§éªŒè¯**ï¼šæœ¬åœ°é€šè¿‡ã€GitHub Actionsã€Release èµ„äº§ã€OTAã€çº¿ä¸Šå®žè¯æ˜¯**åˆ†å¼€çš„è¯æ®**ï¼Œä¸å¯æ··ä¸ºä¸€è°ˆã€‚
+7. **æ¯æ¬¡æ”¹åŠ¨å¿…é¡»è¿‡å¯¹åº”å®ˆå«**ï¼ˆè§ Â§4ï¼‰ï¼Œå¦åˆ™è§†ä¸º**æœªå®Œæˆ**ã€‚
+8. `RUN_DB_CHECKS=0 bash scripts/apply-online-update.sh <ver>` ä¼š**è·³è¿‡ DB/æ”¯ä»˜å°±ç»ªæ ¡éªŒ**ï¼Œä»…åœ¨ owner æ˜Žç¡®æ‰¹å‡†æ—¶ä½¿ç”¨ã€‚
+
+---
+
+## 3. æœ¬åœ°æ€Žä¹ˆè·‘
+
+- **çŽ¯å¢ƒ**ï¼šNode â‰¥ 20ã€pnpm 9.14.2ã€æœ¬åœ° PostgreSQL 16ã€‚
+- **è£…ä¾èµ–**ï¼š`pnpm install`
+- **ä¸€æŠŠèµ·å…¨éƒ¨ï¼ˆserver + user + adminï¼‰**ï¼š`pnpm dev`
+- **åˆ†å¼€èµ·**ï¼š
+  - åŽç«¯ï¼š`NODE_ENV=development JWT_SECRET=dev-secret-12345678 HOST=127.0.0.1 PORT=3001 pnpm --filter server exec tsx watch src/app.ts`
+  - ç”¨æˆ·å‰ç«¯ï¼š`pnpm dev:user`
+  - ç®¡ç†å‰ç«¯ï¼š`pnpm dev:admin`
+- **ç«¯å£**ï¼šåŽç«¯ API **3001** Â· ç”¨æˆ·å‰ç«¯ **3000** Â· ç®¡ç†å‰ç«¯ **3002**ï¼ˆå‰ç«¯ dev ç» proxy æ‰“åˆ° 3001ï¼‰ã€‚
+
+---
+
+## 4. ðŸ›¡ï¸ å®ˆå«æµ‹è¯•çºªå¾‹ï¼ˆæœ¬ä»“åº“çš„å‘½é—¨ï¼‰
+
+`server/package.json` é‡Œæœ‰ **200+ ä¸ªç‹¬ç«‹ `test-*-guards.ts`**ã€‚å®ƒä»¬æŠŠå…³é”®ä¸šåŠ¡/å‰ç«¯ç»“æž„â€œé’‰æ­»â€ï¼Œ`pnpm test` ä¼šè·‘å…¨å¥—ï¼ˆclient+server type-check + å…¨éƒ¨å®ˆå«ï¼‰ã€‚**ä»»ä½•æ”¹åŠ¨å¿…é¡»è®©ç›¸å…³å®ˆå«é€šè¿‡ã€‚**
+
+- **å…¨é‡**ï¼ˆæ…¢ï¼Œå‘ç‰ˆå‰è·‘ï¼‰ï¼š`pnpm test`
+- **å•ä¸ª**ï¼š`pnpm --filter server test:<guard-name>`
+- **å‰ç«¯æœ€å¸¸ç”¨ä¸‰ä¸ª**ï¼š
+  - `test:frontend-route-guards` â€”â€” è·¯ç”± / **è¡¨æ ¼å¸ƒå±€** / `@click` è·¯å¾„æ–­è¨€
+  - `test:frontend-dist-boundary-guards` â€”â€” åŒç«¯ dist è¾¹ç•Œ
+  - `test:frontend-i18n-keys` â€”â€” i18n key å®Œæ•´æ€§
+- **Go agent**ï¼š`pnpm test:agent`
+
+### âš ï¸ è¡¨æ ¼å¸ƒå±€å®ˆå«ï¼ˆæœ€å®¹æ˜“è¸©é›·ï¼‰
+ä¸€æ‰¹è¡¨è¢«å®ˆå«**é”å®š**ä¸ºâ€œ**ç§»åŠ¨å¡ + PC å®šå®½è¡¨ï¼ˆ`table-fixed` / `overflow-hidden`ï¼‰ï¼Œç»ä¸æ¨ªå‘æ»šåŠ¨**â€ï¼Œå¹¶**åå‘ç¦æ­¢** `overflow-x-auto` / `min-w-[...]` / åŽ»æŽ‰ `table-fixed`ã€‚
+- æƒ³ä¿®â€œå®½è¡¨æŒ¤åŽ‹â€æ—¶ï¼š**å…ˆåˆ¤æ–­è¯¥è¡¨æ˜¯å¦åœ¨å®ˆå«æ¸…å•é‡Œ**ã€‚é”å®šè¡¨**åªèƒ½åœ¨ `table-fixed` å†…å¹³è¡¡åˆ—å®½**ï¼ˆåˆ—å®½ç™¾åˆ†æ¯”åˆè®¡ = 100%ï¼‰+ å…è®¸å•å…ƒæ ¼æ¢è¡Œ + é ç§»åŠ¨å¡åº”å¯¹çª„å±ï¼›**ä¸èƒ½**æ”¹æˆæ¨ªå‘æ»šåŠ¨ã€‚
+- å—é”å®šçš„è¡¨ï¼ˆç”¨æˆ·ç«¯ï¼‰ï¼š`MyPackagesView`ã€`MyHostsView`ã€`TransfersView`ã€`OrdersView`ã€`InvitesView`ã€`FlashSalesView`ã€`HostingWalletView`ã€`InstancesView`ã€`LogsView`ã€`EntertainmentView`ï¼›ï¼ˆç®¡ç†ç«¯ï¼‰`admin/BillingView`ã€`admin/ImagesView`ã€`admin/HelpManageView`ã€`admin/MailView`ã€`admin/PluginCenterView`ï¼›ï¼ˆç»„ä»¶ï¼‰`HostPublicIpv4Tab`ã€`InstanceLogsTab`ã€`ConfigEditModal`ã€‚
+- æ”¹ä»»ä¸€å‰ç«¯æ–‡ä»¶åŽ**å¿…è·‘** `test:frontend-route-guards`ã€‚
+
+---
+
+## 5. æž„å»º / æ ¡éªŒå‘½ä»¤
+
+| ç›®çš„ | å‘½ä»¤ |
+|------|------|
+| æž„å»ºï¼ˆå« dist è¾¹ç•Œå®ˆå«ï¼‰| `pnpm build` |
+| åªæž„å»ºå‰ç«¯ / åŽç«¯ | `pnpm build:client` / `pnpm build:server` |
+| Lintï¼ˆæ£€æŸ¥ / è‡ªåŠ¨ä¿®ï¼‰| `pnpm lint` / `pnpm lint:fix` |
+| ç±»åž‹æ£€æŸ¥ | `pnpm --filter client type-check` Â· `pnpm --filter server type-check` |
+| å…¨å¥—å®ˆå« | `pnpm test` |
+| æ–‡æ¡£ç«™å¼€å‘ / æž„å»º | `pnpm docs:dev` / `pnpm docs:build` |
+
+---
+
+## 6. UI æ”¹åŠ¨çº¦æŸï¼ˆå•è‰²é‡åšè¿›è¡Œä¸­ï¼‰
+
+- **æ–¹å‘**ï¼šè‹¹æžœå¼**çº¯é»‘ç™½å•è‰²**ï¼ˆæµ…è‰²=ç™½åº•é»‘å­—ï¼Œæ·±è‰²=é»‘åº•ç™½å­—ï¼‰ï¼ŒåŽ»äºŒæ¬¡å…ƒ/å‰ç¥¥ç‰©/ç«‹ç»˜ã€‚çŠ¶æ€è‰²**åªä¿ç•™ç»¿/ç¥ç€/çº¢**ä¸‰ç§ï¼ˆè¿è¡Œ/å¾…å¤„ç†/å¤±è´¥ï¼‰ã€‚
+- **çº¢çº¿**ï¼šåªæ”¹**æ ·å¼ / å¸ƒå±€ / æ–‡æ¡ˆå±‚çº§**ï¼Œ**ä¸ç¢°**åŽç«¯æŽ¥å£ã€æƒé™ã€æ”¯ä»˜/è®¢å•/å®žä¾‹åˆ›å»º/OTA ç­‰ä¸šåŠ¡é€»è¾‘ä¸Žè·¯ç”±è¡Œä¸ºâ€”â€”**åŠŸèƒ½ 100% ä¸å˜**ã€‚
+- **é…è‰²èµ° token å±‚**ï¼ˆ`client/tailwind.config.js`ï¼‰ï¼šä¸€å †å½©è‰² ramp å·²æ˜ å°„åˆ°ä¸­æ€§ç°ï¼›`rose â†’ çœŸçº¢`ï¼ˆå±é™©/äºæŸè¯­ä¹‰ï¼‰**ä¿ç•™ä¸å¯ç°åŒ–**ï¼›æ¸¸æˆåŒ–æ¨¡å—ï¼ˆæˆå°±/ç­¾åˆ°/æŠ½å¥–/ç¨€æœ‰åº¦ï¼‰å½©è‰²**åˆ»æ„ä¿ç•™**ã€‚
+- `kawaii-cloud.css` **æ¸è¿›æ”¹é€ ã€ä¸é‡å†™**ï¼›å•é¡µåŽ»è‰²ç”¨é¡µé¢ `<style scoped>`ã€‚
+- åŠ¨æ•ˆå¯ç”¨ **GSAP**ï¼ˆå·²è£… gsap-skillsï¼Œè§ `.claude/skills/`ï¼‰ï¼›å°Šé‡ `prefers-reduced-motion`ã€‚
+
+---
+
+## 7. åä½œæ¨¡åž‹ï¼ˆClaude Code â‡„ codexï¼‰
+
+- **Claude Code = æŠ€æœ¯è´Ÿè´£äºº / é›†æˆæ–¹**ï¼šå®šæ ¹å› ã€åˆ‡ä»»åŠ¡ã€å†™è§„æ ¼ã€å®ˆä¸å˜é‡ã€å®¡ diffã€è·‘å®ˆå«ã€çœŸæœºéªŒè¯ã€ç®¡ gitï¼ˆ**ä»…åœ¨ owner åŒæ„æ—¶** commit / pushï¼‰ã€‚
+- **codex = å®žçŽ°å·¥äºº**ï¼šæŒ‰ Claude ç»™çš„è§„æ ¼å®žçŽ°æ”¹åŠ¨ï¼Œå°¤å…¶**ä½Ž/ä¸­å±ã€è‡ªåŒ…å«ã€å¯å¹¶è¡Œ**çš„å—ã€‚
+- **é£Žé™©åˆ†æ¡£**ï¼šé«˜å±è·¯å¾„ç”± Claude å®šæ ¹å›  + æ”¶ç´§è§„æ ¼ï¼›ä½Ž/ä¸­å± codex å¯ç«¯åˆ°ç«¯ä¿®ã€‚**ä»»ä½•ä¸€æ–¹æ”¹å®Œéƒ½è¦è·‘ç›¸å…³å®ˆå«ï¼ŒClaude ç»Ÿä¸€å®¡æŸ¥åŽæ‰è¿›å…¥ä¸‹ä¸€æ­¥ã€‚**
+- **é¿å…å†²çª**ï¼šåŒä¸€æ‰¹æ–‡ä»¶ä¸€æ¬¡åªè®©ä¸€ä¸ª agent æ”¹ã€‚
+
+---
+
+## 8. ä¸€ä¸ªæ”¹åŠ¨çš„ã€Œå®Œæˆã€å®šä¹‰
+
+1. ç›¸å…³ **type-check** é€šè¿‡ï¼›
+2. ç›¸å…³ **å®ˆå«æµ‹è¯•** é€šè¿‡ï¼›
+3. è‹¥åŠ¨å‰ç«¯ â†’ **åŒç«¯ build** é€šè¿‡ï¼›
+4. **çœŸæœºè·‘è¿‡**å—å½±å“æµç¨‹ï¼ˆä¸æ˜¯åªçœ‹æµ‹è¯•ï¼‰ï¼›
+5. **æŠ¥å‘Š**ï¼šæ”¹äº†å“ªäº›æ–‡ä»¶ / ä¸ºä»€ä¹ˆ / é£Žé™© / æ€Žä¹ˆéªŒè¯çš„ã€‚
+
+ä»¥ä¸Šä»»ä¸€æœªæ»¡è¶³ = **æœªå®Œæˆ**ã€‚
+BILLING MATCHES
+
+
+Path       : C:\Users\Administrator\Desktop\payinces\server\src\db\billing-operations.ts
+LineNumber : 123
+Line       :   const expiresAt = addMonths(new Date(), plan.billingCycle)
+Context    : Microsoft.PowerShell.Commands.MatchInfoContext
+
+Path       : C:\Users\Administrator\Desktop\payinces\server\src\db\billing-operations.ts
+LineNumber : 361
+Line       :   const newExpiresAt = addMonths(baseDate, months)
+Context    : Microsoft.PowerShell.Commands.MatchInfoContext
+
+Path       : C:\Users\Administrator\Desktop\payinces\server\src\db\billing-operations.ts
+LineNumber : 708
+Line       :       const unfreezeAt = addMonths(new Date(), 1)
+Context    : Microsoft.PowerShell.Commands.MatchInfoContext
+
+Path       : C:\Users\Administrator\Desktop\payinces\server\src\db\billing-operations.ts
+LineNumber : 716
+Line       :         unfreezeAt,
+Context    : Microsoft.PowerShell.Commands.MatchInfoContext
+
+Path       : C:\Users\Administrator\Desktop\payinces\server\src\db\billing-operations.ts
+LineNumber : 873
+Line       :         const unfreezeAt = addMonths(new Date(), 1)
+Context    : Microsoft.PowerShell.Commands.MatchInfoContext
+
+Path       : C:\Users\Administrator\Desktop\payinces\server\src\db\billing-operations.ts
+LineNumber : 881
+Line       :           unfreezeAt,
+Context    : Microsoft.PowerShell.Commands.MatchInfoContext
+
+Path       : C:\Users\Administrator\Desktop\payinces\server\src\db\billing-operations.ts
+LineNumber : 1135
+Line       : function addMonths(date: Date, months: number): Date {
+Context    : Microsoft.PowerShell.Commands.MatchInfoContext
+
+Path       : C:\Users\Administrator\Desktop\payinces\server\src\db\billing-operations.ts
+LineNumber : 1136
+Line       :   return calcAddMonths(date, months)
+Context    : Microsoft.PowerShell.Commands.MatchInfoContext
+
+Path       : C:\Users\Administrator\Desktop\payinces\server\src\db\billing-operations.ts
+LineNumber : 1176
+Line       :     unfreezeAt?: Date | null
+Context    : Microsoft.PowerShell.Commands.MatchInfoContext
+
+Path       : C:\Users\Administrator\Desktop\payinces\server\src\db\billing-operations.ts
+LineNumber : 1199
+Line       :       unfreezeAt: params.unfreezeAt ?? null,
+Context    : Microsoft.PowerShell.Commands.MatchInfoContext
+
+Path       : C:\Users\Administrator\Desktop\payinces\server\src\db\billing-operations.ts
+LineNumber : 1334
+Line       :   const unfreezeAt = addMonths(new Date(), 1) // 使用 1 个月作为 30 天的近似
+Context    : Microsoft.PowerShell.Commands.MatchInfoContext
+
+Path       : C:\Users\Administrator\Desktop\payinces\server\src\db\billing-operations.ts
+LineNumber : 1343
+Line       :     unfreezeAt,
+Context    : Microsoft.PowerShell.Commands.MatchInfoContext
+
+Path       : C:\Users\Administrator\Desktop\payinces\server\src\routes\users.ts
+LineNumber : 1620
+Line       :         unfreezeAt: log.unfreezeAt?.toISOString() || null,
+Context    : Microsoft.PowerShell.Commands.MatchInfoContext
+
+Path       : C:\Users\Administrator\Desktop\payinces\server\src\routes\users.ts
+LineNumber : 1726
+Line       :                 unfreezeAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30天后解冻
+Context    : Microsoft.PowerShell.Commands.MatchInfoContext
+
+
+
+GUARD
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import assert from 'node:assert/strict'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+
+const billingSource = readFileSync(resolve(__dirname, '../src/db/billing-operations.ts'), 'utf8')
+const schedulerSource = readFileSync(resolve(__dirname, '../src/services/hosting-scheduler.ts'), 'utf8')
+const hostingRouteSource = readFileSync(resolve(__dirname, '../src/routes/hosting.ts'), 'utf8')
+const usersRouteSource = readFileSync(resolve(__dirname, '../src/routes/users.ts'), 'utf8')
+
+assert.ok(
+  usersRouteSource.includes('!Number.isFinite(amount)') &&
+    usersRouteSource.includes('Amount must be a finite non-zero number') &&
+    usersRouteSource.includes('const MAX_HOSTING_BALANCE_ADJUST_AMOUNT = 99999999.99') &&
+    usersRouteSource.includes('Math.abs(amount) > MAX_HOSTING_BALANCE_ADJUST_AMOUNT'),
+  'admin hosting-balance adjustment must reject non-finite and oversized amounts'
+)
+
+assert.ok(
+  usersRouteSource.includes('const MAX_HOSTING_BALANCE_ADJUST_REASON_LENGTH = 500') &&
+    usersRouteSource.includes("const normalizedReason = typeof reason === 'string' ? reason.trim() : ''") &&
+    usersRouteSource.includes('normalizedReason.length > MAX_HOSTING_BALANCE_ADJUST_REASON_LENGTH') &&
+    usersRouteSource.includes("const ADMIN_HOSTING_BALANCE_ADJUST_REMARK_PREFIX = '[Admin]'") &&
+    usersRouteSource.includes('remark: `${ADMIN_HOSTING_BALANCE_ADJUST_REMARK_PREFIX} ${normalizedReason}`') &&
+    usersRouteSource.includes('remark: `[Admin Frozen] ${normalizedReason}`') &&
+    usersRouteSource.includes('remark: `[Admin Frozen Deduct] ${normalizedReason} (Â¥${absAmount.toFixed(2)})`') &&
+    usersRouteSource.includes('reason=${normalizedReason}'),
+  'admin hosting-balance adjustment must trim and bound audit reasons before persistence/logging'
+)
+
+assert.ok(
+  hostingRouteSource.includes("const ADMIN_HOSTING_BALANCE_ADJUST_REMARK_PREFIX = '[Admin]'") &&
+    hostingRouteSource.includes('const OPERATING_HOSTING_INCOME_WHERE = {') &&
+    hostingRouteSource.includes('{ remark: null }') &&
+    hostingRouteSource.includes('{ NOT: { remark: { startsWith: ADMIN_HOSTING_BALANCE_ADJUST_REMARK_PREFIX } } }') &&
+    (hostingRouteSource.match(/\.\.\.OPERATING_HOSTING_INCOME_WHERE/g) || []).length === 4,
+  'admin available hosting-balance grants must be excluded from total income, VIP income, and operating-income history'
+)
+
+const hostingBalanceLogsStart = usersRouteSource.indexOf("}>('/:id/hosting-balance/logs'")
+assert.notEqual(hostingBalanceLogsStart, -1, 'hosting-balance logs route not found')
+const hostingBalanceLogsEnd = usersRouteSource.indexOf('// è°ƒæ•´ç”¨æˆ·æ‰˜ç®¡ä½™é¢ï¼ˆç®¡ç†å‘˜ï¼‰', hostingBalanceLogsStart)
+assert.notEqual(hostingBalanceLogsEnd, -1, 'hosting-balance logs route end marker not found')
+const hostingBalanceLogsRoute = usersRouteSource.slice(hostingBalanceLogsStart, hostingBalanceLogsEnd)
+
+assert.ok(
+  hostingBalanceLogsRoute.includes('const pageNum = parsePositiveIntegerQuery(page, 1)') &&
+    hostingBalanceLogsRoute.includes('const size = parseClampedPositiveIntegerQuery(pageSize, 20, 100)') &&
+    hostingBalanceLogsRoute.includes('const skip = (pageNum - 1) * size') &&
+    !hostingBalanceLogsRoute.includes('parseInt('),
+  'admin hosting-balance logs route must strictly parse pagination before Prisma skip/take'
+)
+
+assert.ok(
+  hostingRouteSource.includes('const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\\d*$/') &&
+    hostingRouteSource.includes('function parsePositiveRouteId(value: string): number | null') &&
+    hostingRouteSource.includes('Number.isSafeInteger(parsed)') &&
+    hostingRouteSource.includes('const blockedUserId = parsePositiveRouteId(request.params.userId)'),
+  'hosting block delete route must reject malformed, zero, and unsafe user IDs'
+)
+
+assert.ok(
+  hostingRouteSource.includes('function parsePositiveIntegerQuery(value: string | undefined, fallback: number): number') &&
+    hostingRouteSource.includes('function parseClampedPositiveIntegerQuery(value: string | undefined, fallback: number, max: number): number') &&
+    hostingRouteSource.includes('const safePageSize = parseClampedPositiveIntegerQuery(pageSize, 30, 100)') &&
+    hostingRouteSource.includes('const pageNum = parsePositiveIntegerQuery(page, 1)') &&
+    hostingRouteSource.includes('const safePageSize = parseClampedPositiveIntegerQuery(pageSize, 20, 100)') &&
+    hostingRouteSource.includes('const safeStatus = normalizeWithdrawalStatus(status)') &&
+    hostingRouteSource.includes('const safeActionType = normalizeHostingActionType(actionType)') &&
+    hostingRouteSource.includes('const searchTerm = normalizeSearch(search, 128)'),
+  'hosting logs and withdrawal routes must strictly parse pagination, cap search, and allowlist filters'
+)
+
+for (const forbiddenPattern of [
+  'Number(request.params.userId)',
+  'Number.isNaN(blockedUserId)',
+  'Number(page) || 1',
+  'Number(pageSize) ||',
+  'baseWhere.actionType = actionType',
+  'where.status = status'
+] as const) {
+  assert.ok(
+    !hostingRouteSource.includes(forbiddenPattern),
+    `hosting routes must not use loose parsing or raw enum filters: ${forbiddenPattern}`
+  )
+}
+
+assert.ok(
+  schedulerSource.includes('[...lockedAmounts.keys()].sort((a, b) => a - b)') &&
+    schedulerSource.includes('tryAdvisoryTransactionLock(tx, HOSTING_BALANCE_LOG_LOCK_NAMESPACE, userId)'),
+  'hosting unfreeze job must acquire per-user hosting-balance locks in deterministic order'
+)
+
+assert.ok(
+  billingSource.includes('tryAdvisoryTransactionLock(client, HOSTING_BALANCE_LOG_LOCK_NAMESPACE, hostOwnerId)') &&
+    billingSource.includes('tryAdvisoryTransactionLock(client, USER_BALANCE_LOCK_NAMESPACE, hostOwnerId)'),
+  'hosted instance destruction must lock both hosting balance and panel balance before deductions'
+)
+
+assert.ok(
+  billingSource.includes('const hostingBalanceUpdateResult = await client.user.updateMany({') &&
+    billingSource.includes('hostingBalance: { gte: deductFromAvailable }') &&
+    billingSource.includes("throw new Error('æ‰˜ç®¡ä½™é¢ä¸è¶³ï¼Œè¯·ç¨åŽé‡è¯•')"),
+  'hosted instance destruction must conditionally decrement available hosting balance'
+)
+
+assert.ok(
+  billingSource.includes('const balanceUpdateResult = await client.user.updateMany({') &&
+    billingSource.includes('balance: { gte: deductFromBalance }') &&
+    billingSource.includes("throw new Error('ä½™é¢ä¸è¶³ï¼Œè¯·ç¨åŽé‡è¯•')") &&
+    billingSource.includes('const updatedUser = await client.user.findUniqueOrThrow({'),
+  'hosted instance destruction must conditionally decrement panel balance before writing balance logs'
+)
+
+const shortfallDebtStart = billingSource.indexOf('const shortfall = remainingToDeduct')
+assert.notEqual(shortfallDebtStart, -1, 'hosting-balance shortfall debt block not found')
+const shortfallDebtEnd = billingSource.indexOf('const totalDeducted =', shortfallDebtStart)
+assert.notEqual(shortfallDebtEnd, -1, 'hosting-balance total deduction calculation not found')
+const shortfallDebtBlock = billingSource.slice(shortfallDebtStart, shortfallDebtEnd)
+
+assert.ok(
+  shortfallDebtBlock.includes('data: { hostingBalance: { decrement: shortfall } }') &&
+    shortfallDebtBlock.includes('shortfallDebt = shortfall') &&
+    !shortfallDebtBlock.includes('gte:') &&
+    billingSource.includes('const totalDeducted = fromFrozen + fromAvailable + fromBalance + shortfallDebt') &&
+    billingSource.includes('amount: -totalDeducted') &&
+    billingSource.includes('å›žæ‰£ç¼ºå£è®°æ¬ æ¬¾ Â¥${shortfallDebt.toFixed(2)}'),
+  'hosted instance deduction shortfall must become host-owner hosting-balance debt instead of a platform loss'
+)
+
+console.log('hosting balance guard checks passed')
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "Write-Output 'TARGET CONTEXT'; "'$p='"'server/src/db/billing-operations.ts'; "'$lines=Get-Content -LiteralPath $p; for($i=1290;$i -le 1360;$i++){ '"'{0,5}: {1}' -f ("'$i+1),$lines[$i] }; Write-Output '"'EARLIER FREEZE CONTEXT'; foreach("'$range in @(@(680,730),@(845,895))){ for($i=$range[0];$i -le $range[1];$i++){ '"'{0,5}: {1}' -f ("'$i+1),$lines[$i] } }; Write-Output '"'FREEZE CONSTANT SEARCH'; Get-ChildItem -LiteralPath server/src -Recurse -File -Filter '*.ts' | Select-String -Pattern 'FREEZE.*(DAY|DURATION)|HOSTING.*FREEZE|30 \\* 24 \\* 60 \\* 60 \\* 1000' | ForEach-Object { '{0}:{1}: {2}' -f "'$_.Path,$_.LineNumber,$_.Line.Trim() }; Write-Output '"'TARGET DIFF'; git diff -- server/src/db/billing-operations.ts server/scripts/test-hosting-balance-guards.ts" in C:\Users\Administrator\Desktop\payinces
+ succeeded in 827ms:
+TARGET CONTEXT
+ 1291:     select: {
+ 1292:       user: {
+ 1293:         select: {
+ 1294:           role: true
+ 1295:         }
+ 1296:       }
+ 1297:     }
+ 1298:   })
+ 1299:   return host?.user.role === 'user'
+ 1300: }
+ 1301: 
+ 1302: /**
+ 1303:  * èŽ·å–èŠ‚ç‚¹æ‰€æœ‰è€…ID
+ 1304:  */
+ 1305: export async function getHostOwnerId(hostId: number): Promise<number | null> {
+ 1306:   const host = await prisma.host.findUnique({
+ 1307:     where: { id: hostId },
+ 1308:     select: { userId: true }
+ 1309:   })
+ 1310:   return host?.userId ?? null
+ 1311: }
+ 1312: 
+ 1313: /**
+ 1314:  * è®°å½•æ‰˜ç®¡æ”¶å…¥ï¼ˆç”¨æˆ·è´­ä¹°/ç»­è´¹ç”¨æˆ·æ‰˜ç®¡èŠ‚ç‚¹ä¸Šçš„å®žä¾‹æ—¶è°ƒç”¨ï¼‰
+ 1315:  * 
+ 1316:  * @param hostOwnerId èŠ‚ç‚¹æ‰€æœ‰è€…ç”¨æˆ·ID
+ 1317:  * @param amount é‡‘é¢ï¼ˆå…ƒï¼‰
+ 1318:  * @param instanceId å…³è”çš„å®žä¾‹ID
+ 1319:  * @param remark å¤‡æ³¨
+ 1320:  * @param actionType æ“ä½œç±»åž‹ï¼ˆpurchase/renew/upgrade/destroyç­‰ï¼‰
+ 1321:  * @param tx å¯é€‰çš„äº‹åŠ¡å®¢æˆ·ç«¯
+ 1322:  */
+ 1323: export async function recordHostingIncome(
+ 1324:   hostOwnerId: number,
+ 1325:   amount: number,
+ 1326:   instanceId: number,
+ 1327:   remark: string,
+ 1328:   actionType: 'purchase' | 'renew' | 'upgrade' | 'destroy' | 'unfreeze' | 'withdraw',
+ 1329:   tx?: any
+ 1330: ): Promise<void> {
+ 1331:   const client = tx || prisma
+ 1332: 
+ 1333:   // è®¡ç®—è§£å†»æ—¶é—´ï¼ˆ30å¤©åŽï¼‰
+ 1334:   const unfreezeAt = addMonths(new Date(), 1) // ä½¿ç”¨ 1 ä¸ªæœˆä½œä¸º 30 å¤©çš„è¿‘ä¼¼
+ 1335: 
+ 1336:   await createHostingLogWithSnapshot(client, {
+ 1337:     userId: hostOwnerId,
+ 1338:     type: 'income',
+ 1339:     actionType,
+ 1340:     amount,
+ 1341:     instanceId,
+ 1342:     frozen: true,
+ 1343:     unfreezeAt,
+ 1344:     remark
+ 1345:   })
+ 1346: }
+ 1347: 
+ 1348: /**
+ 1349:  * å¤„ç†æ‰˜ç®¡æ”¶å…¥ç»“ç®—
+ 1350:  * åœ¨ç”¨æˆ·è´­ä¹°æˆ–ç»­è´¹å®žä¾‹æ—¶è°ƒç”¨ï¼Œæ£€æŸ¥èŠ‚ç‚¹æ˜¯å¦ä¸ºç”¨æˆ·æ‰˜ç®¡ï¼Œå¦‚æ˜¯åˆ™è®°å½•æ”¶å…¥
+ 1351:  * 
+ 1352:  * @param hostId èŠ‚ç‚¹ID
+ 1353:  * @param amount é‡‘é¢ï¼ˆå…ƒï¼‰
+ 1354:  * @param instanceId å®žä¾‹ID
+ 1355:  * @param type ç±»åž‹ï¼š'purchase' | 'renew'
+ 1356:  * @param tx å¯é€‰çš„äº‹åŠ¡å®¢æˆ·ç«¯
+ 1357:  * @returns å¦‚æžœæ˜¯ç”¨æˆ·æ‰˜ç®¡èŠ‚ç‚¹ï¼Œè¿”å›žèŠ‚ç‚¹æ‰€æœ‰è€…ä¿¡æ¯ï¼›å¦åˆ™è¿”å›ž null
+ 1358:  */
+ 1359: export async function processHostingIncome(
+ 1360:   hostId: number,
+ 1361:   amount: number,
+EARLIER FREEZE CONTEXT
+  681:         amount: finalAmount,
+  682:         months,
+  683:         periodStart: instance.expiresAt || new Date(),
+  684:         periodEnd: newExpiresAt,
+  685:         balanceLogId: balanceLog.id,
+  686:         remark: discountAmount > 0
+  687:           ? `ç»­è´¹ ${months} ä¸ªæœˆï¼Œä¼˜æƒ ç æŠ˜æ‰£ -Â¥${discountAmount.toFixed(2)}`
+  688:           : `ç»­è´¹ ${months} ä¸ªæœˆ`
+  689:       }
+  690:     })
+  691: 
+  692:     // å¦‚æžœæœ‰ AFF ç»‘å®šï¼Œç»™ä¼˜æƒ ç åˆ›å»ºè€…è¿”åˆ©
+  693:     if (affBinding?.affCode.enabled) {
+  694:       await processAffCommission(
+  695:         affBinding.affCode.id,
+  696:         instance.id,
+  697:         originalAmount, // åŸºäºŽåŽŸä»·è®¡ç®—è¿”åˆ©
+  698:         'renew',
+  699:         tx as any
+  700:       )
+  701:     }
+  702: 
+  703:     let hostingIncomeResult: { hostOwnerId: number; hostName: string } | null = null
+  704: 
+  705:     const hostingOwner = await resolveHostedIncomeOwner(tx, instance.hostId)
+  706:     if (hostingOwner) {
+  707:       // ç”¨æˆ·æ‰˜ç®¡èŠ‚ç‚¹ï¼Œè®°å½•æ‰˜ç®¡æ”¶å…¥ï¼ˆå¸¦å¿«ç…§ï¼‰
+  708:       const unfreezeAt = addMonths(new Date(), 1)
+  709:       await createHostingLogWithSnapshot(tx, {
+  710:         userId: hostingOwner.userId,
+  711:         type: 'income',
+  712:         actionType: 'renew',
+  713:         amount: finalAmount,
+  714:         instanceId: instance.id,
+  715:         frozen: true,
+  716:         unfreezeAt,
+  717:         remark: `ç”¨æˆ·ç»­è´¹å®žä¾‹æ”¶å…¥ï¼ˆå†»ç»“30å¤©ï¼‰`
+  718:       })
+  719:       console.log(`[HostingIncome] è®°å½•ç»­è´¹æ‰˜ç®¡æ”¶å…¥: hostOwnerId=${hostingOwner.userId}, amount=${finalAmount}, instanceId=${instance.id}`)
+  720:       hostingIncomeResult = { hostOwnerId: hostingOwner.userId, hostName: hostingOwner.hostName }
+  721:     }
+  722: 
+  723:     return { balanceLogId: balanceLog.id, hostingIncomeResult }
+  724:   })
+  725: 
+  726:   return {
+  727:     newExpiresAt,
+  728:     amount: finalAmount,
+  729:     balanceLogId: result.balanceLogId,
+  730:     discountAmount: discountAmount > 0 ? discountAmount : undefined,
+  731:     hostingIncomeResult: result.hostingIncomeResult
+  846:       }
+  847: 
+  848:       const updatedUser = await tx.user.findUnique({
+  849:         where: { id: userId },
+  850:         select: { balance: true }
+  851:       })
+  852:       if (!updatedUser) {
+  853:         throw new Error('ç”¨æˆ·ä¸å­˜åœ¨')
+  854:       }
+  855:       const newBalance = Number(updatedUser.balance)
+  856: 
+  857:       // å‡çº§æ‰£è´¹è®°å½•
+  858:       await tx.balanceLog.create({
+  859:         data: {
+  860:           userId,
+  861:           type: 'consume',
+  862:           amount: -changeResult.priceDiff,
+  863:           balanceBefore: oldBalance,
+  864:           balanceAfter: newBalance,
+  865:           instanceId: instance.id,
+  866:           remark: `å‡çº§æ–¹æ¡ˆï¼š${changeResult.oldPlan.name} â†’ ${newPlan.name}`
+  867:         }
+  868:       })
+  869: 
+  870:       const hostingOwner = await resolveHostedIncomeOwner(tx, instance.hostId)
+  871:       if (hostingOwner) {
+  872:         // ç”¨æˆ·æ‰˜ç®¡èŠ‚ç‚¹ï¼Œè®°å½•æ‰˜ç®¡æ”¶å…¥ï¼ˆå‡çº§å·®ä»·ï¼Œå¸¦å¿«ç…§ï¼‰
+  873:         const unfreezeAt = addMonths(new Date(), 1)
+  874:         await createHostingLogWithSnapshot(tx, {
+  875:           userId: hostingOwner.userId,
+  876:           type: 'income',
+  877:           actionType: 'upgrade',
+  878:           amount: changeResult.priceDiff,
+  879:           instanceId: instance.id,
+  880:           frozen: true,
+  881:           unfreezeAt,
+  882:           remark: `ç”¨æˆ·å‡çº§å®žä¾‹æ–¹æ¡ˆæ”¶å…¥ï¼ˆå†»ç»“30å¤©ï¼‰`
+  883:         })
+  884:         console.log(`[HostingIncome] è®°å½•å‡çº§æ‰˜ç®¡æ”¶å…¥: hostOwnerId=${hostingOwner.userId}, amount=${changeResult.priceDiff}, instanceId=${instance.id}`)
+  885:         hostingIncomeResult = { hostOwnerId: hostingOwner.userId, hostName: hostingOwner.hostName }
+  886:       }
+  887:     }
+  888: 
+  889:     // é™çº§é€€æ¬¾åˆ°ä½™é¢
+  890:     if (changeResult.priceDiff < 0) {
+  891:       refundAmount = Math.abs(changeResult.priceDiff)
+  892: 
+  893:       const updatedUser = await tx.user.update({
+  894:         where: { id: userId },
+  895:         data: { balance: { increment: refundAmount } },
+  896:         select: { balance: true }
+FREEZE CONSTANT SEARCH
+C:\Users\Administrator\Desktop\payinces\server\src\lib\security.ts:605: const thirtyDaysAgo = Math.floor((Date.now() - 30 * 24 * 60 * 60 * 1000) / 1000)
+C:\Users\Administrator\Desktop\payinces\server\src\lib\security.ts:1491: const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+C:\Users\Administrator\Desktop\payinces\server\src\routes\users.ts:1726: unfreezeAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30天后解冻
+C:\Users\Administrator\Desktop\payinces\server\src\services\billing-scheduler.ts:767: const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+C:\Users\Administrator\Desktop\payinces\server\src\services\hosting-scheduler.ts:22: console.log('[Hosting] Starting unfreeze job...')
+C:\Users\Administrator\Desktop\payinces\server\src\services\hosting-scheduler.ts:41: console.log(`[Hosting] Found ${frozenRecords.length} records to unfreeze`)
+C:\Users\Administrator\Desktop\payinces\server\src\services\hosting-scheduler.ts:44: console.log('[Hosting] No records to unfreeze')
+C:\Users\Administrator\Desktop\payinces\server\src\services\hosting-scheduler.ts:113: console.log(`[Hosting] Unfreeze job completed in ${duration}ms, processed ${frozenRecords.length} records`)
+C:\Users\Administrator\Desktop\payinces\server\src\services\hosting-scheduler.ts:115: console.error('[Hosting] Unfreeze job failed:', error)
+C:\Users\Administrator\Desktop\payinces\server\src\services\hosting-scheduler.ts:139: console.log('[Hosting] - Unfreeze: Every hour at minute 0')
+C:\Users\Administrator\Desktop\payinces\server\src\services\hosting-scheduler.ts:146: console.log('[Hosting] Manual unfreeze triggered')
+TARGET DIFF
+diff --git a/server/scripts/test-hosting-balance-guards.ts b/server/scripts/test-hosting-balance-guards.ts
+index 31823ab..522a129 100644
+--- a/server/scripts/test-hosting-balance-guards.ts
++++ b/server/scripts/test-hosting-balance-guards.ts
+@@ -23,13 +23,23 @@ assert.ok(
+   usersRouteSource.includes('const MAX_HOSTING_BALANCE_ADJUST_REASON_LENGTH = 500') &&
+     usersRouteSource.includes("const normalizedReason = typeof reason === 'string' ? reason.trim() : ''") &&
+     usersRouteSource.includes('normalizedReason.length > MAX_HOSTING_BALANCE_ADJUST_REASON_LENGTH') &&
+-    usersRouteSource.includes('remark: `[Admin] ${normalizedReason}`') &&
++    usersRouteSource.includes("const ADMIN_HOSTING_BALANCE_ADJUST_REMARK_PREFIX = '[Admin]'") &&
++    usersRouteSource.includes('remark: `${ADMIN_HOSTING_BALANCE_ADJUST_REMARK_PREFIX} ${normalizedReason}`') &&
+     usersRouteSource.includes('remark: `[Admin Frozen] ${normalizedReason}`') &&
+     usersRouteSource.includes('remark: `[Admin Frozen Deduct] ${normalizedReason} (¥${absAmount.toFixed(2)})`') &&
+     usersRouteSource.includes('reason=${normalizedReason}'),
+   'admin hosting-balance adjustment must trim and bound audit reasons before persistence/logging'
+ )
+ 
++assert.ok(
++  hostingRouteSource.includes("const ADMIN_HOSTING_BALANCE_ADJUST_REMARK_PREFIX = '[Admin]'") &&
++    hostingRouteSource.includes('const OPERATING_HOSTING_INCOME_WHERE = {') &&
++    hostingRouteSource.includes('{ remark: null }') &&
++    hostingRouteSource.includes('{ NOT: { remark: { startsWith: ADMIN_HOSTING_BALANCE_ADJUST_REMARK_PREFIX } } }') &&
++    (hostingRouteSource.match(/\.\.\.OPERATING_HOSTING_INCOME_WHERE/g) || []).length === 4,
++  'admin available hosting-balance grants must be excluded from total income, VIP income, and operating-income history'
++)
++
+ const hostingBalanceLogsStart = usersRouteSource.indexOf("}>('/:id/hosting-balance/logs'")
+ assert.notEqual(hostingBalanceLogsStart, -1, 'hosting-balance logs route not found')
+ const hostingBalanceLogsEnd = usersRouteSource.indexOf('// 调整用户托管余额（管理员）', hostingBalanceLogsStart)
+@@ -105,4 +115,20 @@ assert.ok(
+   'hosted instance destruction must conditionally decrement panel balance before writing balance logs'
+ )
+ 
++const shortfallDebtStart = billingSource.indexOf('const shortfall = remainingToDeduct')
++assert.notEqual(shortfallDebtStart, -1, 'hosting-balance shortfall debt block not found')
++const shortfallDebtEnd = billingSource.indexOf('const totalDeducted =', shortfallDebtStart)
++assert.notEqual(shortfallDebtEnd, -1, 'hosting-balance total deduction calculation not found')
++const shortfallDebtBlock = billingSource.slice(shortfallDebtStart, shortfallDebtEnd)
++
++assert.ok(
++  shortfallDebtBlock.includes('data: { hostingBalance: { decrement: shortfall } }') &&
++    shortfallDebtBlock.includes('shortfallDebt = shortfall') &&
++    !shortfallDebtBlock.includes('gte:') &&
++    billingSource.includes('const totalDeducted = fromFrozen + fromAvailable + fromBalance + shortfallDebt') &&
++    billingSource.includes('amount: -totalDeducted') &&
++    billingSource.includes('回扣缺口记欠款 ¥${shortfallDebt.toFixed(2)}'),
++  'hosted instance deduction shortfall must become host-owner hosting-balance debt instead of a platform loss'
++)
++
+ console.log('hosting balance guard checks passed')
+diff --git a/server/src/db/billing-operations.ts b/server/src/db/billing-operations.ts
+index 5cb1e59..866e936 100644
+--- a/server/src/db/billing-operations.ts
++++ b/server/src/db/billing-operations.ts
+@@ -12,7 +12,6 @@ import {
+   calculateDiscountedPrice,
+   calculateRemainingDays,
+   calculateRemainingDaysPrecise,
+-  calculatePriceDiff,
+   calculateRemainingValue,
+   calculatePlanChangeDetails,
+   addMonths as calcAddMonths
+@@ -150,12 +149,16 @@ export function calculateMonthlyPrice(instance: { billingPrice: any; billingCycl
+  * @param instanceId 实例 ID
+  * @returns { maxRefundable, lastPaymentAmount }
+  */
+-export async function getMaxRefundable(instanceId: number): Promise<{ maxRefundable: number; lastPaymentAmount: number }> {
+-  const billingLineageInstanceIds = await getInstanceBillingLineageIds(instanceId)
++export async function getMaxRefundable(
++  instanceId: number,
++  tx?: Prisma.TransactionClient
++): Promise<{ maxRefundable: number; lastPaymentAmount: number }> {
++  const client = tx || prisma
++  const billingLineageInstanceIds = await getInstanceBillingLineageIds(instanceId, client)
+   const instanceIds = billingLineageInstanceIds.length > 0 ? billingLineageInstanceIds : [instanceId]
+ 
+   const [totalConsumed, refundRecords, lastPayment] = await Promise.all([
+-    prisma.instanceBillingRecord.aggregate({
++    client.instanceBillingRecord.aggregate({
+       where: {
+         instanceId: { in: instanceIds },
+         type: { in: ['newPurchase', 'renew', 'upgrade'] },
+@@ -163,14 +166,14 @@ export async function getMaxRefundable(instanceId: number): Promise<{ maxRefunda
+       },
+       _sum: { amount: true }
+     }),
+-    prisma.instanceBillingRecord.findMany({
++    client.instanceBillingRecord.findMany({
+       where: {
+         instanceId: { in: instanceIds },
+         type: 'refund'
+       },
+       select: { amount: true }
+     }),
+-    prisma.instanceBillingRecord.findFirst({
++    client.instanceBillingRecord.findFirst({
+       where: {
+         instanceId: { in: instanceIds },
+         // 仅查询 newPurchase/renew（upgrade 记录的 amount 是差价，不是完整周期金额）
+@@ -213,7 +216,7 @@ export async function calculateInstanceRemainingRefundQuote(instance: {
+   billingCycle: number | null
+   expiresAt: Date | null
+   packagePlanId: number | null
+-}): Promise<InstanceRemainingRefundQuote> {
++}, tx?: Prisma.TransactionClient): Promise<InstanceRemainingRefundQuote> {
+   const isPaid = !!(instance.packagePlanId && instance.expiresAt && instance.billingPrice)
+ 
+   if (!isPaid) {
+@@ -240,11 +243,12 @@ export async function calculateInstanceRemainingRefundQuote(instance: {
+   }
+ 
+   const remainingDays = calculateRemainingDays(expiresAt, now)
+-  const billingLineageInstanceIds = await getInstanceBillingLineageIds(instance.id)
++  const client = tx || prisma
++  const billingLineageInstanceIds = await getInstanceBillingLineageIds(instance.id, client)
+   const instanceIds = billingLineageInstanceIds.length > 0 ? billingLineageInstanceIds : [instance.id]
+   const [maxRefundableInfo, positiveBillingRecords] = await Promise.all([
+-    getMaxRefundable(instance.id),
+-    prisma.instanceBillingRecord.findMany({
++    getMaxRefundable(instance.id, tx),
++    client.instanceBillingRecord.findMany({
+       where: {
+         instanceId: { in: instanceIds },
+         type: { in: ['newPurchase', 'renew', 'upgrade'] },
+@@ -282,7 +286,7 @@ export async function calculateInstanceRemainingRefundQuote(instance: {
+   // 避免老实例直接变成 0 退款。
+   if (positiveBillingRecords.length === 0 && instance.billingPrice && instance.billingCycle) {
+     let discountRate = 0
+-    const affBinding = await getInstanceAffBinding(instance.id)
++    const affBinding = await getInstanceAffBinding(instance.id, tx)
+     if (affBinding?.affCode?.enabled) {
+       discountRate = Number(affBinding.affCode.discountRate) || 0
+     }
+@@ -369,7 +373,7 @@ export function calculateRenewBilling(
+  * 计算公式：
+  * 1. 原方案日价 = 原方案周期价格 / 原方案周期天数
+  * 2. 新方案日价 = 新方案周期价格 / 新方案周期天数
+- * 3. 剩余价值 = 原方案日价 × 剩余天数 × (1 - 折扣率)
++ * 3. 剩余价值 = 实付账单未使用价值，并封顶于尚可退实付总额
+  * 4. 新方案费用 = 新方案日价 × 剩余天数 × (1 - 折扣率)
+  * 5. 差价 = 新方案费用 - 剩余价值
+  */
+@@ -419,6 +423,7 @@ export async function calculatePlanChange(
+   // ========== 使用公共方法计算差价 ==========
+   const oldCyclePrice = Number(instance.billingPrice) || 0 // 已是元
+   const newCyclePrice = Number(newPlan.price) / 100 // 分转元
++  const paidRefundQuote = await calculateInstanceRemainingRefundQuote(instance)
+ 
+   // 使用公共方法计算详情
+   const calcResult = calculatePlanChangeDetails(
+@@ -427,7 +432,9 @@ export async function calculatePlanChange(
+     newCyclePrice,
+     newPlan.billingCycle,
+     remainingDays,
+-    discountRate
++    discountRate,
++    paidRefundQuote.remainingValue,
++    paidRefundQuote.maxRefundable
+   )
+ 
+   return {
+@@ -463,6 +470,7 @@ export async function calculateInstancePriceAdjustmentQuote(
+     billingPrice: any
+     billingCycle: number | null
+     expiresAt: Date | null
++    packagePlanId: number | null
+   },
+   newPrice: number,
+   settleBalance: boolean,
+@@ -484,14 +492,17 @@ export async function calculateInstancePriceAdjustmentQuote(
+   if (settleBalance && instance.expiresAt) {
+     remainingDays = calculateRemainingDaysPrecise(new Date(instance.expiresAt))
+     if (remainingDays > 0) {
+-      priceDiff = calculatePriceDiff(
++      const paidRefundQuote = await calculateInstanceRemainingRefundQuote(instance, tx)
++      priceDiff = calculatePlanChangeDetails(
+         oldPrice,
+         billingCycle,
+         roundedNewPrice,
+         billingCycle,
+         remainingDays,
+-        discountRate
+-      )
++        discountRate,
++        paidRefundQuote.remainingValue,
++        paidRefundQuote.maxRefundable
++      ).priceDiff
+     }
+   }
+ 
+@@ -540,6 +551,10 @@ export async function performRenewal(
+   instance: Instance,
+   months: number
+ ): Promise<{ newExpiresAt: Date; amount: number; balanceLogId: number; discountAmount?: number; hostingIncomeResult?: { hostOwnerId: number; hostName: string } | null }> {
++  if (instance.status === 'deleted') {
++    throw new Error('实例已删除，无法续费')
++  }
++
+   // 验证付费实例
+   if (!instance.packagePlanId) {
+     throw new Error('免费实例无需续费')
+@@ -565,7 +580,7 @@ export async function performRenewal(
+   let discountAmount = 0
+   let finalAmount = originalAmount
+ 
+-  if (affBinding) {
++  if (affBinding?.affCode.enabled) {
+     discountRate = Number(affBinding.affCode.discountRate)
+     discountAmount = calculateDiscountAmount(originalAmount, discountRate)
+     finalAmount = calculateDiscountedPrice(originalAmount, discountRate)
+@@ -619,6 +634,7 @@ export async function performRenewal(
+     const instanceUpdateResult = await tx.instance.updateMany({
+       where: {
+         id: instance.id,
++        status: { not: 'deleted' },
+         version: instance.version  // 确保版本号未变
+       },
+       data: {
+@@ -674,7 +690,7 @@ export async function performRenewal(
+     })
+ 
+     // 如果有 AFF 绑定，给优惠码创建者返利
+-    if (affBinding) {
++    if (affBinding?.affCode.enabled) {
+       await processAffCommission(
+         affBinding.affCode.id,
+         instance.id,
+@@ -735,6 +751,10 @@ export async function performPlanChange(
+   bandwidthLimit: string | null
+   capacity: PlanUpgradeCapacityCheck
+ }> {
++  if (instance.status === 'deleted') {
++    throw new Error('实例已删除，无法改配')
++  }
++
+   const pkg = await prisma.package.findUnique({
+     where: { id: newPlan.packageId },
+     select: { instanceType: true }
+@@ -901,6 +921,7 @@ export async function performPlanChange(
+     const instanceUpdateResult = await tx.instance.updateMany({
+       where: {
+         id: instance.id,
++        status: { not: 'deleted' },
+         version: instance.version  // 确保版本号未变
+       },
+       data: {
+@@ -1438,6 +1459,7 @@ export async function deductHostingBalance(
+     let fromFrozen = 0
+     let fromAvailable = 0
+     let fromBalance = 0
++    let shortfallDebt = 0
+ 
+     // 第一步：优先从冻结收入中扣除
+     // 冻结记录尚未计入 hostingBalance，通过删除/减少原记录来确保这部分钱不会被计入，
+@@ -1532,7 +1554,19 @@ export async function deductHostingBalance(
+       }
+     }
+ 
+-    const totalDeducted = fromFrozen + fromAvailable + fromBalance
++    // 前三层余额仍不足时，将缺口记入节点主人的托管余额欠款。
++    // 此处刻意不设置非负条件，仅该回扣缺口场景允许 hostingBalance 变为负数。
++    if (remainingToDeduct > 0) {
++      const shortfall = remainingToDeduct
++      await client.user.update({
++        where: { id: hostOwnerId },
++        data: { hostingBalance: { decrement: shortfall } }
++      })
++      shortfallDebt = shortfall
++      remainingToDeduct = 0
++    }
++
++    const totalDeducted = fromFrozen + fromAvailable + fromBalance + shortfallDebt
+ 
+     // 始终创建一条独立的销毁扣除审计记录（无论扣款来自冻结、托管余额还是面板余额）
+     // 原来的条件 (fromFrozen>0 || fromAvailable>0) 遗漏了纯从面板余额扣款的情况，
+@@ -1542,6 +1576,7 @@ export async function deductHostingBalance(
+       if (fromFrozen > 0) parts.push(`冻结抵扣 ¥${fromFrozen.toFixed(2)}`)
+       if (fromAvailable > 0) parts.push(`托管余额扣除 ¥${fromAvailable.toFixed(2)}`)
+       if (fromBalance > 0) parts.push(`面板余额补扣 ¥${fromBalance.toFixed(2)}`)
++      if (shortfallDebt > 0) parts.push(`回扣缺口记欠款 ¥${shortfallDebt.toFixed(2)}`)
+ 
+       await createHostingLogWithSnapshot(client, {
+         userId: hostOwnerId,
+warning: in the working copy of 'server/scripts/test-hosting-balance-guards.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/db/billing-operations.ts', LF will be replaced by CRLF the next time Git touches it
+
+codex
+只读确认：没有现成可配置的 Hosting 冻结天数常量；管理侧直接使用精确 30 天。业务文件里购买、续费、升级三条 Hosting 收入路径都各自用 `addMonths(new Date(), 1)`，因此为真正统一口径，我会在该文件抽一个 `HOSTING_FREEZE_DAYS = 30`，仅替换这三处冻结到期计算；实例账期的其他 `addMonths` 保持不动。守卫会同时钉住“常量为 30、三条路径采用毫秒日数、Hosting 解冻计算不再使用 addMonths”。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$p='"'server/src/db/billing-operations.ts'; "'$lines=Get-Content -LiteralPath $p; for($i=0;$i -le 80;$i++){ '"'{0,4}: {1}' -f ("'$i+1),$lines[$i] }' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 442ms:
+   1: /**
+   2:  * è®¡è´¹ä¸šåŠ¡é€»è¾‘æ“ä½œ
+   3:  * å¤„ç†ä»˜è´¹å®žä¾‹å¼€é€šã€ç»­è´¹ã€å‡é™çº§ç­‰æ ¸å¿ƒè®¡è´¹ä¸šåŠ¡
+   4:  */
+   5: 
+   6: import { prisma } from './prisma.js'
+   7: import type { Instance, PackagePlan, Prisma } from '@prisma/client'
+   8: import { getInstanceAffBinding, processAffCommission } from './aff.js'
+   9: import { getInstanceBillingLineageIds } from './billing-records.js'
+  10: import {
+  11:   calculateDiscountAmount,
+  12:   calculateDiscountedPrice,
+  13:   calculateRemainingDays,
+  14:   calculateRemainingDaysPrecise,
+  15:   calculateRemainingValue,
+  16:   calculatePlanChangeDetails,
+  17:   addMonths as calcAddMonths
+  18: } from '../lib/billing-calc.js'
+  19: import { shouldSyncInstanceSwapSizeWithPlan } from '../lib/instance-swap.js'
+  20: import { resolveInstanceTrafficLimitForHost } from '../lib/traffic-multiplier.js'
+  21: import { calculateInstanceTrafficStatus } from '../services/traffic-utils.js'
+  22: import { normalizePlanTrafficLimitSpeed } from '../services/traffic-bandwidth.js'
+  23: import { getExchangeOperationLock } from '../services/exchange-operation-lock.js'
+  24: import { reservePlanUpgradeCapacityWithLock, type PlanUpgradeCapacityCheck } from './hosts.js'
+  25: import {
+  26:   HOSTING_BALANCE_LOG_LOCK_NAMESPACE,
+  27:   USER_BALANCE_LOCK_NAMESPACE,
+  28:   tryAdvisoryTransactionLock
+  29: } from './advisory-locks.js'
+  30: 
+  31: // ==================== ç±»åž‹å®šä¹‰ ====================
+  32: 
+  33: export interface CreateBillingResult {
+  34:   plan: PackagePlan
+  35:   price: number
+  36:   billingCycle: number
+  37:   setupFee: number
+  38:   totalPrice: number
+  39:   expiresAt: Date
+  40: }
+  41: 
+  42: export interface RenewBillingResult {
+  43:   monthlyPrice: number
+  44:   months: number
+  45:   amount: number
+  46:   newExpiresAt: Date
+  47: }
+  48: 
+  49: export interface InstanceRefundResult {
+  50:   remainingDays: number
+  51:   remainingValue: number
+  52:   refundableValue: number
+  53:   refundAmount: number
+  54:   maxRefundable: number
+  55:   discountRate: number
+  56:   isPaid: boolean
+  57: }
+  58: 
+  59: export interface InstanceRemainingRefundQuote {
+  60:   remainingDays: number
+  61:   remainingValue: number
+  62:   refundableValue: number
+  63:   maxRefundable: number
+  64:   isPaid: boolean
+  65: }
+  66: 
+  67: export interface HostingBalanceDeductionResult {
+  68:   hostOwnerId: number
+  69:   deductedAmount: number
+  70:   fromFrozen: number
+  71:   fromAvailable: number
+  72:   fromBalance: number
+  73: }
+  74: 
+  75: export interface ChangePlanPreviewResult {
+  76:   oldPlan: PackagePlan
+  77:   newPlan: PackagePlan
+  78:   remainingDays: number
+  79:   // è®¡ç®—è¯¦æƒ…ï¼ˆä¾›å‰ç«¯å±•ç¤ºï¼‰
+  80:   oldDailyPrice: number        // åŽŸæ–¹æ¡ˆæ—¥ä»·ï¼ˆå…ƒï¼‰
+  81:   newDailyPrice: number        // æ–°æ–¹æ¡ˆæ—¥ä»·ï¼ˆå…ƒï¼‰
+
+apply patch
+patch: completed
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-hosting-balance-guards.ts
+C:\Users\Administrator\Desktop\payinces\server\src\db\billing-operations.ts
+diff --git a/server/scripts/test-hosting-balance-guards.ts b/server/scripts/test-hosting-balance-guards.ts
+index 522a1299ae97bdd891bca20a1a672d8d44b65c76..18a12ee7e5e1ce8d2c49b17608b6b6ea4596b318
+--- a/server/scripts/test-hosting-balance-guards.ts
++++ b/server/scripts/test-hosting-balance-guards.ts
+@@ -95,6 +95,13 @@
+ )
+ 
+ assert.ok(
++  billingSource.includes('const HOSTING_FREEZE_DAYS = 30') &&
++    (billingSource.match(/new Date\(Date\.now\(\) \+ HOSTING_FREEZE_DAYS \* 24 \* 60 \* 60 \* 1000\)/g) || []).length === 3 &&
++    !billingSource.includes('const unfreezeAt = addMonths(new Date(), 1)'),
++  'hosting income must freeze for exactly 30 days instead of one calendar month'
++)
++
++assert.ok(
+   billingSource.includes('tryAdvisoryTransactionLock(client, HOSTING_BALANCE_LOG_LOCK_NAMESPACE, hostOwnerId)') &&
+     billingSource.includes('tryAdvisoryTransactionLock(client, USER_BALANCE_LOCK_NAMESPACE, hostOwnerId)'),
+   'hosted instance destruction must lock both hosting balance and panel balance before deductions'
+diff --git a/server/src/db/billing-operations.ts b/server/src/db/billing-operations.ts
+index 866e93624cad7ab8e0ac8a0175064cbd41eb687d..3e1a0e12fbe3225d08906f30e75114b913fcfec7
+--- a/server/src/db/billing-operations.ts
++++ b/server/src/db/billing-operations.ts
+@@ -28,6 +28,8 @@
+   tryAdvisoryTransactionLock
+ } from './advisory-locks.js'
+ 
++const HOSTING_FREEZE_DAYS = 30
++
+ // ==================== 类型定义 ====================
+ 
+ export interface CreateBillingResult {
+@@ -705,7 +707,7 @@
+     const hostingOwner = await resolveHostedIncomeOwner(tx, instance.hostId)
+     if (hostingOwner) {
+       // 用户托管节点，记录托管收入（带快照）
+-      const unfreezeAt = addMonths(new Date(), 1)
++      const unfreezeAt = new Date(Date.now() + HOSTING_FREEZE_DAYS * 24 * 60 * 60 * 1000)
+       await createHostingLogWithSnapshot(tx, {
+         userId: hostingOwner.userId,
+         type: 'income',
+@@ -870,7 +872,7 @@
+       const hostingOwner = await resolveHostedIncomeOwner(tx, instance.hostId)
+       if (hostingOwner) {
+         // 用户托管节点，记录托管收入（升级差价，带快照）
+-        const unfreezeAt = addMonths(new Date(), 1)
++        const unfreezeAt = new Date(Date.now() + HOSTING_FREEZE_DAYS * 24 * 60 * 60 * 1000)
+         await createHostingLogWithSnapshot(tx, {
+           userId: hostingOwner.userId,
+           type: 'income',
+@@ -1331,7 +1333,7 @@
+   const client = tx || prisma
+ 
+   // 计算解冻时间（30天后）
+-  const unfreezeAt = addMonths(new Date(), 1) // 使用 1 个月作为 30 天的近似
++  const unfreezeAt = new Date(Date.now() + HOSTING_FREEZE_DAYS * 24 * 60 * 60 * 1000)
+ 
+   await createHostingLogWithSnapshot(client, {
+     userId: hostOwnerId,
+
+diff --git a/server/scripts/test-hosting-balance-guards.ts b/server/scripts/test-hosting-balance-guards.ts
+index 522a1299ae97bdd891bca20a1a672d8d44b65c76..18a12ee7e5e1ce8d2c49b17608b6b6ea4596b318
+--- a/server/scripts/test-hosting-balance-guards.ts
++++ b/server/scripts/test-hosting-balance-guards.ts
+@@ -95,6 +95,13 @@
+ )
+ 
+ assert.ok(
++  billingSource.includes('const HOSTING_FREEZE_DAYS = 30') &&
++    (billingSource.match(/new Date\(Date\.now\(\) \+ HOSTING_FREEZE_DAYS \* 24 \* 60 \* 60 \* 1000\)/g) || []).length === 3 &&
++    !billingSource.includes('const unfreezeAt = addMonths(new Date(), 1)'),
++  'hosting income must freeze for exactly 30 days instead of one calendar month'
++)
++
++assert.ok(
+   billingSource.includes('tryAdvisoryTransactionLock(client, HOSTING_BALANCE_LOG_LOCK_NAMESPACE, hostOwnerId)') &&
+     billingSource.includes('tryAdvisoryTransactionLock(client, USER_BALANCE_LOCK_NAMESPACE, hostOwnerId)'),
+   'hosted instance destruction must lock both hosting balance and panel balance before deductions'
+diff --git a/server/src/db/billing-operations.ts b/server/src/db/billing-operations.ts
+index 866e93624cad7ab8e0ac8a0175064cbd41eb687d..3e1a0e12fbe3225d08906f30e75114b913fcfec7
+--- a/server/src/db/billing-operations.ts
++++ b/server/src/db/billing-operations.ts
+@@ -28,6 +28,8 @@
+   tryAdvisoryTransactionLock
+ } from './advisory-locks.js'
+ 
++const HOSTING_FREEZE_DAYS = 30
++
+ // ==================== 类型定义 ====================
+ 
+ export interface CreateBillingResult {
+@@ -705,7 +707,7 @@
+     const hostingOwner = await resolveHostedIncomeOwner(tx, instance.hostId)
+     if (hostingOwner) {
+       // 用户托管节点，记录托管收入（带快照）
+-      const unfreezeAt = addMonths(new Date(), 1)
++      const unfreezeAt = new Date(Date.now() + HOSTING_FREEZE_DAYS * 24 * 60 * 60 * 1000)
+       await createHostingLogWithSnapshot(tx, {
+         userId: hostingOwner.userId,
+         type: 'income',
+@@ -870,7 +872,7 @@
+       const hostingOwner = await resolveHostedIncomeOwner(tx, instance.hostId)
+       if (hostingOwner) {
+         // 用户托管节点，记录托管收入（升级差价，带快照）
+-        const unfreezeAt = addMonths(new Date(), 1)
++        const unfreezeAt = new Date(Date.now() + HOSTING_FREEZE_DAYS * 24 * 60 * 60 * 1000)
+         await createHostingLogWithSnapshot(tx, {
+           userId: hostingOwner.userId,
+           type: 'income',
+@@ -1331,7 +1333,7 @@
+   const client = tx || prisma
+ 
+   // 计算解冻时间（30天后）
+-  const unfreezeAt = addMonths(new Date(), 1) // 使用 1 个月作为 30 天的近似
++  const unfreezeAt = new Date(Date.now() + HOSTING_FREEZE_DAYS * 24 * 60 * 60 * 1000)
+ 
+   await createHostingLogWithSnapshot(client, {
+     userId: hostOwnerId,
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "Write-Output 'FREEZE MATCHES'; Get-ChildItem -LiteralPath server/src/db/billing-operations.ts | Select-String -Pattern 'HOSTING_FREEZE_DAYS|const unfreezeAt = addMonths' | ForEach-Object { '{0}: {1}' -f "'$_.LineNumber,$_.Line.Trim() }; Write-Output '"'GUARD MATCH'; Select-String -LiteralPath server/scripts/test-hosting-balance-guards.ts -Pattern 'hosting income must freeze|HOSTING_FREEZE_DAYS' -Context 3,3; Write-Output 'DIFF CHECK'; git diff --check -- server/src/db/billing-operations.ts server/scripts/test-hosting-balance-guards.ts" in C:\Users\Administrator\Desktop\payinces
+ succeeded in 533ms:
+FREEZE MATCHES
+31: const HOSTING_FREEZE_DAYS = 30
+710: const unfreezeAt = new Date(Date.now() + HOSTING_FREEZE_DAYS * 24 * 60 * 60 * 1000)
+875: const unfreezeAt = new Date(Date.now() + HOSTING_FREEZE_DAYS * 24 * 60 * 60 * 1000)
+1336: const unfreezeAt = new Date(Date.now() + HOSTING_FREEZE_DAYS * 24 * 60 * 60 * 1000)
+GUARD MATCH
+
+  server\scripts\test-hosting-balance-guards.ts:95:)
+  server\scripts\test-hosting-balance-guards.ts:96:
+  server\scripts\test-hosting-balance-guards.ts:97:assert.ok(
+> server\scripts\test-hosting-balance-guards.ts:98:  billingSource.includes('const HOSTING_FREEZE_DAYS = 30') &&
+> server\scripts\test-hosting-balance-guards.ts:99:    (billingSource.match(/new Date\(Date\.now\(\) \+ 
+HOSTING_FREEZE_DAYS \* 24 \* 60 \* 60 \* 1000\)/g) || []).length === 3 &&
+  server\scripts\test-hosting-balance-guards.ts:100:    !billingSource.includes('const unfreezeAt = addMonths(new 
+Date(), 1)'),
+> server\scripts\test-hosting-balance-guards.ts:101:  'hosting income must freeze for exactly 30 days instead of one 
+calendar month'
+  server\scripts\test-hosting-balance-guards.ts:102:)
+  server\scripts\test-hosting-balance-guards.ts:103:
+  server\scripts\test-hosting-balance-guards.ts:104:assert.ok(
+DIFF CHECK
+
+
+warning: in the working copy of 'server/scripts/test-hosting-balance-guards.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/db/billing-operations.ts', LF will be replaced by CRLF the next time Git touches it
+
+diff --git a/server/scripts/test-hosting-balance-guards.ts b/server/scripts/test-hosting-balance-guards.ts
+index 522a1299ae97bdd891bca20a1a672d8d44b65c76..18a12ee7e5e1ce8d2c49b17608b6b6ea4596b318
+--- a/server/scripts/test-hosting-balance-guards.ts
++++ b/server/scripts/test-hosting-balance-guards.ts
+@@ -95,6 +95,13 @@
+ )
+ 
+ assert.ok(
++  billingSource.includes('const HOSTING_FREEZE_DAYS = 30') &&
++    (billingSource.match(/new Date\(Date\.now\(\) \+ HOSTING_FREEZE_DAYS \* 24 \* 60 \* 60 \* 1000\)/g) || []).length === 3 &&
++    !billingSource.includes('const unfreezeAt = addMonths(new Date(), 1)'),
++  'hosting income must freeze for exactly 30 days instead of one calendar month'
++)
++
++assert.ok(
+   billingSource.includes('tryAdvisoryTransactionLock(client, HOSTING_BALANCE_LOG_LOCK_NAMESPACE, hostOwnerId)') &&
+     billingSource.includes('tryAdvisoryTransactionLock(client, USER_BALANCE_LOCK_NAMESPACE, hostOwnerId)'),
+   'hosted instance destruction must lock both hosting balance and panel balance before deductions'
+diff --git a/server/src/db/billing-operations.ts b/server/src/db/billing-operations.ts
+index 866e93624cad7ab8e0ac8a0175064cbd41eb687d..3e1a0e12fbe3225d08906f30e75114b913fcfec7
+--- a/server/src/db/billing-operations.ts
++++ b/server/src/db/billing-operations.ts
+@@ -28,6 +28,8 @@
+   tryAdvisoryTransactionLock
+ } from './advisory-locks.js'
+ 
++const HOSTING_FREEZE_DAYS = 30
++
+ // ==================== 类型定义 ====================
+ 
+ export interface CreateBillingResult {
+@@ -705,7 +707,7 @@
+     const hostingOwner = await resolveHostedIncomeOwner(tx, instance.hostId)
+     if (hostingOwner) {
+       // 用户托管节点，记录托管收入（带快照）
+-      const unfreezeAt = addMonths(new Date(), 1)
++      const unfreezeAt = new Date(Date.now() + HOSTING_FREEZE_DAYS * 24 * 60 * 60 * 1000)
+       await createHostingLogWithSnapshot(tx, {
+         userId: hostingOwner.userId,
+         type: 'income',
+@@ -870,7 +872,7 @@
+       const hostingOwner = await resolveHostedIncomeOwner(tx, instance.hostId)
+       if (hostingOwner) {
+         // 用户托管节点，记录托管收入（升级差价，带快照）
+-        const unfreezeAt = addMonths(new Date(), 1)
++        const unfreezeAt = new Date(Date.now() + HOSTING_FREEZE_DAYS * 24 * 60 * 60 * 1000)
+         await createHostingLogWithSnapshot(tx, {
+           userId: hostingOwner.userId,
+           type: 'income',
+@@ -1331,7 +1333,7 @@
+   const client = tx || prisma
+ 
+   // 计算解冻时间（30天后）
+-  const unfreezeAt = addMonths(new Date(), 1) // 使用 1 个月作为 30 天的近似
++  const unfreezeAt = new Date(Date.now() + HOSTING_FREEZE_DAYS * 24 * 60 * 60 * 1000)
+ 
+   await createHostingLogWithSnapshot(client, {
+     userId: hostOwnerId,
+
+codex
+最小改动已完成且 `git diff --check` 无错误：三条 Hosting 收入路径统一为精确 30×24 小时，其他月度计费的 `addMonths` 未改。现在并行运行指定 type-check 与 hosting balance 守卫。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'pnpm --filter server type-check' in C:\Users\Administrator\Desktop\payinces
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'pnpm --filter server test:hosting-balance-guards' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 1916ms:
+
+> server@1.3.7 test:hosting-balance-guards C:\Users\Administrator\Desktop\payinces\server
+> node --import tsx scripts/test-hosting-balance-guards.ts
+
+hosting balance guard checks passed
+
+diff --git a/server/scripts/test-hosting-balance-guards.ts b/server/scripts/test-hosting-balance-guards.ts
+index 522a1299ae97bdd891bca20a1a672d8d44b65c76..18a12ee7e5e1ce8d2c49b17608b6b6ea4596b318
+--- a/server/scripts/test-hosting-balance-guards.ts
++++ b/server/scripts/test-hosting-balance-guards.ts
+@@ -95,6 +95,13 @@
+ )
+ 
+ assert.ok(
++  billingSource.includes('const HOSTING_FREEZE_DAYS = 30') &&
++    (billingSource.match(/new Date\(Date\.now\(\) \+ HOSTING_FREEZE_DAYS \* 24 \* 60 \* 60 \* 1000\)/g) || []).length === 3 &&
++    !billingSource.includes('const unfreezeAt = addMonths(new Date(), 1)'),
++  'hosting income must freeze for exactly 30 days instead of one calendar month'
++)
++
++assert.ok(
+   billingSource.includes('tryAdvisoryTransactionLock(client, HOSTING_BALANCE_LOG_LOCK_NAMESPACE, hostOwnerId)') &&
+     billingSource.includes('tryAdvisoryTransactionLock(client, USER_BALANCE_LOCK_NAMESPACE, hostOwnerId)'),
+   'hosted instance destruction must lock both hosting balance and panel balance before deductions'
+diff --git a/server/src/db/billing-operations.ts b/server/src/db/billing-operations.ts
+index 866e93624cad7ab8e0ac8a0175064cbd41eb687d..3e1a0e12fbe3225d08906f30e75114b913fcfec7
+--- a/server/src/db/billing-operations.ts
++++ b/server/src/db/billing-operations.ts
+@@ -28,6 +28,8 @@
+   tryAdvisoryTransactionLock
+ } from './advisory-locks.js'
+ 
++const HOSTING_FREEZE_DAYS = 30
++
+ // ==================== 类型定义 ====================
+ 
+ export interface CreateBillingResult {
+@@ -705,7 +707,7 @@
+     const hostingOwner = await resolveHostedIncomeOwner(tx, instance.hostId)
+     if (hostingOwner) {
+       // 用户托管节点，记录托管收入（带快照）
+-      const unfreezeAt = addMonths(new Date(), 1)
++      const unfreezeAt = new Date(Date.now() + HOSTING_FREEZE_DAYS * 24 * 60 * 60 * 1000)
+       await createHostingLogWithSnapshot(tx, {
+         userId: hostingOwner.userId,
+         type: 'income',
+@@ -870,7 +872,7 @@
+       const hostingOwner = await resolveHostedIncomeOwner(tx, instance.hostId)
+       if (hostingOwner) {
+         // 用户托管节点，记录托管收入（升级差价，带快照）
+-        const unfreezeAt = addMonths(new Date(), 1)
++        const unfreezeAt = new Date(Date.now() + HOSTING_FREEZE_DAYS * 24 * 60 * 60 * 1000)
+         await createHostingLogWithSnapshot(tx, {
+           userId: hostingOwner.userId,
+           type: 'income',
+@@ -1331,7 +1333,7 @@
+   const client = tx || prisma
+ 
+   // 计算解冻时间（30天后）
+-  const unfreezeAt = addMonths(new Date(), 1) // 使用 1 个月作为 30 天的近似
++  const unfreezeAt = new Date(Date.now() + HOSTING_FREEZE_DAYS * 24 * 60 * 60 * 1000)
+ 
+   await createHostingLogWithSnapshot(client, {
+     userId: hostOwnerId,
+
+diff --git a/server/scripts/test-hosting-balance-guards.ts b/server/scripts/test-hosting-balance-guards.ts
+index 522a1299ae97bdd891bca20a1a672d8d44b65c76..18a12ee7e5e1ce8d2c49b17608b6b6ea4596b318
+--- a/server/scripts/test-hosting-balance-guards.ts
++++ b/server/scripts/test-hosting-balance-guards.ts
+@@ -95,6 +95,13 @@
+ )
+ 
+ assert.ok(
++  billingSource.includes('const HOSTING_FREEZE_DAYS = 30') &&
++    (billingSource.match(/new Date\(Date\.now\(\) \+ HOSTING_FREEZE_DAYS \* 24 \* 60 \* 60 \* 1000\)/g) || []).length === 3 &&
++    !billingSource.includes('const unfreezeAt = addMonths(new Date(), 1)'),
++  'hosting income must freeze for exactly 30 days instead of one calendar month'
++)
++
++assert.ok(
+   billingSource.includes('tryAdvisoryTransactionLock(client, HOSTING_BALANCE_LOG_LOCK_NAMESPACE, hostOwnerId)') &&
+     billingSource.includes('tryAdvisoryTransactionLock(client, USER_BALANCE_LOCK_NAMESPACE, hostOwnerId)'),
+   'hosted instance destruction must lock both hosting balance and panel balance before deductions'
+diff --git a/server/src/db/billing-operations.ts b/server/src/db/billing-operations.ts
+index 866e93624cad7ab8e0ac8a0175064cbd41eb687d..3e1a0e12fbe3225d08906f30e75114b913fcfec7
+--- a/server/src/db/billing-operations.ts
++++ b/server/src/db/billing-operations.ts
+@@ -28,6 +28,8 @@
+   tryAdvisoryTransactionLock
+ } from './advisory-locks.js'
+ 
++const HOSTING_FREEZE_DAYS = 30
++
+ // ==================== 类型定义 ====================
+ 
+ export interface CreateBillingResult {
+@@ -705,7 +707,7 @@
+     const hostingOwner = await resolveHostedIncomeOwner(tx, instance.hostId)
+     if (hostingOwner) {
+       // 用户托管节点，记录托管收入（带快照）
+-      const unfreezeAt = addMonths(new Date(), 1)
++      const unfreezeAt = new Date(Date.now() + HOSTING_FREEZE_DAYS * 24 * 60 * 60 * 1000)
+       await createHostingLogWithSnapshot(tx, {
+         userId: hostingOwner.userId,
+         type: 'income',
+@@ -870,7 +872,7 @@
+       const hostingOwner = await resolveHostedIncomeOwner(tx, instance.hostId)
+       if (hostingOwner) {
+         // 用户托管节点，记录托管收入（升级差价，带快照）
+-        const unfreezeAt = addMonths(new Date(), 1)
++        const unfreezeAt = new Date(Date.now() + HOSTING_FREEZE_DAYS * 24 * 60 * 60 * 1000)
+         await createHostingLogWithSnapshot(tx, {
+           userId: hostingOwner.userId,
+           type: 'income',
+@@ -1331,7 +1333,7 @@
+   const client = tx || prisma
+ 
+   // 计算解冻时间（30天后）
+-  const unfreezeAt = addMonths(new Date(), 1) // 使用 1 个月作为 30 天的近似
++  const unfreezeAt = new Date(Date.now() + HOSTING_FREEZE_DAYS * 24 * 60 * 60 * 1000)
+ 
+   await createHostingLogWithSnapshot(client, {
+     userId: hostOwnerId,
+
+diff --git a/server/scripts/test-hosting-balance-guards.ts b/server/scripts/test-hosting-balance-guards.ts
+index 522a1299ae97bdd891bca20a1a672d8d44b65c76..18a12ee7e5e1ce8d2c49b17608b6b6ea4596b318
+--- a/server/scripts/test-hosting-balance-guards.ts
++++ b/server/scripts/test-hosting-balance-guards.ts
+@@ -95,6 +95,13 @@
+ )
+ 
+ assert.ok(
++  billingSource.includes('const HOSTING_FREEZE_DAYS = 30') &&
++    (billingSource.match(/new Date\(Date\.now\(\) \+ HOSTING_FREEZE_DAYS \* 24 \* 60 \* 60 \* 1000\)/g) || []).length === 3 &&
++    !billingSource.includes('const unfreezeAt = addMonths(new Date(), 1)'),
++  'hosting income must freeze for exactly 30 days instead of one calendar month'
++)
++
++assert.ok(
+   billingSource.includes('tryAdvisoryTransactionLock(client, HOSTING_BALANCE_LOG_LOCK_NAMESPACE, hostOwnerId)') &&
+     billingSource.includes('tryAdvisoryTransactionLock(client, USER_BALANCE_LOCK_NAMESPACE, hostOwnerId)'),
+   'hosted instance destruction must lock both hosting balance and panel balance before deductions'
+diff --git a/server/src/db/billing-operations.ts b/server/src/db/billing-operations.ts
+index 866e93624cad7ab8e0ac8a0175064cbd41eb687d..3e1a0e12fbe3225d08906f30e75114b913fcfec7
+--- a/server/src/db/billing-operations.ts
++++ b/server/src/db/billing-operations.ts
+@@ -28,6 +28,8 @@
+   tryAdvisoryTransactionLock
+ } from './advisory-locks.js'
+ 
++const HOSTING_FREEZE_DAYS = 30
++
+ // ==================== 类型定义 ====================
+ 
+ export interface CreateBillingResult {
+@@ -705,7 +707,7 @@
+     const hostingOwner = await resolveHostedIncomeOwner(tx, instance.hostId)
+     if (hostingOwner) {
+       // 用户托管节点，记录托管收入（带快照）
+-      const unfreezeAt = addMonths(new Date(), 1)
++      const unfreezeAt = new Date(Date.now() + HOSTING_FREEZE_DAYS * 24 * 60 * 60 * 1000)
+       await createHostingLogWithSnapshot(tx, {
+         userId: hostingOwner.userId,
+         type: 'income',
+@@ -870,7 +872,7 @@
+       const hostingOwner = await resolveHostedIncomeOwner(tx, instance.hostId)
+       if (hostingOwner) {
+         // 用户托管节点，记录托管收入（升级差价，带快照）
+-        const unfreezeAt = addMonths(new Date(), 1)
++        const unfreezeAt = new Date(Date.now() + HOSTING_FREEZE_DAYS * 24 * 60 * 60 * 1000)
+         await createHostingLogWithSnapshot(tx, {
+           userId: hostingOwner.userId,
+           type: 'income',
+@@ -1331,7 +1333,7 @@
+   const client = tx || prisma
+ 
+   // 计算解冻时间（30天后）
+-  const unfreezeAt = addMonths(new Date(), 1) // 使用 1 个月作为 30 天的近似
++  const unfreezeAt = new Date(Date.now() + HOSTING_FREEZE_DAYS * 24 * 60 * 60 * 1000)
+ 
+   await createHostingLogWithSnapshot(client, {
+     userId: hostOwnerId,
+
+diff --git a/server/scripts/test-hosting-balance-guards.ts b/server/scripts/test-hosting-balance-guards.ts
+index 522a1299ae97bdd891bca20a1a672d8d44b65c76..18a12ee7e5e1ce8d2c49b17608b6b6ea4596b318
+--- a/server/scripts/test-hosting-balance-guards.ts
++++ b/server/scripts/test-hosting-balance-guards.ts
+@@ -95,6 +95,13 @@
+ )
+ 
+ assert.ok(
++  billingSource.includes('const HOSTING_FREEZE_DAYS = 30') &&
++    (billingSource.match(/new Date\(Date\.now\(\) \+ HOSTING_FREEZE_DAYS \* 24 \* 60 \* 60 \* 1000\)/g) || []).length === 3 &&
++    !billingSource.includes('const unfreezeAt = addMonths(new Date(), 1)'),
++  'hosting income must freeze for exactly 30 days instead of one calendar month'
++)
++
++assert.ok(
+   billingSource.includes('tryAdvisoryTransactionLock(client, HOSTING_BALANCE_LOG_LOCK_NAMESPACE, hostOwnerId)') &&
+     billingSource.includes('tryAdvisoryTransactionLock(client, USER_BALANCE_LOCK_NAMESPACE, hostOwnerId)'),
+   'hosted instance destruction must lock both hosting balance and panel balance before deductions'
+diff --git a/server/src/db/billing-operations.ts b/server/src/db/billing-operations.ts
+index 866e93624cad7ab8e0ac8a0175064cbd41eb687d..3e1a0e12fbe3225d08906f30e75114b913fcfec7
+--- a/server/src/db/billing-operations.ts
++++ b/server/src/db/billing-operations.ts
+@@ -28,6 +28,8 @@
+   tryAdvisoryTransactionLock
+ } from './advisory-locks.js'
+ 
++const HOSTING_FREEZE_DAYS = 30
++
+ // ==================== 类型定义 ====================
+ 
+ export interface CreateBillingResult {
+@@ -705,7 +707,7 @@
+     const hostingOwner = await resolveHostedIncomeOwner(tx, instance.hostId)
+     if (hostingOwner) {
+       // 用户托管节点，记录托管收入（带快照）
+-      const unfreezeAt = addMonths(new Date(), 1)
++      const unfreezeAt = new Date(Date.now() + HOSTING_FREEZE_DAYS * 24 * 60 * 60 * 1000)
+       await createHostingLogWithSnapshot(tx, {
+         userId: hostingOwner.userId,
+         type: 'income',
+@@ -870,7 +872,7 @@
+       const hostingOwner = await resolveHostedIncomeOwner(tx, instance.hostId)
+       if (hostingOwner) {
+         // 用户托管节点，记录托管收入（升级差价，带快照）
+-        const unfreezeAt = addMonths(new Date(), 1)
++        const unfreezeAt = new Date(Date.now() + HOSTING_FREEZE_DAYS * 24 * 60 * 60 * 1000)
+         await createHostingLogWithSnapshot(tx, {
+           userId: hostingOwner.userId,
+           type: 'income',
+@@ -1331,7 +1333,7 @@
+   const client = tx || prisma
+ 
+   // 计算解冻时间（30天后）
+-  const unfreezeAt = addMonths(new Date(), 1) // 使用 1 个月作为 30 天的近似
++  const unfreezeAt = new Date(Date.now() + HOSTING_FREEZE_DAYS * 24 * 60 * 60 * 1000)
+ 
+   await createHostingLogWithSnapshot(client, {
+     userId: hostOwnerId,
+
+diff --git a/server/scripts/test-hosting-balance-guards.ts b/server/scripts/test-hosting-balance-guards.ts
+index 522a1299ae97bdd891bca20a1a672d8d44b65c76..18a12ee7e5e1ce8d2c49b17608b6b6ea4596b318
+--- a/server/scripts/test-hosting-balance-guards.ts
++++ b/server/scripts/test-hosting-balance-guards.ts
+@@ -95,6 +95,13 @@
+ )
+ 
+ assert.ok(
++  billingSource.includes('const HOSTING_FREEZE_DAYS = 30') &&
++    (billingSource.match(/new Date\(Date\.now\(\) \+ HOSTING_FREEZE_DAYS \* 24 \* 60 \* 60 \* 1000\)/g) || []).length === 3 &&
++    !billingSource.includes('const unfreezeAt = addMonths(new Date(), 1)'),
++  'hosting income must freeze for exactly 30 days instead of one calendar month'
++)
++
++assert.ok(
+   billingSource.includes('tryAdvisoryTransactionLock(client, HOSTING_BALANCE_LOG_LOCK_NAMESPACE, hostOwnerId)') &&
+     billingSource.includes('tryAdvisoryTransactionLock(client, USER_BALANCE_LOCK_NAMESPACE, hostOwnerId)'),
+   'hosted instance destruction must lock both hosting balance and panel balance before deductions'
+diff --git a/server/src/db/billing-operations.ts b/server/src/db/billing-operations.ts
+index 866e93624cad7ab8e0ac8a0175064cbd41eb687d..3e1a0e12fbe3225d08906f30e75114b913fcfec7
+--- a/server/src/db/billing-operations.ts
++++ b/server/src/db/billing-operations.ts
+@@ -28,6 +28,8 @@
+   tryAdvisoryTransactionLock
+ } from './advisory-locks.js'
+ 
++const HOSTING_FREEZE_DAYS = 30
++
+ // ==================== 类型定义 ====================
+ 
+ export interface CreateBillingResult {
+@@ -705,7 +707,7 @@
+     const hostingOwner = await resolveHostedIncomeOwner(tx, instance.hostId)
+     if (hostingOwner) {
+       // 用户托管节点，记录托管收入（带快照）
+-      const unfreezeAt = addMonths(new Date(), 1)
++      const unfreezeAt = new Date(Date.now() + HOSTING_FREEZE_DAYS * 24 * 60 * 60 * 1000)
+       await createHostingLogWithSnapshot(tx, {
+         userId: hostingOwner.userId,
+         type: 'income',
+@@ -870,7 +872,7 @@
+       const hostingOwner = await resolveHostedIncomeOwner(tx, instance.hostId)
+       if (hostingOwner) {
+         // 用户托管节点，记录托管收入（升级差价，带快照）
+-        const unfreezeAt = addMonths(new Date(), 1)
++        const unfreezeAt = new Date(Date.now() + HOSTING_FREEZE_DAYS * 24 * 60 * 60 * 1000)
+         await createHostingLogWithSnapshot(tx, {
+           userId: hostingOwner.userId,
+           type: 'income',
+@@ -1331,7 +1333,7 @@
+   const client = tx || prisma
+ 
+   // 计算解冻时间（30天后）
+-  const unfreezeAt = addMonths(new Date(), 1) // 使用 1 个月作为 30 天的近似
++  const unfreezeAt = new Date(Date.now() + HOSTING_FREEZE_DAYS * 24 * 60 * 60 * 1000)
+ 
+   await createHostingLogWithSnapshot(client, {
+     userId: hostOwnerId,
+
+diff --git a/server/scripts/test-hosting-balance-guards.ts b/server/scripts/test-hosting-balance-guards.ts
+index 522a1299ae97bdd891bca20a1a672d8d44b65c76..18a12ee7e5e1ce8d2c49b17608b6b6ea4596b318
+--- a/server/scripts/test-hosting-balance-guards.ts
++++ b/server/scripts/test-hosting-balance-guards.ts
+@@ -95,6 +95,13 @@
+ )
+ 
+ assert.ok(
++  billingSource.includes('const HOSTING_FREEZE_DAYS = 30') &&
++    (billingSource.match(/new Date\(Date\.now\(\) \+ HOSTING_FREEZE_DAYS \* 24 \* 60 \* 60 \* 1000\)/g) || []).length === 3 &&
++    !billingSource.includes('const unfreezeAt = addMonths(new Date(), 1)'),
++  'hosting income must freeze for exactly 30 days instead of one calendar month'
++)
++
++assert.ok(
+   billingSource.includes('tryAdvisoryTransactionLock(client, HOSTING_BALANCE_LOG_LOCK_NAMESPACE, hostOwnerId)') &&
+     billingSource.includes('tryAdvisoryTransactionLock(client, USER_BALANCE_LOCK_NAMESPACE, hostOwnerId)'),
+   'hosted instance destruction must lock both hosting balance and panel balance before deductions'
+diff --git a/server/src/db/billing-operations.ts b/server/src/db/billing-operations.ts
+index 866e93624cad7ab8e0ac8a0175064cbd41eb687d..3e1a0e12fbe3225d08906f30e75114b913fcfec7
+--- a/server/src/db/billing-operations.ts
++++ b/server/src/db/billing-operations.ts
+@@ -28,6 +28,8 @@
+   tryAdvisoryTransactionLock
+ } from './advisory-locks.js'
+ 
++const HOSTING_FREEZE_DAYS = 30
++
+ // ==================== 类型定义 ====================
+ 
+ export interface CreateBillingResult {
+@@ -705,7 +707,7 @@
+     const hostingOwner = await resolveHostedIncomeOwner(tx, instance.hostId)
+     if (hostingOwner) {
+       // 用户托管节点，记录托管收入（带快照）
+-      const unfreezeAt = addMonths(new Date(), 1)
++      const unfreezeAt = new Date(Date.now() + HOSTING_FREEZE_DAYS * 24 * 60 * 60 * 1000)
+       await createHostingLogWithSnapshot(tx, {
+         userId: hostingOwner.userId,
+         type: 'income',
+@@ -870,7 +872,7 @@
+       const hostingOwner = await resolveHostedIncomeOwner(tx, instance.hostId)
+       if (hostingOwner) {
+         // 用户托管节点，记录托管收入（升级差价，带快照）
+-        const unfreezeAt = addMonths(new Date(), 1)
++        const unfreezeAt = new Date(Date.now() + HOSTING_FREEZE_DAYS * 24 * 60 * 60 * 1000)
+         await createHostingLogWithSnapshot(tx, {
+           userId: hostingOwner.userId,
+           type: 'income',
+@@ -1331,7 +1333,7 @@
+   const client = tx || prisma
+ 
+   // 计算解冻时间（30天后）
+-  const unfreezeAt = addMonths(new Date(), 1) // 使用 1 个月作为 30 天的近似
++  const unfreezeAt = new Date(Date.now() + HOSTING_FREEZE_DAYS * 24 * 60 * 60 * 1000)
+ 
+   await createHostingLogWithSnapshot(client, {
+     userId: hostOwnerId,
+
+diff --git a/server/scripts/test-hosting-balance-guards.ts b/server/scripts/test-hosting-balance-guards.ts
+index 522a1299ae97bdd891bca20a1a672d8d44b65c76..18a12ee7e5e1ce8d2c49b17608b6b6ea4596b318
+--- a/server/scripts/test-hosting-balance-guards.ts
++++ b/server/scripts/test-hosting-balance-guards.ts
+@@ -95,6 +95,13 @@
+ )
+ 
+ assert.ok(
++  billingSource.includes('const HOSTING_FREEZE_DAYS = 30') &&
++    (billingSource.match(/new Date\(Date\.now\(\) \+ HOSTING_FREEZE_DAYS \* 24 \* 60 \* 60 \* 1000\)/g) || []).length === 3 &&
++    !billingSource.includes('const unfreezeAt = addMonths(new Date(), 1)'),
++  'hosting income must freeze for exactly 30 days instead of one calendar month'
++)
++
++assert.ok(
+   billingSource.includes('tryAdvisoryTransactionLock(client, HOSTING_BALANCE_LOG_LOCK_NAMESPACE, hostOwnerId)') &&
+     billingSource.includes('tryAdvisoryTransactionLock(client, USER_BALANCE_LOCK_NAMESPACE, hostOwnerId)'),
+   'hosted instance destruction must lock both hosting balance and panel balance before deductions'
+diff --git a/server/src/db/billing-operations.ts b/server/src/db/billing-operations.ts
+index 866e93624cad7ab8e0ac8a0175064cbd41eb687d..3e1a0e12fbe3225d08906f30e75114b913fcfec7
+--- a/server/src/db/billing-operations.ts
++++ b/server/src/db/billing-operations.ts
+@@ -28,6 +28,8 @@
+   tryAdvisoryTransactionLock
+ } from './advisory-locks.js'
+ 
++const HOSTING_FREEZE_DAYS = 30
++
+ // ==================== 类型定义 ====================
+ 
+ export interface CreateBillingResult {
+@@ -705,7 +707,7 @@
+     const hostingOwner = await resolveHostedIncomeOwner(tx, instance.hostId)
+     if (hostingOwner) {
+       // 用户托管节点，记录托管收入（带快照）
+-      const unfreezeAt = addMonths(new Date(), 1)
++      const unfreezeAt = new Date(Date.now() + HOSTING_FREEZE_DAYS * 24 * 60 * 60 * 1000)
+       await createHostingLogWithSnapshot(tx, {
+         userId: hostingOwner.userId,
+         type: 'income',
+@@ -870,7 +872,7 @@
+       const hostingOwner = await resolveHostedIncomeOwner(tx, instance.hostId)
+       if (hostingOwner) {
+         // 用户托管节点，记录托管收入（升级差价，带快照）
+-        const unfreezeAt = addMonths(new Date(), 1)
++        const unfreezeAt = new Date(Date.now() + HOSTING_FREEZE_DAYS * 24 * 60 * 60 * 1000)
+         await createHostingLogWithSnapshot(tx, {
+           userId: hostingOwner.userId,
+           type: 'income',
+@@ -1331,7 +1333,7 @@
+   const client = tx || prisma
+ 
+   // 计算解冻时间（30天后）
+-  const unfreezeAt = addMonths(new Date(), 1) // 使用 1 个月作为 30 天的近似
++  const unfreezeAt = new Date(Date.now() + HOSTING_FREEZE_DAYS * 24 * 60 * 60 * 1000)
+ 
+   await createHostingLogWithSnapshot(client, {
+     userId: hostOwnerId,
+
+ succeeded in 29616ms:
+
+> server@1.3.7 type-check C:\Users\Administrator\Desktop\payinces\server
+> tsc --noEmit
+
+
+diff --git a/server/scripts/test-hosting-balance-guards.ts b/server/scripts/test-hosting-balance-guards.ts
+index 522a1299ae97bdd891bca20a1a672d8d44b65c76..18a12ee7e5e1ce8d2c49b17608b6b6ea4596b318
+--- a/server/scripts/test-hosting-balance-guards.ts
++++ b/server/scripts/test-hosting-balance-guards.ts
+@@ -95,6 +95,13 @@
+ )
+ 
+ assert.ok(
++  billingSource.includes('const HOSTING_FREEZE_DAYS = 30') &&
++    (billingSource.match(/new Date\(Date\.now\(\) \+ HOSTING_FREEZE_DAYS \* 24 \* 60 \* 60 \* 1000\)/g) || []).length === 3 &&
++    !billingSource.includes('const unfreezeAt = addMonths(new Date(), 1)'),
++  'hosting income must freeze for exactly 30 days instead of one calendar month'
++)
++
++assert.ok(
+   billingSource.includes('tryAdvisoryTransactionLock(client, HOSTING_BALANCE_LOG_LOCK_NAMESPACE, hostOwnerId)') &&
+     billingSource.includes('tryAdvisoryTransactionLock(client, USER_BALANCE_LOCK_NAMESPACE, hostOwnerId)'),
+   'hosted instance destruction must lock both hosting balance and panel balance before deductions'
+diff --git a/server/src/db/billing-operations.ts b/server/src/db/billing-operations.ts
+index 866e93624cad7ab8e0ac8a0175064cbd41eb687d..3e1a0e12fbe3225d08906f30e75114b913fcfec7
+--- a/server/src/db/billing-operations.ts
++++ b/server/src/db/billing-operations.ts
+@@ -28,6 +28,8 @@
+   tryAdvisoryTransactionLock
+ } from './advisory-locks.js'
+ 
++const HOSTING_FREEZE_DAYS = 30
++
+ // ==================== 类型定义 ====================
+ 
+ export interface CreateBillingResult {
+@@ -705,7 +707,7 @@
+     const hostingOwner = await resolveHostedIncomeOwner(tx, instance.hostId)
+     if (hostingOwner) {
+       // 用户托管节点，记录托管收入（带快照）
+-      const unfreezeAt = addMonths(new Date(), 1)
++      const unfreezeAt = new Date(Date.now() + HOSTING_FREEZE_DAYS * 24 * 60 * 60 * 1000)
+       await createHostingLogWithSnapshot(tx, {
+         userId: hostingOwner.userId,
+         type: 'income',
+@@ -870,7 +872,7 @@
+       const hostingOwner = await resolveHostedIncomeOwner(tx, instance.hostId)
+       if (hostingOwner) {
+         // 用户托管节点，记录托管收入（升级差价，带快照）
+-        const unfreezeAt = addMonths(new Date(), 1)
++        const unfreezeAt = new Date(Date.now() + HOSTING_FREEZE_DAYS * 24 * 60 * 60 * 1000)
+         await createHostingLogWithSnapshot(tx, {
+           userId: hostingOwner.userId,
+           type: 'income',
+@@ -1331,7 +1333,7 @@
+   const client = tx || prisma
+ 
+   // 计算解冻时间（30天后）
+-  const unfreezeAt = addMonths(new Date(), 1) // 使用 1 个月作为 30 天的近似
++  const unfreezeAt = new Date(Date.now() + HOSTING_FREEZE_DAYS * 24 * 60 * 60 * 1000)
+ 
+   await createHostingLogWithSnapshot(client, {
+     userId: hostOwnerId,
+
+codex
+已将 `billing-operations.ts` 的购买、续费、升级 Hosting 收入冻结到期统一为精确 `30 × 24` 小时，并抽取 `HOSTING_FREEZE_DAYS = 30` 常量；守卫新增三条路径均使用精确 30 天且禁止 `addMonths` 自然月计算的断言。`pnpm --filter server type-check` 与 `pnpm --filter server test:hosting-balance-guards` 均通过。未 commit、push 或发版。
+diff --git a/server/scripts/test-hosting-balance-guards.ts b/server/scripts/test-hosting-balance-guards.ts
+index 522a1299ae97bdd891bca20a1a672d8d44b65c76..18a12ee7e5e1ce8d2c49b17608b6b6ea4596b318
+--- a/server/scripts/test-hosting-balance-guards.ts
++++ b/server/scripts/test-hosting-balance-guards.ts
+@@ -95,6 +95,13 @@
+ )
+ 
+ assert.ok(
++  billingSource.includes('const HOSTING_FREEZE_DAYS = 30') &&
++    (billingSource.match(/new Date\(Date\.now\(\) \+ HOSTING_FREEZE_DAYS \* 24 \* 60 \* 60 \* 1000\)/g) || []).length === 3 &&
++    !billingSource.includes('const unfreezeAt = addMonths(new Date(), 1)'),
++  'hosting income must freeze for exactly 30 days instead of one calendar month'
++)
++
++assert.ok(
+   billingSource.includes('tryAdvisoryTransactionLock(client, HOSTING_BALANCE_LOG_LOCK_NAMESPACE, hostOwnerId)') &&
+     billingSource.includes('tryAdvisoryTransactionLock(client, USER_BALANCE_LOCK_NAMESPACE, hostOwnerId)'),
+   'hosted instance destruction must lock both hosting balance and panel balance before deductions'
+diff --git a/server/src/db/billing-operations.ts b/server/src/db/billing-operations.ts
+index 866e93624cad7ab8e0ac8a0175064cbd41eb687d..3e1a0e12fbe3225d08906f30e75114b913fcfec7
+--- a/server/src/db/billing-operations.ts
++++ b/server/src/db/billing-operations.ts
+@@ -28,6 +28,8 @@
+   tryAdvisoryTransactionLock
+ } from './advisory-locks.js'
+ 
++const HOSTING_FREEZE_DAYS = 30
++
+ // ==================== 类型定义 ====================
+ 
+ export interface CreateBillingResult {
+@@ -705,7 +707,7 @@
+     const hostingOwner = await resolveHostedIncomeOwner(tx, instance.hostId)
+     if (hostingOwner) {
+       // 用户托管节点，记录托管收入（带快照）
+-      const unfreezeAt = addMonths(new Date(), 1)
++      const unfreezeAt = new Date(Date.now() + HOSTING_FREEZE_DAYS * 24 * 60 * 60 * 1000)
+       await createHostingLogWithSnapshot(tx, {
+         userId: hostingOwner.userId,
+         type: 'income',
+@@ -870,7 +872,7 @@
+       const hostingOwner = await resolveHostedIncomeOwner(tx, instance.hostId)
+       if (hostingOwner) {
+         // 用户托管节点，记录托管收入（升级差价，带快照）
+-        const unfreezeAt = addMonths(new Date(), 1)
++        const unfreezeAt = new Date(Date.now() + HOSTING_FREEZE_DAYS * 24 * 60 * 60 * 1000)
+         await createHostingLogWithSnapshot(tx, {
+           userId: hostingOwner.userId,
+           type: 'income',
+@@ -1331,7 +1333,7 @@
+   const client = tx || prisma
+ 
+   // 计算解冻时间（30天后）
+-  const unfreezeAt = addMonths(new Date(), 1) // 使用 1 个月作为 30 天的近似
++  const unfreezeAt = new Date(Date.now() + HOSTING_FREEZE_DAYS * 24 * 60 * 60 * 1000)
+ 
+   await createHostingLogWithSnapshot(client, {
+     userId: hostOwnerId,
+
+tokens used
+45,726

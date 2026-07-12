@@ -1,0 +1,3393 @@
+OpenAI Codex v0.144.0-alpha.4
+--------
+workdir: C:\Users\Administrator\Desktop\payinces
+model: gpt-5.6-sol
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: high
+reasoning summaries: none
+session id: 019f52d2-8e72-7673-9ba6-31d7c91b9965
+--------
+user
+你是 PayIncus 仓库实现工程师。先读仓库根 AGENTS.md(返利/计费高危,先读代码+守卫;不 commit/push/发版、不大重构)。严格按规格,只改 instance-billing.ts apply-aff 端点与其守卫。不要碰 billing-scheduler.ts(有并行任务)。改完跑守卫报告。不要 commit。
+---
+# FX-033 规格：apply-aff 允许事后绑任意他人码永久续费95折(E10 / BF-3-04)
+
+## owner 裁决(BEHAVIOR.md E10)
+砍掉"事后绑他人码"——或仅允许绑**自己生成的码**。采用后者(更稳,保留端点但收紧)。
+
+## 根因
+POST /:id/apply-aff(server/src/routes/instance-billing.ts:460-572)允许任何实例主给已有实例事后绑定**任意(非自己)有效码**,
+永久享受续费 95 折、无消费门槛 → 等于全站通用折扣、返利变成给随机码主的固定支出。
+
+## 修法（只改 server/src/routes/instance-billing.ts 的 apply-aff 端点)
+1. 先只读该端点,弄清它如何取码、如何校验(validateAffCode)、如何 createAffBinding。
+2. 收紧:只允许绑定**当前用户自己生成的码**(affCode.userId === request.user.id)。若绑的码不属于当前用户 → 返回明确 403/400 拒绝(用现有 apiError/ErrorCode)。
+   - 注意:原本 validateAffCode 里有"不能用自己的码"(下单场景防自返利)的相反规则——apply-aff 是"事后给自己实例绑自己的码享续费折扣",语义不同;本条要求的是"只能绑自己的码"。请确认这两处语义不冲突:下单用别人码(得返利给别人)、apply-aff 绑自己码(自己的实例续费打折,返利记给自己或按现有绑定佣金逻辑)。若绑自己码会触发"自返利"问题,则改为**直接停用该端点**(返回 403"该功能已下线")——二选一,以不产生自返利套利为准,并在交付说明你选了哪种及理由。
+3. 不改折扣率/返利率数值。
+
+## 加守卫
+在现有 server/scripts/test-instance-billing-route-id-guards.ts 追加断言:apply-aff 端点限制为仅绑自己的码(或已停用)。不改 package.json。
+
+## 验收
+- pnpm --filter server type-check 通过;pnpm --filter server test:instance-billing-route-id-guards 通过;test:aff-review-ui-guards 通过。
+
+## 交付
+一段话:选了"限自己码"还是"停用端点"及理由、如何防自返利、守卫结果。不要 commit。
+
+codex
+我会先按仓库规矩只读 `AGENTS.md`、`apply-aff` 端点及相关守卫，并追踪 `validateAffCode` / `createAffBinding` 的返利语义；确认“限自己码”是否会形成自返利后，再只改指定路由文件与守卫文件。不会触碰 scheduler、git 提交或发布。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Content -Raw AGENTS.md' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 553ms:
+# PayIncus / Incudal â€” é¡¹ç›®ç»Ÿä¸€è§„çŸ©ï¼ˆAGENTS.mdï¼‰
+
+> æœ¬æ–‡ä»¶æ˜¯æœ¬ä»“åº“**æ‰€æœ‰ AI agentï¼ˆClaude Codeã€codex ç­‰ï¼‰çš„ç»Ÿä¸€å·¥ä½œè§„èŒƒ**ã€‚
+> `CLAUDE.md` é€šè¿‡ `@AGENTS.md` å¼•ç”¨æœ¬æ–‡ä»¶ â€”â€” Claude Code ä¸Ž codex è¯»åˆ°çš„æ˜¯**åŒä¸€å¥—è§„çŸ©**ï¼Œæ”¹è¿™ä¸€ä¸ªæ–‡ä»¶å³å¯ã€‚
+> æƒå¨è¿ç»´/å‘ç‰ˆäº‹å®žä»¥ä»“åº“æ ¹çš„ `OPERATIONS_HANDOFF.md`ï¼ˆæ“ä½œæ‰‹å†Œï¼‰ä¸Ž `HANDOFF.md`ï¼ˆç‰ˆæœ¬è¯æ®å°è´¦ï¼‰ä¸ºå‡†ã€‚
+
+---
+
+## 0. æ²Ÿé€šè¯­è¨€
+- ä¸Ž owner é»˜è®¤ç”¨**ä¸­æ–‡**æ²Ÿé€šã€‚
+
+## 1. è¿™æ˜¯ä»€ä¹ˆé¡¹ç›®
+**PayIncus**ï¼ˆå†…éƒ¨ä»£å· `incudal`ï¼‰â€”â€”å•†ç”¨ Incusï¼ˆLXC/KVMï¼‰NAT VPS å”®å–ä¸Žäº¤ä»˜å¹³å°ï¼Œ**çº¿ä¸Šè¿è¥ä¸­**ã€‚å½“å‰ç”Ÿäº§ç‰ˆæœ¬ **v1.3.7**ã€‚pnpm monorepoï¼š
+
+| ç›®å½• | æŠ€æœ¯æ ˆ / ä½œç”¨ |
+|------|----------------|
+| `client/` | Vue 3 + Vite SPAã€‚åŒç«¯æž„å»ºï¼ˆ`VITE_APP_ENTRY`ï¼‰â†’ `dist/user`ï¼ˆpay.payincus.comï¼‰+ `dist/admin`ï¼ˆadmin.payincus.comï¼‰ã€‚ä¸¤ç«¯ç‹¬ç«‹æºã€**ä¸å…±äº« cookie åŸŸ**ã€‚ |
+| `server/` | Fastify 5 + Prisma 7 + PostgreSQLï¼Œ~300 TS æ–‡ä»¶ã€~70 è·¯ç”±ã€~15 è°ƒåº¦/workerã€‚æ—  Redisï¼ˆç”¨ PG advisory lockï¼‰ã€‚ä¸‰å¥—é‰´æƒé¢ï¼šWeb çš„ JWT+refresh cookieã€Public API çš„ `pat_`/`poa_` tokenã€host agent çš„ HMACã€‚ |
+| `agent/` | Go å®¿ä¸» agentï¼Œåªè¯»ç›‘æŽ§ï¼ˆå¿ƒè·³/èµ„æº/å®žä¾‹æ€/æµé‡ï¼‰ï¼ŒHMAC ç­¾åï¼Œè‡ªå‡çº§ã€‚ |
+| å…¶å®ƒ | `docs-site/`ï¼ˆVitePressï¼‰ã€`deploy/`ï¼ˆsystemd+Nginxï¼‰ã€`scripts/`ï¼ˆå®‰è£…/æ ¡éªŒ/OTAï¼‰ã€`plugin-templates/`ã€`theme-templates/`ã€‚ |
+
+éƒ¨ç½²ï¼šä¸‰å±‚æ‹†åˆ†ï¼ˆuser / admin / ç§æœ‰åŽç«¯ `127.0.0.1:3001`ï¼‰ï¼Œè£…æœºæ ¹ `/opt/incudal`ï¼ŒåŽŸå­ OTAï¼ˆ`releases/<ver-ts>` + `current` è½¯é“¾ï¼‰+ è‡ªåŠ¨å›žæ»šã€‚
+
+---
+
+## 2. ðŸ”´ ç¡¬è§„çŸ©ï¼ˆä¸å¯åå•†ï¼Œè¿åå³äº‹æ•…ï¼‰
+
+1. **ä¸ç¢°ç”Ÿäº§**ï¼šæœªç» owner æ˜Žç¡®è¦æ±‚ï¼Œ**ç»ä¸** OTAã€å‘å¸ƒã€pushã€æ‰“ tagã€æ”¹ç”Ÿäº§çŽ¯å¢ƒã€‚
+2. **ä¸åšç ´åæ€§ git**ï¼šæœªç» owner æ˜Žç¡®è¦æ±‚ï¼Œ**ç»ä¸** `git reset`ã€`git checkout --`ã€å¼ºåˆ¶åˆ é™¤ã€æ¸…ç†æœªè·Ÿè¸ªæ–‡ä»¶ã€`git commit`/`git push`ã€‚
+3. **é«˜å±è·¯å¾„å…ˆè¯»åŽå†™**ï¼šæ”¹åŠ¨ä»¥ä¸‹ä»»ä¸€é¢†åŸŸï¼Œ**å¿…é¡»å…ˆè¯»ç›¸å…³ä»£ç  + å¯¹åº”å®ˆå«æµ‹è¯•**å†åŠ¨æ‰‹ï¼š
+   > é‰´æƒ Â· æ”¯ä»˜ Â· æƒé™ Â· é£ŽæŽ§ Â· èµ„æºäº¤ä»˜ Â· å…‘æ¢æµç¨‹ Â· å®žä¾‹åˆ›å»º Â· OTA
+4. **æ”¹åŠ¨æœ€å°åŒ–**ï¼šä¿® bug / å‘ç‰ˆæœŸé—´**ä¸åšå¤§èŒƒå›´é‡æž„**ï¼Œåªæ”¹å¿…è¦çš„ã€‚
+5. **ç»ä¸æ³„å¯†**ï¼šä»»ä½• commitã€handoffã€æ€»ç»“ã€æˆªå›¾ä¸­éƒ½**ä¸å¾—**å‡ºçŽ°å‡­è¯ / token / cookie / å¯†é’¥ã€‚
+6. **æœ¬åœ°è¿‡ â‰  ç”Ÿäº§éªŒè¯**ï¼šæœ¬åœ°é€šè¿‡ã€GitHub Actionsã€Release èµ„äº§ã€OTAã€çº¿ä¸Šå®žè¯æ˜¯**åˆ†å¼€çš„è¯æ®**ï¼Œä¸å¯æ··ä¸ºä¸€è°ˆã€‚
+7. **æ¯æ¬¡æ”¹åŠ¨å¿…é¡»è¿‡å¯¹åº”å®ˆå«**ï¼ˆè§ Â§4ï¼‰ï¼Œå¦åˆ™è§†ä¸º**æœªå®Œæˆ**ã€‚
+8. `RUN_DB_CHECKS=0 bash scripts/apply-online-update.sh <ver>` ä¼š**è·³è¿‡ DB/æ”¯ä»˜å°±ç»ªæ ¡éªŒ**ï¼Œä»…åœ¨ owner æ˜Žç¡®æ‰¹å‡†æ—¶ä½¿ç”¨ã€‚
+
+---
+
+## 3. æœ¬åœ°æ€Žä¹ˆè·‘
+
+- **çŽ¯å¢ƒ**ï¼šNode â‰¥ 20ã€pnpm 9.14.2ã€æœ¬åœ° PostgreSQL 16ã€‚
+- **è£…ä¾èµ–**ï¼š`pnpm install`
+- **ä¸€æŠŠèµ·å…¨éƒ¨ï¼ˆserver + user + adminï¼‰**ï¼š`pnpm dev`
+- **åˆ†å¼€èµ·**ï¼š
+  - åŽç«¯ï¼š`NODE_ENV=development JWT_SECRET=dev-secret-12345678 HOST=127.0.0.1 PORT=3001 pnpm --filter server exec tsx watch src/app.ts`
+  - ç”¨æˆ·å‰ç«¯ï¼š`pnpm dev:user`
+  - ç®¡ç†å‰ç«¯ï¼š`pnpm dev:admin`
+- **ç«¯å£**ï¼šåŽç«¯ API **3001** Â· ç”¨æˆ·å‰ç«¯ **3000** Â· ç®¡ç†å‰ç«¯ **3002**ï¼ˆå‰ç«¯ dev ç» proxy æ‰“åˆ° 3001ï¼‰ã€‚
+
+---
+
+## 4. ðŸ›¡ï¸ å®ˆå«æµ‹è¯•çºªå¾‹ï¼ˆæœ¬ä»“åº“çš„å‘½é—¨ï¼‰
+
+`server/package.json` é‡Œæœ‰ **200+ ä¸ªç‹¬ç«‹ `test-*-guards.ts`**ã€‚å®ƒä»¬æŠŠå…³é”®ä¸šåŠ¡/å‰ç«¯ç»“æž„â€œé’‰æ­»â€ï¼Œ`pnpm test` ä¼šè·‘å…¨å¥—ï¼ˆclient+server type-check + å…¨éƒ¨å®ˆå«ï¼‰ã€‚**ä»»ä½•æ”¹åŠ¨å¿…é¡»è®©ç›¸å…³å®ˆå«é€šè¿‡ã€‚**
+
+- **å…¨é‡**ï¼ˆæ…¢ï¼Œå‘ç‰ˆå‰è·‘ï¼‰ï¼š`pnpm test`
+- **å•ä¸ª**ï¼š`pnpm --filter server test:<guard-name>`
+- **å‰ç«¯æœ€å¸¸ç”¨ä¸‰ä¸ª**ï¼š
+  - `test:frontend-route-guards` â€”â€” è·¯ç”± / **è¡¨æ ¼å¸ƒå±€** / `@click` è·¯å¾„æ–­è¨€
+  - `test:frontend-dist-boundary-guards` â€”â€” åŒç«¯ dist è¾¹ç•Œ
+  - `test:frontend-i18n-keys` â€”â€” i18n key å®Œæ•´æ€§
+- **Go agent**ï¼š`pnpm test:agent`
+
+### âš ï¸ è¡¨æ ¼å¸ƒå±€å®ˆå«ï¼ˆæœ€å®¹æ˜“è¸©é›·ï¼‰
+ä¸€æ‰¹è¡¨è¢«å®ˆå«**é”å®š**ä¸ºâ€œ**ç§»åŠ¨å¡ + PC å®šå®½è¡¨ï¼ˆ`table-fixed` / `overflow-hidden`ï¼‰ï¼Œç»ä¸æ¨ªå‘æ»šåŠ¨**â€ï¼Œå¹¶**åå‘ç¦æ­¢** `overflow-x-auto` / `min-w-[...]` / åŽ»æŽ‰ `table-fixed`ã€‚
+- æƒ³ä¿®â€œå®½è¡¨æŒ¤åŽ‹â€æ—¶ï¼š**å…ˆåˆ¤æ–­è¯¥è¡¨æ˜¯å¦åœ¨å®ˆå«æ¸…å•é‡Œ**ã€‚é”å®šè¡¨**åªèƒ½åœ¨ `table-fixed` å†…å¹³è¡¡åˆ—å®½**ï¼ˆåˆ—å®½ç™¾åˆ†æ¯”åˆè®¡ = 100%ï¼‰+ å…è®¸å•å…ƒæ ¼æ¢è¡Œ + é ç§»åŠ¨å¡åº”å¯¹çª„å±ï¼›**ä¸èƒ½**æ”¹æˆæ¨ªå‘æ»šåŠ¨ã€‚
+- å—é”å®šçš„è¡¨ï¼ˆç”¨æˆ·ç«¯ï¼‰ï¼š`MyPackagesView`ã€`MyHostsView`ã€`TransfersView`ã€`OrdersView`ã€`InvitesView`ã€`FlashSalesView`ã€`HostingWalletView`ã€`InstancesView`ã€`LogsView`ã€`EntertainmentView`ï¼›ï¼ˆç®¡ç†ç«¯ï¼‰`admin/BillingView`ã€`admin/ImagesView`ã€`admin/HelpManageView`ã€`admin/MailView`ã€`admin/PluginCenterView`ï¼›ï¼ˆç»„ä»¶ï¼‰`HostPublicIpv4Tab`ã€`InstanceLogsTab`ã€`ConfigEditModal`ã€‚
+- æ”¹ä»»ä¸€å‰ç«¯æ–‡ä»¶åŽ**å¿…è·‘** `test:frontend-route-guards`ã€‚
+
+---
+
+## 5. æž„å»º / æ ¡éªŒå‘½ä»¤
+
+| ç›®çš„ | å‘½ä»¤ |
+|------|------|
+| æž„å»ºï¼ˆå« dist è¾¹ç•Œå®ˆå«ï¼‰| `pnpm build` |
+| åªæž„å»ºå‰ç«¯ / åŽç«¯ | `pnpm build:client` / `pnpm build:server` |
+| Lintï¼ˆæ£€æŸ¥ / è‡ªåŠ¨ä¿®ï¼‰| `pnpm lint` / `pnpm lint:fix` |
+| ç±»åž‹æ£€æŸ¥ | `pnpm --filter client type-check` Â· `pnpm --filter server type-check` |
+| å…¨å¥—å®ˆå« | `pnpm test` |
+| æ–‡æ¡£ç«™å¼€å‘ / æž„å»º | `pnpm docs:dev` / `pnpm docs:build` |
+
+---
+
+## 6. UI æ”¹åŠ¨çº¦æŸï¼ˆå•è‰²é‡åšè¿›è¡Œä¸­ï¼‰
+
+- **æ–¹å‘**ï¼šè‹¹æžœå¼**çº¯é»‘ç™½å•è‰²**ï¼ˆæµ…è‰²=ç™½åº•é»‘å­—ï¼Œæ·±è‰²=é»‘åº•ç™½å­—ï¼‰ï¼ŒåŽ»äºŒæ¬¡å…ƒ/å‰ç¥¥ç‰©/ç«‹ç»˜ã€‚çŠ¶æ€è‰²**åªä¿ç•™ç»¿/ç¥ç€/çº¢**ä¸‰ç§ï¼ˆè¿è¡Œ/å¾…å¤„ç†/å¤±è´¥ï¼‰ã€‚
+- **çº¢çº¿**ï¼šåªæ”¹**æ ·å¼ / å¸ƒå±€ / æ–‡æ¡ˆå±‚çº§**ï¼Œ**ä¸ç¢°**åŽç«¯æŽ¥å£ã€æƒé™ã€æ”¯ä»˜/è®¢å•/å®žä¾‹åˆ›å»º/OTA ç­‰ä¸šåŠ¡é€»è¾‘ä¸Žè·¯ç”±è¡Œä¸ºâ€”â€”**åŠŸèƒ½ 100% ä¸å˜**ã€‚
+- **é…è‰²èµ° token å±‚**ï¼ˆ`client/tailwind.config.js`ï¼‰ï¼šä¸€å †å½©è‰² ramp å·²æ˜ å°„åˆ°ä¸­æ€§ç°ï¼›`rose â†’ çœŸçº¢`ï¼ˆå±é™©/äºæŸè¯­ä¹‰ï¼‰**ä¿ç•™ä¸å¯ç°åŒ–**ï¼›æ¸¸æˆåŒ–æ¨¡å—ï¼ˆæˆå°±/ç­¾åˆ°/æŠ½å¥–/ç¨€æœ‰åº¦ï¼‰å½©è‰²**åˆ»æ„ä¿ç•™**ã€‚
+- `kawaii-cloud.css` **æ¸è¿›æ”¹é€ ã€ä¸é‡å†™**ï¼›å•é¡µåŽ»è‰²ç”¨é¡µé¢ `<style scoped>`ã€‚
+- åŠ¨æ•ˆå¯ç”¨ **GSAP**ï¼ˆå·²è£… gsap-skillsï¼Œè§ `.claude/skills/`ï¼‰ï¼›å°Šé‡ `prefers-reduced-motion`ã€‚
+
+---
+
+## 7. åä½œæ¨¡åž‹ï¼ˆClaude Code â‡„ codexï¼‰
+
+- **Claude Code = æŠ€æœ¯è´Ÿè´£äºº / é›†æˆæ–¹**ï¼šå®šæ ¹å› ã€åˆ‡ä»»åŠ¡ã€å†™è§„æ ¼ã€å®ˆä¸å˜é‡ã€å®¡ diffã€è·‘å®ˆå«ã€çœŸæœºéªŒè¯ã€ç®¡ gitï¼ˆ**ä»…åœ¨ owner åŒæ„æ—¶** commit / pushï¼‰ã€‚
+- **codex = å®žçŽ°å·¥äºº**ï¼šæŒ‰ Claude ç»™çš„è§„æ ¼å®žçŽ°æ”¹åŠ¨ï¼Œå°¤å…¶**ä½Ž/ä¸­å±ã€è‡ªåŒ…å«ã€å¯å¹¶è¡Œ**çš„å—ã€‚
+- **é£Žé™©åˆ†æ¡£**ï¼šé«˜å±è·¯å¾„ç”± Claude å®šæ ¹å›  + æ”¶ç´§è§„æ ¼ï¼›ä½Ž/ä¸­å± codex å¯ç«¯åˆ°ç«¯ä¿®ã€‚**ä»»ä½•ä¸€æ–¹æ”¹å®Œéƒ½è¦è·‘ç›¸å…³å®ˆå«ï¼ŒClaude ç»Ÿä¸€å®¡æŸ¥åŽæ‰è¿›å…¥ä¸‹ä¸€æ­¥ã€‚**
+- **é¿å…å†²çª**ï¼šåŒä¸€æ‰¹æ–‡ä»¶ä¸€æ¬¡åªè®©ä¸€ä¸ª agent æ”¹ã€‚
+
+---
+
+## 8. ä¸€ä¸ªæ”¹åŠ¨çš„ã€Œå®Œæˆã€å®šä¹‰
+
+1. ç›¸å…³ **type-check** é€šè¿‡ï¼›
+2. ç›¸å…³ **å®ˆå«æµ‹è¯•** é€šè¿‡ï¼›
+3. è‹¥åŠ¨å‰ç«¯ â†’ **åŒç«¯ build** é€šè¿‡ï¼›
+4. **çœŸæœºè·‘è¿‡**å—å½±å“æµç¨‹ï¼ˆä¸æ˜¯åªçœ‹æµ‹è¯•ï¼‰ï¼›
+5. **æŠ¥å‘Š**ï¼šæ”¹äº†å“ªäº›æ–‡ä»¶ / ä¸ºä»€ä¹ˆ / é£Žé™© / æ€Žä¹ˆéªŒè¯çš„ã€‚
+
+ä»¥ä¸Šä»»ä¸€æœªæ»¡è¶³ = **æœªå®Œæˆ**ã€‚
+
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'rg -n -C 30 "apply-aff|validateAffCode|createAffBinding" server/src/routes/instance-billing.ts server/scripts/test-instance-billing-route-id-guards.ts server/src' in C:\Users\Administrator\Desktop\payinces
+2026-07-11T20:16:23.182996Z ERROR codex_core::tools::router: error=Exit code: 1
+Wall time: 0.7 seconds
+Output:
+rg : The term 'rg' is not recognized as the name of a cmdlet, function, script file, or operable program. Check the 
+spelling of the name, or if a path was included, verify that the path is correct and try again.
+At line:2 char:1
++ rg -n -C 30 "apply-aff|validateAffCode|createAffBinding" server/src/r ...
++ ~~
+    + CategoryInfo          : ObjectNotFound: (rg:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+
+ exited 1 in 670ms:
+rg : The term 'rg' is not recognized as the name of a cmdlet, function, script file, or operable program. Check the 
+spelling of the name, or if a path was included, verify that the path is correct and try again.
+At line:2 char:1
++ rg -n -C 30 "apply-aff|validateAffCode|createAffBinding" server/src/r ...
++ ~~
+    + CategoryInfo          : ObjectNotFound: (rg:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+
+codex
+当前环境没有 `rg`，我改用 PowerShell 只读检索。接下来会同时核对端点完整事务流程、校验函数与绑定佣金的后续消费点，避免仅凭字段名判断自返利风险。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$paths = @('"'server/src/routes/instance-billing.ts','server/scripts/test-instance-billing-route-id-guards.ts'); Get-ChildItem -Path server/src -Recurse -File -Include *.ts | Select-String -Pattern 'apply-aff|validateAffCode|createAffBinding' -Context 12,20; Get-Content -Raw "'$paths[1]' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 1236ms:
+
+  server\src\db\aff.ts:420:    return { success: true, code: affCode.code }
+  server\src\db\aff.ts:421:  } catch (error) {
+  server\src\db\aff.ts:422:    return {
+  server\src\db\aff.ts:423:      success: false,
+  server\src\db\aff.ts:424:      error: error instanceof Error ? error.message : '删除优惠码失败'
+  server\src\db\aff.ts:425:    }
+  server\src\db\aff.ts:426:  }
+  server\src\db\aff.ts:427:}
+  server\src\db\aff.ts:428:
+  server\src\db\aff.ts:429:/**
+  server\src\db\aff.ts:430: * 验证优惠码（支持全局码）
+  server\src\db\aff.ts:431: */
+> server\src\db\aff.ts:432:export async function validateAffCode(
+  server\src\db\aff.ts:433:  code: string,
+  server\src\db\aff.ts:434:  packagePlanId: number,
+  server\src\db\aff.ts:435:  userId: number
+  server\src\db\aff.ts:436:): Promise<{
+  server\src\db\aff.ts:437:  valid: boolean
+  server\src\db\aff.ts:438:  affCode?: AffCode
+  server\src\db\aff.ts:439:  discountRate?: number
+  server\src\db\aff.ts:440:  commissionRate?: number
+  server\src\db\aff.ts:441:  error?: string
+  server\src\db\aff.ts:442:}> {
+  server\src\db\aff.ts:443:  // 1. 查询优惠码
+  server\src\db\aff.ts:444:  const affCode = await prisma.affCode.findUnique({
+  server\src\db\aff.ts:445:    where: { code: code.toUpperCase() }
+  server\src\db\aff.ts:446:  })
+  server\src\db\aff.ts:447:
+  server\src\db\aff.ts:448:  if (!affCode) {
+  server\src\db\aff.ts:449:    return { valid: false, error: '优惠码不存在' }
+  server\src\db\aff.ts:450:  }
+  server\src\db\aff.ts:451:
+  server\src\db\aff.ts:452:  // 2. 检查方案是否匹配（全局码跳过此检查）
+  server\src\db\aff.ts:468:    valid: true,
+  server\src\db\aff.ts:469:    affCode,
+  server\src\db\aff.ts:470:    discountRate: Number(affCode.discountRate),
+  server\src\db\aff.ts:471:    commissionRate: Number(affCode.commissionRate)
+  server\src\db\aff.ts:472:  }
+  server\src\db\aff.ts:473:}
+  server\src\db\aff.ts:474:
+  server\src\db\aff.ts:475:// ==================== AFF 绑定与返利 ====================
+  server\src\db\aff.ts:476:
+  server\src\db\aff.ts:477:/**
+  server\src\db\aff.ts:478: * 创建实例与优惠码的绑定关系（开通时调用）
+  server\src\db\aff.ts:479: */
+> server\src\db\aff.ts:480:export async function createAffBinding(
+  server\src\db\aff.ts:481:  instanceId: number,
+  server\src\db\aff.ts:482:  affCodeId: number,
+  server\src\db\aff.ts:483:  tx?: Prisma.TransactionClient
+  server\src\db\aff.ts:484:): Promise<void> {
+  server\src\db\aff.ts:485:  const client = tx || prisma
+  server\src\db\aff.ts:486:  await client.affBinding.create({
+  server\src\db\aff.ts:487:    data: { instanceId, affCodeId }
+  server\src\db\aff.ts:488:  })
+  server\src\db\aff.ts:489:}
+  server\src\db\aff.ts:490:
+  server\src\db\aff.ts:491:/**
+  server\src\db\aff.ts:492: * 获取实例绑定的优惠码
+  server\src\db\aff.ts:493: */
+  server\src\db\aff.ts:494:export async function getInstanceAffBinding(instanceId: number, tx?: 
+Prisma.TransactionClient): Promise<{
+  server\src\db\aff.ts:495:  affCode: AffCode
+  server\src\db\aff.ts:496:  userId: number // 优惠码创建者
+  server\src\db\aff.ts:497:} | null> {
+  server\src\db\aff.ts:498:  const client = tx || prisma
+  server\src\db\aff.ts:499:  const binding = await client.affBinding.findUnique({
+  server\src\db\aff.ts:500:    where: { instanceId },
+  server\src\routes\admin-billing.ts:2951:    } catch (error) {
+  server\src\routes\admin-billing.ts:2952:      const errorMessage = error instanceof Error ? error.message : 
+String(error)
+  server\src\routes\admin-billing.ts:2953:      if (errorMessage.includes('BALANCE_CONFLICT')) {
+  server\src\routes\admin-billing.ts:2954:        return reply.status(409).send({ error: '用户余额正在处理，请稍后重试' })
+  server\src\routes\admin-billing.ts:2955:      }
+  server\src\routes\admin-billing.ts:2956:      request.log.error(error, '删除并退款失败')
+  server\src\routes\admin-billing.ts:2957:      return reply.status(500).send({ error: '删除并退款失败' })
+  server\src\routes\admin-billing.ts:2958:    }
+  server\src\routes\admin-billing.ts:2959:  })
+  server\src\routes\admin-billing.ts:2960:
+  server\src\routes\admin-billing.ts:2961:  // ==================== 管理员应用AFF优惠码 ====================
+  server\src\routes\admin-billing.ts:2962:
+> server\src\routes\admin-billing.ts:2963:  // POST /api/admin/instances/:id/apply-aff - 为实例应用AFF优惠码
+> server\src\routes\admin-billing.ts:2964:  app.post('/api/admin/instances/:id/apply-aff', {
+  server\src\routes\admin-billing.ts:2965:    onRequest: [app.authenticate, app.requireAdmin],
+  server\src\routes\admin-billing.ts:2966:    config: { rateLimit: { max: 20, timeWindow: '1 minute' } }
+  server\src\routes\admin-billing.ts:2967:  }, async (request, reply) => {
+  server\src\routes\admin-billing.ts:2968:    const admin = request.user!
+  server\src\routes\admin-billing.ts:2969:    const { id } = request.params as { id: string }
+  server\src\routes\admin-billing.ts:2970:    const { affCode: affCodeInput } = request.body as { affCode: string }
+  server\src\routes\admin-billing.ts:2971:
+  server\src\routes\admin-billing.ts:2972:    const instanceId = parsePositiveRouteId(id)
+  server\src\routes\admin-billing.ts:2973:    if (!instanceId) {
+  server\src\routes\admin-billing.ts:2974:      return reply.status(400).send({ error: '无效的实例ID' })
+  server\src\routes\admin-billing.ts:2975:    }
+  server\src\routes\admin-billing.ts:2976:
+  server\src\routes\admin-billing.ts:2977:    if (!affCodeInput || affCodeInput.trim().length < 3) {
+  server\src\routes\admin-billing.ts:2978:      return reply.status(400).send({ error: '请输入有效的AFF优惠码' })
+  server\src\routes\admin-billing.ts:2979:    }
+  server\src\routes\admin-billing.ts:2980:
+  server\src\routes\admin-billing.ts:2981:    try {
+  server\src\routes\admin-billing.ts:2982:      // 1. 获取实例信息
+  server\src\routes\admin-billing.ts:2983:      const instance = await prisma.instance.findUnique({
+  server\src\routes\admin-billing.ts:2984:        where: { id: instanceId },
+  server\src\routes\admin-billing.ts:3016:      })
+  server\src\routes\admin-billing.ts:3017:
+  server\src\routes\admin-billing.ts:3018:      if (!affCode) {
+  server\src\routes\admin-billing.ts:3019:        return reply.status(400).send({ error: '优惠码不存在' })
+  server\src\routes\admin-billing.ts:3020:      }
+  server\src\routes\admin-billing.ts:3021:
+  server\src\routes\admin-billing.ts:3022:      // 4. 检查AFF码创建者不能是实例所有者（防止自返利）
+  server\src\routes\admin-billing.ts:3023:      if (affCode.userId === instance.userId) {
+  server\src\routes\admin-billing.ts:3024:        return reply.status(400).send({ error: '不能为用户应用其自己的优惠码' })
+  server\src\routes\admin-billing.ts:3025:      }
+  server\src\routes\admin-billing.ts:3026:
+  server\src\routes\admin-billing.ts:3027:      // 5. 创建AFF绑定
+> server\src\routes\admin-billing.ts:3028:      await db.createAffBinding(instanceId, affCode.id)
+  server\src\routes\admin-billing.ts:3029:
+  server\src\routes\admin-billing.ts:3030:      // 6. 记录操作日志
+  server\src\routes\admin-billing.ts:3031:      await createLog(
+  server\src\routes\admin-billing.ts:3032:        admin.id,
+  server\src\routes\admin-billing.ts:3033:        'admin',
+  server\src\routes\admin-billing.ts:3034:        'instance.admin_apply_aff',
+  server\src\routes\admin-billing.ts:3035:        `Admin applied AFF code "${affCode.code}" (Owner: 
+${affCode.user?.username}) to instance "${instance.name}" (User: ${instance.user?.username})`,
+  server\src\routes\admin-billing.ts:3036:        'success',
+  server\src\routes\admin-billing.ts:3037:        { instanceId }
+  server\src\routes\admin-billing.ts:3038:      )
+  server\src\routes\admin-billing.ts:3039:
+  server\src\routes\admin-billing.ts:3040:      // 7. 通知用户
+  server\src\routes\admin-billing.ts:3041:      await sendNotification(instance.userId, 'aff_applied', {
+  server\src\routes\admin-billing.ts:3042:        instanceName: instance.name,
+  server\src\routes\admin-billing.ts:3043:        discountPercent: Math.round(Number(affCode.discountRate) * 100)
+  server\src\routes\admin-billing.ts:3044:      })
+  server\src\routes\admin-billing.ts:3045:
+  server\src\routes\admin-billing.ts:3046:      return {
+  server\src\routes\admin-billing.ts:3047:        success: true,
+  server\src\routes\admin-billing.ts:3048:        message: `已为实例应用 ${Math.round(Number(affCode.discountRate) * 100)}% 
+续费折扣`,
+  server\src\routes\aff.ts:288:  }, async (request: FastifyRequest<{ Body: { code: string; packagePlanId: number } }>, 
+reply: FastifyReply) => {
+  server\src\routes\aff.ts:289:    const { user } = request
+  server\src\routes\aff.ts:290:    const { code, packagePlanId } = request.body
+  server\src\routes\aff.ts:291:
+  server\src\routes\aff.ts:292:    if (!code || !code.trim()) {
+  server\src\routes\aff.ts:293:      return reply.code(400).send({ error: '请输入优惠码' })
+  server\src\routes\aff.ts:294:    }
+  server\src\routes\aff.ts:295:
+  server\src\routes\aff.ts:296:    if (!packagePlanId || typeof packagePlanId !== 'number') {
+  server\src\routes\aff.ts:297:      return reply.code(400).send({ error: '方案 ID 无效' })
+  server\src\routes\aff.ts:298:    }
+  server\src\routes\aff.ts:299:
+> server\src\routes\aff.ts:300:    const result = await db.validateAffCode(code.trim(), packagePlanId, user.id)
+  server\src\routes\aff.ts:301:
+  server\src\routes\aff.ts:302:    if (!result.valid) {
+  server\src\routes\aff.ts:303:      return reply.code(400).send({ error: result.error })
+  server\src\routes\aff.ts:304:    }
+  server\src\routes\aff.ts:305:
+  server\src\routes\aff.ts:306:    return {
+  server\src\routes\aff.ts:307:      valid: true,
+  server\src\routes\aff.ts:308:      discountRate: result.discountRate,
+  server\src\routes\aff.ts:309:      commissionRate: result.commissionRate
+  server\src\routes\aff.ts:310:    }
+  server\src\routes\aff.ts:311:  })
+  server\src\routes\aff.ts:312:
+  server\src\routes\aff.ts:313:  // ==================== 转化申请 API ====================
+  server\src\routes\aff.ts:314:
+  server\src\routes\aff.ts:315:  // 创建转化申请
+  server\src\routes\aff.ts:316:  fastify.post<{
+  server\src\routes\aff.ts:317:    Body: { amount: number }
+  server\src\routes\aff.ts:318:  }>('/me/convert', {
+  server\src\routes\aff.ts:319:    onRequest: [fastify.authenticate],
+  server\src\routes\aff.ts:320:    config: { rateLimit: { max: 5, timeWindow: '1 minute' } }
+  server\src\routes\hosts.ts:5710:    } catch (err) {
+  server\src\routes\hosts.ts:5711:      const errorMessage = err instanceof Error ? err.message : String(err)
+  server\src\routes\hosts.ts:5712:      return reply.code(500).send({ error: `无法连接目标节点: ${errorMessage}` })
+  server\src\routes\hosts.ts:5713:    }
+  server\src\routes\hosts.ts:5714:
+  server\src\routes\hosts.ts:5715:    // 导入必要的模块
+  server\src\routes\hosts.ts:5716:    const { stopInstance, deleteInstance, createInstance, startInstance } = await 
+import('../lib/incus/index.js')
+  server\src\routes\hosts.ts:5717:    const { buildInstanceConfig } = await import('../lib/incus/incus-instances.js')
+  server\src\routes\hosts.ts:5718:    const { generateIncusConfig, generateRandomPassword } = await 
+import('../lib/incus-config-generator.js')
+  server\src\routes\hosts.ts:5719:    const { generateVmConfig } = await import('../lib/incus-config-vm.js')
+  server\src\routes\hosts.ts:5720:    const { generateRandomIPv4, generateRandomIPv6 } = await 
+import('../lib/ip-calculator.js')
+  server\src\routes\hosts.ts:5721:    const { decryptSensitiveData, encryptSensitiveData } = await 
+import('../lib/security.js')
+> server\src\routes\hosts.ts:5722:    const { getInstanceAffBinding, createAffBinding } = await import('../db/aff.js')
+  server\src\routes\hosts.ts:5723:    const { createInboxMessage } = await import('../db/inbox.js')
+  server\src\routes\hosts.ts:5724:    const { customAlphabet } = await import('nanoid')
+  server\src\routes\hosts.ts:5725:    // 自定义 nanoid，只使用小写字母和数字（Incus 不允许下划线）
+  server\src\routes\hosts.ts:5726:    const nanoid = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 8)
+  server\src\routes\hosts.ts:5727:
+  server\src\routes\hosts.ts:5728:    for (const instance of instances) {
+  server\src\routes\hosts.ts:5729:      let targetResourcesReserved = false
+  server\src\routes\hosts.ts:5730:      let targetIncusCreated = false
+  server\src\routes\hosts.ts:5731:      let targetIncusId: string | null = null
+  server\src\routes\hosts.ts:5732:      let newDbInstanceId: number | null = null
+  server\src\routes\hosts.ts:5733:      let sourceIncusDeleted = false
+  server\src\routes\hosts.ts:5734:      const originalInstanceStatus = instance.status as InstanceStatus
+  server\src\routes\hosts.ts:5735:
+  server\src\routes\hosts.ts:5736:      try {
+  server\src\routes\hosts.ts:5737:        // 1. 检查转移锁定、恢复任务和上传任务
+  server\src\routes\hosts.ts:5738:        const hasPendingTransfer = await db.hasPendingTransfer(instance.id)
+  server\src\routes\hosts.ts:5739:        if (hasPendingTransfer) {
+  server\src\routes\hosts.ts:5740:          results.push({ id: instance.id, name: instance.name, success: false, 
+error: '实例有待处理的转移请求' })
+  server\src\routes\hosts.ts:5741:          continue
+  server\src\routes\hosts.ts:5742:        }
+  server\src\routes\hosts.ts:6035:              limitsCpuPriority: (instance as any).limitsCpuPriority,
+  server\src\routes\hosts.ts:6036:              // 启动配置
+  server\src\routes\hosts.ts:6037:              bootAutostart: (instance as any).bootAutostart,
+  server\src\routes\hosts.ts:6038:              bootAutostartPriority: (instance as any).bootAutostartPriority,
+  server\src\routes\hosts.ts:6039:              bootAutostartDelay: (instance as any).bootAutostartDelay,
+  server\src\routes\hosts.ts:6040:              bootHostShutdownTimeout: (instance as any).bootHostShutdownTimeout
+  server\src\routes\hosts.ts:6041:            }
+  server\src\routes\hosts.ts:6042:          })
+  server\src\routes\hosts.ts:6043:          newDbInstanceId = createdInstance.id
+  server\src\routes\hosts.ts:6044:
+  server\src\routes\hosts.ts:6045:          const movedCount = await db.reassignInstanceBillingRecords(instance.id, 
+createdInstance.id, tx)
+  server\src\routes\hosts.ts:6046:          if (affBinding) {
+> server\src\routes\hosts.ts:6047:            await createAffBinding(createdInstance.id, affBinding.affCode.id, tx)
+  server\src\routes\hosts.ts:6048:          }
+  server\src\routes\hosts.ts:6049:
+  server\src\routes\hosts.ts:6050:          const sourceUpdate = await tx.instance.updateMany({
+  server\src\routes\hosts.ts:6051:            where: {
+  server\src\routes\hosts.ts:6052:              id: instance.id,
+  server\src\routes\hosts.ts:6053:              status: originalInstanceStatus
+  server\src\routes\hosts.ts:6054:            },
+  server\src\routes\hosts.ts:6055:            data: { status: 'deleted' }
+  server\src\routes\hosts.ts:6056:          })
+  server\src\routes\hosts.ts:6057:          if (sourceUpdate.count !== 1) {
+  server\src\routes\hosts.ts:6058:            throw new Error('源实例状态已变化，无法完成迁移')
+  server\src\routes\hosts.ts:6059:          }
+  server\src\routes\hosts.ts:6060:
+  server\src\routes\hosts.ts:6061:          return {
+  server\src\routes\hosts.ts:6062:            createdInstance,
+  server\src\routes\hosts.ts:6063:            migratedBillingRecordCount: movedCount
+  server\src\routes\hosts.ts:6064:          }
+  server\src\routes\hosts.ts:6065:        })
+  server\src\routes\hosts.ts:6066:
+  server\src\routes\hosts.ts:6067:        if (isPaidInstance && migratedBillingRecordCount === 0) {
+  server\src\routes\instance-billing.ts:449:          discountRate: billingInfo.affDiscount.discountRate,
+  server\src\routes\instance-billing.ts:450:          discountPercent: Math.round(billingInfo.affDiscount.discountRate 
+* 100)  // 百分比，如 5 表示 5%
+  server\src\routes\instance-billing.ts:451:        } : null,
+  server\src\routes\instance-billing.ts:452:        // 托管实例相关信息
+  server\src\routes\instance-billing.ts:453:        isHostedInstance: billingInfo.isHostedInstance,
+  server\src\routes\instance-billing.ts:454:        daysUntilExpire: billingInfo.daysUntilExpire,
+  server\src\routes\instance-billing.ts:455:        hostingRenewRestriction: billingInfo.hostingRenewRestriction
+  server\src\routes\instance-billing.ts:456:      }
+  server\src\routes\instance-billing.ts:457:    }
+  server\src\routes\instance-billing.ts:458:  })
+  server\src\routes\instance-billing.ts:459:
+  server\src\routes\instance-billing.ts:460:  // ==================== 绑定 AFF 优惠码（仅影响后续续费） ====================
+> server\src\routes\instance-billing.ts:461:  // POST /api/instances/:id/apply-aff
+  server\src\routes\instance-billing.ts:462:  fastify.post<{
+  server\src\routes\instance-billing.ts:463:    Params: { id: string }
+  server\src\routes\instance-billing.ts:464:    Body: { affCode: string }
+> server\src\routes\instance-billing.ts:465:  }>('/:id/apply-aff', {
+  server\src\routes\instance-billing.ts:466:    onRequest: [fastify.authenticateUser],
+  server\src\routes\instance-billing.ts:467:    config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
+  server\src\routes\instance-billing.ts:468:    schema: {
+  server\src\routes\instance-billing.ts:469:      body: {
+  server\src\routes\instance-billing.ts:470:        type: 'object',
+  server\src\routes\instance-billing.ts:471:        required: ['affCode'],
+  server\src\routes\instance-billing.ts:472:        properties: {
+  server\src\routes\instance-billing.ts:473:          affCode: { type: 'string', minLength: 3, maxLength: 64 }
+  server\src\routes\instance-billing.ts:474:        },
+  server\src\routes\instance-billing.ts:475:        additionalProperties: false
+  server\src\routes\instance-billing.ts:476:      }
+  server\src\routes\instance-billing.ts:477:    }
+  server\src\routes\instance-billing.ts:478:  }, async (request, reply) => {
+  server\src\routes\instance-billing.ts:479:    const { user } = request
+  server\src\routes\instance-billing.ts:480:    const instanceId = parsePositiveRouteId(request.params.id)
+  server\src\routes\instance-billing.ts:481:    const affCodeInput = request.body.affCode?.trim()
+  server\src\routes\instance-billing.ts:482:
+  server\src\routes\instance-billing.ts:483:    if (!instanceId) {
+  server\src\routes\instance-billing.ts:484:      return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
+  server\src\routes\instance-billing.ts:485:    }
+  server\src\routes\instance-billing.ts:524:
+  server\src\routes\instance-billing.ts:525:    // 用户托管节点不允许使用优惠码；角色判断为准，名称规则兼容历史 PEER 节点
+  server\src\routes\instance-billing.ts:526:    const isHostedInstance = instance.host?.user.role === 'user'
+  server\src\routes\instance-billing.ts:527:      || instance.host?.name.toLowerCase().startsWith('peer')
+  server\src\routes\instance-billing.ts:528:    if (isHostedInstance) {
+  server\src\routes\instance-billing.ts:529:      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, 
+'用户托管节点不支持使用优惠码'))
+  server\src\routes\instance-billing.ts:530:    }
+  server\src\routes\instance-billing.ts:531:
+  server\src\routes\instance-billing.ts:532:    if (instance.affBinding) {
+  server\src\routes\instance-billing.ts:533:      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, 
+'该实例已绑定优惠码，无法重复绑定'))
+  server\src\routes\instance-billing.ts:534:    }
+  server\src\routes\instance-billing.ts:535:
+> server\src\routes\instance-billing.ts:536:    const validation = await db.validateAffCode(affCodeInput, 
+instance.packagePlanId, user.id)
+  server\src\routes\instance-billing.ts:537:    if (!validation.valid || !validation.affCode) {
+  server\src\routes\instance-billing.ts:538:      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, 
+validation.error || '优惠码无效'))
+  server\src\routes\instance-billing.ts:539:    }
+  server\src\routes\instance-billing.ts:540:
+  server\src\routes\instance-billing.ts:541:    try {
+> server\src\routes\instance-billing.ts:542:      await db.createAffBinding(instance.id, validation.affCode.id)
+  server\src\routes\instance-billing.ts:543:    } catch (error: any) {
+  server\src\routes\instance-billing.ts:544:      if (error?.code === 'P2002') {
+  server\src\routes\instance-billing.ts:545:        return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, 
+'该实例已绑定优惠码，无法重复绑定'))
+  server\src\routes\instance-billing.ts:546:      }
+  server\src\routes\instance-billing.ts:547:      if (error?.code === 'P2003') {
+  server\src\routes\instance-billing.ts:548:        return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, 
+'优惠码无效'))
+  server\src\routes\instance-billing.ts:549:      }
+  server\src\routes\instance-billing.ts:550:      request.log.error(error, '用户绑定AFF优惠码失败')
+  server\src\routes\instance-billing.ts:551:      return reply.code(500).send({ error: '绑定优惠码失败' })
+  server\src\routes\instance-billing.ts:552:    }
+  server\src\routes\instance-billing.ts:553:
+  server\src\routes\instance-billing.ts:554:    const discountRate = Number(validation.discountRate ?? 
+validation.affCode.discountRate)
+  server\src\routes\instance-billing.ts:555:    const discountPercent = Math.round(discountRate * 100)
+  server\src\routes\instance-billing.ts:556:
+  server\src\routes\instance-billing.ts:557:    await createLog(
+  server\src\routes\instance-billing.ts:558:      user.id,
+  server\src\routes\instance-billing.ts:559:      'instance',
+  server\src\routes\instance-billing.ts:560:      'instance.apply_aff',
+  server\src\routes\instance-billing.ts:561:      `Applied AFF code "${validation.affCode.code}" to instance 
+"${instance.name}" for future renewals`,
+  server\src\routes\instance-billing.ts:562:      'success',
+  server\src\routes\instances.ts:1406:    let validatedAffCode: { id: number; userId: number; discountRate: number } | 
+null = null
+  server\src\routes\instances.ts:1407:    let discountAmount = 0
+  server\src\routes\instances.ts:1408:    let finalPrice = 0
+  server\src\routes\instances.ts:1409:    let actualPrice = 0
+  server\src\routes\instances.ts:1410:
+  server\src\routes\instances.ts:1411:    if (selectedPlan) {
+  server\src\routes\instances.ts:1412:      billing = calculateCreateBilling(selectedPlan)
+  server\src\routes\instances.ts:1413:      finalPrice = flashSaleCheckout ? Number((flashSaleCheckout.flashPrice / 
+100).toFixed(2)) : billing.totalPrice
+  server\src\routes\instances.ts:1414:      actualPrice = finalPrice
+  server\src\routes\instances.ts:1415:
+  server\src\routes\instances.ts:1416:      // 1.4.1 如果提供了优惠码，验证并计算折扣
+  server\src\routes\instances.ts:1417:      if (promoCode && promoCode.trim()) {
+> server\src\routes\instances.ts:1418:        const validation = await db.validateAffCode(promoCode.trim(), 
+selectedPlan.id, user.id)
+  server\src\routes\instances.ts:1419:        if (!validation.valid) {
+  server\src\routes\instances.ts:1420:          return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, 
+validation.error || '优惠码无效'))
+  server\src\routes\instances.ts:1421:        }
+  server\src\routes\instances.ts:1422:        validatedAffCode = {
+  server\src\routes\instances.ts:1423:          id: validation.affCode!.id,
+  server\src\routes\instances.ts:1424:          userId: validation.affCode!.userId,
+  server\src\routes\instances.ts:1425:          discountRate: validation.discountRate!
+  server\src\routes\instances.ts:1426:        }
+  server\src\routes\instances.ts:1427:        // 计算折扣金额（折扣应用于方案价格）
+  server\src\routes\instances.ts:1428:        const discountBasePrice = flashSaleCheckout ? 
+Number((flashSaleCheckout.flashPrice / 100).toFixed(2)) : billing.price
+  server\src\routes\instances.ts:1429:        discountAmount = calculateDiscountAmount(discountBasePrice, 
+validatedAffCode.discountRate)
+  server\src\routes\instances.ts:1430:        finalPrice = Number((discountBasePrice - discountAmount).toFixed(2))
+  server\src\routes\instances.ts:1431:        actualPrice = finalPrice
+  server\src\routes\instances.ts:1432:      }
+  server\src\routes\instances.ts:1433:
+  server\src\routes\instances.ts:1434:      const userBalance = await getUserBalance(user.id)
+  server\src\routes\instances.ts:1435:      if (userBalance < actualPrice) {
+  server\src\routes\instances.ts:1436:        return reply.code(400).send(apiError(ErrorCode.BALANCE_INSUFFICIENT,
+  server\src\routes\instances.ts:1437:          `余额不足，需要 ¥${actualPrice.toFixed(2)}，当前余额 ¥${userBalance.toFixed(2)}`))
+  server\src\routes\instances.ts:1438:      }
+  server\src\routes\instances.ts:1909:                planName: flashSaleCheckout.planName,
+  server\src\routes\instances.ts:1910:                campaignName: flashSaleCheckout.campaignName,
+  server\src\routes\instances.ts:1911:                originalPriceCents: flashSaleCheckout.originalPriceSnapshot,
+  server\src\routes\instances.ts:1912:                flashPriceCents: flashSaleCheckout.flashPrice,
+  server\src\routes\instances.ts:1913:                discountAmount
+  server\src\routes\instances.ts:1914:              }
+  server\src\routes\instances.ts:1915:            })
+  server\src\routes\instances.ts:1916:          }
+  server\src\routes\instances.ts:1917:
+  server\src\routes\instances.ts:1918:          // 如果使用了优惠码，创建 AFF 绑定并处理返利
+  server\src\routes\instances.ts:1919:          if (validatedAffCode) {
+  server\src\routes\instances.ts:1920:            // 创建实例与优惠码的永久绑定
+> server\src\routes\instances.ts:1921:            await db.createAffBinding(instance.id, validatedAffCode.id, tx as 
+any)
+  server\src\routes\instances.ts:1922:
+  server\src\routes\instances.ts:1923:            const affCommissionBasePrice = flashSaleCheckout
+  server\src\routes\instances.ts:1924:              ? Number((flashSaleCheckout.flashPrice / 100).toFixed(2))
+  server\src\routes\instances.ts:1925:              : billing.price
+  server\src\routes\instances.ts:1926:
+  server\src\routes\instances.ts:1927:            // 给优惠码创建者返利（基于可参与返利的下单价，不是优惠码折扣后价格）
+  server\src\routes\instances.ts:1928:            await db.processAffCommission(
+  server\src\routes\instances.ts:1929:              validatedAffCode.id,
+  server\src\routes\instances.ts:1930:              instance.id,
+  server\src\routes\instances.ts:1931:              affCommissionBasePrice,
+  server\src\routes\instances.ts:1932:              'new_purchase',
+  server\src\routes\instances.ts:1933:              tx as any
+  server\src\routes\instances.ts:1934:            )
+  server\src\routes\instances.ts:1935:          }
+  server\src\routes\instances.ts:1936:
+  server\src\routes\instances.ts:1937:          // 处理托管收入结算（用户托管节点）
+  server\src\routes\instances.ts:1938:          const hostingIncomeResult = await db.processHostingIncome(
+  server\src\routes\instances.ts:1939:            lockedHost.id,
+  server\src\routes\instances.ts:1940:            actualPrice,
+  server\src\routes\instances.ts:1941:            instance.id,
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+
+const source = readFileSync(resolve(__dirname, '../src/routes/instance-billing.ts'), 'utf8')
+const bulkSeedSource = readFileSync(resolve(__dirname, './seed-bulk-local-data.ts'), 'utf8')
+
+assert.ok(
+  source.includes('const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\\d*$/') &&
+    source.includes('function parsePositiveRouteId(value: string): number | null') &&
+    source.includes('Number.isSafeInteger(parsed)') &&
+    source.includes('function parsePositiveIntegerInput(value: unknown): number | null'),
+  'instance billing routes must define strict positive safe-integer route and body ID parsing'
+)
+
+assert.ok(
+  source.includes("import type { BillingRecordType } from '@prisma/client'") &&
+    source.includes('const BILLING_RECORD_TYPES = new Set<BillingRecordType>([') &&
+    source.includes("'newPurchase'") &&
+    source.includes("'transfer_fee'"),
+  'instance billing record query filters must be typed and allowlisted'
+)
+
+assert.ok(
+  source.includes('function parseClampedPositiveIntegerQuery(value: string | undefined, fallback: number, max: number): number') &&
+    source.includes('function normalizeBillingRecordType(value: string | undefined): BillingRecordType | undefined'),
+  'instance billing records route must define strict query pagination and type normalization helpers'
+)
+
+assert.equal(
+  source.match(/const instanceId = parsePositiveRouteId\(request\.params\.id\)/g)?.length ?? 0,
+  7,
+  'all instance billing routes must strictly validate instance route IDs'
+)
+
+assert.equal(
+  source.match(/const newPlanId = parsePositiveRouteId\(request\.query\.newPlanId\)/g)?.length ?? 0,
+  1,
+  'plan-change preview must strictly validate query newPlanId'
+)
+
+assert.equal(
+  source.match(/const newPlanId = parsePositiveIntegerInput\(request\.body\.newPlanId\)/g)?.length ?? 0,
+  1,
+  'plan-change execution must strictly validate body newPlanId'
+)
+
+for (const forbiddenPattern of [
+  'const instanceId = Number(request.params.id)',
+  'const newPlanId = Number(request.query.newPlanId)',
+  'isNaN(instanceId)',
+  'isNaN(newPlanId)'
+] as const) {
+  assert.ok(
+    !source.includes(forbiddenPattern),
+    `instance billing routes must not use loose ID parsing: ${forbiddenPattern}`
+  )
+}
+
+const recordsRouteStart = source.indexOf("}>('/:id/billing/records'")
+assert.notEqual(recordsRouteStart, -1, 'missing instance billing records route')
+const recordsRouteEnd = source.indexOf('\n}', recordsRouteStart)
+assert.notEqual(recordsRouteEnd, -1, 'missing instance billing records route end marker')
+const recordsRoute = source.slice(recordsRouteStart, recordsRouteEnd)
+
+assert.ok(
+  recordsRoute.includes('page: parsePositiveIntegerQuery(page, 1)') &&
+    recordsRoute.includes('pageSize: parseClampedPositiveIntegerQuery(pageSize, 20, 100)') &&
+    recordsRoute.includes('type: normalizeBillingRecordType(type)'),
+  'instance billing records route must normalize pagination and type before DB reads'
+)
+
+assert.ok(
+  source.includes('function serializePlanPriceYuan(price: unknown): number') &&
+    source.includes('function serializeInstanceBillingPriceYuan(price: unknown, fallbackPlanPrice: unknown): number') &&
+    source.includes('price: serializeInstanceBillingPriceYuan(instance.billingPrice, preview.oldPlan.price)') &&
+    source.includes('price: serializePlanPriceYuan(preview.newPlan.price)') &&
+    !source.includes('price: Number(preview.newPlan.price)'),
+  'plan-change preview must serialize PackagePlan.price from cents to yuan before returning prices to clients'
+)
+
+assert.ok(
+  bulkSeedSource.includes('billingPrice: plan.price / 100') &&
+    !bulkSeedSource.includes('billingPrice: plan.price,'),
+  'bulk local seed must store instance billingPrice in yuan, matching production create/change-plan billing logic'
+)
+
+for (const forbiddenPattern of [
+  'page: Number(page)',
+  'pageSize: Number(pageSize)',
+  'type: type as any'
+]) {
+  assert.ok(
+    !recordsRoute.includes(forbiddenPattern),
+    `instance billing records route must not use unsafe query handling: ${forbiddenPattern}`
+  )
+}
+
+console.log('instance billing route ID guard tests passed')
+
+
+
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$route = Get-Content server/src/routes/instance-billing.ts; $route[477..571]; $aff = Get-Content server/src/db/aff.ts; $aff[431..570]; Get-ChildItem -Path server/src -Recurse -File -Include *.ts | Select-String -Pattern '"'processAffCommission\\(|getInstanceAffBinding\\(' -Context 8,18" in C:\Users\Administrator\Desktop\payinces
+ succeeded in 1229ms:
+  }, async (request, reply) => {
+    const { user } = request
+    const instanceId = parsePositiveRouteId(request.params.id)
+    const affCodeInput = request.body.affCode?.trim()
+
+    if (!instanceId) {
+      return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
+    }
+
+    if (!affCodeInput || affCodeInput.length < 3) {
+      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, 'è¯·è¾“å…¥æœ‰æ•ˆçš„AFFä¼˜æƒ ç '))
+    }
+
+    const instance = await prisma.instance.findUnique({
+      where: { id: instanceId },
+      include: {
+        affBinding: true,
+        host: {
+          select: {
+            name: true,
+            user: {
+              select: { role: true }
+            }
+          }
+        }
+      }
+    })
+
+    if (!instance) {
+      return reply.code(404).send(apiError(ErrorCode.INSTANCE_NOT_FOUND))
+    }
+
+    // åªæœ‰å®žä¾‹æ‰€æœ‰è€…å¯ä»¥è‡ªè¡Œç»‘å®šä¼˜æƒ ç 
+    if (instance.userId !== user.id) {
+      return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
+    }
+
+    if (instance.status === 'deleted') {
+      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, 'å®žä¾‹å·²åˆ é™¤'))
+    }
+
+    if (!instance.packagePlanId) {
+      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, 'å…è´¹å®žä¾‹ä¸æ”¯æŒä½¿ç”¨ä¼˜æƒ ç '))
+    }
+
+    if (await checkExchangeBillingLock(instanceId, reply)) return
+
+    // ç”¨æˆ·æ‰˜ç®¡èŠ‚ç‚¹ä¸å…è®¸ä½¿ç”¨ä¼˜æƒ ç ï¼›è§’è‰²åˆ¤æ–­ä¸ºå‡†ï¼Œåç§°è§„åˆ™å…¼å®¹åŽ†å² PEER èŠ‚ç‚¹
+    const isHostedInstance = instance.host?.user.role === 'user'
+      || instance.host?.name.toLowerCase().startsWith('peer')
+    if (isHostedInstance) {
+      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, 'ç”¨æˆ·æ‰˜ç®¡èŠ‚ç‚¹ä¸æ”¯æŒä½¿ç”¨ä¼˜æƒ ç '))
+    }
+
+    if (instance.affBinding) {
+      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, 'è¯¥å®žä¾‹å·²ç»‘å®šä¼˜æƒ ç ï¼Œæ— æ³•é‡å¤ç»‘å®š'))
+    }
+
+    const validation = await db.validateAffCode(affCodeInput, instance.packagePlanId, user.id)
+    if (!validation.valid || !validation.affCode) {
+      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, validation.error || 'ä¼˜æƒ ç æ— æ•ˆ'))
+    }
+
+    try {
+      await db.createAffBinding(instance.id, validation.affCode.id)
+    } catch (error: any) {
+      if (error?.code === 'P2002') {
+        return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, 'è¯¥å®žä¾‹å·²ç»‘å®šä¼˜æƒ ç ï¼Œæ— æ³•é‡å¤ç»‘å®š'))
+      }
+      if (error?.code === 'P2003') {
+        return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, 'ä¼˜æƒ ç æ— æ•ˆ'))
+      }
+      request.log.error(error, 'ç”¨æˆ·ç»‘å®šAFFä¼˜æƒ ç å¤±è´¥')
+      return reply.code(500).send({ error: 'ç»‘å®šä¼˜æƒ ç å¤±è´¥' })
+    }
+
+    const discountRate = Number(validation.discountRate ?? validation.affCode.discountRate)
+    const discountPercent = Math.round(discountRate * 100)
+
+    await createLog(
+      user.id,
+      'instance',
+      'instance.apply_aff',
+      `Applied AFF code "${validation.affCode.code}" to instance "${instance.name}" for future renewals`,
+      'success',
+      { instanceId: instance.id }
+    )
+
+    return {
+      success: true,
+      message: `ä¼˜æƒ ç ç»‘å®šæˆåŠŸï¼ŒåŽç»­ç»­è´¹å°†äº«å— ${discountPercent}% æŠ˜æ‰£`,
+      discountRate,
+      discountPercent
+    }
+  })
+export async function validateAffCode(
+  code: string,
+  packagePlanId: number,
+  userId: number
+): Promise<{
+  valid: boolean
+  affCode?: AffCode
+  discountRate?: number
+  commissionRate?: number
+  error?: string
+}> {
+  // 1. æŸ¥è¯¢ä¼˜æƒ ç 
+  const affCode = await prisma.affCode.findUnique({
+    where: { code: code.toUpperCase() }
+  })
+
+  if (!affCode) {
+    return { valid: false, error: 'ä¼˜æƒ ç ä¸å­˜åœ¨' }
+  }
+
+  // 2. æ£€æŸ¥æ–¹æ¡ˆæ˜¯å¦åŒ¹é…ï¼ˆå…¨å±€ç è·³è¿‡æ­¤æ£€æŸ¥ï¼‰
+  if (affCode.packagePlanId !== null && affCode.packagePlanId !== packagePlanId) {
+    return { valid: false, error: 'ä¼˜æƒ ç ä¸é€‚ç”¨äºŽæ­¤æ–¹æ¡ˆ' }
+  }
+
+  // 3. æ£€æŸ¥æ˜¯å¦è‡ªå·±çš„ä¼˜æƒ ç 
+  if (affCode.userId === userId) {
+    return { valid: false, error: 'ä¸èƒ½ä½¿ç”¨è‡ªå·±çš„ä¼˜æƒ ç ' }
+  }
+
+  // 4. æ£€æŸ¥ä¼˜æƒ ç æ˜¯å¦å¯ç”¨
+  if (!affCode.enabled) {
+    return { valid: false, error: 'ä¼˜æƒ ç å·²ç¦ç”¨' }
+  }
+
+  return {
+    valid: true,
+    affCode,
+    discountRate: Number(affCode.discountRate),
+    commissionRate: Number(affCode.commissionRate)
+  }
+}
+
+// ==================== AFF ç»‘å®šä¸Žè¿”åˆ© ====================
+
+/**
+ * åˆ›å»ºå®žä¾‹ä¸Žä¼˜æƒ ç çš„ç»‘å®šå…³ç³»ï¼ˆå¼€é€šæ—¶è°ƒç”¨ï¼‰
+ */
+export async function createAffBinding(
+  instanceId: number,
+  affCodeId: number,
+  tx?: Prisma.TransactionClient
+): Promise<void> {
+  const client = tx || prisma
+  await client.affBinding.create({
+    data: { instanceId, affCodeId }
+  })
+}
+
+/**
+ * èŽ·å–å®žä¾‹ç»‘å®šçš„ä¼˜æƒ ç 
+ */
+export async function getInstanceAffBinding(instanceId: number, tx?: Prisma.TransactionClient): Promise<{
+  affCode: AffCode
+  userId: number // ä¼˜æƒ ç åˆ›å»ºè€…
+} | null> {
+  const client = tx || prisma
+  const binding = await client.affBinding.findUnique({
+    where: { instanceId },
+    include: {
+      affCode: true
+    }
+  })
+
+  if (!binding) return null
+
+  return {
+    affCode: binding.affCode,
+    userId: binding.affCode.userId
+  }
+}
+
+/**
+ * å¤„ç† AFF è¿”åˆ©ï¼ˆæ–°è´­æˆ–ç»­è´¹æ—¶è°ƒç”¨ï¼‰
+ * @param originalAmount è®¢å•åŽŸå§‹é‡‘é¢ï¼ˆæœªæ‰“æŠ˜å‰ï¼‰
+ */
+export async function processAffCommission(
+  affCodeId: number,
+  instanceId: number,
+  originalAmount: number,
+  type: 'new_purchase' | 'renew',
+  tx?: Prisma.TransactionClient
+): Promise<void> {
+  const client = tx || prisma
+
+  // 1. èŽ·å–ä¼˜æƒ ç ä¿¡æ¯
+  const affCode = await client.affCode.findUnique({
+    where: { id: affCodeId }
+  })
+
+  if (!affCode) return
+
+  // 2. è®¡ç®—è¿”åˆ©é‡‘é¢
+  const commissionRate = Number(affCode.commissionRate)
+  const commission = Math.round(originalAmount * commissionRate * 100) / 100
+
+  if (commission <= 0) return
+
+  // 3. ç»™ä¼˜æƒ ç åˆ›å»ºè€…å¢žåŠ  AFF ä½™é¢
+  await changeAffBalance({
+    userId: affCode.userId,
+    type,
+    amount: commission,
+    affCodeId,
+    instanceId,
+    originalAmount,
+    remark: type === 'new_purchase' ? 'æ–°è´­è¿”åˆ©' : 'ç»­è´¹è¿”åˆ©'
+  }, client as PrismaClient)
+
+  // 4. æ›´æ–°ä¼˜æƒ ç ç»Ÿè®¡
+  await client.affCode.update({
+    where: { id: affCodeId },
+    data: {
+      usedCount: type === 'new_purchase' ? { increment: 1 } : undefined,
+      totalEarnings: { increment: commission }
+    }
+  })
+}
+
+// ==================== AFF æ—¥å¿—æŸ¥è¯¢ ====================
+
+// AFF æ—¥å¿—å¸¦å…³è”ä¿¡æ¯çš„ç±»åž‹
+export type AffLogWithDetails = AffLog & {
+  affCode?: { code: string } | null
+}
+
+/**
+ * èŽ·å–ç”¨æˆ·çš„ AFF æ”¶ç›Šæ—¥å¿—ï¼ˆåˆ†é¡µï¼‰
+ */
+export async function getAffLogs(
+
+  server\src\db\aff.ts:486:  await client.affBinding.create({
+  server\src\db\aff.ts:487:    data: { instanceId, affCodeId }
+  server\src\db\aff.ts:488:  })
+  server\src\db\aff.ts:489:}
+  server\src\db\aff.ts:490:
+  server\src\db\aff.ts:491:/**
+  server\src\db\aff.ts:492: * 获取实例绑定的优惠码
+  server\src\db\aff.ts:493: */
+> server\src\db\aff.ts:494:export async function getInstanceAffBinding(instanceId: number, tx?: 
+Prisma.TransactionClient): Promise<{
+  server\src\db\aff.ts:495:  affCode: AffCode
+  server\src\db\aff.ts:496:  userId: number // 优惠码创建者
+  server\src\db\aff.ts:497:} | null> {
+  server\src\db\aff.ts:498:  const client = tx || prisma
+  server\src\db\aff.ts:499:  const binding = await client.affBinding.findUnique({
+  server\src\db\aff.ts:500:    where: { instanceId },
+  server\src\db\aff.ts:501:    include: {
+  server\src\db\aff.ts:502:      affCode: true
+  server\src\db\aff.ts:503:    }
+  server\src\db\aff.ts:504:  })
+  server\src\db\aff.ts:505:
+  server\src\db\aff.ts:506:  if (!binding) return null
+  server\src\db\aff.ts:507:
+  server\src\db\aff.ts:508:  return {
+  server\src\db\aff.ts:509:    affCode: binding.affCode,
+  server\src\db\aff.ts:510:    userId: binding.affCode.userId
+  server\src\db\aff.ts:511:  }
+  server\src\db\aff.ts:512:}
+  server\src\db\aff.ts:513:
+  server\src\db\aff.ts:514:/**
+  server\src\db\aff.ts:515: * 处理 AFF 返利（新购或续费时调用）
+  server\src\db\aff.ts:516: * @param originalAmount 订单原始金额（未打折前）
+  server\src\db\aff.ts:517: */
+> server\src\db\aff.ts:518:export async function processAffCommission(
+  server\src\db\aff.ts:519:  affCodeId: number,
+  server\src\db\aff.ts:520:  instanceId: number,
+  server\src\db\aff.ts:521:  originalAmount: number,
+  server\src\db\aff.ts:522:  type: 'new_purchase' | 'renew',
+  server\src\db\aff.ts:523:  tx?: Prisma.TransactionClient
+  server\src\db\aff.ts:524:): Promise<void> {
+  server\src\db\aff.ts:525:  const client = tx || prisma
+  server\src\db\aff.ts:526:
+  server\src\db\aff.ts:527:  // 1. 获取优惠码信息
+  server\src\db\aff.ts:528:  const affCode = await client.affCode.findUnique({
+  server\src\db\aff.ts:529:    where: { id: affCodeId }
+  server\src\db\aff.ts:530:  })
+  server\src\db\aff.ts:531:
+  server\src\db\aff.ts:532:  if (!affCode) return
+  server\src\db\aff.ts:533:
+  server\src\db\aff.ts:534:  // 2. 计算返利金额
+  server\src\db\aff.ts:535:  const commissionRate = Number(affCode.commissionRate)
+  server\src\db\aff.ts:536:  const commission = Math.round(originalAmount * commissionRate * 100) / 100
+  server\src\db\billing-operations.ts:277:  }
+  server\src\db\billing-operations.ts:278:
+  server\src\db\billing-operations.ts:279:  remainingValue = roundCurrency(remainingValue)
+  server\src\db\billing-operations.ts:280:
+  server\src\db\billing-operations.ts:281:  // 兼容历史/异常数据：如果缺少正向计费记录，则回退到旧逻辑，
+  server\src\db\billing-operations.ts:282:  // 避免老实例直接变成 0 退款。
+  server\src\db\billing-operations.ts:283:  if (positiveBillingRecords.length === 0 && instance.billingPrice && 
+instance.billingCycle) {
+  server\src\db\billing-operations.ts:284:    let discountRate = 0
+> server\src\db\billing-operations.ts:285:    const affBinding = await getInstanceAffBinding(instance.id)
+  server\src\db\billing-operations.ts:286:    if (affBinding?.affCode?.enabled) {
+  server\src\db\billing-operations.ts:287:      discountRate = Number(affBinding.affCode.discountRate) || 0
+  server\src\db\billing-operations.ts:288:    }
+  server\src\db\billing-operations.ts:289:
+  server\src\db\billing-operations.ts:290:    remainingValue = calculateRemainingValue(
+  server\src\db\billing-operations.ts:291:      Number(instance.billingPrice),
+  server\src\db\billing-operations.ts:292:      instance.billingCycle,
+  server\src\db\billing-operations.ts:293:      remainingDays,
+  server\src\db\billing-operations.ts:294:      discountRate
+  server\src\db\billing-operations.ts:295:    )
+  server\src\db\billing-operations.ts:296:  }
+  server\src\db\billing-operations.ts:297:
+  server\src\db\billing-operations.ts:298:  const refundableValue = roundCurrency(Math.min(remainingValue, 
+maxRefundable))
+  server\src\db\billing-operations.ts:299:
+  server\src\db\billing-operations.ts:300:  return {
+  server\src\db\billing-operations.ts:301:    remainingDays,
+  server\src\db\billing-operations.ts:302:    remainingValue,
+  server\src\db\billing-operations.ts:303:    refundableValue,
+  server\src\db\billing-operations.ts:406:
+  server\src\db\billing-operations.ts:407:  if (minRemainingDays !== null && remainingDays < minRemainingDays) {
+  server\src\db\billing-operations.ts:408:    canChange = false
+  server\src\db\billing-operations.ts:409:    cannotChangeReason = 'remaining_days_insufficient' // 剩余天数不足
+  server\src\db\billing-operations.ts:410:  }
+  server\src\db\billing-operations.ts:411:
+  server\src\db\billing-operations.ts:412:  // ========== 获取 AFF 折扣率 ==========
+  server\src\db\billing-operations.ts:413:  let discountRate = 0
+> server\src\db\billing-operations.ts:414:  const affBinding = await getInstanceAffBinding(instance.id)
+  server\src\db\billing-operations.ts:415:  if (affBinding) {
+  server\src\db\billing-operations.ts:416:    discountRate = Number(affBinding.affCode.discountRate) || 0
+  server\src\db\billing-operations.ts:417:  }
+  server\src\db\billing-operations.ts:418:
+  server\src\db\billing-operations.ts:419:  // ========== 使用公共方法计算差价 ==========
+  server\src\db\billing-operations.ts:420:  const oldCyclePrice = Number(instance.billingPrice) || 0 // 已是元
+  server\src\db\billing-operations.ts:421:  const newCyclePrice = Number(newPlan.price) / 100 // 分转元
+  server\src\db\billing-operations.ts:422:
+  server\src\db\billing-operations.ts:423:  // 使用公共方法计算详情
+  server\src\db\billing-operations.ts:424:  const calcResult = calculatePlanChangeDetails(
+  server\src\db\billing-operations.ts:425:    oldCyclePrice,
+  server\src\db\billing-operations.ts:426:    instance.billingCycle || 1,
+  server\src\db\billing-operations.ts:427:    newCyclePrice,
+  server\src\db\billing-operations.ts:428:    newPlan.billingCycle,
+  server\src\db\billing-operations.ts:429:    remainingDays,
+  server\src\db\billing-operations.ts:430:    discountRate
+  server\src\db\billing-operations.ts:431:  )
+  server\src\db\billing-operations.ts:432:
+  server\src\db\billing-operations.ts:468:  settleBalance: boolean,
+  server\src\db\billing-operations.ts:469:  tx?: Prisma.TransactionClient
+  server\src\db\billing-operations.ts:470:): Promise<InstancePriceAdjustmentQuote> {
+  server\src\db\billing-operations.ts:471:  const oldPrice = Number(instance.billingPrice) || 0
+  server\src\db\billing-operations.ts:472:  const roundedNewPrice = roundCurrency(newPrice)
+  server\src\db\billing-operations.ts:473:  const billingCycle = instance.billingCycle || 1
+  server\src\db\billing-operations.ts:474:
+  server\src\db\billing-operations.ts:475:  let discountRate = 0
+> server\src\db\billing-operations.ts:476:  const affBinding = await getInstanceAffBinding(instance.id, tx)
+  server\src\db\billing-operations.ts:477:  if (affBinding?.affCode?.enabled) {
+  server\src\db\billing-operations.ts:478:    discountRate = Number(affBinding.affCode.discountRate) || 0
+  server\src\db\billing-operations.ts:479:  }
+  server\src\db\billing-operations.ts:480:
+  server\src\db\billing-operations.ts:481:  let remainingDays = 0
+  server\src\db\billing-operations.ts:482:  let priceDiff = 0
+  server\src\db\billing-operations.ts:483:
+  server\src\db\billing-operations.ts:484:  if (settleBalance && instance.expiresAt) {
+  server\src\db\billing-operations.ts:485:    remainingDays = calculateRemainingDaysPrecise(new 
+Date(instance.expiresAt))
+  server\src\db\billing-operations.ts:486:    if (remainingDays > 0) {
+  server\src\db\billing-operations.ts:487:      priceDiff = calculatePriceDiff(
+  server\src\db\billing-operations.ts:488:        oldPrice,
+  server\src\db\billing-operations.ts:489:        billingCycle,
+  server\src\db\billing-operations.ts:490:        roundedNewPrice,
+  server\src\db\billing-operations.ts:491:        billingCycle,
+  server\src\db\billing-operations.ts:492:        remainingDays,
+  server\src\db\billing-operations.ts:493:        discountRate
+  server\src\db\billing-operations.ts:494:      )
+  server\src\db\billing-operations.ts:555:    throw new Error('实例已被手动封停，请联系宿主机所有者解封后再续费')
+  server\src\db\billing-operations.ts:556:  }
+  server\src\db\billing-operations.ts:557:
+  server\src\db\billing-operations.ts:558:  await assertInstanceNotExchangeLocked(instance.id)
+  server\src\db\billing-operations.ts:559:
+  server\src\db\billing-operations.ts:560:  const { amount: originalAmount, newExpiresAt } = 
+calculateRenewBilling(instance, months)
+  server\src\db\billing-operations.ts:561:
+  server\src\db\billing-operations.ts:562:  // 检查 AFF 绑定，计算折扣
+> server\src\db\billing-operations.ts:563:  const affBinding = await getInstanceAffBinding(instance.id)
+  server\src\db\billing-operations.ts:564:  let discountRate = 0
+  server\src\db\billing-operations.ts:565:  let discountAmount = 0
+  server\src\db\billing-operations.ts:566:  let finalAmount = originalAmount
+  server\src\db\billing-operations.ts:567:
+  server\src\db\billing-operations.ts:568:  if (affBinding?.affCode.enabled) {
+  server\src\db\billing-operations.ts:569:    discountRate = Number(affBinding.affCode.discountRate)
+  server\src\db\billing-operations.ts:570:    discountAmount = calculateDiscountAmount(originalAmount, discountRate)
+  server\src\db\billing-operations.ts:571:    finalAmount = calculateDiscountedPrice(originalAmount, discountRate)
+  server\src\db\billing-operations.ts:572:  }
+  server\src\db\billing-operations.ts:573:
+  server\src\db\billing-operations.ts:574:  // 执行事务（带乐观锁）
+  server\src\db\billing-operations.ts:575:  const result = await prisma.$transaction(async (tx) => {
+  server\src\db\billing-operations.ts:576:    const balanceLocked = await tryAdvisoryTransactionLock(tx, 
+USER_BALANCE_LOCK_NAMESPACE, userId)
+  server\src\db\billing-operations.ts:577:    if (!balanceLocked) {
+  server\src\db\billing-operations.ts:578:      throw new Error('余额正在处理，请稍后重试')
+  server\src\db\billing-operations.ts:579:    }
+  server\src\db\billing-operations.ts:580:
+  server\src\db\billing-operations.ts:581:    // 获取用户当前余额
+  server\src\db\billing-operations.ts:670:        remark: discountAmount > 0
+  server\src\db\billing-operations.ts:671:          ? `续费 ${months} 个月，优惠码折扣 -¥${discountAmount.toFixed(2)}`
+  server\src\db\billing-operations.ts:672:          : `续费 ${months} 个月`
+  server\src\db\billing-operations.ts:673:      }
+  server\src\db\billing-operations.ts:674:    })
+  server\src\db\billing-operations.ts:675:
+  server\src\db\billing-operations.ts:676:    // 如果有 AFF 绑定，给优惠码创建者返利
+  server\src\db\billing-operations.ts:677:    if (affBinding?.affCode.enabled) {
+> server\src\db\billing-operations.ts:678:      await processAffCommission(
+  server\src\db\billing-operations.ts:679:        affBinding.affCode.id,
+  server\src\db\billing-operations.ts:680:        instance.id,
+  server\src\db\billing-operations.ts:681:        originalAmount, // 基于原价计算返利
+  server\src\db\billing-operations.ts:682:        'renew',
+  server\src\db\billing-operations.ts:683:        tx as any
+  server\src\db\billing-operations.ts:684:      )
+  server\src\db\billing-operations.ts:685:    }
+  server\src\db\billing-operations.ts:686:
+  server\src\db\billing-operations.ts:687:    let hostingIncomeResult: { hostOwnerId: number; hostName: string } | 
+null = null
+  server\src\db\billing-operations.ts:688:
+  server\src\db\billing-operations.ts:689:    const hostingOwner = await resolveHostedIncomeOwner(tx, instance.hostId)
+  server\src\db\billing-operations.ts:690:    if (hostingOwner) {
+  server\src\db\billing-operations.ts:691:      // 用户托管节点，记录托管收入（带快照）
+  server\src\db\billing-operations.ts:692:      const unfreezeAt = addMonths(new Date(), 1)
+  server\src\db\billing-operations.ts:693:      await createHostingLogWithSnapshot(tx, {
+  server\src\db\billing-operations.ts:694:        userId: hostingOwner.userId,
+  server\src\db\billing-operations.ts:695:        type: 'income',
+  server\src\db\billing-operations.ts:696:        actionType: 'renew',
+  server\src\db\billing-operations.ts:1050:
+  server\src\db\billing-operations.ts:1051:  if (isPaid && instance.billingPrice) {
+  server\src\db\billing-operations.ts:1052:    monthlyPrice = calculateMonthlyPrice({
+  server\src\db\billing-operations.ts:1053:      billingPrice: instance.billingPrice,
+  server\src\db\billing-operations.ts:1054:      billingCycle: instance.billingCycle
+  server\src\db\billing-operations.ts:1055:    })
+  server\src\db\billing-operations.ts:1056:
+  server\src\db\billing-operations.ts:1057:    // 获取 AFF 绑定信息，计算折扣
+> server\src\db\billing-operations.ts:1058:    const affBinding = await getInstanceAffBinding(instanceId)
+  server\src\db\billing-operations.ts:1059:    let discountRate = 0
+  server\src\db\billing-operations.ts:1060:    if (affBinding) {
+  server\src\db\billing-operations.ts:1061:      discountRate = Number(affBinding.affCode.discountRate)
+  server\src\db\billing-operations.ts:1062:      affDiscount = {
+  server\src\db\billing-operations.ts:1063:        discountRate,
+  server\src\db\billing-operations.ts:1064:        affCodeId: affBinding.affCode.id
+  server\src\db\billing-operations.ts:1065:      }
+  server\src\db\billing-operations.ts:1066:    }
+  server\src\db\billing-operations.ts:1067:
+  server\src\db\billing-operations.ts:1068:    // 计算续费预览（包含折扣价）
+  server\src\db\billing-operations.ts:1069:    const originalPreview = previewRenewPrices({
+  server\src\db\billing-operations.ts:1070:      billingPrice: instance.billingPrice,
+  server\src\db\billing-operations.ts:1071:      billingCycle: instance.billingCycle,
+  server\src\db\billing-operations.ts:1072:      expiresAt: instance.expiresAt
+  server\src\db\billing-operations.ts:1073:    })
+  server\src\db\billing-operations.ts:1074:
+  server\src\db\billing-operations.ts:1075:    // 托管实例只返回1个月的续费选项
+  server\src\db\billing-operations.ts:1076:    const filteredPreview = isHostedInstance
+  server\src\routes\hosts.ts:5976:        await createInstance(targetClient, incusConfig)
+  server\src\routes\hosts.ts:5977:        targetIncusCreated = true
+  server\src\routes\hosts.ts:5978:
+  server\src\routes\hosts.ts:5979:        // 15. 启动新实例
+  server\src\routes\hosts.ts:5980:        console.log(`[Migrate] 启动新实例 ${newIncusId}...`)
+  server\src\routes\hosts.ts:5981:        await startInstance(targetClient, newIncusId)
+  server\src\routes\hosts.ts:5982:
+  server\src\routes\hosts.ts:5983:        // 16. 获取原实例的 AFF 绑定信息
+> server\src\routes\hosts.ts:5984:        const affBinding = await getInstanceAffBinding(instance.id)
+  server\src\routes\hosts.ts:5985:
+  server\src\routes\hosts.ts:5986:        // 17. 判断是否为付费实例，决定使用哪个套餐/方案
+  server\src\routes\hosts.ts:5987:        const isPaidInstance = instance.packagePlanId !== null
+  server\src\routes\hosts.ts:5988:        const finalPackageId = isPaidInstance && targetPackage ? targetPackage.id : 
+instance.packageId
+  server\src\routes\hosts.ts:5989:        const finalPlanId = isPaidInstance && targetPlan ? targetPlan.id : 
+instance.packagePlanId
+  server\src\routes\hosts.ts:5990:        const finalBillingPrice = isPaidInstance && targetPlan ? 
+Number(targetPlan.price) / 100 : instance.billingPrice
+  server\src\routes\hosts.ts:5991:        const finalBillingCycle = isPaidInstance && targetPlan ? 
+targetPlan.billingCycle : instance.billingCycle
+  server\src\routes\hosts.ts:5992:
+  server\src\routes\hosts.ts:5993:        // 18. 在数据库中创建新实例记录，并暂时标记源实例 deleted
+  server\src\routes\hosts.ts:5994:        const { createdInstance: newInstance, migratedBillingRecordCount } = await 
+prisma.$transaction(async tx => {
+  server\src\routes\hosts.ts:5995:          const createdInstance = await tx.instance.create({
+  server\src\routes\hosts.ts:5996:            data: {
+  server\src\routes\hosts.ts:5997:              incusId: newIncusId,
+  server\src\routes\hosts.ts:5998:              name: instance.name,
+  server\src\routes\hosts.ts:5999:              userId: instance.userId,
+  server\src\routes\hosts.ts:6000:              hostId: targetHostId,
+  server\src\routes\hosts.ts:6001:              packageId: finalPackageId,
+  server\src\routes\hosts.ts:6002:              packagePlanId: finalPlanId,
+  server\src\routes\instances.ts:1920:            // 创建实例与优惠码的永久绑定
+  server\src\routes\instances.ts:1921:            await db.createAffBinding(instance.id, validatedAffCode.id, tx as 
+any)
+  server\src\routes\instances.ts:1922:
+  server\src\routes\instances.ts:1923:            const affCommissionBasePrice = flashSaleCheckout
+  server\src\routes\instances.ts:1924:              ? Number((flashSaleCheckout.flashPrice / 100).toFixed(2))
+  server\src\routes\instances.ts:1925:              : billing.price
+  server\src\routes\instances.ts:1926:
+  server\src\routes\instances.ts:1927:            // 给优惠码创建者返利（基于可参与返利的下单价，不是优惠码折扣后价格）
+> server\src\routes\instances.ts:1928:            await db.processAffCommission(
+  server\src\routes\instances.ts:1929:              validatedAffCode.id,
+  server\src\routes\instances.ts:1930:              instance.id,
+  server\src\routes\instances.ts:1931:              affCommissionBasePrice,
+  server\src\routes\instances.ts:1932:              'new_purchase',
+  server\src\routes\instances.ts:1933:              tx as any
+  server\src\routes\instances.ts:1934:            )
+  server\src\routes\instances.ts:1935:          }
+  server\src\routes\instances.ts:1936:
+  server\src\routes\instances.ts:1937:          // 处理托管收入结算（用户托管节点）
+  server\src\routes\instances.ts:1938:          const hostingIncomeResult = await db.processHostingIncome(
+  server\src\routes\instances.ts:1939:            lockedHost.id,
+  server\src\routes\instances.ts:1940:            actualPrice,
+  server\src\routes\instances.ts:1941:            instance.id,
+  server\src\routes\instances.ts:1942:            'purchase',
+  server\src\routes\instances.ts:1943:            tx
+  server\src\routes\instances.ts:1944:          )
+  server\src\routes\instances.ts:1945:
+  server\src\routes\instances.ts:1946:          return { instanceId: instance.id, host: lockedHost, 
+hostingIncomeResult, actualPrice, planBandwidthLimit }
+  server\src\routes\instances.ts:2417:      }
+  server\src\routes\instances.ts:2418:      if (plan?.price && plan?.billingCycle) {
+  server\src\routes\instances.ts:2419:        // 返回方案原价（分转元）
+  server\src\routes\instances.ts:2420:        planPrice = Number(plan.price) / 100
+  server\src\routes\instances.ts:2421:        billingCycle = plan.billingCycle
+  server\src\routes\instances.ts:2422:      }
+  server\src\routes\instances.ts:2423:
+  server\src\routes\instances.ts:2424:      // 查询 AFF 绑定，获取折扣率
+> server\src\routes\instances.ts:2425:      const affBinding = await db.getInstanceAffBinding(instanceId)
+  server\src\routes\instances.ts:2426:      if (affBinding) {
+  server\src\routes\instances.ts:2427:        hasAffBinding = true
+  server\src\routes\instances.ts:2428:        affDiscountRate = Number(affBinding.affCode.discountRate)
+  server\src\routes\instances.ts:2429:      }
+  server\src\routes\instances.ts:2430:    }
+  server\src\routes\instances.ts:2431:
+  server\src\routes\instances.ts:2432:    isHostedInstance = Boolean(host?.name.toLowerCase().startsWith('peer'))
+  server\src\routes\instances.ts:2433:
+  server\src\routes\instances.ts:2434:    const effectivePortLimit = instance.port_limit ?? 20
+  server\src\routes\instances.ts:2435:    const effectiveSnapshotLimit = instance.snapshot_limit ?? 5
+  server\src\routes\instances.ts:2436:    const effectiveBackupLimit = instance.backup_limit ?? 3
+  server\src\routes\instances.ts:2437:    const quotaUsage = {
+  server\src\routes\instances.ts:2438:      port: currentPortCount,
+  server\src\routes\instances.ts:2439:      snapshot: currentSnapshotCount,
+  server\src\routes\instances.ts:2440:      backup: currentBackupCount,
+  server\src\routes\instances.ts:2441:      site: currentSiteCount
+  server\src\routes\instances.ts:2442:    }
+  server\src\routes\instances.ts:2443:    const effectiveQuotaLimit = {
+
+
+
+codex
+只读结论：不能采用“限自己码”。续费路径会按绑定码执行 `processAffCommission`，返利余额直接记到该码 `userId`；若实例主只能绑自己的码，就会同时获得续费折扣和自己的续费返利，形成明确自返利套利。因此我选择停用该端点：保留鉴权、限流、请求 schema 与严格实例 ID 校验，对合法请求统一返回 403“该功能已下线”，并用守卫钉死端点不再调用校验或创建绑定。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "Get-ChildItem -Path server/src -Recurse -File -Include *.ts | Select-String -SimpleMatch 'apiError(ErrorCode.FORBIDDEN,' | Select-Object -First 20" in C:\Users\Administrator\Desktop\payinces
+ succeeded in 777ms:
+
+server\src\routes\checkin.ts:125:        return reply.code(403).send(apiError(ErrorCode.FORBIDDEN, '账号状态异常，无法签到'))
+server\src\routes\checkin.ts:182:      return reply.code(403).send(apiError(ErrorCode.FORBIDDEN, 'This redeem code is 
+assigned to another user'))
+server\src\routes\checkin.ts:439:        return reply.code(403).send(apiError(ErrorCode.FORBIDDEN, 'This redeem code 
+is assigned to another user'))
+server\src\routes\friends.ts:221:        return reply.code(403).send(apiError(ErrorCode.FORBIDDEN, '无权取消此请求'))
+server\src\routes\friends.ts:283:        return reply.code(403).send(apiError(ErrorCode.FORBIDDEN, '无权处理此请求'))
+server\src\routes\friends.ts:342:        return reply.code(403).send(apiError(ErrorCode.FORBIDDEN, '无权处理此请求'))
+server\src\routes\friends.ts:407:        return reply.code(403).send(apiError(ErrorCode.FORBIDDEN, '无权删除此好友'))
+server\src\routes\gift-cards.ts:95:    return reply.code(403).send(apiError(ErrorCode.FORBIDDEN, 'Gift card management 
+requires gift card admin allowlist'))
+server\src\routes\tickets.ts:187:        return reply.code(403).send(apiError(ErrorCode.FORBIDDEN, 'Ticket creation is 
+disabled'))
+server\src\routes\users.ts:536:      return reply.code(403).send(apiError(ErrorCode.FORBIDDEN, 
+DEMO_ACCOUNT_PROTECTED_MESSAGE))
+server\src\routes\users.ts:1277:      return reply.code(403).send(apiError(ErrorCode.FORBIDDEN, 
+DEMO_ACCOUNT_PROTECTED_MESSAGE))
+
+
+
+apply patch
+patch: completed
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-instance-billing-route-id-guards.ts
+C:\Users\Administrator\Desktop\payinces\server\src\routes\instance-billing.ts
+diff --git a/server/scripts/test-instance-billing-route-id-guards.ts b/server/scripts/test-instance-billing-route-id-guards.ts
+index 45e930cf8456b897244f075586151ea89d2df996..e34b1d9968bb5eed2be97a28cf9f87401d2a5645
+--- a/server/scripts/test-instance-billing-route-id-guards.ts
++++ b/server/scripts/test-instance-billing-route-id-guards.ts
+@@ -67,6 +67,19 @@
+ assert.notEqual(recordsRouteEnd, -1, 'missing instance billing records route end marker')
+ const recordsRoute = source.slice(recordsRouteStart, recordsRouteEnd)
+ 
++const applyAffRouteStart = source.indexOf("}>('/:id/apply-aff'")
++assert.notEqual(applyAffRouteStart, -1, 'missing apply-aff route')
++const applyAffRouteEnd = source.indexOf('\n  // ====================', applyAffRouteStart)
++assert.notEqual(applyAffRouteEnd, -1, 'missing apply-aff route end marker')
++const applyAffRoute = source.slice(applyAffRouteStart, applyAffRouteEnd)
++
++assert.ok(
++  applyAffRoute.includes("return reply.code(403).send(apiError(ErrorCode.FORBIDDEN, '该功能已下线'))") &&
++    !applyAffRoute.includes('validateAffCode(') &&
++    !applyAffRoute.includes('createAffBinding('),
++  'apply-aff must remain disabled to prevent post-purchase self-referral discount and commission abuse'
++)
++
+ assert.ok(
+   recordsRoute.includes('page: parsePositiveIntegerQuery(page, 1)') &&
+     recordsRoute.includes('pageSize: parseClampedPositiveIntegerQuery(pageSize, 20, 100)') &&
+diff --git a/server/src/routes/instance-billing.ts b/server/src/routes/instance-billing.ts
+index 1e6c7836e80b215b54beb2f5880889640161f2c0..cf0d7a7c9e9fa510703988ea7e7eec94d0fdbe53
+--- a/server/src/routes/instance-billing.ts
++++ b/server/src/routes/instance-billing.ts
+@@ -476,99 +476,13 @@
+       }
+     }
+   }, async (request, reply) => {
+-    const { user } = request
+     const instanceId = parsePositiveRouteId(request.params.id)
+-    const affCodeInput = request.body.affCode?.trim()
+ 
+     if (!instanceId) {
+       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
+-    }
+-
+-    if (!affCodeInput || affCodeInput.length < 3) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '请输入有效的AFF优惠码'))
+     }
+ 
+-    const instance = await prisma.instance.findUnique({
+-      where: { id: instanceId },
+-      include: {
+-        affBinding: true,
+-        host: {
+-          select: {
+-            name: true,
+-            user: {
+-              select: { role: true }
+-            }
+-          }
+-        }
+-      }
+-    })
+-
+-    if (!instance) {
+-      return reply.code(404).send(apiError(ErrorCode.INSTANCE_NOT_FOUND))
+-    }
+-
+-    // 只有实例所有者可以自行绑定优惠码
+-    if (instance.userId !== user.id) {
+-      return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
+-    }
+-
+-    if (instance.status === 'deleted') {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '实例已删除'))
+-    }
+-
+-    if (!instance.packagePlanId) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '免费实例不支持使用优惠码'))
+-    }
+-
+-    if (await checkExchangeBillingLock(instanceId, reply)) return
+-
+-    // 用户托管节点不允许使用优惠码；角色判断为准，名称规则兼容历史 PEER 节点
+-    const isHostedInstance = instance.host?.user.role === 'user'
+-      || instance.host?.name.toLowerCase().startsWith('peer')
+-    if (isHostedInstance) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '用户托管节点不支持使用优惠码'))
+-    }
+-
+-    if (instance.affBinding) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '该实例已绑定优惠码，无法重复绑定'))
+-    }
+-
+-    const validation = await db.validateAffCode(affCodeInput, instance.packagePlanId, user.id)
+-    if (!validation.valid || !validation.affCode) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, validation.error || '优惠码无效'))
+-    }
+-
+-    try {
+-      await db.createAffBinding(instance.id, validation.affCode.id)
+-    } catch (error: any) {
+-      if (error?.code === 'P2002') {
+-        return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '该实例已绑定优惠码，无法重复绑定'))
+-      }
+-      if (error?.code === 'P2003') {
+-        return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '优惠码无效'))
+-      }
+-      request.log.error(error, '用户绑定AFF优惠码失败')
+-      return reply.code(500).send({ error: '绑定优惠码失败' })
+-    }
+-
+-    const discountRate = Number(validation.discountRate ?? validation.affCode.discountRate)
+-    const discountPercent = Math.round(discountRate * 100)
+-
+-    await createLog(
+-      user.id,
+-      'instance',
+-      'instance.apply_aff',
+-      `Applied AFF code "${validation.affCode.code}" to instance "${instance.name}" for future renewals`,
+-      'success',
+-      { instanceId: instance.id }
+-    )
+-
+-    return {
+-      success: true,
+-      message: `优惠码绑定成功，后续续费将享受 ${discountPercent}% 折扣`,
+-      discountRate,
+-      discountPercent
+-    }
++    return reply.code(403).send(apiError(ErrorCode.FORBIDDEN, '该功能已下线'))
+   })
+ 
+   // ==================== 手动续费 ====================
+
+diff --git a/server/scripts/test-instance-billing-route-id-guards.ts b/server/scripts/test-instance-billing-route-id-guards.ts
+index 45e930cf8456b897244f075586151ea89d2df996..e34b1d9968bb5eed2be97a28cf9f87401d2a5645
+--- a/server/scripts/test-instance-billing-route-id-guards.ts
++++ b/server/scripts/test-instance-billing-route-id-guards.ts
+@@ -67,6 +67,19 @@
+ assert.notEqual(recordsRouteEnd, -1, 'missing instance billing records route end marker')
+ const recordsRoute = source.slice(recordsRouteStart, recordsRouteEnd)
+ 
++const applyAffRouteStart = source.indexOf("}>('/:id/apply-aff'")
++assert.notEqual(applyAffRouteStart, -1, 'missing apply-aff route')
++const applyAffRouteEnd = source.indexOf('\n  // ====================', applyAffRouteStart)
++assert.notEqual(applyAffRouteEnd, -1, 'missing apply-aff route end marker')
++const applyAffRoute = source.slice(applyAffRouteStart, applyAffRouteEnd)
++
++assert.ok(
++  applyAffRoute.includes("return reply.code(403).send(apiError(ErrorCode.FORBIDDEN, '该功能已下线'))") &&
++    !applyAffRoute.includes('validateAffCode(') &&
++    !applyAffRoute.includes('createAffBinding('),
++  'apply-aff must remain disabled to prevent post-purchase self-referral discount and commission abuse'
++)
++
+ assert.ok(
+   recordsRoute.includes('page: parsePositiveIntegerQuery(page, 1)') &&
+     recordsRoute.includes('pageSize: parseClampedPositiveIntegerQuery(pageSize, 20, 100)') &&
+diff --git a/server/src/routes/instance-billing.ts b/server/src/routes/instance-billing.ts
+index 1e6c7836e80b215b54beb2f5880889640161f2c0..cf0d7a7c9e9fa510703988ea7e7eec94d0fdbe53
+--- a/server/src/routes/instance-billing.ts
++++ b/server/src/routes/instance-billing.ts
+@@ -476,99 +476,13 @@
+       }
+     }
+   }, async (request, reply) => {
+-    const { user } = request
+     const instanceId = parsePositiveRouteId(request.params.id)
+-    const affCodeInput = request.body.affCode?.trim()
+ 
+     if (!instanceId) {
+       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
+-    }
+-
+-    if (!affCodeInput || affCodeInput.length < 3) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '请输入有效的AFF优惠码'))
+     }
+ 
+-    const instance = await prisma.instance.findUnique({
+-      where: { id: instanceId },
+-      include: {
+-        affBinding: true,
+-        host: {
+-          select: {
+-            name: true,
+-            user: {
+-              select: { role: true }
+-            }
+-          }
+-        }
+-      }
+-    })
+-
+-    if (!instance) {
+-      return reply.code(404).send(apiError(ErrorCode.INSTANCE_NOT_FOUND))
+-    }
+-
+-    // 只有实例所有者可以自行绑定优惠码
+-    if (instance.userId !== user.id) {
+-      return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
+-    }
+-
+-    if (instance.status === 'deleted') {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '实例已删除'))
+-    }
+-
+-    if (!instance.packagePlanId) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '免费实例不支持使用优惠码'))
+-    }
+-
+-    if (await checkExchangeBillingLock(instanceId, reply)) return
+-
+-    // 用户托管节点不允许使用优惠码；角色判断为准，名称规则兼容历史 PEER 节点
+-    const isHostedInstance = instance.host?.user.role === 'user'
+-      || instance.host?.name.toLowerCase().startsWith('peer')
+-    if (isHostedInstance) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '用户托管节点不支持使用优惠码'))
+-    }
+-
+-    if (instance.affBinding) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '该实例已绑定优惠码，无法重复绑定'))
+-    }
+-
+-    const validation = await db.validateAffCode(affCodeInput, instance.packagePlanId, user.id)
+-    if (!validation.valid || !validation.affCode) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, validation.error || '优惠码无效'))
+-    }
+-
+-    try {
+-      await db.createAffBinding(instance.id, validation.affCode.id)
+-    } catch (error: any) {
+-      if (error?.code === 'P2002') {
+-        return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '该实例已绑定优惠码，无法重复绑定'))
+-      }
+-      if (error?.code === 'P2003') {
+-        return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '优惠码无效'))
+-      }
+-      request.log.error(error, '用户绑定AFF优惠码失败')
+-      return reply.code(500).send({ error: '绑定优惠码失败' })
+-    }
+-
+-    const discountRate = Number(validation.discountRate ?? validation.affCode.discountRate)
+-    const discountPercent = Math.round(discountRate * 100)
+-
+-    await createLog(
+-      user.id,
+-      'instance',
+-      'instance.apply_aff',
+-      `Applied AFF code "${validation.affCode.code}" to instance "${instance.name}" for future renewals`,
+-      'success',
+-      { instanceId: instance.id }
+-    )
+-
+-    return {
+-      success: true,
+-      message: `优惠码绑定成功，后续续费将享受 ${discountPercent}% 折扣`,
+-      discountRate,
+-      discountPercent
+-    }
++    return reply.code(403).send(apiError(ErrorCode.FORBIDDEN, '该功能已下线'))
+   })
+ 
+   // ==================== 手动续费 ====================
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'git diff -- server/src/routes/instance-billing.ts server/scripts/test-instance-billing-route-id-guards.ts' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 506ms:
+diff --git a/server/scripts/test-instance-billing-route-id-guards.ts b/server/scripts/test-instance-billing-route-id-guards.ts
+index 45e930c..e34b1d9 100644
+--- a/server/scripts/test-instance-billing-route-id-guards.ts
++++ b/server/scripts/test-instance-billing-route-id-guards.ts
+@@ -67,6 +67,19 @@ const recordsRouteEnd = source.indexOf('\n}', recordsRouteStart)
+ assert.notEqual(recordsRouteEnd, -1, 'missing instance billing records route end marker')
+ const recordsRoute = source.slice(recordsRouteStart, recordsRouteEnd)
+ 
++const applyAffRouteStart = source.indexOf("}>('/:id/apply-aff'")
++assert.notEqual(applyAffRouteStart, -1, 'missing apply-aff route')
++const applyAffRouteEnd = source.indexOf('\n  // ====================', applyAffRouteStart)
++assert.notEqual(applyAffRouteEnd, -1, 'missing apply-aff route end marker')
++const applyAffRoute = source.slice(applyAffRouteStart, applyAffRouteEnd)
++
++assert.ok(
++  applyAffRoute.includes("return reply.code(403).send(apiError(ErrorCode.FORBIDDEN, '该功能已下线'))") &&
++    !applyAffRoute.includes('validateAffCode(') &&
++    !applyAffRoute.includes('createAffBinding('),
++  'apply-aff must remain disabled to prevent post-purchase self-referral discount and commission abuse'
++)
++
+ assert.ok(
+   recordsRoute.includes('page: parsePositiveIntegerQuery(page, 1)') &&
+     recordsRoute.includes('pageSize: parseClampedPositiveIntegerQuery(pageSize, 20, 100)') &&
+diff --git a/server/src/routes/instance-billing.ts b/server/src/routes/instance-billing.ts
+index 1e6c783..cf0d7a7 100644
+--- a/server/src/routes/instance-billing.ts
++++ b/server/src/routes/instance-billing.ts
+@@ -476,99 +476,13 @@ export default async function instanceBillingRoutes(fastify: FastifyInstance) {
+       }
+     }
+   }, async (request, reply) => {
+-    const { user } = request
+     const instanceId = parsePositiveRouteId(request.params.id)
+-    const affCodeInput = request.body.affCode?.trim()
+ 
+     if (!instanceId) {
+       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
+     }
+ 
+-    if (!affCodeInput || affCodeInput.length < 3) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '请输入有效的AFF优惠码'))
+-    }
+-
+-    const instance = await prisma.instance.findUnique({
+-      where: { id: instanceId },
+-      include: {
+-        affBinding: true,
+-        host: {
+-          select: {
+-            name: true,
+-            user: {
+-              select: { role: true }
+-            }
+-          }
+-        }
+-      }
+-    })
+-
+-    if (!instance) {
+-      return reply.code(404).send(apiError(ErrorCode.INSTANCE_NOT_FOUND))
+-    }
+-
+-    // 只有实例所有者可以自行绑定优惠码
+-    if (instance.userId !== user.id) {
+-      return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
+-    }
+-
+-    if (instance.status === 'deleted') {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '实例已删除'))
+-    }
+-
+-    if (!instance.packagePlanId) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '免费实例不支持使用优惠码'))
+-    }
+-
+-    if (await checkExchangeBillingLock(instanceId, reply)) return
+-
+-    // 用户托管节点不允许使用优惠码；角色判断为准，名称规则兼容历史 PEER 节点
+-    const isHostedInstance = instance.host?.user.role === 'user'
+-      || instance.host?.name.toLowerCase().startsWith('peer')
+-    if (isHostedInstance) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '用户托管节点不支持使用优惠码'))
+-    }
+-
+-    if (instance.affBinding) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '该实例已绑定优惠码，无法重复绑定'))
+-    }
+-
+-    const validation = await db.validateAffCode(affCodeInput, instance.packagePlanId, user.id)
+-    if (!validation.valid || !validation.affCode) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, validation.error || '优惠码无效'))
+-    }
+-
+-    try {
+-      await db.createAffBinding(instance.id, validation.affCode.id)
+-    } catch (error: any) {
+-      if (error?.code === 'P2002') {
+-        return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '该实例已绑定优惠码，无法重复绑定'))
+-      }
+-      if (error?.code === 'P2003') {
+-        return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '优惠码无效'))
+-      }
+-      request.log.error(error, '用户绑定AFF优惠码失败')
+-      return reply.code(500).send({ error: '绑定优惠码失败' })
+-    }
+-
+-    const discountRate = Number(validation.discountRate ?? validation.affCode.discountRate)
+-    const discountPercent = Math.round(discountRate * 100)
+-
+-    await createLog(
+-      user.id,
+-      'instance',
+-      'instance.apply_aff',
+-      `Applied AFF code "${validation.affCode.code}" to instance "${instance.name}" for future renewals`,
+-      'success',
+-      { instanceId: instance.id }
+-    )
+-
+-    return {
+-      success: true,
+-      message: `优惠码绑定成功，后续续费将享受 ${discountPercent}% 折扣`,
+-      discountRate,
+-      discountPercent
+-    }
++    return reply.code(403).send(apiError(ErrorCode.FORBIDDEN, '该功能已下线'))
+   })
+ 
+   // ==================== 手动续费 ====================
+warning: in the working copy of 'server/scripts/test-instance-billing-route-id-guards.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/instance-billing.ts', LF will be replaced by CRLF the next time Git touches it
+
+diff --git a/server/scripts/test-instance-billing-route-id-guards.ts b/server/scripts/test-instance-billing-route-id-guards.ts
+index 45e930cf8456b897244f075586151ea89d2df996..e34b1d9968bb5eed2be97a28cf9f87401d2a5645
+--- a/server/scripts/test-instance-billing-route-id-guards.ts
++++ b/server/scripts/test-instance-billing-route-id-guards.ts
+@@ -67,6 +67,19 @@
+ assert.notEqual(recordsRouteEnd, -1, 'missing instance billing records route end marker')
+ const recordsRoute = source.slice(recordsRouteStart, recordsRouteEnd)
+ 
++const applyAffRouteStart = source.indexOf("}>('/:id/apply-aff'")
++assert.notEqual(applyAffRouteStart, -1, 'missing apply-aff route')
++const applyAffRouteEnd = source.indexOf('\n  // ====================', applyAffRouteStart)
++assert.notEqual(applyAffRouteEnd, -1, 'missing apply-aff route end marker')
++const applyAffRoute = source.slice(applyAffRouteStart, applyAffRouteEnd)
++
++assert.ok(
++  applyAffRoute.includes("return reply.code(403).send(apiError(ErrorCode.FORBIDDEN, '该功能已下线'))") &&
++    !applyAffRoute.includes('validateAffCode(') &&
++    !applyAffRoute.includes('createAffBinding('),
++  'apply-aff must remain disabled to prevent post-purchase self-referral discount and commission abuse'
++)
++
+ assert.ok(
+   recordsRoute.includes('page: parsePositiveIntegerQuery(page, 1)') &&
+     recordsRoute.includes('pageSize: parseClampedPositiveIntegerQuery(pageSize, 20, 100)') &&
+diff --git a/server/src/routes/instance-billing.ts b/server/src/routes/instance-billing.ts
+index 1e6c7836e80b215b54beb2f5880889640161f2c0..cf0d7a7c9e9fa510703988ea7e7eec94d0fdbe53
+--- a/server/src/routes/instance-billing.ts
++++ b/server/src/routes/instance-billing.ts
+@@ -476,99 +476,13 @@
+       }
+     }
+   }, async (request, reply) => {
+-    const { user } = request
+     const instanceId = parsePositiveRouteId(request.params.id)
+-    const affCodeInput = request.body.affCode?.trim()
+ 
+     if (!instanceId) {
+       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
+-    }
+-
+-    if (!affCodeInput || affCodeInput.length < 3) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '请输入有效的AFF优惠码'))
+     }
+ 
+-    const instance = await prisma.instance.findUnique({
+-      where: { id: instanceId },
+-      include: {
+-        affBinding: true,
+-        host: {
+-          select: {
+-            name: true,
+-            user: {
+-              select: { role: true }
+-            }
+-          }
+-        }
+-      }
+-    })
+-
+-    if (!instance) {
+-      return reply.code(404).send(apiError(ErrorCode.INSTANCE_NOT_FOUND))
+-    }
+-
+-    // 只有实例所有者可以自行绑定优惠码
+-    if (instance.userId !== user.id) {
+-      return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
+-    }
+-
+-    if (instance.status === 'deleted') {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '实例已删除'))
+-    }
+-
+-    if (!instance.packagePlanId) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '免费实例不支持使用优惠码'))
+-    }
+-
+-    if (await checkExchangeBillingLock(instanceId, reply)) return
+-
+-    // 用户托管节点不允许使用优惠码；角色判断为准，名称规则兼容历史 PEER 节点
+-    const isHostedInstance = instance.host?.user.role === 'user'
+-      || instance.host?.name.toLowerCase().startsWith('peer')
+-    if (isHostedInstance) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '用户托管节点不支持使用优惠码'))
+-    }
+-
+-    if (instance.affBinding) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '该实例已绑定优惠码，无法重复绑定'))
+-    }
+-
+-    const validation = await db.validateAffCode(affCodeInput, instance.packagePlanId, user.id)
+-    if (!validation.valid || !validation.affCode) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, validation.error || '优惠码无效'))
+-    }
+-
+-    try {
+-      await db.createAffBinding(instance.id, validation.affCode.id)
+-    } catch (error: any) {
+-      if (error?.code === 'P2002') {
+-        return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '该实例已绑定优惠码，无法重复绑定'))
+-      }
+-      if (error?.code === 'P2003') {
+-        return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '优惠码无效'))
+-      }
+-      request.log.error(error, '用户绑定AFF优惠码失败')
+-      return reply.code(500).send({ error: '绑定优惠码失败' })
+-    }
+-
+-    const discountRate = Number(validation.discountRate ?? validation.affCode.discountRate)
+-    const discountPercent = Math.round(discountRate * 100)
+-
+-    await createLog(
+-      user.id,
+-      'instance',
+-      'instance.apply_aff',
+-      `Applied AFF code "${validation.affCode.code}" to instance "${instance.name}" for future renewals`,
+-      'success',
+-      { instanceId: instance.id }
+-    )
+-
+-    return {
+-      success: true,
+-      message: `优惠码绑定成功，后续续费将享受 ${discountPercent}% 折扣`,
+-      discountRate,
+-      discountPercent
+-    }
++    return reply.code(403).send(apiError(ErrorCode.FORBIDDEN, '该功能已下线'))
+   })
+ 
+   // ==================== 手动续费 ====================
+
+codex
+实现已按最小范围完成，diff 仅涉及指定端点和指定守卫；未改折扣/返利数值，也未触碰 `billing-scheduler.ts`。现在运行三项验收：server type-check、实例计费路由守卫、AFF review UI 守卫。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'pnpm --filter server type-check' in C:\Users\Administrator\Desktop\payinces
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'pnpm --filter server test:aff-review-ui-guards' in C:\Users\Administrator\Desktop\payinces
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'pnpm --filter server test:instance-billing-route-id-guards' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 2010ms:
+
+> server@1.3.7 test:aff-review-ui-guards C:\Users\Administrator\Desktop\payinces\server
+> node --import tsx scripts/test-aff-review-ui-guards.ts
+
+AFF review UI guard tests passed
+
+ succeeded in 2102ms:
+
+> server@1.3.7 test:instance-billing-route-id-guards C:\Users\Administrator\Desktop\payinces\server
+> node --import tsx scripts/test-instance-billing-route-id-guards.ts
+
+instance billing route ID guard tests passed
+
+diff --git a/server/scripts/test-instance-billing-route-id-guards.ts b/server/scripts/test-instance-billing-route-id-guards.ts
+index 45e930cf8456b897244f075586151ea89d2df996..e34b1d9968bb5eed2be97a28cf9f87401d2a5645
+--- a/server/scripts/test-instance-billing-route-id-guards.ts
++++ b/server/scripts/test-instance-billing-route-id-guards.ts
+@@ -67,6 +67,19 @@
+ assert.notEqual(recordsRouteEnd, -1, 'missing instance billing records route end marker')
+ const recordsRoute = source.slice(recordsRouteStart, recordsRouteEnd)
+ 
++const applyAffRouteStart = source.indexOf("}>('/:id/apply-aff'")
++assert.notEqual(applyAffRouteStart, -1, 'missing apply-aff route')
++const applyAffRouteEnd = source.indexOf('\n  // ====================', applyAffRouteStart)
++assert.notEqual(applyAffRouteEnd, -1, 'missing apply-aff route end marker')
++const applyAffRoute = source.slice(applyAffRouteStart, applyAffRouteEnd)
++
++assert.ok(
++  applyAffRoute.includes("return reply.code(403).send(apiError(ErrorCode.FORBIDDEN, '该功能已下线'))") &&
++    !applyAffRoute.includes('validateAffCode(') &&
++    !applyAffRoute.includes('createAffBinding('),
++  'apply-aff must remain disabled to prevent post-purchase self-referral discount and commission abuse'
++)
++
+ assert.ok(
+   recordsRoute.includes('page: parsePositiveIntegerQuery(page, 1)') &&
+     recordsRoute.includes('pageSize: parseClampedPositiveIntegerQuery(pageSize, 20, 100)') &&
+diff --git a/server/src/routes/instance-billing.ts b/server/src/routes/instance-billing.ts
+index 1e6c7836e80b215b54beb2f5880889640161f2c0..cf0d7a7c9e9fa510703988ea7e7eec94d0fdbe53
+--- a/server/src/routes/instance-billing.ts
++++ b/server/src/routes/instance-billing.ts
+@@ -476,99 +476,13 @@
+       }
+     }
+   }, async (request, reply) => {
+-    const { user } = request
+     const instanceId = parsePositiveRouteId(request.params.id)
+-    const affCodeInput = request.body.affCode?.trim()
+ 
+     if (!instanceId) {
+       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
+-    }
+-
+-    if (!affCodeInput || affCodeInput.length < 3) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '请输入有效的AFF优惠码'))
+     }
+ 
+-    const instance = await prisma.instance.findUnique({
+-      where: { id: instanceId },
+-      include: {
+-        affBinding: true,
+-        host: {
+-          select: {
+-            name: true,
+-            user: {
+-              select: { role: true }
+-            }
+-          }
+-        }
+-      }
+-    })
+-
+-    if (!instance) {
+-      return reply.code(404).send(apiError(ErrorCode.INSTANCE_NOT_FOUND))
+-    }
+-
+-    // 只有实例所有者可以自行绑定优惠码
+-    if (instance.userId !== user.id) {
+-      return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
+-    }
+-
+-    if (instance.status === 'deleted') {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '实例已删除'))
+-    }
+-
+-    if (!instance.packagePlanId) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '免费实例不支持使用优惠码'))
+-    }
+-
+-    if (await checkExchangeBillingLock(instanceId, reply)) return
+-
+-    // 用户托管节点不允许使用优惠码；角色判断为准，名称规则兼容历史 PEER 节点
+-    const isHostedInstance = instance.host?.user.role === 'user'
+-      || instance.host?.name.toLowerCase().startsWith('peer')
+-    if (isHostedInstance) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '用户托管节点不支持使用优惠码'))
+-    }
+-
+-    if (instance.affBinding) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '该实例已绑定优惠码，无法重复绑定'))
+-    }
+-
+-    const validation = await db.validateAffCode(affCodeInput, instance.packagePlanId, user.id)
+-    if (!validation.valid || !validation.affCode) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, validation.error || '优惠码无效'))
+-    }
+-
+-    try {
+-      await db.createAffBinding(instance.id, validation.affCode.id)
+-    } catch (error: any) {
+-      if (error?.code === 'P2002') {
+-        return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '该实例已绑定优惠码，无法重复绑定'))
+-      }
+-      if (error?.code === 'P2003') {
+-        return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '优惠码无效'))
+-      }
+-      request.log.error(error, '用户绑定AFF优惠码失败')
+-      return reply.code(500).send({ error: '绑定优惠码失败' })
+-    }
+-
+-    const discountRate = Number(validation.discountRate ?? validation.affCode.discountRate)
+-    const discountPercent = Math.round(discountRate * 100)
+-
+-    await createLog(
+-      user.id,
+-      'instance',
+-      'instance.apply_aff',
+-      `Applied AFF code "${validation.affCode.code}" to instance "${instance.name}" for future renewals`,
+-      'success',
+-      { instanceId: instance.id }
+-    )
+-
+-    return {
+-      success: true,
+-      message: `优惠码绑定成功，后续续费将享受 ${discountPercent}% 折扣`,
+-      discountRate,
+-      discountPercent
+-    }
++    return reply.code(403).send(apiError(ErrorCode.FORBIDDEN, '该功能已下线'))
+   })
+ 
+   // ==================== 手动续费 ====================
+
+diff --git a/server/scripts/test-instance-billing-route-id-guards.ts b/server/scripts/test-instance-billing-route-id-guards.ts
+index 45e930cf8456b897244f075586151ea89d2df996..e34b1d9968bb5eed2be97a28cf9f87401d2a5645
+--- a/server/scripts/test-instance-billing-route-id-guards.ts
++++ b/server/scripts/test-instance-billing-route-id-guards.ts
+@@ -67,6 +67,19 @@
+ assert.notEqual(recordsRouteEnd, -1, 'missing instance billing records route end marker')
+ const recordsRoute = source.slice(recordsRouteStart, recordsRouteEnd)
+ 
++const applyAffRouteStart = source.indexOf("}>('/:id/apply-aff'")
++assert.notEqual(applyAffRouteStart, -1, 'missing apply-aff route')
++const applyAffRouteEnd = source.indexOf('\n  // ====================', applyAffRouteStart)
++assert.notEqual(applyAffRouteEnd, -1, 'missing apply-aff route end marker')
++const applyAffRoute = source.slice(applyAffRouteStart, applyAffRouteEnd)
++
++assert.ok(
++  applyAffRoute.includes("return reply.code(403).send(apiError(ErrorCode.FORBIDDEN, '该功能已下线'))") &&
++    !applyAffRoute.includes('validateAffCode(') &&
++    !applyAffRoute.includes('createAffBinding('),
++  'apply-aff must remain disabled to prevent post-purchase self-referral discount and commission abuse'
++)
++
+ assert.ok(
+   recordsRoute.includes('page: parsePositiveIntegerQuery(page, 1)') &&
+     recordsRoute.includes('pageSize: parseClampedPositiveIntegerQuery(pageSize, 20, 100)') &&
+diff --git a/server/src/routes/instance-billing.ts b/server/src/routes/instance-billing.ts
+index 1e6c7836e80b215b54beb2f5880889640161f2c0..cf0d7a7c9e9fa510703988ea7e7eec94d0fdbe53
+--- a/server/src/routes/instance-billing.ts
++++ b/server/src/routes/instance-billing.ts
+@@ -476,99 +476,13 @@
+       }
+     }
+   }, async (request, reply) => {
+-    const { user } = request
+     const instanceId = parsePositiveRouteId(request.params.id)
+-    const affCodeInput = request.body.affCode?.trim()
+ 
+     if (!instanceId) {
+       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
+-    }
+-
+-    if (!affCodeInput || affCodeInput.length < 3) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '请输入有效的AFF优惠码'))
+     }
+ 
+-    const instance = await prisma.instance.findUnique({
+-      where: { id: instanceId },
+-      include: {
+-        affBinding: true,
+-        host: {
+-          select: {
+-            name: true,
+-            user: {
+-              select: { role: true }
+-            }
+-          }
+-        }
+-      }
+-    })
+-
+-    if (!instance) {
+-      return reply.code(404).send(apiError(ErrorCode.INSTANCE_NOT_FOUND))
+-    }
+-
+-    // 只有实例所有者可以自行绑定优惠码
+-    if (instance.userId !== user.id) {
+-      return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
+-    }
+-
+-    if (instance.status === 'deleted') {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '实例已删除'))
+-    }
+-
+-    if (!instance.packagePlanId) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '免费实例不支持使用优惠码'))
+-    }
+-
+-    if (await checkExchangeBillingLock(instanceId, reply)) return
+-
+-    // 用户托管节点不允许使用优惠码；角色判断为准，名称规则兼容历史 PEER 节点
+-    const isHostedInstance = instance.host?.user.role === 'user'
+-      || instance.host?.name.toLowerCase().startsWith('peer')
+-    if (isHostedInstance) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '用户托管节点不支持使用优惠码'))
+-    }
+-
+-    if (instance.affBinding) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '该实例已绑定优惠码，无法重复绑定'))
+-    }
+-
+-    const validation = await db.validateAffCode(affCodeInput, instance.packagePlanId, user.id)
+-    if (!validation.valid || !validation.affCode) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, validation.error || '优惠码无效'))
+-    }
+-
+-    try {
+-      await db.createAffBinding(instance.id, validation.affCode.id)
+-    } catch (error: any) {
+-      if (error?.code === 'P2002') {
+-        return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '该实例已绑定优惠码，无法重复绑定'))
+-      }
+-      if (error?.code === 'P2003') {
+-        return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '优惠码无效'))
+-      }
+-      request.log.error(error, '用户绑定AFF优惠码失败')
+-      return reply.code(500).send({ error: '绑定优惠码失败' })
+-    }
+-
+-    const discountRate = Number(validation.discountRate ?? validation.affCode.discountRate)
+-    const discountPercent = Math.round(discountRate * 100)
+-
+-    await createLog(
+-      user.id,
+-      'instance',
+-      'instance.apply_aff',
+-      `Applied AFF code "${validation.affCode.code}" to instance "${instance.name}" for future renewals`,
+-      'success',
+-      { instanceId: instance.id }
+-    )
+-
+-    return {
+-      success: true,
+-      message: `优惠码绑定成功，后续续费将享受 ${discountPercent}% 折扣`,
+-      discountRate,
+-      discountPercent
+-    }
++    return reply.code(403).send(apiError(ErrorCode.FORBIDDEN, '该功能已下线'))
+   })
+ 
+   // ==================== 手动续费 ====================
+
+diff --git a/server/scripts/test-instance-billing-route-id-guards.ts b/server/scripts/test-instance-billing-route-id-guards.ts
+index 45e930cf8456b897244f075586151ea89d2df996..e34b1d9968bb5eed2be97a28cf9f87401d2a5645
+--- a/server/scripts/test-instance-billing-route-id-guards.ts
++++ b/server/scripts/test-instance-billing-route-id-guards.ts
+@@ -67,6 +67,19 @@
+ assert.notEqual(recordsRouteEnd, -1, 'missing instance billing records route end marker')
+ const recordsRoute = source.slice(recordsRouteStart, recordsRouteEnd)
+ 
++const applyAffRouteStart = source.indexOf("}>('/:id/apply-aff'")
++assert.notEqual(applyAffRouteStart, -1, 'missing apply-aff route')
++const applyAffRouteEnd = source.indexOf('\n  // ====================', applyAffRouteStart)
++assert.notEqual(applyAffRouteEnd, -1, 'missing apply-aff route end marker')
++const applyAffRoute = source.slice(applyAffRouteStart, applyAffRouteEnd)
++
++assert.ok(
++  applyAffRoute.includes("return reply.code(403).send(apiError(ErrorCode.FORBIDDEN, '该功能已下线'))") &&
++    !applyAffRoute.includes('validateAffCode(') &&
++    !applyAffRoute.includes('createAffBinding('),
++  'apply-aff must remain disabled to prevent post-purchase self-referral discount and commission abuse'
++)
++
+ assert.ok(
+   recordsRoute.includes('page: parsePositiveIntegerQuery(page, 1)') &&
+     recordsRoute.includes('pageSize: parseClampedPositiveIntegerQuery(pageSize, 20, 100)') &&
+diff --git a/server/src/routes/instance-billing.ts b/server/src/routes/instance-billing.ts
+index 1e6c7836e80b215b54beb2f5880889640161f2c0..cf0d7a7c9e9fa510703988ea7e7eec94d0fdbe53
+--- a/server/src/routes/instance-billing.ts
++++ b/server/src/routes/instance-billing.ts
+@@ -476,99 +476,13 @@
+       }
+     }
+   }, async (request, reply) => {
+-    const { user } = request
+     const instanceId = parsePositiveRouteId(request.params.id)
+-    const affCodeInput = request.body.affCode?.trim()
+ 
+     if (!instanceId) {
+       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
+-    }
+-
+-    if (!affCodeInput || affCodeInput.length < 3) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '请输入有效的AFF优惠码'))
+     }
+ 
+-    const instance = await prisma.instance.findUnique({
+-      where: { id: instanceId },
+-      include: {
+-        affBinding: true,
+-        host: {
+-          select: {
+-            name: true,
+-            user: {
+-              select: { role: true }
+-            }
+-          }
+-        }
+-      }
+-    })
+-
+-    if (!instance) {
+-      return reply.code(404).send(apiError(ErrorCode.INSTANCE_NOT_FOUND))
+-    }
+-
+-    // 只有实例所有者可以自行绑定优惠码
+-    if (instance.userId !== user.id) {
+-      return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
+-    }
+-
+-    if (instance.status === 'deleted') {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '实例已删除'))
+-    }
+-
+-    if (!instance.packagePlanId) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '免费实例不支持使用优惠码'))
+-    }
+-
+-    if (await checkExchangeBillingLock(instanceId, reply)) return
+-
+-    // 用户托管节点不允许使用优惠码；角色判断为准，名称规则兼容历史 PEER 节点
+-    const isHostedInstance = instance.host?.user.role === 'user'
+-      || instance.host?.name.toLowerCase().startsWith('peer')
+-    if (isHostedInstance) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '用户托管节点不支持使用优惠码'))
+-    }
+-
+-    if (instance.affBinding) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '该实例已绑定优惠码，无法重复绑定'))
+-    }
+-
+-    const validation = await db.validateAffCode(affCodeInput, instance.packagePlanId, user.id)
+-    if (!validation.valid || !validation.affCode) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, validation.error || '优惠码无效'))
+-    }
+-
+-    try {
+-      await db.createAffBinding(instance.id, validation.affCode.id)
+-    } catch (error: any) {
+-      if (error?.code === 'P2002') {
+-        return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '该实例已绑定优惠码，无法重复绑定'))
+-      }
+-      if (error?.code === 'P2003') {
+-        return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '优惠码无效'))
+-      }
+-      request.log.error(error, '用户绑定AFF优惠码失败')
+-      return reply.code(500).send({ error: '绑定优惠码失败' })
+-    }
+-
+-    const discountRate = Number(validation.discountRate ?? validation.affCode.discountRate)
+-    const discountPercent = Math.round(discountRate * 100)
+-
+-    await createLog(
+-      user.id,
+-      'instance',
+-      'instance.apply_aff',
+-      `Applied AFF code "${validation.affCode.code}" to instance "${instance.name}" for future renewals`,
+-      'success',
+-      { instanceId: instance.id }
+-    )
+-
+-    return {
+-      success: true,
+-      message: `优惠码绑定成功，后续续费将享受 ${discountPercent}% 折扣`,
+-      discountRate,
+-      discountPercent
+-    }
++    return reply.code(403).send(apiError(ErrorCode.FORBIDDEN, '该功能已下线'))
+   })
+ 
+   // ==================== 手动续费 ====================
+
+diff --git a/server/scripts/test-instance-billing-route-id-guards.ts b/server/scripts/test-instance-billing-route-id-guards.ts
+index 45e930cf8456b897244f075586151ea89d2df996..e34b1d9968bb5eed2be97a28cf9f87401d2a5645
+--- a/server/scripts/test-instance-billing-route-id-guards.ts
++++ b/server/scripts/test-instance-billing-route-id-guards.ts
+@@ -67,6 +67,19 @@
+ assert.notEqual(recordsRouteEnd, -1, 'missing instance billing records route end marker')
+ const recordsRoute = source.slice(recordsRouteStart, recordsRouteEnd)
+ 
++const applyAffRouteStart = source.indexOf("}>('/:id/apply-aff'")
++assert.notEqual(applyAffRouteStart, -1, 'missing apply-aff route')
++const applyAffRouteEnd = source.indexOf('\n  // ====================', applyAffRouteStart)
++assert.notEqual(applyAffRouteEnd, -1, 'missing apply-aff route end marker')
++const applyAffRoute = source.slice(applyAffRouteStart, applyAffRouteEnd)
++
++assert.ok(
++  applyAffRoute.includes("return reply.code(403).send(apiError(ErrorCode.FORBIDDEN, '该功能已下线'))") &&
++    !applyAffRoute.includes('validateAffCode(') &&
++    !applyAffRoute.includes('createAffBinding('),
++  'apply-aff must remain disabled to prevent post-purchase self-referral discount and commission abuse'
++)
++
+ assert.ok(
+   recordsRoute.includes('page: parsePositiveIntegerQuery(page, 1)') &&
+     recordsRoute.includes('pageSize: parseClampedPositiveIntegerQuery(pageSize, 20, 100)') &&
+diff --git a/server/src/routes/instance-billing.ts b/server/src/routes/instance-billing.ts
+index 1e6c7836e80b215b54beb2f5880889640161f2c0..cf0d7a7c9e9fa510703988ea7e7eec94d0fdbe53
+--- a/server/src/routes/instance-billing.ts
++++ b/server/src/routes/instance-billing.ts
+@@ -476,99 +476,13 @@
+       }
+     }
+   }, async (request, reply) => {
+-    const { user } = request
+     const instanceId = parsePositiveRouteId(request.params.id)
+-    const affCodeInput = request.body.affCode?.trim()
+ 
+     if (!instanceId) {
+       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
+-    }
+-
+-    if (!affCodeInput || affCodeInput.length < 3) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '请输入有效的AFF优惠码'))
+     }
+ 
+-    const instance = await prisma.instance.findUnique({
+-      where: { id: instanceId },
+-      include: {
+-        affBinding: true,
+-        host: {
+-          select: {
+-            name: true,
+-            user: {
+-              select: { role: true }
+-            }
+-          }
+-        }
+-      }
+-    })
+-
+-    if (!instance) {
+-      return reply.code(404).send(apiError(ErrorCode.INSTANCE_NOT_FOUND))
+-    }
+-
+-    // 只有实例所有者可以自行绑定优惠码
+-    if (instance.userId !== user.id) {
+-      return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
+-    }
+-
+-    if (instance.status === 'deleted') {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '实例已删除'))
+-    }
+-
+-    if (!instance.packagePlanId) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '免费实例不支持使用优惠码'))
+-    }
+-
+-    if (await checkExchangeBillingLock(instanceId, reply)) return
+-
+-    // 用户托管节点不允许使用优惠码；角色判断为准，名称规则兼容历史 PEER 节点
+-    const isHostedInstance = instance.host?.user.role === 'user'
+-      || instance.host?.name.toLowerCase().startsWith('peer')
+-    if (isHostedInstance) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '用户托管节点不支持使用优惠码'))
+-    }
+-
+-    if (instance.affBinding) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '该实例已绑定优惠码，无法重复绑定'))
+-    }
+-
+-    const validation = await db.validateAffCode(affCodeInput, instance.packagePlanId, user.id)
+-    if (!validation.valid || !validation.affCode) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, validation.error || '优惠码无效'))
+-    }
+-
+-    try {
+-      await db.createAffBinding(instance.id, validation.affCode.id)
+-    } catch (error: any) {
+-      if (error?.code === 'P2002') {
+-        return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '该实例已绑定优惠码，无法重复绑定'))
+-      }
+-      if (error?.code === 'P2003') {
+-        return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '优惠码无效'))
+-      }
+-      request.log.error(error, '用户绑定AFF优惠码失败')
+-      return reply.code(500).send({ error: '绑定优惠码失败' })
+-    }
+-
+-    const discountRate = Number(validation.discountRate ?? validation.affCode.discountRate)
+-    const discountPercent = Math.round(discountRate * 100)
+-
+-    await createLog(
+-      user.id,
+-      'instance',
+-      'instance.apply_aff',
+-      `Applied AFF code "${validation.affCode.code}" to instance "${instance.name}" for future renewals`,
+-      'success',
+-      { instanceId: instance.id }
+-    )
+-
+-    return {
+-      success: true,
+-      message: `优惠码绑定成功，后续续费将享受 ${discountPercent}% 折扣`,
+-      discountRate,
+-      discountPercent
+-    }
++    return reply.code(403).send(apiError(ErrorCode.FORBIDDEN, '该功能已下线'))
+   })
+ 
+   // ==================== 手动续费 ====================
+
+diff --git a/server/scripts/test-instance-billing-route-id-guards.ts b/server/scripts/test-instance-billing-route-id-guards.ts
+index 45e930cf8456b897244f075586151ea89d2df996..e34b1d9968bb5eed2be97a28cf9f87401d2a5645
+--- a/server/scripts/test-instance-billing-route-id-guards.ts
++++ b/server/scripts/test-instance-billing-route-id-guards.ts
+@@ -67,6 +67,19 @@
+ assert.notEqual(recordsRouteEnd, -1, 'missing instance billing records route end marker')
+ const recordsRoute = source.slice(recordsRouteStart, recordsRouteEnd)
+ 
++const applyAffRouteStart = source.indexOf("}>('/:id/apply-aff'")
++assert.notEqual(applyAffRouteStart, -1, 'missing apply-aff route')
++const applyAffRouteEnd = source.indexOf('\n  // ====================', applyAffRouteStart)
++assert.notEqual(applyAffRouteEnd, -1, 'missing apply-aff route end marker')
++const applyAffRoute = source.slice(applyAffRouteStart, applyAffRouteEnd)
++
++assert.ok(
++  applyAffRoute.includes("return reply.code(403).send(apiError(ErrorCode.FORBIDDEN, '该功能已下线'))") &&
++    !applyAffRoute.includes('validateAffCode(') &&
++    !applyAffRoute.includes('createAffBinding('),
++  'apply-aff must remain disabled to prevent post-purchase self-referral discount and commission abuse'
++)
++
+ assert.ok(
+   recordsRoute.includes('page: parsePositiveIntegerQuery(page, 1)') &&
+     recordsRoute.includes('pageSize: parseClampedPositiveIntegerQuery(pageSize, 20, 100)') &&
+diff --git a/server/src/routes/instance-billing.ts b/server/src/routes/instance-billing.ts
+index 1e6c7836e80b215b54beb2f5880889640161f2c0..cf0d7a7c9e9fa510703988ea7e7eec94d0fdbe53
+--- a/server/src/routes/instance-billing.ts
++++ b/server/src/routes/instance-billing.ts
+@@ -476,99 +476,13 @@
+       }
+     }
+   }, async (request, reply) => {
+-    const { user } = request
+     const instanceId = parsePositiveRouteId(request.params.id)
+-    const affCodeInput = request.body.affCode?.trim()
+ 
+     if (!instanceId) {
+       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
+-    }
+-
+-    if (!affCodeInput || affCodeInput.length < 3) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '请输入有效的AFF优惠码'))
+     }
+ 
+-    const instance = await prisma.instance.findUnique({
+-      where: { id: instanceId },
+-      include: {
+-        affBinding: true,
+-        host: {
+-          select: {
+-            name: true,
+-            user: {
+-              select: { role: true }
+-            }
+-          }
+-        }
+-      }
+-    })
+-
+-    if (!instance) {
+-      return reply.code(404).send(apiError(ErrorCode.INSTANCE_NOT_FOUND))
+-    }
+-
+-    // 只有实例所有者可以自行绑定优惠码
+-    if (instance.userId !== user.id) {
+-      return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
+-    }
+-
+-    if (instance.status === 'deleted') {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '实例已删除'))
+-    }
+-
+-    if (!instance.packagePlanId) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '免费实例不支持使用优惠码'))
+-    }
+-
+-    if (await checkExchangeBillingLock(instanceId, reply)) return
+-
+-    // 用户托管节点不允许使用优惠码；角色判断为准，名称规则兼容历史 PEER 节点
+-    const isHostedInstance = instance.host?.user.role === 'user'
+-      || instance.host?.name.toLowerCase().startsWith('peer')
+-    if (isHostedInstance) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '用户托管节点不支持使用优惠码'))
+-    }
+-
+-    if (instance.affBinding) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '该实例已绑定优惠码，无法重复绑定'))
+-    }
+-
+-    const validation = await db.validateAffCode(affCodeInput, instance.packagePlanId, user.id)
+-    if (!validation.valid || !validation.affCode) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, validation.error || '优惠码无效'))
+-    }
+-
+-    try {
+-      await db.createAffBinding(instance.id, validation.affCode.id)
+-    } catch (error: any) {
+-      if (error?.code === 'P2002') {
+-        return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '该实例已绑定优惠码，无法重复绑定'))
+-      }
+-      if (error?.code === 'P2003') {
+-        return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '优惠码无效'))
+-      }
+-      request.log.error(error, '用户绑定AFF优惠码失败')
+-      return reply.code(500).send({ error: '绑定优惠码失败' })
+-    }
+-
+-    const discountRate = Number(validation.discountRate ?? validation.affCode.discountRate)
+-    const discountPercent = Math.round(discountRate * 100)
+-
+-    await createLog(
+-      user.id,
+-      'instance',
+-      'instance.apply_aff',
+-      `Applied AFF code "${validation.affCode.code}" to instance "${instance.name}" for future renewals`,
+-      'success',
+-      { instanceId: instance.id }
+-    )
+-
+-    return {
+-      success: true,
+-      message: `优惠码绑定成功，后续续费将享受 ${discountPercent}% 折扣`,
+-      discountRate,
+-      discountPercent
+-    }
++    return reply.code(403).send(apiError(ErrorCode.FORBIDDEN, '该功能已下线'))
+   })
+ 
+   // ==================== 手动续费 ====================
+
+diff --git a/server/scripts/test-instance-billing-route-id-guards.ts b/server/scripts/test-instance-billing-route-id-guards.ts
+index 45e930cf8456b897244f075586151ea89d2df996..e34b1d9968bb5eed2be97a28cf9f87401d2a5645
+--- a/server/scripts/test-instance-billing-route-id-guards.ts
++++ b/server/scripts/test-instance-billing-route-id-guards.ts
+@@ -67,6 +67,19 @@
+ assert.notEqual(recordsRouteEnd, -1, 'missing instance billing records route end marker')
+ const recordsRoute = source.slice(recordsRouteStart, recordsRouteEnd)
+ 
++const applyAffRouteStart = source.indexOf("}>('/:id/apply-aff'")
++assert.notEqual(applyAffRouteStart, -1, 'missing apply-aff route')
++const applyAffRouteEnd = source.indexOf('\n  // ====================', applyAffRouteStart)
++assert.notEqual(applyAffRouteEnd, -1, 'missing apply-aff route end marker')
++const applyAffRoute = source.slice(applyAffRouteStart, applyAffRouteEnd)
++
++assert.ok(
++  applyAffRoute.includes("return reply.code(403).send(apiError(ErrorCode.FORBIDDEN, '该功能已下线'))") &&
++    !applyAffRoute.includes('validateAffCode(') &&
++    !applyAffRoute.includes('createAffBinding('),
++  'apply-aff must remain disabled to prevent post-purchase self-referral discount and commission abuse'
++)
++
+ assert.ok(
+   recordsRoute.includes('page: parsePositiveIntegerQuery(page, 1)') &&
+     recordsRoute.includes('pageSize: parseClampedPositiveIntegerQuery(pageSize, 20, 100)') &&
+diff --git a/server/src/routes/instance-billing.ts b/server/src/routes/instance-billing.ts
+index 1e6c7836e80b215b54beb2f5880889640161f2c0..cf0d7a7c9e9fa510703988ea7e7eec94d0fdbe53
+--- a/server/src/routes/instance-billing.ts
++++ b/server/src/routes/instance-billing.ts
+@@ -476,99 +476,13 @@
+       }
+     }
+   }, async (request, reply) => {
+-    const { user } = request
+     const instanceId = parsePositiveRouteId(request.params.id)
+-    const affCodeInput = request.body.affCode?.trim()
+ 
+     if (!instanceId) {
+       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
+-    }
+-
+-    if (!affCodeInput || affCodeInput.length < 3) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '请输入有效的AFF优惠码'))
+     }
+ 
+-    const instance = await prisma.instance.findUnique({
+-      where: { id: instanceId },
+-      include: {
+-        affBinding: true,
+-        host: {
+-          select: {
+-            name: true,
+-            user: {
+-              select: { role: true }
+-            }
+-          }
+-        }
+-      }
+-    })
+-
+-    if (!instance) {
+-      return reply.code(404).send(apiError(ErrorCode.INSTANCE_NOT_FOUND))
+-    }
+-
+-    // 只有实例所有者可以自行绑定优惠码
+-    if (instance.userId !== user.id) {
+-      return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
+-    }
+-
+-    if (instance.status === 'deleted') {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '实例已删除'))
+-    }
+-
+-    if (!instance.packagePlanId) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '免费实例不支持使用优惠码'))
+-    }
+-
+-    if (await checkExchangeBillingLock(instanceId, reply)) return
+-
+-    // 用户托管节点不允许使用优惠码；角色判断为准，名称规则兼容历史 PEER 节点
+-    const isHostedInstance = instance.host?.user.role === 'user'
+-      || instance.host?.name.toLowerCase().startsWith('peer')
+-    if (isHostedInstance) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '用户托管节点不支持使用优惠码'))
+-    }
+-
+-    if (instance.affBinding) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '该实例已绑定优惠码，无法重复绑定'))
+-    }
+-
+-    const validation = await db.validateAffCode(affCodeInput, instance.packagePlanId, user.id)
+-    if (!validation.valid || !validation.affCode) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, validation.error || '优惠码无效'))
+-    }
+-
+-    try {
+-      await db.createAffBinding(instance.id, validation.affCode.id)
+-    } catch (error: any) {
+-      if (error?.code === 'P2002') {
+-        return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '该实例已绑定优惠码，无法重复绑定'))
+-      }
+-      if (error?.code === 'P2003') {
+-        return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '优惠码无效'))
+-      }
+-      request.log.error(error, '用户绑定AFF优惠码失败')
+-      return reply.code(500).send({ error: '绑定优惠码失败' })
+-    }
+-
+-    const discountRate = Number(validation.discountRate ?? validation.affCode.discountRate)
+-    const discountPercent = Math.round(discountRate * 100)
+-
+-    await createLog(
+-      user.id,
+-      'instance',
+-      'instance.apply_aff',
+-      `Applied AFF code "${validation.affCode.code}" to instance "${instance.name}" for future renewals`,
+-      'success',
+-      { instanceId: instance.id }
+-    )
+-
+-    return {
+-      success: true,
+-      message: `优惠码绑定成功，后续续费将享受 ${discountPercent}% 折扣`,
+-      discountRate,
+-      discountPercent
+-    }
++    return reply.code(403).send(apiError(ErrorCode.FORBIDDEN, '该功能已下线'))
+   })
+ 
+   // ==================== 手动续费 ====================
+
+diff --git a/server/scripts/test-instance-billing-route-id-guards.ts b/server/scripts/test-instance-billing-route-id-guards.ts
+index 45e930cf8456b897244f075586151ea89d2df996..e34b1d9968bb5eed2be97a28cf9f87401d2a5645
+--- a/server/scripts/test-instance-billing-route-id-guards.ts
++++ b/server/scripts/test-instance-billing-route-id-guards.ts
+@@ -67,6 +67,19 @@
+ assert.notEqual(recordsRouteEnd, -1, 'missing instance billing records route end marker')
+ const recordsRoute = source.slice(recordsRouteStart, recordsRouteEnd)
+ 
++const applyAffRouteStart = source.indexOf("}>('/:id/apply-aff'")
++assert.notEqual(applyAffRouteStart, -1, 'missing apply-aff route')
++const applyAffRouteEnd = source.indexOf('\n  // ====================', applyAffRouteStart)
++assert.notEqual(applyAffRouteEnd, -1, 'missing apply-aff route end marker')
++const applyAffRoute = source.slice(applyAffRouteStart, applyAffRouteEnd)
++
++assert.ok(
++  applyAffRoute.includes("return reply.code(403).send(apiError(ErrorCode.FORBIDDEN, '该功能已下线'))") &&
++    !applyAffRoute.includes('validateAffCode(') &&
++    !applyAffRoute.includes('createAffBinding('),
++  'apply-aff must remain disabled to prevent post-purchase self-referral discount and commission abuse'
++)
++
+ assert.ok(
+   recordsRoute.includes('page: parsePositiveIntegerQuery(page, 1)') &&
+     recordsRoute.includes('pageSize: parseClampedPositiveIntegerQuery(pageSize, 20, 100)') &&
+diff --git a/server/src/routes/instance-billing.ts b/server/src/routes/instance-billing.ts
+index 1e6c7836e80b215b54beb2f5880889640161f2c0..cf0d7a7c9e9fa510703988ea7e7eec94d0fdbe53
+--- a/server/src/routes/instance-billing.ts
++++ b/server/src/routes/instance-billing.ts
+@@ -476,99 +476,13 @@
+       }
+     }
+   }, async (request, reply) => {
+-    const { user } = request
+     const instanceId = parsePositiveRouteId(request.params.id)
+-    const affCodeInput = request.body.affCode?.trim()
+ 
+     if (!instanceId) {
+       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
+-    }
+-
+-    if (!affCodeInput || affCodeInput.length < 3) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '请输入有效的AFF优惠码'))
+     }
+ 
+-    const instance = await prisma.instance.findUnique({
+-      where: { id: instanceId },
+-      include: {
+-        affBinding: true,
+-        host: {
+-          select: {
+-            name: true,
+-            user: {
+-              select: { role: true }
+-            }
+-          }
+-        }
+-      }
+-    })
+-
+-    if (!instance) {
+-      return reply.code(404).send(apiError(ErrorCode.INSTANCE_NOT_FOUND))
+-    }
+-
+-    // 只有实例所有者可以自行绑定优惠码
+-    if (instance.userId !== user.id) {
+-      return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
+-    }
+-
+-    if (instance.status === 'deleted') {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '实例已删除'))
+-    }
+-
+-    if (!instance.packagePlanId) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '免费实例不支持使用优惠码'))
+-    }
+-
+-    if (await checkExchangeBillingLock(instanceId, reply)) return
+-
+-    // 用户托管节点不允许使用优惠码；角色判断为准，名称规则兼容历史 PEER 节点
+-    const isHostedInstance = instance.host?.user.role === 'user'
+-      || instance.host?.name.toLowerCase().startsWith('peer')
+-    if (isHostedInstance) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '用户托管节点不支持使用优惠码'))
+-    }
+-
+-    if (instance.affBinding) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '该实例已绑定优惠码，无法重复绑定'))
+-    }
+-
+-    const validation = await db.validateAffCode(affCodeInput, instance.packagePlanId, user.id)
+-    if (!validation.valid || !validation.affCode) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, validation.error || '优惠码无效'))
+-    }
+-
+-    try {
+-      await db.createAffBinding(instance.id, validation.affCode.id)
+-    } catch (error: any) {
+-      if (error?.code === 'P2002') {
+-        return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '该实例已绑定优惠码，无法重复绑定'))
+-      }
+-      if (error?.code === 'P2003') {
+-        return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '优惠码无效'))
+-      }
+-      request.log.error(error, '用户绑定AFF优惠码失败')
+-      return reply.code(500).send({ error: '绑定优惠码失败' })
+-    }
+-
+-    const discountRate = Number(validation.discountRate ?? validation.affCode.discountRate)
+-    const discountPercent = Math.round(discountRate * 100)
+-
+-    await createLog(
+-      user.id,
+-      'instance',
+-      'instance.apply_aff',
+-      `Applied AFF code "${validation.affCode.code}" to instance "${instance.name}" for future renewals`,
+-      'success',
+-      { instanceId: instance.id }
+-    )
+-
+-    return {
+-      success: true,
+-      message: `优惠码绑定成功，后续续费将享受 ${discountPercent}% 折扣`,
+-      discountRate,
+-      discountPercent
+-    }
++    return reply.code(403).send(apiError(ErrorCode.FORBIDDEN, '该功能已下线'))
+   })
+ 
+   // ==================== 手动续费 ====================
+
+diff --git a/server/scripts/test-instance-billing-route-id-guards.ts b/server/scripts/test-instance-billing-route-id-guards.ts
+index 45e930cf8456b897244f075586151ea89d2df996..e34b1d9968bb5eed2be97a28cf9f87401d2a5645
+--- a/server/scripts/test-instance-billing-route-id-guards.ts
++++ b/server/scripts/test-instance-billing-route-id-guards.ts
+@@ -67,6 +67,19 @@
+ assert.notEqual(recordsRouteEnd, -1, 'missing instance billing records route end marker')
+ const recordsRoute = source.slice(recordsRouteStart, recordsRouteEnd)
+ 
++const applyAffRouteStart = source.indexOf("}>('/:id/apply-aff'")
++assert.notEqual(applyAffRouteStart, -1, 'missing apply-aff route')
++const applyAffRouteEnd = source.indexOf('\n  // ====================', applyAffRouteStart)
++assert.notEqual(applyAffRouteEnd, -1, 'missing apply-aff route end marker')
++const applyAffRoute = source.slice(applyAffRouteStart, applyAffRouteEnd)
++
++assert.ok(
++  applyAffRoute.includes("return reply.code(403).send(apiError(ErrorCode.FORBIDDEN, '该功能已下线'))") &&
++    !applyAffRoute.includes('validateAffCode(') &&
++    !applyAffRoute.includes('createAffBinding('),
++  'apply-aff must remain disabled to prevent post-purchase self-referral discount and commission abuse'
++)
++
+ assert.ok(
+   recordsRoute.includes('page: parsePositiveIntegerQuery(page, 1)') &&
+     recordsRoute.includes('pageSize: parseClampedPositiveIntegerQuery(pageSize, 20, 100)') &&
+diff --git a/server/src/routes/instance-billing.ts b/server/src/routes/instance-billing.ts
+index 1e6c7836e80b215b54beb2f5880889640161f2c0..cf0d7a7c9e9fa510703988ea7e7eec94d0fdbe53
+--- a/server/src/routes/instance-billing.ts
++++ b/server/src/routes/instance-billing.ts
+@@ -476,99 +476,13 @@
+       }
+     }
+   }, async (request, reply) => {
+-    const { user } = request
+     const instanceId = parsePositiveRouteId(request.params.id)
+-    const affCodeInput = request.body.affCode?.trim()
+ 
+     if (!instanceId) {
+       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
+-    }
+-
+-    if (!affCodeInput || affCodeInput.length < 3) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '请输入有效的AFF优惠码'))
+     }
+ 
+-    const instance = await prisma.instance.findUnique({
+-      where: { id: instanceId },
+-      include: {
+-        affBinding: true,
+-        host: {
+-          select: {
+-            name: true,
+-            user: {
+-              select: { role: true }
+-            }
+-          }
+-        }
+-      }
+-    })
+-
+-    if (!instance) {
+-      return reply.code(404).send(apiError(ErrorCode.INSTANCE_NOT_FOUND))
+-    }
+-
+-    // 只有实例所有者可以自行绑定优惠码
+-    if (instance.userId !== user.id) {
+-      return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
+-    }
+-
+-    if (instance.status === 'deleted') {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '实例已删除'))
+-    }
+-
+-    if (!instance.packagePlanId) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '免费实例不支持使用优惠码'))
+-    }
+-
+-    if (await checkExchangeBillingLock(instanceId, reply)) return
+-
+-    // 用户托管节点不允许使用优惠码；角色判断为准，名称规则兼容历史 PEER 节点
+-    const isHostedInstance = instance.host?.user.role === 'user'
+-      || instance.host?.name.toLowerCase().startsWith('peer')
+-    if (isHostedInstance) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '用户托管节点不支持使用优惠码'))
+-    }
+-
+-    if (instance.affBinding) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '该实例已绑定优惠码，无法重复绑定'))
+-    }
+-
+-    const validation = await db.validateAffCode(affCodeInput, instance.packagePlanId, user.id)
+-    if (!validation.valid || !validation.affCode) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, validation.error || '优惠码无效'))
+-    }
+-
+-    try {
+-      await db.createAffBinding(instance.id, validation.affCode.id)
+-    } catch (error: any) {
+-      if (error?.code === 'P2002') {
+-        return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '该实例已绑定优惠码，无法重复绑定'))
+-      }
+-      if (error?.code === 'P2003') {
+-        return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '优惠码无效'))
+-      }
+-      request.log.error(error, '用户绑定AFF优惠码失败')
+-      return reply.code(500).send({ error: '绑定优惠码失败' })
+-    }
+-
+-    const discountRate = Number(validation.discountRate ?? validation.affCode.discountRate)
+-    const discountPercent = Math.round(discountRate * 100)
+-
+-    await createLog(
+-      user.id,
+-      'instance',
+-      'instance.apply_aff',
+-      `Applied AFF code "${validation.affCode.code}" to instance "${instance.name}" for future renewals`,
+-      'success',
+-      { instanceId: instance.id }
+-    )
+-
+-    return {
+-      success: true,
+-      message: `优惠码绑定成功，后续续费将享受 ${discountPercent}% 折扣`,
+-      discountRate,
+-      discountPercent
+-    }
++    return reply.code(403).send(apiError(ErrorCode.FORBIDDEN, '该功能已下线'))
+   })
+ 
+   // ==================== 手动续费 ====================
+
+diff --git a/server/scripts/test-instance-billing-route-id-guards.ts b/server/scripts/test-instance-billing-route-id-guards.ts
+index 45e930cf8456b897244f075586151ea89d2df996..e34b1d9968bb5eed2be97a28cf9f87401d2a5645
+--- a/server/scripts/test-instance-billing-route-id-guards.ts
++++ b/server/scripts/test-instance-billing-route-id-guards.ts
+@@ -67,6 +67,19 @@
+ assert.notEqual(recordsRouteEnd, -1, 'missing instance billing records route end marker')
+ const recordsRoute = source.slice(recordsRouteStart, recordsRouteEnd)
+ 
++const applyAffRouteStart = source.indexOf("}>('/:id/apply-aff'")
++assert.notEqual(applyAffRouteStart, -1, 'missing apply-aff route')
++const applyAffRouteEnd = source.indexOf('\n  // ====================', applyAffRouteStart)
++assert.notEqual(applyAffRouteEnd, -1, 'missing apply-aff route end marker')
++const applyAffRoute = source.slice(applyAffRouteStart, applyAffRouteEnd)
++
++assert.ok(
++  applyAffRoute.includes("return reply.code(403).send(apiError(ErrorCode.FORBIDDEN, '该功能已下线'))") &&
++    !applyAffRoute.includes('validateAffCode(') &&
++    !applyAffRoute.includes('createAffBinding('),
++  'apply-aff must remain disabled to prevent post-purchase self-referral discount and commission abuse'
++)
++
+ assert.ok(
+   recordsRoute.includes('page: parsePositiveIntegerQuery(page, 1)') &&
+     recordsRoute.includes('pageSize: parseClampedPositiveIntegerQuery(pageSize, 20, 100)') &&
+diff --git a/server/src/routes/instance-billing.ts b/server/src/routes/instance-billing.ts
+index 1e6c7836e80b215b54beb2f5880889640161f2c0..cf0d7a7c9e9fa510703988ea7e7eec94d0fdbe53
+--- a/server/src/routes/instance-billing.ts
++++ b/server/src/routes/instance-billing.ts
+@@ -476,99 +476,13 @@
+       }
+     }
+   }, async (request, reply) => {
+-    const { user } = request
+     const instanceId = parsePositiveRouteId(request.params.id)
+-    const affCodeInput = request.body.affCode?.trim()
+ 
+     if (!instanceId) {
+       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
+-    }
+-
+-    if (!affCodeInput || affCodeInput.length < 3) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '请输入有效的AFF优惠码'))
+     }
+ 
+-    const instance = await prisma.instance.findUnique({
+-      where: { id: instanceId },
+-      include: {
+-        affBinding: true,
+-        host: {
+-          select: {
+-            name: true,
+-            user: {
+-              select: { role: true }
+-            }
+-          }
+-        }
+-      }
+-    })
+-
+-    if (!instance) {
+-      return reply.code(404).send(apiError(ErrorCode.INSTANCE_NOT_FOUND))
+-    }
+-
+-    // 只有实例所有者可以自行绑定优惠码
+-    if (instance.userId !== user.id) {
+-      return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
+-    }
+-
+-    if (instance.status === 'deleted') {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '实例已删除'))
+-    }
+-
+-    if (!instance.packagePlanId) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '免费实例不支持使用优惠码'))
+-    }
+-
+-    if (await checkExchangeBillingLock(instanceId, reply)) return
+-
+-    // 用户托管节点不允许使用优惠码；角色判断为准，名称规则兼容历史 PEER 节点
+-    const isHostedInstance = instance.host?.user.role === 'user'
+-      || instance.host?.name.toLowerCase().startsWith('peer')
+-    if (isHostedInstance) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '用户托管节点不支持使用优惠码'))
+-    }
+-
+-    if (instance.affBinding) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '该实例已绑定优惠码，无法重复绑定'))
+-    }
+-
+-    const validation = await db.validateAffCode(affCodeInput, instance.packagePlanId, user.id)
+-    if (!validation.valid || !validation.affCode) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, validation.error || '优惠码无效'))
+-    }
+-
+-    try {
+-      await db.createAffBinding(instance.id, validation.affCode.id)
+-    } catch (error: any) {
+-      if (error?.code === 'P2002') {
+-        return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '该实例已绑定优惠码，无法重复绑定'))
+-      }
+-      if (error?.code === 'P2003') {
+-        return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '优惠码无效'))
+-      }
+-      request.log.error(error, '用户绑定AFF优惠码失败')
+-      return reply.code(500).send({ error: '绑定优惠码失败' })
+-    }
+-
+-    const discountRate = Number(validation.discountRate ?? validation.affCode.discountRate)
+-    const discountPercent = Math.round(discountRate * 100)
+-
+-    await createLog(
+-      user.id,
+-      'instance',
+-      'instance.apply_aff',
+-      `Applied AFF code "${validation.affCode.code}" to instance "${instance.name}" for future renewals`,
+-      'success',
+-      { instanceId: instance.id }
+-    )
+-
+-    return {
+-      success: true,
+-      message: `优惠码绑定成功，后续续费将享受 ${discountPercent}% 折扣`,
+-      discountRate,
+-      discountPercent
+-    }
++    return reply.code(403).send(apiError(ErrorCode.FORBIDDEN, '该功能已下线'))
+   })
+ 
+   // ==================== 手动续费 ====================
+
+diff --git a/server/scripts/test-instance-billing-route-id-guards.ts b/server/scripts/test-instance-billing-route-id-guards.ts
+index 45e930cf8456b897244f075586151ea89d2df996..e34b1d9968bb5eed2be97a28cf9f87401d2a5645
+--- a/server/scripts/test-instance-billing-route-id-guards.ts
++++ b/server/scripts/test-instance-billing-route-id-guards.ts
+@@ -67,6 +67,19 @@
+ assert.notEqual(recordsRouteEnd, -1, 'missing instance billing records route end marker')
+ const recordsRoute = source.slice(recordsRouteStart, recordsRouteEnd)
+ 
++const applyAffRouteStart = source.indexOf("}>('/:id/apply-aff'")
++assert.notEqual(applyAffRouteStart, -1, 'missing apply-aff route')
++const applyAffRouteEnd = source.indexOf('\n  // ====================', applyAffRouteStart)
++assert.notEqual(applyAffRouteEnd, -1, 'missing apply-aff route end marker')
++const applyAffRoute = source.slice(applyAffRouteStart, applyAffRouteEnd)
++
++assert.ok(
++  applyAffRoute.includes("return reply.code(403).send(apiError(ErrorCode.FORBIDDEN, '该功能已下线'))") &&
++    !applyAffRoute.includes('validateAffCode(') &&
++    !applyAffRoute.includes('createAffBinding('),
++  'apply-aff must remain disabled to prevent post-purchase self-referral discount and commission abuse'
++)
++
+ assert.ok(
+   recordsRoute.includes('page: parsePositiveIntegerQuery(page, 1)') &&
+     recordsRoute.includes('pageSize: parseClampedPositiveIntegerQuery(pageSize, 20, 100)') &&
+diff --git a/server/src/routes/instance-billing.ts b/server/src/routes/instance-billing.ts
+index 1e6c7836e80b215b54beb2f5880889640161f2c0..cf0d7a7c9e9fa510703988ea7e7eec94d0fdbe53
+--- a/server/src/routes/instance-billing.ts
++++ b/server/src/routes/instance-billing.ts
+@@ -476,99 +476,13 @@
+       }
+     }
+   }, async (request, reply) => {
+-    const { user } = request
+     const instanceId = parsePositiveRouteId(request.params.id)
+-    const affCodeInput = request.body.affCode?.trim()
+ 
+     if (!instanceId) {
+       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
+-    }
+-
+-    if (!affCodeInput || affCodeInput.length < 3) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '请输入有效的AFF优惠码'))
+     }
+ 
+-    const instance = await prisma.instance.findUnique({
+-      where: { id: instanceId },
+-      include: {
+-        affBinding: true,
+-        host: {
+-          select: {
+-            name: true,
+-            user: {
+-              select: { role: true }
+-            }
+-          }
+-        }
+-      }
+-    })
+-
+-    if (!instance) {
+-      return reply.code(404).send(apiError(ErrorCode.INSTANCE_NOT_FOUND))
+-    }
+-
+-    // 只有实例所有者可以自行绑定优惠码
+-    if (instance.userId !== user.id) {
+-      return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
+-    }
+-
+-    if (instance.status === 'deleted') {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '实例已删除'))
+-    }
+-
+-    if (!instance.packagePlanId) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '免费实例不支持使用优惠码'))
+-    }
+-
+-    if (await checkExchangeBillingLock(instanceId, reply)) return
+-
+-    // 用户托管节点不允许使用优惠码；角色判断为准，名称规则兼容历史 PEER 节点
+-    const isHostedInstance = instance.host?.user.role === 'user'
+-      || instance.host?.name.toLowerCase().startsWith('peer')
+-    if (isHostedInstance) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '用户托管节点不支持使用优惠码'))
+-    }
+-
+-    if (instance.affBinding) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '该实例已绑定优惠码，无法重复绑定'))
+-    }
+-
+-    const validation = await db.validateAffCode(affCodeInput, instance.packagePlanId, user.id)
+-    if (!validation.valid || !validation.affCode) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, validation.error || '优惠码无效'))
+-    }
+-
+-    try {
+-      await db.createAffBinding(instance.id, validation.affCode.id)
+-    } catch (error: any) {
+-      if (error?.code === 'P2002') {
+-        return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '该实例已绑定优惠码，无法重复绑定'))
+-      }
+-      if (error?.code === 'P2003') {
+-        return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '优惠码无效'))
+-      }
+-      request.log.error(error, '用户绑定AFF优惠码失败')
+-      return reply.code(500).send({ error: '绑定优惠码失败' })
+-    }
+-
+-    const discountRate = Number(validation.discountRate ?? validation.affCode.discountRate)
+-    const discountPercent = Math.round(discountRate * 100)
+-
+-    await createLog(
+-      user.id,
+-      'instance',
+-      'instance.apply_aff',
+-      `Applied AFF code "${validation.affCode.code}" to instance "${instance.name}" for future renewals`,
+-      'success',
+-      { instanceId: instance.id }
+-    )
+-
+-    return {
+-      success: true,
+-      message: `优惠码绑定成功，后续续费将享受 ${discountPercent}% 折扣`,
+-      discountRate,
+-      discountPercent
+-    }
++    return reply.code(403).send(apiError(ErrorCode.FORBIDDEN, '该功能已下线'))
+   })
+ 
+   // ==================== 手动续费 ====================
+
+ succeeded in 41650ms:
+
+> server@1.3.7 type-check C:\Users\Administrator\Desktop\payinces\server
+> tsc --noEmit
+
+
+diff --git a/server/scripts/test-instance-billing-route-id-guards.ts b/server/scripts/test-instance-billing-route-id-guards.ts
+index 45e930cf8456b897244f075586151ea89d2df996..e34b1d9968bb5eed2be97a28cf9f87401d2a5645
+--- a/server/scripts/test-instance-billing-route-id-guards.ts
++++ b/server/scripts/test-instance-billing-route-id-guards.ts
+@@ -67,6 +67,19 @@
+ assert.notEqual(recordsRouteEnd, -1, 'missing instance billing records route end marker')
+ const recordsRoute = source.slice(recordsRouteStart, recordsRouteEnd)
+ 
++const applyAffRouteStart = source.indexOf("}>('/:id/apply-aff'")
++assert.notEqual(applyAffRouteStart, -1, 'missing apply-aff route')
++const applyAffRouteEnd = source.indexOf('\n  // ====================', applyAffRouteStart)
++assert.notEqual(applyAffRouteEnd, -1, 'missing apply-aff route end marker')
++const applyAffRoute = source.slice(applyAffRouteStart, applyAffRouteEnd)
++
++assert.ok(
++  applyAffRoute.includes("return reply.code(403).send(apiError(ErrorCode.FORBIDDEN, '该功能已下线'))") &&
++    !applyAffRoute.includes('validateAffCode(') &&
++    !applyAffRoute.includes('createAffBinding('),
++  'apply-aff must remain disabled to prevent post-purchase self-referral discount and commission abuse'
++)
++
+ assert.ok(
+   recordsRoute.includes('page: parsePositiveIntegerQuery(page, 1)') &&
+     recordsRoute.includes('pageSize: parseClampedPositiveIntegerQuery(pageSize, 20, 100)') &&
+diff --git a/server/src/routes/instance-billing.ts b/server/src/routes/instance-billing.ts
+index 1e6c7836e80b215b54beb2f5880889640161f2c0..cf0d7a7c9e9fa510703988ea7e7eec94d0fdbe53
+--- a/server/src/routes/instance-billing.ts
++++ b/server/src/routes/instance-billing.ts
+@@ -476,99 +476,13 @@
+       }
+     }
+   }, async (request, reply) => {
+-    const { user } = request
+     const instanceId = parsePositiveRouteId(request.params.id)
+-    const affCodeInput = request.body.affCode?.trim()
+ 
+     if (!instanceId) {
+       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
+-    }
+-
+-    if (!affCodeInput || affCodeInput.length < 3) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '请输入有效的AFF优惠码'))
+     }
+ 
+-    const instance = await prisma.instance.findUnique({
+-      where: { id: instanceId },
+-      include: {
+-        affBinding: true,
+-        host: {
+-          select: {
+-            name: true,
+-            user: {
+-              select: { role: true }
+-            }
+-          }
+-        }
+-      }
+-    })
+-
+-    if (!instance) {
+-      return reply.code(404).send(apiError(ErrorCode.INSTANCE_NOT_FOUND))
+-    }
+-
+-    // 只有实例所有者可以自行绑定优惠码
+-    if (instance.userId !== user.id) {
+-      return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
+-    }
+-
+-    if (instance.status === 'deleted') {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '实例已删除'))
+-    }
+-
+-    if (!instance.packagePlanId) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '免费实例不支持使用优惠码'))
+-    }
+-
+-    if (await checkExchangeBillingLock(instanceId, reply)) return
+-
+-    // 用户托管节点不允许使用优惠码；角色判断为准，名称规则兼容历史 PEER 节点
+-    const isHostedInstance = instance.host?.user.role === 'user'
+-      || instance.host?.name.toLowerCase().startsWith('peer')
+-    if (isHostedInstance) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '用户托管节点不支持使用优惠码'))
+-    }
+-
+-    if (instance.affBinding) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '该实例已绑定优惠码，无法重复绑定'))
+-    }
+-
+-    const validation = await db.validateAffCode(affCodeInput, instance.packagePlanId, user.id)
+-    if (!validation.valid || !validation.affCode) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, validation.error || '优惠码无效'))
+-    }
+-
+-    try {
+-      await db.createAffBinding(instance.id, validation.affCode.id)
+-    } catch (error: any) {
+-      if (error?.code === 'P2002') {
+-        return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '该实例已绑定优惠码，无法重复绑定'))
+-      }
+-      if (error?.code === 'P2003') {
+-        return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '优惠码无效'))
+-      }
+-      request.log.error(error, '用户绑定AFF优惠码失败')
+-      return reply.code(500).send({ error: '绑定优惠码失败' })
+-    }
+-
+-    const discountRate = Number(validation.discountRate ?? validation.affCode.discountRate)
+-    const discountPercent = Math.round(discountRate * 100)
+-
+-    await createLog(
+-      user.id,
+-      'instance',
+-      'instance.apply_aff',
+-      `Applied AFF code "${validation.affCode.code}" to instance "${instance.name}" for future renewals`,
+-      'success',
+-      { instanceId: instance.id }
+-    )
+-
+-    return {
+-      success: true,
+-      message: `优惠码绑定成功，后续续费将享受 ${discountPercent}% 折扣`,
+-      discountRate,
+-      discountPercent
+-    }
++    return reply.code(403).send(apiError(ErrorCode.FORBIDDEN, '该功能已下线'))
+   })
+ 
+   // ==================== 手动续费 ====================
+
+codex
+选择“停用端点”：因为绑定自己的码会在续费时同时获得折扣和返利，形成自返利套利。现已将 `apply-aff` 对合法实例 ID 统一返回 403“该功能已下线”，守卫确保不再调用 `validateAffCode` / `createAffBinding`。修改仅涉及 [instance-billing.ts](C:/Users/Administrator/Desktop/payinces/server/src/routes/instance-billing.ts:478) 和 [守卫](C:/Users/Administrator/Desktop/payinces/server/scripts/test-instance-billing-route-id-guards.ts:70)。server type-check、`test:instance-billing-route-id-guards`、`test:aff-review-ui-guards` 均通过；未触碰 scheduler，未 commit。
+diff --git a/server/scripts/test-instance-billing-route-id-guards.ts b/server/scripts/test-instance-billing-route-id-guards.ts
+index 45e930cf8456b897244f075586151ea89d2df996..e34b1d9968bb5eed2be97a28cf9f87401d2a5645
+--- a/server/scripts/test-instance-billing-route-id-guards.ts
++++ b/server/scripts/test-instance-billing-route-id-guards.ts
+@@ -67,6 +67,19 @@
+ assert.notEqual(recordsRouteEnd, -1, 'missing instance billing records route end marker')
+ const recordsRoute = source.slice(recordsRouteStart, recordsRouteEnd)
+ 
++const applyAffRouteStart = source.indexOf("}>('/:id/apply-aff'")
++assert.notEqual(applyAffRouteStart, -1, 'missing apply-aff route')
++const applyAffRouteEnd = source.indexOf('\n  // ====================', applyAffRouteStart)
++assert.notEqual(applyAffRouteEnd, -1, 'missing apply-aff route end marker')
++const applyAffRoute = source.slice(applyAffRouteStart, applyAffRouteEnd)
++
++assert.ok(
++  applyAffRoute.includes("return reply.code(403).send(apiError(ErrorCode.FORBIDDEN, '该功能已下线'))") &&
++    !applyAffRoute.includes('validateAffCode(') &&
++    !applyAffRoute.includes('createAffBinding('),
++  'apply-aff must remain disabled to prevent post-purchase self-referral discount and commission abuse'
++)
++
+ assert.ok(
+   recordsRoute.includes('page: parsePositiveIntegerQuery(page, 1)') &&
+     recordsRoute.includes('pageSize: parseClampedPositiveIntegerQuery(pageSize, 20, 100)') &&
+diff --git a/server/src/routes/instance-billing.ts b/server/src/routes/instance-billing.ts
+index 1e6c7836e80b215b54beb2f5880889640161f2c0..cf0d7a7c9e9fa510703988ea7e7eec94d0fdbe53
+--- a/server/src/routes/instance-billing.ts
++++ b/server/src/routes/instance-billing.ts
+@@ -476,99 +476,13 @@
+       }
+     }
+   }, async (request, reply) => {
+-    const { user } = request
+     const instanceId = parsePositiveRouteId(request.params.id)
+-    const affCodeInput = request.body.affCode?.trim()
+ 
+     if (!instanceId) {
+       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
+-    }
+-
+-    if (!affCodeInput || affCodeInput.length < 3) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '请输入有效的AFF优惠码'))
+     }
+ 
+-    const instance = await prisma.instance.findUnique({
+-      where: { id: instanceId },
+-      include: {
+-        affBinding: true,
+-        host: {
+-          select: {
+-            name: true,
+-            user: {
+-              select: { role: true }
+-            }
+-          }
+-        }
+-      }
+-    })
+-
+-    if (!instance) {
+-      return reply.code(404).send(apiError(ErrorCode.INSTANCE_NOT_FOUND))
+-    }
+-
+-    // 只有实例所有者可以自行绑定优惠码
+-    if (instance.userId !== user.id) {
+-      return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
+-    }
+-
+-    if (instance.status === 'deleted') {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '实例已删除'))
+-    }
+-
+-    if (!instance.packagePlanId) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '免费实例不支持使用优惠码'))
+-    }
+-
+-    if (await checkExchangeBillingLock(instanceId, reply)) return
+-
+-    // 用户托管节点不允许使用优惠码；角色判断为准，名称规则兼容历史 PEER 节点
+-    const isHostedInstance = instance.host?.user.role === 'user'
+-      || instance.host?.name.toLowerCase().startsWith('peer')
+-    if (isHostedInstance) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '用户托管节点不支持使用优惠码'))
+-    }
+-
+-    if (instance.affBinding) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '该实例已绑定优惠码，无法重复绑定'))
+-    }
+-
+-    const validation = await db.validateAffCode(affCodeInput, instance.packagePlanId, user.id)
+-    if (!validation.valid || !validation.affCode) {
+-      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, validation.error || '优惠码无效'))
+-    }
+-
+-    try {
+-      await db.createAffBinding(instance.id, validation.affCode.id)
+-    } catch (error: any) {
+-      if (error?.code === 'P2002') {
+-        return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '该实例已绑定优惠码，无法重复绑定'))
+-      }
+-      if (error?.code === 'P2003') {
+-        return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '优惠码无效'))
+-      }
+-      request.log.error(error, '用户绑定AFF优惠码失败')
+-      return reply.code(500).send({ error: '绑定优惠码失败' })
+-    }
+-
+-    const discountRate = Number(validation.discountRate ?? validation.affCode.discountRate)
+-    const discountPercent = Math.round(discountRate * 100)
+-
+-    await createLog(
+-      user.id,
+-      'instance',
+-      'instance.apply_aff',
+-      `Applied AFF code "${validation.affCode.code}" to instance "${instance.name}" for future renewals`,
+-      'success',
+-      { instanceId: instance.id }
+-    )
+-
+-    return {
+-      success: true,
+-      message: `优惠码绑定成功，后续续费将享受 ${discountPercent}% 折扣`,
+-      discountRate,
+-      discountPercent
+-    }
++    return reply.code(403).send(apiError(ErrorCode.FORBIDDEN, '该功能已下线'))
+   })
+ 
+   // ==================== 手动续费 ====================
+
+tokens used
+55,120

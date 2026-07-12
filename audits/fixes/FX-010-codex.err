@@ -1,0 +1,2383 @@
+OpenAI Codex v0.144.0-alpha.4
+--------
+workdir: C:\Users\Administrator\Desktop\payinces
+model: gpt-5.6-sol
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: high
+reasoning summaries: none
+session id: 019f52bf-ba5a-7720-a050-6b681fc0b85e
+--------
+user
+你是 PayIncus 仓库实现工程师。先读仓库根 AGENTS.md(支付/余额属高危路径,先读代码+守卫再改;不 commit/push/发版、不大重构)。严格按规格修,只改 approveBalanceAdjustmentRequest 与其守卫,**绝不改动 getUsersTotalConsumeMap(D-176)**。改完跑守卫报告。不要 commit。
+---
+# FX-010 规格：充值退款方向应为"余额收回(扣减)"(A3 / BF-2-08 / owner 裁决)
+
+## owner 裁决(BEHAVIOR.md A3)
+充值退款 = 余额收回(扣减);实例退款 = 加到余额(现状已正确)。
+现状 bug:订单中心退款审批 approveBalanceAdjustmentRequest 对所有 requestType='refund' 一律 changeBalanceInTransaction(+amount) 加余额;
+对"充值来源"的退款(sourceType='recharge')也加余额 → 若同时线下原路退真钱,用户双份补偿。
+
+## 关键事实(已核对)
+- BalanceAdjustmentRequest 有 sourceType 字段('recharge' | 'instance_billing' | null),订单中心登记退款时按订单类型写入(orders.ts)。
+- changeBalanceInTransaction 已有防负:扣款(amount<0)且结果<0 时抛 '余额不足'(balance.ts:229-231 + updateMany gte 原子条件)。
+- 同文件 getUsersTotalConsumeMap 是 D-176 已修口径(净消费),**本次绝不改动它**。
+
+## 修法（只改 server/src/db/balance.ts 的 approveBalanceAdjustmentRequest + 更新对应守卫）
+1. 在 approveBalanceAdjustmentRequest 里判定 isRechargeRefund = (request.requestType === 'refund' && request.sourceType === 'recharge')。
+2. 应用余额变动时:
+   - isRechargeRefund → **扣减**:type = 'admin_adjust'(收回性质),amount = -Math.abs(Number(request.amount)),remark 里注明"充值退款收回余额"(在原 remark 基础上补一句即可)。
+   - 其它(instance_billing 退款 / 无 sourceType 的退款 / 非退款调账)→ **保持现状不变**(refund 加余额 / admin_adjust 原逻辑)。
+3. 余额不足:依赖 changeBalanceInTransaction 现有 '余额不足' 抛错——recharge 退款且用户已花光时,审批事务回滚、向管理员返回清晰错误(保持现有错误传播即可;若上层 catch 后消息不清晰,可在 approve 处捕获 '余额不足' 重述为"用户余额不足以收回充值,需人工处理",但不改变抛出=拒绝的行为)。**不允许余额转负**(维持非负不变量)。
+4. 不改 orders.ts、不改 changeBalanceInTransaction 的防负逻辑、不改 getUsersTotalConsumeMap。
+
+## 加/更新守卫
+更新 server/scripts/test-balance-adjustment-approval-guards.ts:追加断言——approveBalanceAdjustmentRequest 源码中对 sourceType==='recharge' 的 refund 走负数扣减(含 isRechargeRefund 判定 + 负 amount + admin_adjust),而非无条件加余额。保持原有断言不变。
+
+## 验收
+- pnpm --filter server type-check 通过;
+- pnpm --filter server test:balance-adjustment-approval-guards 通过;
+- pnpm --filter server test:balance-change-amount-guard、test:recharge-accounting-guards 通过(确认未误伤会计口径)。
+
+## 交付
+一段话:isRechargeRefund 判定、扣减实现、余额不足处理、守卫结果。不要 commit。
+
+codex
+我会严格限定在 `approveBalanceAdjustmentRequest` 和对应守卫：先读取根规约、目标函数、余额防负实现及现有守卫，再做最小修改；不会触碰 `getUsersTotalConsumeMap`，也不会 commit/push/发版。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Content -Raw AGENTS.md; rg -n -C 80 "approveBalanceAdjustmentRequest|changeBalanceInTransaction|getUsersTotalConsumeMap" server/src/db/balance.ts; Get-Content -Raw server/scripts/test-balance-adjustment-approval-guards.ts; rg -n "balance-adjustment-approval-guards|balance-change-amount-guard|recharge-accounting-guards" server/package.json' in C:\Users\Administrator\Desktop\payinces
+2026-07-11T19:55:33.452248Z ERROR codex_core::tools::router: error=Exit code: 1
+Wall time: 0.8 seconds
+Output:
+# PayIncus / Incudal â€” é¡¹ç›®ç»Ÿä¸€è§„çŸ©ï¼ˆAGENTS.mdï¼‰
+
+> æœ¬æ–‡ä»¶æ˜¯æœ¬ä»“åº“**æ‰€æœ‰ AI agentï¼ˆClaude Codeã€codex ç­‰ï¼‰çš„ç»Ÿä¸€å·¥ä½œè§„èŒƒ**ã€‚
+> `CLAUDE.md` é€šè¿‡ `@AGENTS.md` å¼•ç”¨æœ¬æ–‡ä»¶ â€”â€” Claude Code ä¸Ž codex è¯»åˆ°çš„æ˜¯**åŒä¸€å¥—è§„çŸ©**ï¼Œæ”¹è¿™ä¸€ä¸ªæ–‡ä»¶å³å¯ã€‚
+> æƒå¨è¿ç»´/å‘ç‰ˆäº‹å®žä»¥ä»“åº“æ ¹çš„ `OPERATIONS_HANDOFF.md`ï¼ˆæ“ä½œæ‰‹å†Œï¼‰ä¸Ž `HANDOFF.md`ï¼ˆç‰ˆæœ¬è¯æ®å°è´¦ï¼‰ä¸ºå‡†ã€‚
+
+---
+
+## 0. æ²Ÿé€šè¯­è¨€
+- ä¸Ž owner é»˜è®¤ç”¨**ä¸­æ–‡**æ²Ÿé€šã€‚
+
+## 1. è¿™æ˜¯ä»€ä¹ˆé¡¹ç›®
+**PayIncus**ï¼ˆå†…éƒ¨ä»£å· `incudal`ï¼‰â€”â€”å•†ç”¨ Incusï¼ˆLXC/KVMï¼‰NAT VPS å”®å–ä¸Žäº¤ä»˜å¹³å°ï¼Œ**çº¿ä¸Šè¿è¥ä¸­**ã€‚å½“å‰ç”Ÿäº§ç‰ˆæœ¬ **v1.3.7**ã€‚pnpm monorepoï¼š
+
+| ç›®å½• | æŠ€æœ¯æ ˆ / ä½œç”¨ |
+|------|----------------|
+| `client/` | Vue 3 + Vite SPAã€‚åŒç«¯æž„å»ºï¼ˆ`VITE_APP_ENTRY`ï¼‰â†’ `dist/user`ï¼ˆpay.payincus.comï¼‰+ `dist/admin`ï¼ˆadmin.payincus.comï¼‰ã€‚ä¸¤ç«¯ç‹¬ç«‹æºã€**ä¸å…±äº« cookie åŸŸ**ã€‚ |
+| `server/` | Fastify 5 + Prisma 7 + PostgreSQLï¼Œ~300 TS æ–‡ä»¶ã€~70 è·¯ç”±ã€~15 è°ƒåº¦/workerã€‚æ—  Redisï¼ˆç”¨ PG advisory lockï¼‰ã€‚ä¸‰å¥—é‰´æƒé¢ï¼šWeb çš„ JWT+refresh cookieã€Public API çš„ `pat_`/`poa_` tokenã€host agent çš„ HMACã€‚ |
+| `agent/` | Go å®¿ä¸» agentï¼Œåªè¯»ç›‘æŽ§ï¼ˆå¿ƒè·³/èµ„æº/å®žä¾‹æ€/æµé‡ï¼‰ï¼ŒHMAC ç­¾åï¼Œè‡ªå‡çº§ã€‚ |
+| å…¶å®ƒ | `docs-site/`ï¼ˆVitePressï¼‰ã€`deploy/`ï¼ˆsystemd+Nginxï¼‰ã€`scripts/`ï¼ˆå®‰è£…/æ ¡éªŒ/OTAï¼‰ã€`plugin-templates/`ã€`theme-templates/`ã€‚ |
+
+éƒ¨ç½²ï¼šä¸‰å±‚æ‹†åˆ†ï¼ˆuser / admin / ç§æœ‰åŽç«¯ `127.0.0.1:3001`ï¼‰ï¼Œè£…æœºæ ¹ `/opt/incudal`ï¼ŒåŽŸå­ OTAï¼ˆ`releases/<ver-ts>` + `current` è½¯é“¾ï¼‰+ è‡ªåŠ¨å›žæ»šã€‚
+
+---
+
+## 2. ðŸ”´ ç¡¬è§„çŸ©ï¼ˆä¸å¯åå•†ï¼Œè¿åå³äº‹æ•…ï¼‰
+
+1. **ä¸ç¢°ç”Ÿäº§**ï¼šæœªç» owner æ˜Žç¡®è¦æ±‚ï¼Œ**ç»ä¸** OTAã€å‘å¸ƒã€pushã€æ‰“ tagã€æ”¹ç”Ÿäº§çŽ¯å¢ƒã€‚
+2. **ä¸åšç ´åæ€§ git**ï¼šæœªç» owner æ˜Žç¡®è¦æ±‚ï¼Œ**ç»ä¸** `git reset`ã€`git checkout --`ã€å¼ºåˆ¶åˆ é™¤ã€æ¸…ç†æœªè·Ÿè¸ªæ–‡ä»¶ã€`git commit`/`git push`ã€‚
+3. **é«˜å±è·¯å¾„å…ˆè¯»åŽå†™**ï¼šæ”¹åŠ¨ä»¥ä¸‹ä»»ä¸€é¢†åŸŸï¼Œ**å¿…é¡»å…ˆè¯»ç›¸å…³ä»£ç  + å¯¹åº”å®ˆå«æµ‹è¯•**å†åŠ¨æ‰‹ï¼š
+   > é‰´æƒ Â· æ”¯ä»˜ Â· æƒé™ Â· é£ŽæŽ§ Â· èµ„æºäº¤ä»˜ Â· å…‘æ¢æµç¨‹ Â· å®žä¾‹åˆ›å»º Â· OTA
+4. **æ”¹åŠ¨æœ€å°åŒ–**ï¼šä¿® bug / å‘ç‰ˆæœŸé—´**ä¸åšå¤§èŒƒå›´é‡æž„**ï¼Œåªæ”¹å¿…è¦çš„ã€‚
+5. **ç»ä¸æ³„å¯†**ï¼šä»»ä½• commitã€handoffã€æ€»ç»“ã€æˆªå›¾ä¸­éƒ½**ä¸å¾—**å‡ºçŽ°å‡­è¯ / token / cookie / å¯†é’¥ã€‚
+6. **æœ¬åœ°è¿‡ â‰  ç”Ÿäº§éªŒè¯**ï¼šæœ¬åœ°é€šè¿‡ã€GitHub Actionsã€Release èµ„äº§ã€OTAã€çº¿ä¸Šå®žè¯æ˜¯**åˆ†å¼€çš„è¯æ®**ï¼Œä¸å¯æ··ä¸ºä¸€è°ˆã€‚
+7. **æ¯æ¬¡æ”¹åŠ¨å¿…é¡»è¿‡å¯¹åº”å®ˆå«**ï¼ˆè§ Â§4ï¼‰ï¼Œå¦åˆ™è§†ä¸º**æœªå®Œæˆ**ã€‚
+8. `RUN_DB_CHECKS=0 bash scripts/apply-online-update.sh <ver>` ä¼š**è·³è¿‡ DB/æ”¯ä»˜å°±ç»ªæ ¡éªŒ**ï¼Œä»…åœ¨ owner æ˜Žç¡®æ‰¹å‡†æ—¶ä½¿ç”¨ã€‚
+
+---
+
+## 3. æœ¬åœ°æ€Žä¹ˆè·‘
+
+- **çŽ¯å¢ƒ**ï¼šNode â‰¥ 20ã€pnpm 9.14.2ã€æœ¬åœ° PostgreSQL 16ã€‚
+- **è£…ä¾èµ–**ï¼š`pnpm install`
+- **ä¸€æŠŠèµ·å…¨éƒ¨ï¼ˆserver + user + adminï¼‰**ï¼š`pnpm dev`
+- **åˆ†å¼€èµ·**ï¼š
+  - åŽç«¯ï¼š`NODE_ENV=development JWT_SECRET=dev-secret-12345678 HOST=127.0.0.1 PORT=3001 pnpm --filter server exec tsx watch src/app.ts`
+  - ç”¨æˆ·å‰ç«¯ï¼š`pnpm dev:user`
+  - ç®¡ç†å‰ç«¯ï¼š`pnpm dev:admin`
+- **ç«¯å£**ï¼šåŽç«¯ API **3001** Â· ç”¨æˆ·å‰ç«¯ **3000** Â· ç®¡ç†å‰ç«¯ **3002**ï¼ˆå‰ç«¯ dev ç» proxy æ‰“åˆ° 3001ï¼‰ã€‚
+
+---
+
+## 4. ðŸ›¡ï¸ å®ˆå«æµ‹è¯•çºªå¾‹ï¼ˆæœ¬ä»“åº“çš„å‘½é—¨ï¼‰
+
+`server/package.json` é‡Œæœ‰ **200+ ä¸ªç‹¬ç«‹ `test-*-guards.ts`**ã€‚å®ƒä»¬æŠŠå…³é”®ä¸šåŠ¡/å‰ç«¯ç»“æž„â€œé’‰æ­»â€ï¼Œ`pnpm test` ä¼šè·‘å…¨å¥—ï¼ˆclient+server type-check + å…¨éƒ¨å®ˆå«ï¼‰ã€‚**ä»»ä½•æ”¹åŠ¨å¿…é¡»è®©ç›¸å…³å®ˆå«é€šè¿‡ã€‚**
+
+- **å…¨é‡**ï¼ˆæ…¢ï¼Œå‘ç‰ˆå‰è·‘ï¼‰ï¼š`pnpm test`
+- **å•ä¸ª**ï¼š`pnpm --filter server test:<guard-name>`
+- **å‰ç«¯æœ€å¸¸ç”¨ä¸‰ä¸ª**ï¼š
+  - `test:frontend-route-guards` â€”â€” è·¯ç”± / **è¡¨æ ¼å¸ƒå±€** / `@click` è·¯å¾„æ–­è¨€
+  - `test:frontend-dist-boundary-guards` â€”â€” åŒç«¯ dist è¾¹ç•Œ
+  - `test:frontend-i18n-keys` â€”â€” i18n key å®Œæ•´æ€§
+- **Go agent**ï¼š`pnpm test:agent`
+
+### âš ï¸ è¡¨æ ¼å¸ƒå±€å®ˆå«ï¼ˆæœ€å®¹æ˜“è¸©é›·ï¼‰
+ä¸€æ‰¹è¡¨è¢«å®ˆå«**é”å®š**ä¸ºâ€œ**ç§»åŠ¨å¡ + PC å®šå®½è¡¨ï¼ˆ`table-fixed` / `overflow-hidden`ï¼‰ï¼Œç»ä¸æ¨ªå‘æ»šåŠ¨**â€ï¼Œå¹¶**åå‘ç¦æ­¢** `overflow-x-auto` / `min-w-[...]` / åŽ»æŽ‰ `table-fixed`ã€‚
+- æƒ³ä¿®â€œå®½è¡¨æŒ¤åŽ‹â€æ—¶ï¼š**å…ˆåˆ¤æ–­è¯¥è¡¨æ˜¯å¦åœ¨å®ˆå«æ¸…å•é‡Œ**ã€‚é”å®šè¡¨**åªèƒ½åœ¨ `table-fixed` å†…å¹³è¡¡åˆ—å®½**ï¼ˆåˆ—å®½ç™¾åˆ†æ¯”åˆè®¡ = 100%ï¼‰+ å…è®¸å•å…ƒæ ¼æ¢è¡Œ + é ç§»åŠ¨å¡åº”å¯¹çª„å±ï¼›**ä¸èƒ½**æ”¹æˆæ¨ªå‘æ»šåŠ¨ã€‚
+- å—é”å®šçš„è¡¨ï¼ˆç”¨æˆ·ç«¯ï¼‰ï¼š`MyPackagesView`ã€`MyHostsView`ã€`TransfersView`ã€`OrdersView`ã€`InvitesView`ã€`FlashSalesView`ã€`HostingWalletView`ã€`InstancesView`ã€`LogsView`ã€`EntertainmentView`ï¼›ï¼ˆç®¡ç†ç«¯ï¼‰`admin/BillingView`ã€`admin/ImagesView`ã€`admin/HelpManageView`ã€`admin/MailView`ã€`admin/PluginCenterView`ï¼›ï¼ˆç»„ä»¶ï¼‰`HostPublicIpv4Tab`ã€`InstanceLogsTab`ã€`ConfigEditModal`ã€‚
+- æ”¹ä»»ä¸€å‰ç«¯æ–‡ä»¶åŽ**å¿…è·‘** `test:frontend-route-guards`ã€‚
+
+---
+
+## 5. æž„å»º / æ ¡éªŒå‘½ä»¤
+
+| ç›®çš„ | å‘½ä»¤ |
+|------|------|
+| æž„å»ºï¼ˆå« dist è¾¹ç•Œå®ˆå«ï¼‰| `pnpm build` |
+| åªæž„å»ºå‰ç«¯ / åŽç«¯ | `pnpm build:client` / `pnpm build:server` |
+| Lintï¼ˆæ£€æŸ¥ / è‡ªåŠ¨ä¿®ï¼‰| `pnpm lint` / `pnpm lint:fix` |
+| ç±»åž‹æ£€æŸ¥ | `pnpm --filter client type-check` Â· `pnpm --filter server type-check` |
+| å…¨å¥—å®ˆå« | `pnpm test` |
+| æ–‡æ¡£ç«™å¼€å‘ / æž„å»º | `pnpm docs:dev` / `pnpm docs:build` |
+
+---
+
+## 6. UI æ”¹åŠ¨çº¦æŸï¼ˆå•è‰²é‡åšè¿›è¡Œä¸­ï¼‰
+
+- **æ–¹å‘**ï¼šè‹¹æžœå¼**çº¯é»‘ç™½å•è‰²**ï¼ˆæµ…è‰²=ç™½åº•é»‘å­—ï¼Œæ·±è‰²=é»‘åº•ç™½å­—ï¼‰ï¼ŒåŽ»äºŒæ¬¡å…ƒ/å‰ç¥¥ç‰©/ç«‹ç»˜ã€‚çŠ¶æ€è‰²**åªä¿ç•™ç»¿/ç¥ç€/çº¢**ä¸‰ç§ï¼ˆè¿è¡Œ/å¾…å¤„ç†/å¤±è´¥ï¼‰ã€‚
+- **çº¢çº¿**ï¼šåªæ”¹**æ ·å¼ / å¸ƒå±€ / æ–‡æ¡ˆå±‚çº§**ï¼Œ**ä¸ç¢°**åŽç«¯æŽ¥å£ã€æƒé™ã€æ”¯ä»˜/è®¢å•/å®žä¾‹åˆ›å»º/OTA ç­‰ä¸šåŠ¡é€»è¾‘ä¸Žè·¯ç”±è¡Œä¸ºâ€”â€”**åŠŸèƒ½ 100% ä¸å˜**ã€‚
+- **é…è‰²èµ° token å±‚**ï¼ˆ`client/tailwind.config.js`ï¼‰ï¼šä¸€å †å½©è‰² ramp å·²æ˜ å°„åˆ°ä¸­æ€§ç°ï¼›`rose â†’ çœŸçº¢`ï¼ˆå±é™©/äºæŸè¯­ä¹‰ï¼‰**ä¿ç•™ä¸å¯ç°åŒ–**ï¼›æ¸¸æˆåŒ–æ¨¡å—ï¼ˆæˆå°±/ç­¾åˆ°/æŠ½å¥–/ç¨€æœ‰åº¦ï¼‰å½©è‰²**åˆ»æ„ä¿ç•™**ã€‚
+- `kawaii-cloud.css` **æ¸è¿›æ”¹é€ ã€ä¸é‡å†™**ï¼›å•é¡µåŽ»è‰²ç”¨é¡µé¢ `<style scoped>`ã€‚
+- åŠ¨æ•ˆå¯ç”¨ **GSAP**ï¼ˆå·²è£… gsap-skillsï¼Œè§ `.claude/skills/`ï¼‰ï¼›å°Šé‡ `prefers-reduced-motion`ã€‚
+
+---
+
+## 7. åä½œæ¨¡åž‹ï¼ˆClaude Code â‡„ codexï¼‰
+
+- **Claude Code = æŠ€æœ¯è´Ÿè´£äºº / é›†æˆæ–¹**ï¼šå®šæ ¹å› ã€åˆ‡ä»»åŠ¡ã€å†™è§„æ ¼ã€å®ˆä¸å˜é‡ã€å®¡ diffã€è·‘å®ˆå«ã€çœŸæœºéªŒè¯ã€ç®¡ gitï¼ˆ**ä»…åœ¨ owner åŒæ„æ—¶** commit / pushï¼‰ã€‚
+- **codex = å®žçŽ°å·¥äºº**ï¼šæŒ‰ Claude ç»™çš„è§„æ ¼å®žçŽ°æ”¹åŠ¨ï¼Œå°¤å…¶**ä½Ž/ä¸­å±ã€è‡ªåŒ…å«ã€å¯å¹¶è¡Œ**çš„å—ã€‚
+- **é£Žé™©åˆ†æ¡£**ï¼šé«˜å±è·¯å¾„ç”± Claude å®šæ ¹å›  + æ”¶ç´§è§„æ ¼ï¼›ä½Ž/ä¸­å± codex å¯ç«¯åˆ°ç«¯ä¿®ã€‚**ä»»ä½•ä¸€æ–¹æ”¹å®Œéƒ½è¦è·‘ç›¸å…³å®ˆå«ï¼ŒClaude ç»Ÿä¸€å®¡æŸ¥åŽæ‰è¿›å…¥ä¸‹ä¸€æ­¥ã€‚**
+- **é¿å…å†²çª**ï¼šåŒä¸€æ‰¹æ–‡ä»¶ä¸€æ¬¡åªè®©ä¸€ä¸ª agent æ”¹ã€‚
+
+---
+
+## 8. ä¸€ä¸ªæ”¹åŠ¨çš„ã€Œå®Œæˆã€å®šä¹‰
+
+1. ç›¸å…³ **type-check** é€šè¿‡ï¼›
+2. ç›¸å…³ **å®ˆå«æµ‹è¯•** é€šè¿‡ï¼›
+3. è‹¥åŠ¨å‰ç«¯ â†’ **åŒç«¯ build** é€šè¿‡ï¼›
+4. **çœŸæœºè·‘è¿‡**å—å½±å“æµç¨‹ï¼ˆä¸æ˜¯åªçœ‹æµ‹è¯•ï¼‰ï¼›
+5. **æŠ¥å‘Š**ï¼šæ”¹äº†å“ªäº›æ–‡ä»¶ / ä¸ºä»€ä¹ˆ / é£Žé™© / æ€Žä¹ˆéªŒè¯çš„ã€‚
+
+ä»¥ä¸Šä»»ä¸€æœªæ»¡è¶³ = **æœªå®Œæˆ**ã€‚
+
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import { dirname, resolve } from 'node:path'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+const root = resolve(__dirname, '..')
+
+const schema = readFileSync(resolve(root, 'prisma/schema.prisma'), 'utf8')
+const migration = readFileSync(resolve(root, 'prisma/migrations/20260624193000_add_balance_adjustment_requests/migration.sql'), 'utf8')
+const balanceDb = readFileSync(resolve(root, 'src/db/balance.ts'), 'utf8')
+const balanceRoute = readFileSync(resolve(root, 'src/routes/balance.ts'), 'utf8')
+const adminApi = readFileSync(resolve(root, '../client/src/api/admin.ts'), 'utf8')
+const adminOrdersView = readFileSync(resolve(root, '../client/src/views/admin/OrdersView.vue'), 'utf8')
+
+assert.ok(schema.includes('enum BalanceAdjustmentRequestStatus'), 'schema must define adjustment request status enum')
+assert.ok(schema.includes('model BalanceAdjustmentRequest'), 'schema must define adjustment request model')
+assert.ok(schema.includes('@relation("BalanceAdjustmentTarget"'), 'target user relation missing')
+assert.ok(schema.includes('balanceLogId      Int?                           @unique'), 'approval request must bind at most one balance log')
+
+assert.ok(migration.includes('CREATE TYPE "BalanceAdjustmentRequestStatus"'), 'migration must create status enum')
+assert.ok(migration.includes('CREATE TABLE "balance_adjustment_requests"'), 'migration must create approval table')
+assert.ok(migration.includes('CREATE UNIQUE INDEX "balance_adjustment_requests_balance_log_id_key"'), 'migration must enforce one balance log per request')
+
+assert.ok(balanceDb.includes('async function changeBalanceInTransaction('), 'balance mutation must be reusable inside approval transaction')
+assert.ok(balanceDb.includes('export async function createBalanceAdjustmentRequest('), 'missing create approval request db function')
+assert.ok(balanceDb.includes('export async function getBalanceAdjustmentRequests('), 'missing approval request list db function')
+assert.ok(balanceDb.includes('export async function approveBalanceAdjustmentRequest('), 'missing approval execution db function')
+assert.ok(balanceDb.includes('export async function rejectBalanceAdjustmentRequest('), 'missing reject db function')
+assert.ok(
+  balanceDb.includes("where: { id: requestId, status: 'pending' }") &&
+    balanceDb.includes("status: 'approved'") &&
+    balanceDb.includes('changeBalanceInTransaction(tx, {') &&
+    balanceDb.includes('balanceLogId: balanceResult.balanceLog.id'),
+  'approval must atomically claim pending request, mutate balance, and bind balance log'
+)
+assert.ok(
+  balanceDb.includes("status: 'rejected'") &&
+    balanceDb.includes("where: { id: requestId, status: 'pending' }"),
+  'rejection must only update pending requests'
+)
+
+assert.ok(balanceRoute.includes("'/admin/adjustment-requests'"), 'missing approval list route')
+assert.ok(balanceRoute.includes("'/admin/:userId/adjustment-requests'"), 'missing approval create route')
+assert.ok(balanceRoute.includes("'/admin/adjustment-requests/:requestId/approve'"), 'missing approval execute route')
+assert.ok(balanceRoute.includes("'/admin/adjustment-requests/:requestId/reject'"), 'missing approval reject route')
+assert.ok(balanceRoute.includes('normalizeAdminBalanceAdjustmentRequestInput(request.body)'), 'approval create route must validate request body')
+assert.ok(balanceRoute.includes('normalizeAdminBalanceAdjustmentReviewInput(request.body, true)'), 'reject route must require review remark')
+assert.ok(balanceRoute.includes('sendBalanceAdjustedEmail'), 'approval execution should notify user when email exists')
+
+assert.ok(adminApi.includes('createBalanceAdjustmentRequest'), 'admin api must expose approval create')
+assert.ok(adminApi.includes('getBalanceAdjustmentRequests'), 'admin api must expose approval list')
+assert.ok(adminApi.includes('approveBalanceAdjustmentRequest'), 'admin api must expose approval execute')
+assert.ok(adminApi.includes('rejectBalanceAdjustmentRequest'), 'admin api must expose approval reject')
+
+assert.ok(adminOrdersView.includes('è°ƒè´¦å®¡æ‰¹'), 'admin order center must render approval task list')
+assert.ok(adminOrdersView.includes('requestPageSize = 7'), 'approval task list must be capped to seven rows per page')
+assert.ok(adminOrdersView.includes('æäº¤è°ƒè´¦å®¡æ‰¹'), 'order detail must submit approval request')
+assert.ok(adminOrdersView.includes('é€šè¿‡å¹¶æ‰§è¡Œ'), 'approval list must expose execute action')
+assert.ok(!adminOrdersView.includes('api.admin.adjustUserBalance'), 'order center must not directly mutate balance')
+
+console.log('balance adjustment approval guards passed')
+
+rg : The term 'rg' is not recognized as the name of a cmdlet, function, script file, or operable program. Check the 
+spelling of the name, or if a path was included, verify that the path is correct and try again.
+At line:2 char:29
++ Get-Content -Raw AGENTS.md; rg -n -C 80 "approveBalanceAdjustmentRequ ...
++                             ~~
+    + CategoryInfo          : ObjectNotFound: (rg:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+rg : The term 'rg' is not recognized as the name of a cmdlet, function, script file, or operable program. Check the 
+spelling of the name, or if a path was included, verify that the path is correct and try again.
+At line:2 char:228
++ ... server/scripts/test-balance-adjustment-approval-guards.ts; rg -n "bal ...
++                                                                ~~
+    + CategoryInfo          : ObjectNotFound: (rg:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+
+ exited 1 in 770ms:
+# PayIncus / Incudal â€” é¡¹ç›®ç»Ÿä¸€è§„çŸ©ï¼ˆAGENTS.mdï¼‰
+
+> æœ¬æ–‡ä»¶æ˜¯æœ¬ä»“åº“**æ‰€æœ‰ AI agentï¼ˆClaude Codeã€codex ç­‰ï¼‰çš„ç»Ÿä¸€å·¥ä½œè§„èŒƒ**ã€‚
+> `CLAUDE.md` é€šè¿‡ `@AGENTS.md` å¼•ç”¨æœ¬æ–‡ä»¶ â€”â€” Claude Code ä¸Ž codex è¯»åˆ°çš„æ˜¯**åŒä¸€å¥—è§„çŸ©**ï¼Œæ”¹è¿™ä¸€ä¸ªæ–‡ä»¶å³å¯ã€‚
+> æƒå¨è¿ç»´/å‘ç‰ˆäº‹å®žä»¥ä»“åº“æ ¹çš„ `OPERATIONS_HANDOFF.md`ï¼ˆæ“ä½œæ‰‹å†Œï¼‰ä¸Ž `HANDOFF.md`ï¼ˆç‰ˆæœ¬è¯æ®å°è´¦ï¼‰ä¸ºå‡†ã€‚
+
+---
+
+## 0. æ²Ÿé€šè¯­è¨€
+- ä¸Ž owner é»˜è®¤ç”¨**ä¸­æ–‡**æ²Ÿé€šã€‚
+
+## 1. è¿™æ˜¯ä»€ä¹ˆé¡¹ç›®
+**PayIncus**ï¼ˆå†…éƒ¨ä»£å· `incudal`ï¼‰â€”â€”å•†ç”¨ Incusï¼ˆLXC/KVMï¼‰NAT VPS å”®å–ä¸Žäº¤ä»˜å¹³å°ï¼Œ**çº¿ä¸Šè¿è¥ä¸­**ã€‚å½“å‰ç”Ÿäº§ç‰ˆæœ¬ **v1.3.7**ã€‚pnpm monorepoï¼š
+
+| ç›®å½• | æŠ€æœ¯æ ˆ / ä½œç”¨ |
+|------|----------------|
+| `client/` | Vue 3 + Vite SPAã€‚åŒç«¯æž„å»ºï¼ˆ`VITE_APP_ENTRY`ï¼‰â†’ `dist/user`ï¼ˆpay.payincus.comï¼‰+ `dist/admin`ï¼ˆadmin.payincus.comï¼‰ã€‚ä¸¤ç«¯ç‹¬ç«‹æºã€**ä¸å…±äº« cookie åŸŸ**ã€‚ |
+| `server/` | Fastify 5 + Prisma 7 + PostgreSQLï¼Œ~300 TS æ–‡ä»¶ã€~70 è·¯ç”±ã€~15 è°ƒåº¦/workerã€‚æ—  Redisï¼ˆç”¨ PG advisory lockï¼‰ã€‚ä¸‰å¥—é‰´æƒé¢ï¼šWeb çš„ JWT+refresh cookieã€Public API çš„ `pat_`/`poa_` tokenã€host agent çš„ HMACã€‚ |
+| `agent/` | Go å®¿ä¸» agentï¼Œåªè¯»ç›‘æŽ§ï¼ˆå¿ƒè·³/èµ„æº/å®žä¾‹æ€/æµé‡ï¼‰ï¼ŒHMAC ç­¾åï¼Œè‡ªå‡çº§ã€‚ |
+| å…¶å®ƒ | `docs-site/`ï¼ˆVitePressï¼‰ã€`deploy/`ï¼ˆsystemd+Nginxï¼‰ã€`scripts/`ï¼ˆå®‰è£…/æ ¡éªŒ/OTAï¼‰ã€`plugin-templates/`ã€`theme-templates/`ã€‚ |
+
+éƒ¨ç½²ï¼šä¸‰å±‚æ‹†åˆ†ï¼ˆuser / admin / ç§æœ‰åŽç«¯ `127.0.0.1:3001`ï¼‰ï¼Œè£…æœºæ ¹ `/opt/incudal`ï¼ŒåŽŸå­ OTAï¼ˆ`releases/<ver-ts>` + `current` è½¯é“¾ï¼‰+ è‡ªåŠ¨å›žæ»šã€‚
+
+---
+
+## 2. ðŸ”´ ç¡¬è§„çŸ©ï¼ˆä¸å¯åå•†ï¼Œè¿åå³äº‹æ•…ï¼‰
+
+1. **ä¸ç¢°ç”Ÿäº§**ï¼šæœªç» owner æ˜Žç¡®è¦æ±‚ï¼Œ**ç»ä¸** OTAã€å‘å¸ƒã€pushã€æ‰“ tagã€æ”¹ç”Ÿäº§çŽ¯å¢ƒã€‚
+2. **ä¸åšç ´åæ€§ git**ï¼šæœªç» owner æ˜Žç¡®è¦æ±‚ï¼Œ**ç»ä¸** `git reset`ã€`git checkout --`ã€å¼ºåˆ¶åˆ é™¤ã€æ¸…ç†æœªè·Ÿè¸ªæ–‡ä»¶ã€`git commit`/`git push`ã€‚
+3. **é«˜å±è·¯å¾„å…ˆè¯»åŽå†™**ï¼šæ”¹åŠ¨ä»¥ä¸‹ä»»ä¸€é¢†åŸŸï¼Œ**å¿…é¡»å…ˆè¯»ç›¸å…³ä»£ç  + å¯¹åº”å®ˆå«æµ‹è¯•**å†åŠ¨æ‰‹ï¼š
+   > é‰´æƒ Â· æ”¯ä»˜ Â· æƒé™ Â· é£ŽæŽ§ Â· èµ„æºäº¤ä»˜ Â· å…‘æ¢æµç¨‹ Â· å®žä¾‹åˆ›å»º Â· OTA
+4. **æ”¹åŠ¨æœ€å°åŒ–**ï¼šä¿® bug / å‘ç‰ˆæœŸé—´**ä¸åšå¤§èŒƒå›´é‡æž„**ï¼Œåªæ”¹å¿…è¦çš„ã€‚
+5. **ç»ä¸æ³„å¯†**ï¼šä»»ä½• commitã€handoffã€æ€»ç»“ã€æˆªå›¾ä¸­éƒ½**ä¸å¾—**å‡ºçŽ°å‡­è¯ / token / cookie / å¯†é’¥ã€‚
+6. **æœ¬åœ°è¿‡ â‰  ç”Ÿäº§éªŒè¯**ï¼šæœ¬åœ°é€šè¿‡ã€GitHub Actionsã€Release èµ„äº§ã€OTAã€çº¿ä¸Šå®žè¯æ˜¯**åˆ†å¼€çš„è¯æ®**ï¼Œä¸å¯æ··ä¸ºä¸€è°ˆã€‚
+7. **æ¯æ¬¡æ”¹åŠ¨å¿…é¡»è¿‡å¯¹åº”å®ˆå«**ï¼ˆè§ Â§4ï¼‰ï¼Œå¦åˆ™è§†ä¸º**æœªå®Œæˆ**ã€‚
+8. `RUN_DB_CHECKS=0 bash scripts/apply-online-update.sh <ver>` ä¼š**è·³è¿‡ DB/æ”¯ä»˜å°±ç»ªæ ¡éªŒ**ï¼Œä»…åœ¨ owner æ˜Žç¡®æ‰¹å‡†æ—¶ä½¿ç”¨ã€‚
+
+---
+
+## 3. æœ¬åœ°æ€Žä¹ˆè·‘
+
+- **çŽ¯å¢ƒ**ï¼šNode â‰¥ 20ã€pnpm 9.14.2ã€æœ¬åœ° PostgreSQL 16ã€‚
+- **è£…ä¾èµ–**ï¼š`pnpm install`
+- **ä¸€æŠŠèµ·å…¨éƒ¨ï¼ˆserver + user + adminï¼‰**ï¼š`pnpm dev`
+- **åˆ†å¼€èµ·**ï¼š
+  - åŽç«¯ï¼š`NODE_ENV=development JWT_SECRET=dev-secret-12345678 HOST=127.0.0.1 PORT=3001 pnpm --filter server exec tsx watch src/app.ts`
+  - ç”¨æˆ·å‰ç«¯ï¼š`pnpm dev:user`
+  - ç®¡ç†å‰ç«¯ï¼š`pnpm dev:admin`
+- **ç«¯å£**ï¼šåŽç«¯ API **3001** Â· ç”¨æˆ·å‰ç«¯ **3000** Â· ç®¡ç†å‰ç«¯ **3002**ï¼ˆå‰ç«¯ dev ç» proxy æ‰“åˆ° 3001ï¼‰ã€‚
+
+---
+
+## 4. ðŸ›¡ï¸ å®ˆå«æµ‹è¯•çºªå¾‹ï¼ˆæœ¬ä»“åº“çš„å‘½é—¨ï¼‰
+
+`server/package.json` é‡Œæœ‰ **200+ ä¸ªç‹¬ç«‹ `test-*-guards.ts`**ã€‚å®ƒä»¬æŠŠå…³é”®ä¸šåŠ¡/å‰ç«¯ç»“æž„â€œé’‰æ­»â€ï¼Œ`pnpm test` ä¼šè·‘å…¨å¥—ï¼ˆclient+server type-check + å…¨éƒ¨å®ˆå«ï¼‰ã€‚**ä»»ä½•æ”¹åŠ¨å¿…é¡»è®©ç›¸å…³å®ˆå«é€šè¿‡ã€‚**
+
+- **å…¨é‡**ï¼ˆæ…¢ï¼Œå‘ç‰ˆå‰è·‘ï¼‰ï¼š`pnpm test`
+- **å•ä¸ª**ï¼š`pnpm --filter server test:<guard-name>`
+- **å‰ç«¯æœ€å¸¸ç”¨ä¸‰ä¸ª**ï¼š
+  - `test:frontend-route-guards` â€”â€” è·¯ç”± / **è¡¨æ ¼å¸ƒå±€** / `@click` è·¯å¾„æ–­è¨€
+  - `test:frontend-dist-boundary-guards` â€”â€” åŒç«¯ dist è¾¹ç•Œ
+  - `test:frontend-i18n-keys` â€”â€” i18n key å®Œæ•´æ€§
+- **Go agent**ï¼š`pnpm test:agent`
+
+### âš ï¸ è¡¨æ ¼å¸ƒå±€å®ˆå«ï¼ˆæœ€å®¹æ˜“è¸©é›·ï¼‰
+ä¸€æ‰¹è¡¨è¢«å®ˆå«**é”å®š**ä¸ºâ€œ**ç§»åŠ¨å¡ + PC å®šå®½è¡¨ï¼ˆ`table-fixed` / `overflow-hidden`ï¼‰ï¼Œç»ä¸æ¨ªå‘æ»šåŠ¨**â€ï¼Œå¹¶**åå‘ç¦æ­¢** `overflow-x-auto` / `min-w-[...]` / åŽ»æŽ‰ `table-fixed`ã€‚
+- æƒ³ä¿®â€œå®½è¡¨æŒ¤åŽ‹â€æ—¶ï¼š**å…ˆåˆ¤æ–­è¯¥è¡¨æ˜¯å¦åœ¨å®ˆå«æ¸…å•é‡Œ**ã€‚é”å®šè¡¨**åªèƒ½åœ¨ `table-fixed` å†…å¹³è¡¡åˆ—å®½**ï¼ˆåˆ—å®½ç™¾åˆ†æ¯”åˆè®¡ = 100%ï¼‰+ å…è®¸å•å…ƒæ ¼æ¢è¡Œ + é ç§»åŠ¨å¡åº”å¯¹çª„å±ï¼›**ä¸èƒ½**æ”¹æˆæ¨ªå‘æ»šåŠ¨ã€‚
+- å—é”å®šçš„è¡¨ï¼ˆç”¨æˆ·ç«¯ï¼‰ï¼š`MyPackagesView`ã€`MyHostsView`ã€`TransfersView`ã€`OrdersView`ã€`InvitesView`ã€`FlashSalesView`ã€`HostingWalletView`ã€`InstancesView`ã€`LogsView`ã€`EntertainmentView`ï¼›ï¼ˆç®¡ç†ç«¯ï¼‰`admin/BillingView`ã€`admin/ImagesView`ã€`admin/HelpManageView`ã€`admin/MailView`ã€`admin/PluginCenterView`ï¼›ï¼ˆç»„ä»¶ï¼‰`HostPublicIpv4Tab`ã€`InstanceLogsTab`ã€`ConfigEditModal`ã€‚
+- æ”¹ä»»ä¸€å‰ç«¯æ–‡ä»¶åŽ**å¿…è·‘** `test:frontend-route-guards`ã€‚
+
+---
+
+## 5. æž„å»º / æ ¡éªŒå‘½ä»¤
+
+| ç›®çš„ | å‘½ä»¤ |
+|------|------|
+| æž„å»ºï¼ˆå« dist è¾¹ç•Œå®ˆå«ï¼‰| `pnpm build` |
+| åªæž„å»ºå‰ç«¯ / åŽç«¯ | `pnpm build:client` / `pnpm build:server` |
+| Lintï¼ˆæ£€æŸ¥ / è‡ªåŠ¨ä¿®ï¼‰| `pnpm lint` / `pnpm lint:fix` |
+| ç±»åž‹æ£€æŸ¥ | `pnpm --filter client type-check` Â· `pnpm --filter server type-check` |
+| å…¨å¥—å®ˆå« | `pnpm test` |
+| æ–‡æ¡£ç«™å¼€å‘ / æž„å»º | `pnpm docs:dev` / `pnpm docs:build` |
+
+---
+
+## 6. UI æ”¹åŠ¨çº¦æŸï¼ˆå•è‰²é‡åšè¿›è¡Œä¸­ï¼‰
+
+- **æ–¹å‘**ï¼šè‹¹æžœå¼**çº¯é»‘ç™½å•è‰²**ï¼ˆæµ…è‰²=ç™½åº•é»‘å­—ï¼Œæ·±è‰²=é»‘åº•ç™½å­—ï¼‰ï¼ŒåŽ»äºŒæ¬¡å…ƒ/å‰ç¥¥ç‰©/ç«‹ç»˜ã€‚çŠ¶æ€è‰²**åªä¿ç•™ç»¿/ç¥ç€/çº¢**ä¸‰ç§ï¼ˆè¿è¡Œ/å¾…å¤„ç†/å¤±è´¥ï¼‰ã€‚
+- **çº¢çº¿**ï¼šåªæ”¹**æ ·å¼ / å¸ƒå±€ / æ–‡æ¡ˆå±‚çº§**ï¼Œ**ä¸ç¢°**åŽç«¯æŽ¥å£ã€æƒé™ã€æ”¯ä»˜/è®¢å•/å®žä¾‹åˆ›å»º/OTA ç­‰ä¸šåŠ¡é€»è¾‘ä¸Žè·¯ç”±è¡Œä¸ºâ€”â€”**åŠŸèƒ½ 100% ä¸å˜**ã€‚
+- **é…è‰²èµ° token å±‚**ï¼ˆ`client/tailwind.config.js`ï¼‰ï¼šä¸€å †å½©è‰² ramp å·²æ˜ å°„åˆ°ä¸­æ€§ç°ï¼›`rose â†’ çœŸçº¢`ï¼ˆå±é™©/äºæŸè¯­ä¹‰ï¼‰**ä¿ç•™ä¸å¯ç°åŒ–**ï¼›æ¸¸æˆåŒ–æ¨¡å—ï¼ˆæˆå°±/ç­¾åˆ°/æŠ½å¥–/ç¨€æœ‰åº¦ï¼‰å½©è‰²**åˆ»æ„ä¿ç•™**ã€‚
+- `kawaii-cloud.css` **æ¸è¿›æ”¹é€ ã€ä¸é‡å†™**ï¼›å•é¡µåŽ»è‰²ç”¨é¡µé¢ `<style scoped>`ã€‚
+- åŠ¨æ•ˆå¯ç”¨ **GSAP**ï¼ˆå·²è£… gsap-skillsï¼Œè§ `.claude/skills/`ï¼‰ï¼›å°Šé‡ `prefers-reduced-motion`ã€‚
+
+---
+
+## 7. åä½œæ¨¡åž‹ï¼ˆClaude Code â‡„ codexï¼‰
+
+- **Claude Code = æŠ€æœ¯è´Ÿè´£äºº / é›†æˆæ–¹**ï¼šå®šæ ¹å› ã€åˆ‡ä»»åŠ¡ã€å†™è§„æ ¼ã€å®ˆä¸å˜é‡ã€å®¡ diffã€è·‘å®ˆå«ã€çœŸæœºéªŒè¯ã€ç®¡ gitï¼ˆ**ä»…åœ¨ owner åŒæ„æ—¶** commit / pushï¼‰ã€‚
+- **codex = å®žçŽ°å·¥äºº**ï¼šæŒ‰ Claude ç»™çš„è§„æ ¼å®žçŽ°æ”¹åŠ¨ï¼Œå°¤å…¶**ä½Ž/ä¸­å±ã€è‡ªåŒ…å«ã€å¯å¹¶è¡Œ**çš„å—ã€‚
+- **é£Žé™©åˆ†æ¡£**ï¼šé«˜å±è·¯å¾„ç”± Claude å®šæ ¹å›  + æ”¶ç´§è§„æ ¼ï¼›ä½Ž/ä¸­å± codex å¯ç«¯åˆ°ç«¯ä¿®ã€‚**ä»»ä½•ä¸€æ–¹æ”¹å®Œéƒ½è¦è·‘ç›¸å…³å®ˆå«ï¼ŒClaude ç»Ÿä¸€å®¡æŸ¥åŽæ‰è¿›å…¥ä¸‹ä¸€æ­¥ã€‚**
+- **é¿å…å†²çª**ï¼šåŒä¸€æ‰¹æ–‡ä»¶ä¸€æ¬¡åªè®©ä¸€ä¸ª agent æ”¹ã€‚
+
+---
+
+## 8. ä¸€ä¸ªæ”¹åŠ¨çš„ã€Œå®Œæˆã€å®šä¹‰
+
+1. ç›¸å…³ **type-check** é€šè¿‡ï¼›
+2. ç›¸å…³ **å®ˆå«æµ‹è¯•** é€šè¿‡ï¼›
+3. è‹¥åŠ¨å‰ç«¯ â†’ **åŒç«¯ build** é€šè¿‡ï¼›
+4. **çœŸæœºè·‘è¿‡**å—å½±å“æµç¨‹ï¼ˆä¸æ˜¯åªçœ‹æµ‹è¯•ï¼‰ï¼›
+5. **æŠ¥å‘Š**ï¼šæ”¹äº†å“ªäº›æ–‡ä»¶ / ä¸ºä»€ä¹ˆ / é£Žé™© / æ€Žä¹ˆéªŒè¯çš„ã€‚
+
+ä»¥ä¸Šä»»ä¸€æœªæ»¡è¶³ = **æœªå®Œæˆ**ã€‚
+
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import { dirname, resolve } from 'node:path'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+const root = resolve(__dirname, '..')
+
+const schema = readFileSync(resolve(root, 'prisma/schema.prisma'), 'utf8')
+const migration = readFileSync(resolve(root, 'prisma/migrations/20260624193000_add_balance_adjustment_requests/migration.sql'), 'utf8')
+const balanceDb = readFileSync(resolve(root, 'src/db/balance.ts'), 'utf8')
+const balanceRoute = readFileSync(resolve(root, 'src/routes/balance.ts'), 'utf8')
+const adminApi = readFileSync(resolve(root, '../client/src/api/admin.ts'), 'utf8')
+const adminOrdersView = readFileSync(resolve(root, '../client/src/views/admin/OrdersView.vue'), 'utf8')
+
+assert.ok(schema.includes('enum BalanceAdjustmentRequestStatus'), 'schema must define adjustment request status enum')
+assert.ok(schema.includes('model BalanceAdjustmentRequest'), 'schema must define adjustment request model')
+assert.ok(schema.includes('@relation("BalanceAdjustmentTarget"'), 'target user relation missing')
+assert.ok(schema.includes('balanceLogId      Int?                           @unique'), 'approval request must bind at most one balance log')
+
+assert.ok(migration.includes('CREATE TYPE "BalanceAdjustmentRequestStatus"'), 'migration must create status enum')
+assert.ok(migration.includes('CREATE TABLE "balance_adjustment_requests"'), 'migration must create approval table')
+assert.ok(migration.includes('CREATE UNIQUE INDEX "balance_adjustment_requests_balance_log_id_key"'), 'migration must enforce one balance log per request')
+
+assert.ok(balanceDb.includes('async function changeBalanceInTransaction('), 'balance mutation must be reusable inside approval transaction')
+assert.ok(balanceDb.includes('export async function createBalanceAdjustmentRequest('), 'missing create approval request db function')
+assert.ok(balanceDb.includes('export async function getBalanceAdjustmentRequests('), 'missing approval request list db function')
+assert.ok(balanceDb.includes('export async function approveBalanceAdjustmentRequest('), 'missing approval execution db function')
+assert.ok(balanceDb.includes('export async function rejectBalanceAdjustmentRequest('), 'missing reject db function')
+assert.ok(
+  balanceDb.includes("where: { id: requestId, status: 'pending' }") &&
+    balanceDb.includes("status: 'approved'") &&
+    balanceDb.includes('changeBalanceInTransaction(tx, {') &&
+    balanceDb.includes('balanceLogId: balanceResult.balanceLog.id'),
+  'approval must atomically claim pending request, mutate balance, and bind balance log'
+)
+assert.ok(
+  balanceDb.includes("status: 'rejected'") &&
+    balanceDb.includes("where: { id: requestId, status: 'pending' }"),
+  'rejection must only update pending requests'
+)
+
+assert.ok(balanceRoute.includes("'/admin/adjustment-requests'"), 'missing approval list route')
+assert.ok(balanceRoute.includes("'/admin/:userId/adjustment-requests'"), 'missing approval create route')
+assert.ok(balanceRoute.includes("'/admin/adjustment-requests/:requestId/approve'"), 'missing approval execute route')
+assert.ok(balanceRoute.includes("'/admin/adjustment-requests/:requestId/reject'"), 'missing approval reject route')
+assert.ok(balanceRoute.includes('normalizeAdminBalanceAdjustmentRequestInput(request.body)'), 'approval create route must validate request body')
+assert.ok(balanceRoute.includes('normalizeAdminBalanceAdjustmentReviewInput(request.body, true)'), 'reject route must require review remark')
+assert.ok(balanceRoute.includes('sendBalanceAdjustedEmail'), 'approval execution should notify user when email exists')
+
+assert.ok(adminApi.includes('createBalanceAdjustmentRequest'), 'admin api must expose approval create')
+assert.ok(adminApi.includes('getBalanceAdjustmentRequests'), 'admin api must expose approval list')
+assert.ok(adminApi.includes('approveBalanceAdjustmentRequest'), 'admin api must expose approval execute')
+assert.ok(adminApi.includes('rejectBalanceAdjustmentRequest'), 'admin api must expose approval reject')
+
+assert.ok(adminOrdersView.includes('è°ƒè´¦å®¡æ‰¹'), 'admin order center must render approval task list')
+assert.ok(adminOrdersView.includes('requestPageSize = 7'), 'approval task list must be capped to seven rows per page')
+assert.ok(adminOrdersView.includes('æäº¤è°ƒè´¦å®¡æ‰¹'), 'order detail must submit approval request')
+assert.ok(adminOrdersView.includes('é€šè¿‡å¹¶æ‰§è¡Œ'), 'approval list must expose execute action')
+assert.ok(!adminOrdersView.includes('api.admin.adjustUserBalance'), 'order center must not directly mutate balance')
+
+console.log('balance adjustment approval guards passed')
+
+rg : The term 'rg' is not recognized as the name of a cmdlet, function, script file, or operable program. Check the 
+spelling of the name, or if a path was included, verify that the path is correct and try again.
+At line:2 char:29
++ Get-Content -Raw AGENTS.md; rg -n -C 80 "approveBalanceAdjustmentRequ ...
++                             ~~
+    + CategoryInfo          : ObjectNotFound: (rg:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+rg : The term 'rg' is not recognized as the name of a cmdlet, function, script file, or operable program. Check the 
+spelling of the name, or if a path was included, verify that the path is correct and try again.
+At line:2 char:228
++ ... server/scripts/test-balance-adjustment-approval-guards.ts; rg -n "bal ...
++                                                                ~~
+    + CategoryInfo          : ObjectNotFound: (rg:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+
+codex
+`rg` 在当前环境不可用，我已改用 PowerShell 原生检索继续只读核对。根规约和现有审批守卫已读取；下一步精确展开目标函数及防负分支，确认事务与错误传播后再落补丁。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$OutputEncoding = [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new(); $p='"'server/src/db/balance.ts'; "'$lines=Get-Content -Encoding UTF8 $p; $matches=Select-String -Path $p -Pattern '"'async function changeBalanceInTransaction|export async function approveBalanceAdjustmentRequest|export async function getUsersTotalConsumeMap'; foreach("'$m in $matches){ $start=[Math]::Max(0,$m.LineNumber-25); $end=[Math]::Min($lines.Length-1,$m.LineNumber+90); "### $($m.LineNumber): $($m.Line.Trim())"; $lines[$start..$end] }; Select-String -Path server/package.json -Pattern '"'balance-adjustment-approval-guards|balance-change-amount-guard|recharge-accounting-guards' -Context 0,0" in C:\Users\Administrator\Desktop\payinces
+ succeeded in 689ms:
+### 205: async function changeBalanceInTransaction(
+  user: { id: number; username: string; email: string | null }
+  requestedBy: { id: number; username: string }
+  reviewedBy?: { id: number; username: string } | null
+  balanceLog?: BalanceLog | null
+}
+
+export interface BalanceAdjustmentRequestInput {
+  userId: number
+  requestedByUserId: number
+  amount: number
+  requestType: BalanceAdjustmentRequestType
+  reason: string
+  sourceType?: string
+  sourceId?: number
+  orderNo?: string
+}
+
+export interface BalanceAdjustmentRequestListOptions {
+  page?: number
+  pageSize?: number
+  status?: BalanceAdjustmentRequestStatus
+  userId?: number
+}
+
+async function changeBalanceInTransaction(
+  tx: Prisma.TransactionClient,
+  input: BalanceChangeInput
+): Promise<{ balanceLog: BalanceLog; newBalance: number }> {
+  const { userId, type, amount, orderId, instanceId, remark } = input
+  const normalizedAmount = normalizeBalanceAmount(amount)
+
+  const locked = await tryAdvisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, userId)
+  if (!locked) {
+    throw new Error('余额正在处理，请稍后重试')
+  }
+
+  const user = await tx.user.findUnique({
+    where: { id: userId },
+    select: { balance: true }
+  })
+
+  if (!user) {
+    throw new Error('用户不存在')
+  }
+
+  const balanceBefore = Number(user.balance)
+  const balanceAfter = Number((balanceBefore + normalizedAmount).toFixed(2))
+
+  if (normalizedAmount < 0 && balanceAfter < 0) {
+    throw new Error('余额不足')
+  }
+
+  if (Math.abs(balanceAfter) > MAX_BALANCE_AMOUNT) {
+    throw new Error('余额超出系统允许范围')
+  }
+
+  const updateResult = await tx.user.updateMany({
+    where: {
+      id: userId,
+      ...(normalizedAmount < 0 ? { balance: { gte: Math.abs(normalizedAmount) } } : {})
+    },
+    data: { balance: { increment: normalizedAmount } }
+  })
+
+  if (updateResult.count === 0) {
+    throw new Error('余额不足或并发冲突')
+  }
+
+  const updatedUser = await tx.user.findUnique({
+    where: { id: userId },
+    select: { balance: true }
+  })
+
+  if (!updatedUser) {
+    throw new Error('用户不存在')
+  }
+
+  const persistedBalanceAfter = Number(updatedUser.balance)
+
+  const balanceLog = await tx.balanceLog.create({
+    data: {
+      userId,
+      type,
+      amount: normalizedAmount,
+      balanceBefore,
+      balanceAfter: persistedBalanceAfter,
+      orderId,
+      instanceId,
+      remark
+    }
+  })
+
+  return { balanceLog, newBalance: persistedBalanceAfter }
+}
+
+/**
+ * 变更用户余额（事务安全）
+ * 所有余额变动都应该通过这个函数进行，确保日志记录和数据一致性
+ */
+export async function changeBalance(
+  input: BalanceChangeInput
+): Promise<BalanceChangeResult> {
+  try {
+    const result = await prisma.$transaction((tx) => changeBalanceInTransaction(tx, input))
+
+    return {
+      success: true,
+      balanceLog: result.balanceLog,
+      newBalance: result.newBalance
+    }
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : '余额变动失败'
+    }
+  }
+### 357: export async function approveBalanceAdjustmentRequest(
+  page: number
+  pageSize: number
+}> {
+  const { page, pageSize } = clampPagination(options.page, options.pageSize)
+  const skip = (page - 1) * pageSize
+  const where: Prisma.BalanceAdjustmentRequestWhereInput = {
+    ...(options.status ? { status: options.status } : {}),
+    ...(options.userId ? { userId: options.userId } : {})
+  }
+
+  const [requests, total] = await Promise.all([
+    prisma.balanceAdjustmentRequest.findMany({
+      where,
+      include: includeBalanceAdjustmentRequestRelations(),
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take: pageSize
+    }),
+    prisma.balanceAdjustmentRequest.count({ where })
+  ])
+
+  return { requests: requests as BalanceAdjustmentRequestWithRelations[], total, page, pageSize }
+}
+
+export async function approveBalanceAdjustmentRequest(
+  requestId: number,
+  reviewerUserId: number,
+  reviewRemark?: string
+): Promise<{ request: BalanceAdjustmentRequestWithRelations; newBalance: number }> {
+  return prisma.$transaction(async (tx) => {
+    const request = await tx.balanceAdjustmentRequest.findUnique({
+      where: { id: requestId },
+      include: includeBalanceAdjustmentRequestRelations()
+    })
+
+    if (!request) {
+      throw new Error('调账申请不存在')
+    }
+    if (request.status !== 'pending') {
+      throw new Error('调账申请已处理')
+    }
+
+    const claimed = await tx.balanceAdjustmentRequest.updateMany({
+      where: { id: requestId, status: 'pending' },
+      data: {
+        status: 'approved',
+        reviewedByUserId: reviewerUserId,
+        reviewedAt: new Date(),
+        reviewRemark
+      }
+    })
+
+    if (claimed.count !== 1) {
+      throw new Error('调账申请已处理')
+    }
+
+    const logType: BalanceLogType = request.requestType === 'refund' && Number(request.amount) > 0
+      ? 'refund'
+      : 'admin_adjust'
+    const remark = [
+      `[审批通过] ${request.reason}`,
+      request.orderNo ? `订单 ${request.orderNo}` : '',
+      reviewRemark ? `审核备注: ${reviewRemark}` : ''
+    ].filter(Boolean).join('；')
+
+    const balanceResult = await changeBalanceInTransaction(tx, {
+      userId: request.userId,
+      type: logType,
+      amount: Number(request.amount),
+      orderId: request.orderNo || undefined,
+      remark
+    })
+
+    const updatedRequest = await tx.balanceAdjustmentRequest.update({
+      where: { id: requestId },
+      data: { balanceLogId: balanceResult.balanceLog.id },
+      include: includeBalanceAdjustmentRequestRelations()
+    })
+
+    return {
+      request: updatedRequest as BalanceAdjustmentRequestWithRelations,
+      newBalance: balanceResult.newBalance
+    }
+  })
+}
+
+export async function rejectBalanceAdjustmentRequest(
+  requestId: number,
+  reviewerUserId: number,
+  reviewRemark: string
+): Promise<BalanceAdjustmentRequestWithRelations> {
+  return prisma.$transaction(async (tx) => {
+    const claimed = await tx.balanceAdjustmentRequest.updateMany({
+      where: { id: requestId, status: 'pending' },
+      data: {
+        status: 'rejected',
+        reviewedByUserId: reviewerUserId,
+        reviewedAt: new Date(),
+        reviewRemark
+      }
+    })
+
+    if (claimed.count !== 1) {
+      throw new Error('调账申请不存在或已处理')
+    }
+
+    const request = await tx.balanceAdjustmentRequest.findUnique({
+      where: { id: requestId },
+      include: includeBalanceAdjustmentRequestRelations()
+    })
+
+    if (!request) {
+      throw new Error('调账申请不存在')
+    }
+
+    return request as BalanceAdjustmentRequestWithRelations
+### 549: export async function getUsersTotalConsumeMap(
+export async function giftBalance(
+  userId: number,
+  amount: number,
+  remark?: string
+): Promise<BalanceChangeResult> {
+  return changeBalance({
+    userId,
+    type: 'gift',
+    amount: Math.abs(amount), // 确保是正数
+    remark
+  })
+}
+
+/**
+ * 获取用户实际消费额（净消费 = 实例消费 − 实例相关退款）。
+ * 历史上部分业务把 consume.amount 写成正数，不能直接 SUM(amount) 再取绝对值，
+ * 因此优先使用余额前后差额，兼容正负号不一致的历史日志。
+ *
+ * 退款按同样口径扣减，但**仅扣减挂了实例的退款**（type='refund' 且 instance_id 非空，
+ * 即实例创建失败自动退款、销毁退款、降级退款等消费冲正）。充值退款、管理员调账退款
+ * （走 type='refund' 但无 instance_id）不计入，避免把与消费无关的退款错误地从消费额中扣掉。
+ * 与实例级的 getInstanceRefundableAmount（消费 − 退款）口径保持一致，
+ * 修复「消费→退款→再消费」时累计消费被重复计数、进而虚高可兑换积分/VIP 等级的问题。
+ */
+export async function getUsersTotalConsumeMap(
+  userIds: number[],
+  client: BalanceQueryClient = prisma
+): Promise<Map<number, number>> {
+  const validUserIds = Array.from(new Set(
+    userIds.filter(id => Number.isInteger(id) && id > 0)
+  ))
+
+  if (validUserIds.length === 0) {
+    return new Map()
+  }
+
+  const rows = await client.$queryRaw<Array<{ userId: number; totalConsume: unknown }>>(Prisma.sql`
+    SELECT
+      user_id AS "userId",
+      GREATEST(COALESCE(SUM(
+        CASE
+          WHEN type = 'consume' THEN
+            CASE WHEN balance_before > balance_after THEN balance_before - balance_after ELSE ABS(amount) END
+          WHEN type = 'refund' THEN
+            -1 * (CASE WHEN balance_after > balance_before THEN balance_after - balance_before ELSE ABS(amount) END)
+          ELSE 0
+        END
+      ), 0), 0)::numeric AS "totalConsume"
+    FROM balance_logs
+    WHERE user_id IN (${Prisma.join(validUserIds)})
+      AND (
+        type = 'consume'
+        OR (type = 'refund' AND instance_id IS NOT NULL)
+      )
+    GROUP BY user_id
+  `)
+
+  return new Map(rows.map(row => [row.userId, toNumber(row.totalConsume)]))
+}
+
+export async function getUserTotalConsume(
+  userId: number,
+  client: BalanceQueryClient = prisma
+): Promise<number> {
+  const consumeMap = await getUsersTotalConsumeMap([userId], client)
+  return consumeMap.get(userId) || 0
+}
+
+// ==================== 检查操作 ====================
+
+/**
+ * 检查用户余额是否足够
+ */
+export async function hasEnoughBalance(
+  userId: number,
+  amount: number
+): Promise<boolean> {
+  const balance = await getUserBalance(userId)
+  return balance >= amount
+}
+
+/**
+ * 获取用户消费统计
+ */
+export async function getUserConsumeStats(userId: number): Promise<{
+  totalRecharge: number
+  totalConsume: number
+  totalRefund: number
+  totalDestroyedValue: number
+}> {
+  const [logs, destroyedRefund, totalConsume] = await Promise.all([
+    prisma.balanceLog.groupBy({
+      by: ['type'],
+      where: { userId },
+      _sum: { amount: true }
+    }),
+    prisma.balanceLog.aggregate({
+      where: {
+        userId,
+        type: 'refund',
+        amount: { gt: 0 },
+        remark: { contains: '用户销毁实例退款' }
+      },
+      _sum: { amount: true }
+    }),
+    getUserTotalConsume(userId)
+  ])
+
+  const stats = {
+    totalRecharge: 0,
+    totalConsume,
+    totalRefund: 0,
+    totalDestroyedValue: destroyedRefund._sum.amount !== null && destroyedRefund._sum.amount !== undefined
+      ? parseFloat(String(destroyedRefund._sum.amount))
+      : 0
+  }
+
+server\package.json:47:    "test:balance-adjustment-approval-guards": "node --import tsx 
+scripts/test-balance-adjustment-approval-guards.ts",
+server\package.json:48:    "test:balance-change-amount-guard": "node --import tsx 
+scripts/test-balance-change-amount-guard.ts",
+server\package.json:164:    "test:recharge-accounting-guards": "node --import tsx 
+scripts/test-recharge-accounting-guards.ts",
+
+
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$OutputEncoding = [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new(); Get-Content -Raw -Encoding UTF8 server/scripts/test-balance-change-amount-guard.ts; Get-Content -Raw -Encoding UTF8 server/scripts/test-recharge-accounting-guards.ts; git status --short -- server/src/db/balance.ts server/scripts/test-balance-adjustment-approval-guards.ts; git diff -- server/src/db/balance.ts server/scripts/test-balance-adjustment-approval-guards.ts' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 721ms:
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import { dirname, resolve } from 'node:path'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+
+const balanceSource = readFileSync(resolve(__dirname, '../src/db/balance.ts'), 'utf8')
+const balanceRouteSource = readFileSync(resolve(__dirname, '../src/routes/balance.ts'), 'utf8')
+
+const changeBalanceStart = balanceSource.indexOf('export async function changeBalance(')
+assert.notEqual(changeBalanceStart, -1, 'missing changeBalance function')
+const changeBalanceEnd = balanceSource.indexOf('/**\n * 充值到账', changeBalanceStart)
+assert.notEqual(changeBalanceEnd, -1, 'missing changeBalance end marker')
+const changeBalanceSection = balanceSource.slice(changeBalanceStart, changeBalanceEnd)
+const transactionHelperStart = balanceSource.indexOf('async function changeBalanceInTransaction(')
+assert.notEqual(transactionHelperStart, -1, 'missing shared balance transaction helper')
+const transactionHelperEnd = balanceSource.indexOf('/**\n * 变更用户余额', transactionHelperStart)
+assert.notEqual(transactionHelperEnd, -1, 'missing shared balance transaction helper end marker')
+const transactionHelperSection = balanceSource.slice(transactionHelperStart, transactionHelperEnd)
+
+assert.ok(
+  balanceSource.includes("throw new Error('余额变动金额无效')"),
+  'changeBalance must return a clear invalid-amount error'
+)
+assert.ok(
+  balanceSource.includes('const MAX_BALANCE_AMOUNT = 99999999.99'),
+  'balance changes must define an upper bound matching Decimal(10,2) storage'
+)
+assert.ok(
+  balanceSource.includes('function normalizeBalanceAmount(value: number): number') &&
+    balanceSource.includes('const normalized = Number(value.toFixed(2))') &&
+    balanceSource.includes('normalized === 0 || Math.abs(normalized) > MAX_BALANCE_AMOUNT'),
+  'balance changes must normalize to cents and reject values outside database precision before mutating'
+)
+assert.ok(
+  transactionHelperSection.includes('const normalizedAmount = normalizeBalanceAmount(amount)'),
+  'balance mutation helper must normalize the input amount once before the transaction'
+)
+assert.ok(
+  transactionHelperSection.includes('const balanceAfter = Number((balanceBefore + normalizedAmount).toFixed(2))') &&
+    transactionHelperSection.includes('Math.abs(balanceAfter) > MAX_BALANCE_AMOUNT'),
+  'changeBalance must validate the resulting balance against Decimal(10,2) limits'
+)
+assert.ok(
+  transactionHelperSection.includes('data: { balance: { increment: normalizedAmount } }') &&
+    transactionHelperSection.includes('amount: normalizedAmount'),
+  'changeBalance must use the normalized amount for both the balance mutation and balance log'
+)
+assert.ok(
+  changeBalanceSection.includes('prisma.$transaction((tx) => changeBalanceInTransaction(tx, input))'),
+  'changeBalance must delegate to the shared transaction helper'
+)
+assert.ok(
+  balanceRouteSource.includes("typeof amount !== 'number' || !Number.isFinite(amount)"),
+  'admin balance routes must reject non-finite JSON numbers before calling changeBalance'
+)
+assert.ok(
+  balanceRouteSource.includes('const ADMIN_BALANCE_REMARK_MAX_LENGTH = 500') &&
+    balanceRouteSource.includes('function isPlainRecord(value: unknown): value is Record<string, unknown>') &&
+    balanceRouteSource.includes('function normalizeAdminBalanceRemark(value: unknown, required: boolean, field: string): string | undefined') &&
+    balanceRouteSource.includes('function normalizeAdminBalanceAdjustInput(input: unknown): AdminBalanceAdjustInput') &&
+    balanceRouteSource.includes('function normalizeAdminBalanceGiftInput(input: unknown): AdminBalanceGiftInput'),
+  'admin balance mutation routes must validate runtime body shape and remarks before accounting writes'
+)
+assert.ok(
+  balanceRouteSource.includes('remark.length > ADMIN_BALANCE_REMARK_MAX_LENGTH') &&
+    balanceRouteSource.includes("throw { error: `${field}必须是字符串` }") &&
+    balanceRouteSource.includes("throw { error: '请求参数无效' }"),
+  'admin balance remarks must be string-typed, trimmed, bounded, and guarded behind plain-object body checks'
+)
+assert.ok(
+  !balanceRouteSource.includes("typeof amount !== 'number' || isNaN(amount)"),
+  'admin balance routes must not rely on isNaN, which accepts Infinity'
+)
+
+assert.ok(
+  balanceRouteSource.includes('BalanceLogType') &&
+    balanceRouteSource.includes('BillingRecordType') &&
+    balanceRouteSource.includes("from '@prisma/client'"),
+  'balance routes must type query filters against Prisma enums'
+)
+
+assert.ok(
+  balanceRouteSource.includes('const BALANCE_LOG_TYPES = new Set<BalanceLogType>([') &&
+  balanceRouteSource.includes("'hosting_deduction'") &&
+  balanceRouteSource.includes("'invite_generate'"),
+  'balance log filters must be allowlisted before DB reads'
+)
+
+assert.ok(
+  balanceRouteSource.includes('const BILLING_RECORD_TYPES = new Set<BillingRecordType>([') &&
+  balanceRouteSource.includes("'newPurchase'") &&
+  balanceRouteSource.includes("'transfer_fee'"),
+  'billing record filters must be allowlisted before DB reads'
+)
+
+assert.ok(
+  balanceRouteSource.includes('function parseClampedPositiveIntegerQuery(value: string | undefined, fallback: number, max: number): number') &&
+  balanceRouteSource.includes('function normalizeBalanceLogType(value: string | undefined): BalanceLogType | undefined') &&
+  balanceRouteSource.includes('function normalizeBillingRecordType(value: string | undefined): BillingRecordType | undefined'),
+  'balance routes must define strict pagination and enum-normalization helpers'
+)
+
+const userBalanceLogsStart = balanceRouteSource.indexOf("}>('/me/logs'")
+assert.notEqual(userBalanceLogsStart, -1, 'missing user balance logs route')
+const userBalanceLogsEnd = balanceRouteSource.indexOf('  // 获取当前用户计费记录', userBalanceLogsStart)
+assert.notEqual(userBalanceLogsEnd, -1, 'missing user balance logs route end marker')
+const userBalanceLogsRoute = balanceRouteSource.slice(userBalanceLogsStart, userBalanceLogsEnd)
+
+assert.ok(
+  userBalanceLogsRoute.includes('page: parsePositiveIntegerQuery(page, 1)') &&
+  userBalanceLogsRoute.includes('pageSize: parseClampedPositiveIntegerQuery(pageSize, 20, 100)') &&
+  userBalanceLogsRoute.includes('type: normalizeBalanceLogType(type)'),
+  'user balance logs route must normalize pagination and type before DB reads'
+)
+
+const userBillingStart = balanceRouteSource.indexOf("}>('/me/billing'")
+assert.notEqual(userBillingStart, -1, 'missing user billing route')
+const userBillingEnd = balanceRouteSource.indexOf('  // ==================== 管理员余额管理 API ====================', userBillingStart)
+assert.notEqual(userBillingEnd, -1, 'missing user billing route end marker')
+const userBillingRoute = balanceRouteSource.slice(userBillingStart, userBillingEnd)
+
+assert.ok(
+  userBillingRoute.includes('page: parsePositiveIntegerQuery(page, 1)') &&
+  userBillingRoute.includes('pageSize: parseClampedPositiveIntegerQuery(pageSize, 20, 100)') &&
+  userBillingRoute.includes('type: normalizeBillingRecordType(type)'),
+  'user billing route must normalize pagination and type before DB reads'
+)
+
+const adminBalanceLogsStart = balanceRouteSource.indexOf("}>('/admin/:userId/logs'")
+assert.notEqual(adminBalanceLogsStart, -1, 'missing admin balance logs route')
+const adminBalanceLogsEnd = balanceRouteSource.indexOf('  // 管理员调整用户余额', adminBalanceLogsStart)
+assert.notEqual(adminBalanceLogsEnd, -1, 'missing admin balance logs route end marker')
+const adminBalanceLogsRoute = balanceRouteSource.slice(adminBalanceLogsStart, adminBalanceLogsEnd)
+
+assert.ok(
+  adminBalanceLogsRoute.includes('page: parsePositiveIntegerQuery(page, 1)') &&
+  adminBalanceLogsRoute.includes('pageSize: parseClampedPositiveIntegerQuery(pageSize, 20, 100)') &&
+  adminBalanceLogsRoute.includes('type: normalizeBalanceLogType(type)'),
+  'admin balance logs route must normalize pagination and type before DB reads'
+)
+
+for (const [routeName, routeSource] of [
+  ['user balance logs', userBalanceLogsRoute],
+  ['user billing', userBillingRoute],
+  ['admin balance logs', adminBalanceLogsRoute]
+] as const) {
+  for (const unsafePattern of [
+    'Math.min(Number(pageSize) || 20, 100)',
+    'page: Number(page)',
+    'page: Number(page) || 1',
+    'pageSize: Number(pageSize)',
+    'type: type as any'
+  ]) {
+    assert.ok(
+      !routeSource.includes(unsafePattern),
+      `${routeName} route must not use unsafe query handling: ${unsafePattern}`
+    )
+  }
+}
+
+const adminAdjustStart = balanceRouteSource.indexOf("}>('/admin/:userId/adjust'")
+assert.notEqual(adminAdjustStart, -1, 'missing admin balance adjust route')
+const adminAdjustEnd = balanceRouteSource.indexOf('  // 管理员赠送余额', adminAdjustStart)
+assert.notEqual(adminAdjustEnd, -1, 'missing admin balance adjust route end marker')
+const adminAdjustRoute = balanceRouteSource.slice(adminAdjustStart, adminAdjustEnd)
+
+assert.ok(
+  adminAdjustRoute.includes('balanceInput = normalizeAdminBalanceAdjustInput(request.body)') &&
+    adminAdjustRoute.includes('const { amount, remark } = balanceInput') &&
+    adminAdjustRoute.includes('`[管理员 ${user.username}] ${remark}`'),
+  'admin balance adjust route must use normalized amount and remark before accounting writes'
+)
+assert.ok(
+  !adminAdjustRoute.includes('const { amount, remark } = request.body') &&
+    !adminAdjustRoute.includes('remark.trim()'),
+  'admin balance adjust route must not destructure raw typed bodies or trim remarks inline'
+)
+
+const adminGiftStart = balanceRouteSource.indexOf("}>('/admin/:userId/gift'")
+assert.notEqual(adminGiftStart, -1, 'missing admin balance gift route')
+const adminGiftEnd = balanceRouteSource.indexOf('\n}', adminGiftStart)
+assert.notEqual(adminGiftEnd, -1, 'missing admin balance gift route end marker')
+const adminGiftRoute = balanceRouteSource.slice(adminGiftStart, adminGiftEnd)
+
+assert.ok(
+  adminGiftRoute.includes('balanceInput = normalizeAdminBalanceGiftInput(request.body)') &&
+    adminGiftRoute.includes('const { amount, remark } = balanceInput') &&
+    adminGiftRoute.includes('remark || `管理员 ${user.username} 赠送`'),
+  'admin balance gift route must use normalized amount and optional remark before accounting writes'
+)
+assert.ok(
+  !adminGiftRoute.includes('const { amount, remark } = request.body'),
+  'admin balance gift route must not destructure raw typed bodies'
+)
+
+console.log('balance change amount guard tests passed')
+
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+
+const routeSource = readFileSync(resolve(__dirname, '../src/routes/recharge.ts'), 'utf8')
+const providerDbSource = readFileSync(resolve(__dirname, '../src/db/payment-providers.ts'), 'utf8')
+const rechargeDbSource = readFileSync(resolve(__dirname, '../src/db/recharge-records.ts'), 'utf8')
+const vipSource = readFileSync(resolve(__dirname, '../src/services/vip-levels.ts'), 'utf8')
+const adminStatisticsSource = readFileSync(resolve(__dirname, '../src/routes/admin-statistics.ts'), 'utf8')
+const adminBillingSource = readFileSync(resolve(__dirname, '../src/routes/admin-billing.ts'), 'utf8')
+
+function sectionBetween(source: string, startMarker: string, endMarker: string): string {
+  const start = source.indexOf(startMarker)
+  assert.notEqual(start, -1, `missing start marker: ${startMarker}`)
+  const end = source.indexOf(endMarker, start + startMarker.length)
+  assert.notEqual(end, -1, `missing end marker: ${endMarker}`)
+  return source.slice(start, end)
+}
+
+const createOrderRoute = sectionBetween(
+  routeSource,
+  "app.post('/api/recharge/orders'",
+  "// 获取用户充值记录列表"
+)
+
+assert.ok(
+  createOrderRoute.includes('const actualAmount = db.calculateActualAmount(provider, normalizedAmount)'),
+  'recharge order creation must compute the real credited amount before persistence'
+)
+assert.ok(
+  routeSource.includes('function parsePositiveJsonMoney(value: unknown): number | null') &&
+    routeSource.includes("typeof value !== 'number' || !Number.isFinite(value) || value <= 0"),
+  'recharge routes must define a strict JSON number guard for money inputs'
+)
+assert.ok(
+  routeSource.includes('function normalizeOptionalTrimmedString(value: unknown, maxLength: number): string | null | undefined') &&
+    routeSource.includes("if (typeof value !== 'string')") &&
+    routeSource.includes('return trimmed.length <= maxLength ? trimmed : null'),
+  'recharge routes must define a strict runtime guard for optional admin string inputs'
+)
+assert.ok(
+  createOrderRoute.includes('const rechargeAmount = parsePositiveJsonMoney(amount)') &&
+    createOrderRoute.includes('if (rechargeAmount === null)') &&
+    createOrderRoute.includes('const normalizedAmount = Math.round(rechargeAmount * 100) / 100'),
+  'recharge order creation must reject string, non-finite, and non-positive amounts before normalization'
+)
+assert.ok(
+  createOrderRoute.includes('!Number.isFinite(actualAmount) || actualAmount <= 0'),
+  'recharge order creation must reject non-finite or non-positive credited amounts'
+)
+assert.ok(
+  createOrderRoute.indexOf('!Number.isFinite(actualAmount) || actualAmount <= 0') <
+    createOrderRoute.indexOf('await db.createRechargeOrder'),
+  'credited amount guard must run before creating the recharge order'
+)
+
+const manualCompleteRoute = sectionBetween(
+  routeSource,
+  "app.post('/api/admin/recharge/orders/:orderNo/complete'",
+  "// 标记充值订单失败（管理员）"
+)
+assert.ok(
+  manualCompleteRoute.includes('actualAmount = parsePositiveJsonMoney(rawActualAmount) ?? undefined') &&
+    manualCompleteRoute.includes('if (actualAmount === undefined)'),
+  'admin manual recharge completion must reject non-number actualAmount values instead of coercing them'
+)
+assert.ok(
+  manualCompleteRoute.includes('const tradeNo = normalizeOptionalTrimmedString(rawTradeNo, MAX_RECHARGE_TRADE_NO_LENGTH)') &&
+    manualCompleteRoute.includes("if (tradeNo === null)") &&
+    manualCompleteRoute.includes("return reply.status(400).send({ error: '交易号格式无效或过长' })"),
+  'admin manual recharge completion must reject malformed or oversized tradeNo values before persistence'
+)
+assert.ok(
+  manualCompleteRoute.indexOf("if (tradeNo === null)") < manualCompleteRoute.indexOf('db.completeRecharge'),
+  'admin manual recharge completion must validate tradeNo before calling completeRecharge'
+)
+assert.ok(
+  !manualCompleteRoute.includes('actualAmount = Number(rawActualAmount)'),
+  'admin manual recharge completion must not coerce actualAmount with Number()'
+)
+
+const manualFailRoute = sectionBetween(
+  routeSource,
+  "app.post('/api/admin/recharge/orders/:orderNo/fail'",
+  '// ==================== 第三方支付回调 ===================='
+)
+assert.ok(
+  manualFailRoute.includes('const reason = normalizeOptionalTrimmedString(rawReason, MAX_RECHARGE_ADMIN_REASON_LENGTH)') &&
+    manualFailRoute.includes("if (reason === null)") &&
+    manualFailRoute.includes("const failReason = reason || '管理员标记失败'"),
+  'admin manual recharge failure must normalize and bound the reason before persistence/logging'
+)
+assert.ok(
+  manualFailRoute.indexOf("if (reason === null)") < manualFailRoute.indexOf('db.failRecharge'),
+  'admin manual recharge failure must validate reason before calling failRecharge'
+)
+assert.ok(
+  manualFailRoute.includes('db.failRecharge(orderNo, failReason') &&
+    manualFailRoute.includes('as failed: ${failReason}'),
+  'admin manual recharge failure must persist and log only the normalized reason'
+)
+
+const repayRoute = sectionBetween(
+  routeSource,
+  "app.post('/api/recharge/orders/:orderNo/repay'",
+  '// 获取用户充值统计'
+)
+assert.ok(
+  repayRoute.includes('const paymentMethodChanged = selectedPaymentMethod !== (record.paymentMethod || undefined)'),
+  'recharge repay must detect payment method changes explicitly'
+)
+assert.ok(
+  repayRoute.includes('db.getPaymentFeeConfig(pricingProvider, selectedPaymentMethod)') &&
+    repayRoute.includes('db.calculatePaymentFee(pricingProvider, rechargeAmount, selectedPaymentMethod)') &&
+    repayRoute.includes('db.calculatePayableAmount(pricingProvider, rechargeAmount, selectedPaymentMethod)') &&
+    repayRoute.includes('db.calculateActualAmount(pricingProvider, rechargeAmount)'),
+  'recharge repay must recalculate fee, payable amount, and actual credited amount for the selected method'
+)
+assert.ok(
+  repayRoute.includes('const existingPaymentDetails = readRechargePaymentDetails') &&
+    repayRoute.includes('feeRate: existingPaymentDetails.recharge?.feeRate ?? provider.feeRate') &&
+    repayRoute.includes('feeFixed: existingPaymentDetails.recharge?.feeFixed ?? provider.feeFixed'),
+  'recharge repay pricing must keep the order-created base fee snapshot when no method-specific fee applies'
+)
+assert.ok(
+  repayRoute.includes('mergeRechargeAmountDetails(providerPaymentDetails') &&
+    repayRoute.includes('payableAmount') &&
+    repayRoute.includes('feeRate: feeConfig.feeRate') &&
+    repayRoute.includes('paymentMethod: selectedPaymentMethod || null'),
+  'recharge repay must persist refreshed payment amount metadata when the method changes'
+)
+assert.ok(
+  repayRoute.includes('await db.updatePendingRechargePaymentSelection(orderNo') &&
+    !repayRoute.includes('updateRechargePaymentMethod'),
+  'recharge repay must update payment method and amount metadata together through a pending-only helper'
+)
+assert.ok(
+  repayRoute.indexOf('await db.updatePendingRechargePaymentSelection(orderNo') <
+    repayRoute.indexOf('return {'),
+  'recharge repay must persist refreshed payment metadata before returning the new pay URL to the client'
+)
+
+assert.ok(
+  rechargeDbSource.includes('export async function updatePendingRechargePaymentSelection(') &&
+    rechargeDbSource.includes("status: 'pending'") &&
+    rechargeDbSource.includes('paymentDetails: data.paymentDetails as any') &&
+    rechargeDbSource.includes('actualAmount: data.actualAmount') &&
+    rechargeDbSource.includes('fee: data.fee'),
+  'recharge DB layer must conditionally update pending payment selection with refreshed accounting fields'
+)
+assert.ok(
+  !rechargeDbSource.includes('export async function updateRechargePaymentMethod('),
+  'recharge DB layer must not expose the old unconditional payment-method-only update helper'
+)
+
+const actualAmountHelper = sectionBetween(
+  providerDbSource,
+  'export function calculateActualAmount(',
+  '/**\n * 验证充值金额是否在渠道允许范围内'
+)
+assert.ok(
+  actualAmountHelper.includes('return Number((amount - fee).toFixed(2))'),
+  'deduct-fee providers can produce non-positive credited amounts that must be guarded at order creation'
+)
+
+for (const [label, source] of [
+  ['user/system recharge stats', rechargeDbSource],
+  ['VIP totalRecharge stats', vipSource],
+  ['admin statistics recharge stats', adminStatisticsSource],
+  ['admin billing recharge stats', adminBillingSource]
+] as const) {
+  assert.ok(
+    source.includes('COALESCE(actual_amount, amount)'),
+    `${label}: completed recharge sums must use actual credited amount with legacy amount fallback`
+  )
+  assert.ok(
+    !source.includes("_sum: { amount: true }\n    })\n  ])\n\n  return {\n    totalConsume"),
+    `${label}: must not keep the old completed-recharge amount aggregate pattern`
+  )
+}
+
+console.log('recharge accounting guard tests passed')
+
+ M server/src/db/balance.ts
+diff --git a/server/src/db/balance.ts b/server/src/db/balance.ts
+index 7db4116..fdddb4e 100644
+--- a/server/src/db/balance.ts
++++ b/server/src/db/balance.ts
+@@ -536,9 +536,15 @@ export async function giftBalance(
+ }
+ 
+ /**
+- * 获取用户实际消费额。
+- * 历史上部分业务把 consume.amount 写成正数，不能直接 SUM(amount) 再取绝对值。
+- * 这里优先使用余额前后差额，兼容正负号不一致的历史日志。
++ * 获取用户实际消费额（净消费 = 实例消费 − 实例相关退款）。
++ * 历史上部分业务把 consume.amount 写成正数，不能直接 SUM(amount) 再取绝对值，
++ * 因此优先使用余额前后差额，兼容正负号不一致的历史日志。
++ *
++ * 退款按同样口径扣减，但**仅扣减挂了实例的退款**（type='refund' 且 instance_id 非空，
++ * 即实例创建失败自动退款、销毁退款、降级退款等消费冲正）。充值退款、管理员调账退款
++ * （走 type='refund' 但无 instance_id）不计入，避免把与消费无关的退款错误地从消费额中扣掉。
++ * 与实例级的 getInstanceRefundableAmount（消费 − 退款）口径保持一致，
++ * 修复「消费→退款→再消费」时累计消费被重复计数、进而虚高可兑换积分/VIP 等级的问题。
+  */
+ export async function getUsersTotalConsumeMap(
+   userIds: number[],
+@@ -555,15 +561,21 @@ export async function getUsersTotalConsumeMap(
+   const rows = await client.$queryRaw<Array<{ userId: number; totalConsume: unknown }>>(Prisma.sql`
+     SELECT
+       user_id AS "userId",
+-      COALESCE(SUM(
++      GREATEST(COALESCE(SUM(
+         CASE
+-          WHEN balance_before > balance_after THEN balance_before - balance_after
+-          ELSE ABS(amount)
++          WHEN type = 'consume' THEN
++            CASE WHEN balance_before > balance_after THEN balance_before - balance_after ELSE ABS(amount) END
++          WHEN type = 'refund' THEN
++            -1 * (CASE WHEN balance_after > balance_before THEN balance_after - balance_before ELSE ABS(amount) END)
++          ELSE 0
+         END
+-      ), 0)::numeric AS "totalConsume"
++      ), 0), 0)::numeric AS "totalConsume"
+     FROM balance_logs
+     WHERE user_id IN (${Prisma.join(validUserIds)})
+-      AND type = 'consume'
++      AND (
++        type = 'consume'
++        OR (type = 'refund' AND instance_id IS NOT NULL)
++      )
+     GROUP BY user_id
+   `)
+ 
+warning: in the working copy of 'server/src/db/balance.ts', LF will be replaced by CRLF the next time Git touches it
+
+codex
+已确认目标文件存在用户/前序的 D-176 未提交改动，且只位于 `getUsersTotalConsumeMap`；我会保留它原样并仅补丁审批函数。实现将复用现有事务内防负与错误传播：充值退款计算负数、记 `admin_adjust`，余额不足会直接使整笔审批事务回滚。
+apply patch
+patch: completed
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-balance-adjustment-approval-guards.ts
+C:\Users\Administrator\Desktop\payinces\server\src\db\balance.ts
+diff --git a/server/scripts/test-balance-adjustment-approval-guards.ts b/server/scripts/test-balance-adjustment-approval-guards.ts
+index 7cc2a864bd796e39ffa576a7551791899b579942..808290767a6f005fdbf546f6dc3a7e670e90bf2f
+--- a/server/scripts/test-balance-adjustment-approval-guards.ts
++++ b/server/scripts/test-balance-adjustment-approval-guards.ts
+@@ -35,6 +35,20 @@
+     balanceDb.includes('balanceLogId: balanceResult.balanceLog.id'),
+   'approval must atomically claim pending request, mutate balance, and bind balance log'
+ )
++const approvalStart = balanceDb.indexOf('export async function approveBalanceAdjustmentRequest(')
++assert.notEqual(approvalStart, -1, 'missing approval execution db function')
++const approvalEnd = balanceDb.indexOf('export async function rejectBalanceAdjustmentRequest(', approvalStart)
++assert.notEqual(approvalEnd, -1, 'missing approval execution db function end marker')
++const approvalSection = balanceDb.slice(approvalStart, approvalEnd)
++assert.ok(
++  approvalSection.includes("const isRechargeRefund = request.requestType === 'refund' && request.sourceType === 'recharge'") &&
++    approvalSection.includes("const logType: BalanceLogType = request.requestType === 'refund' && Number(request.amount) > 0 && !isRechargeRefund") &&
++    approvalSection.includes("? -Math.abs(Number(request.amount))") &&
++    approvalSection.includes("isRechargeRefund ? '充值退款收回余额' : ''") &&
++    approvalSection.includes('type: logType') &&
++    approvalSection.includes('amount: balanceChangeAmount'),
++  'recharge refunds must reclaim balance with a negative admin_adjust instead of unconditionally crediting the user'
++)
+ assert.ok(
+   balanceDb.includes("status: 'rejected'") &&
+     balanceDb.includes("where: { id: requestId, status: 'pending' }"),
+diff --git a/server/src/db/balance.ts b/server/src/db/balance.ts
+index fdddb4e62cab45871e73ddb25d60f46ed1f6ad26..92dd7de8d75cc36adb18300ae21267dd1116f31a
+--- a/server/src/db/balance.ts
++++ b/server/src/db/balance.ts
+@@ -386,19 +386,24 @@
+       throw new Error('调账申请已处理')
+     }
+ 
+-    const logType: BalanceLogType = request.requestType === 'refund' && Number(request.amount) > 0
++    const isRechargeRefund = request.requestType === 'refund' && request.sourceType === 'recharge'
++    const logType: BalanceLogType = request.requestType === 'refund' && Number(request.amount) > 0 && !isRechargeRefund
+       ? 'refund'
+       : 'admin_adjust'
++    const balanceChangeAmount = isRechargeRefund
++      ? -Math.abs(Number(request.amount))
++      : Number(request.amount)
+     const remark = [
+       `[审批通过] ${request.reason}`,
+       request.orderNo ? `订单 ${request.orderNo}` : '',
++      isRechargeRefund ? '充值退款收回余额' : '',
+       reviewRemark ? `审核备注: ${reviewRemark}` : ''
+     ].filter(Boolean).join('；')
+ 
+     const balanceResult = await changeBalanceInTransaction(tx, {
+       userId: request.userId,
+       type: logType,
+-      amount: Number(request.amount),
++      amount: balanceChangeAmount,
+       orderId: request.orderNo || undefined,
+       remark
+     })
+
+diff --git a/server/scripts/test-balance-adjustment-approval-guards.ts b/server/scripts/test-balance-adjustment-approval-guards.ts
+index 7cc2a864bd796e39ffa576a7551791899b579942..808290767a6f005fdbf546f6dc3a7e670e90bf2f
+--- a/server/scripts/test-balance-adjustment-approval-guards.ts
++++ b/server/scripts/test-balance-adjustment-approval-guards.ts
+@@ -35,6 +35,20 @@
+     balanceDb.includes('balanceLogId: balanceResult.balanceLog.id'),
+   'approval must atomically claim pending request, mutate balance, and bind balance log'
+ )
++const approvalStart = balanceDb.indexOf('export async function approveBalanceAdjustmentRequest(')
++assert.notEqual(approvalStart, -1, 'missing approval execution db function')
++const approvalEnd = balanceDb.indexOf('export async function rejectBalanceAdjustmentRequest(', approvalStart)
++assert.notEqual(approvalEnd, -1, 'missing approval execution db function end marker')
++const approvalSection = balanceDb.slice(approvalStart, approvalEnd)
++assert.ok(
++  approvalSection.includes("const isRechargeRefund = request.requestType === 'refund' && request.sourceType === 'recharge'") &&
++    approvalSection.includes("const logType: BalanceLogType = request.requestType === 'refund' && Number(request.amount) > 0 && !isRechargeRefund") &&
++    approvalSection.includes("? -Math.abs(Number(request.amount))") &&
++    approvalSection.includes("isRechargeRefund ? '充值退款收回余额' : ''") &&
++    approvalSection.includes('type: logType') &&
++    approvalSection.includes('amount: balanceChangeAmount'),
++  'recharge refunds must reclaim balance with a negative admin_adjust instead of unconditionally crediting the user'
++)
+ assert.ok(
+   balanceDb.includes("status: 'rejected'") &&
+     balanceDb.includes("where: { id: requestId, status: 'pending' }"),
+diff --git a/server/src/db/balance.ts b/server/src/db/balance.ts
+index fdddb4e62cab45871e73ddb25d60f46ed1f6ad26..92dd7de8d75cc36adb18300ae21267dd1116f31a
+--- a/server/src/db/balance.ts
++++ b/server/src/db/balance.ts
+@@ -386,19 +386,24 @@
+       throw new Error('调账申请已处理')
+     }
+ 
+-    const logType: BalanceLogType = request.requestType === 'refund' && Number(request.amount) > 0
++    const isRechargeRefund = request.requestType === 'refund' && request.sourceType === 'recharge'
++    const logType: BalanceLogType = request.requestType === 'refund' && Number(request.amount) > 0 && !isRechargeRefund
+       ? 'refund'
+       : 'admin_adjust'
++    const balanceChangeAmount = isRechargeRefund
++      ? -Math.abs(Number(request.amount))
++      : Number(request.amount)
+     const remark = [
+       `[审批通过] ${request.reason}`,
+       request.orderNo ? `订单 ${request.orderNo}` : '',
++      isRechargeRefund ? '充值退款收回余额' : '',
+       reviewRemark ? `审核备注: ${reviewRemark}` : ''
+     ].filter(Boolean).join('；')
+ 
+     const balanceResult = await changeBalanceInTransaction(tx, {
+       userId: request.userId,
+       type: logType,
+-      amount: Number(request.amount),
++      amount: balanceChangeAmount,
+       orderId: request.orderNo || undefined,
+       remark
+     })
+
+codex
+最小补丁已落下：仅审批函数新增来源判定、负数收回、`admin_adjust` 与备注；对应守卫新增函数范围内断言，原断言未改。现在按验收清单运行 server 类型检查和 3 个指定守卫。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'pnpm --filter server type-check; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; pnpm --filter server test:balance-adjustment-approval-guards; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; pnpm --filter server test:balance-change-amount-guard; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; pnpm --filter server test:recharge-accounting-guards; exit $LASTEXITCODE' in C:\Users\Administrator\Desktop\payinces
+diff --git a/server/scripts/test-balance-adjustment-approval-guards.ts b/server/scripts/test-balance-adjustment-approval-guards.ts
+index 7cc2a864bd796e39ffa576a7551791899b579942..808290767a6f005fdbf546f6dc3a7e670e90bf2f
+--- a/server/scripts/test-balance-adjustment-approval-guards.ts
++++ b/server/scripts/test-balance-adjustment-approval-guards.ts
+@@ -35,6 +35,20 @@
+     balanceDb.includes('balanceLogId: balanceResult.balanceLog.id'),
+   'approval must atomically claim pending request, mutate balance, and bind balance log'
+ )
++const approvalStart = balanceDb.indexOf('export async function approveBalanceAdjustmentRequest(')
++assert.notEqual(approvalStart, -1, 'missing approval execution db function')
++const approvalEnd = balanceDb.indexOf('export async function rejectBalanceAdjustmentRequest(', approvalStart)
++assert.notEqual(approvalEnd, -1, 'missing approval execution db function end marker')
++const approvalSection = balanceDb.slice(approvalStart, approvalEnd)
++assert.ok(
++  approvalSection.includes("const isRechargeRefund = request.requestType === 'refund' && request.sourceType === 'recharge'") &&
++    approvalSection.includes("const logType: BalanceLogType = request.requestType === 'refund' && Number(request.amount) > 0 && !isRechargeRefund") &&
++    approvalSection.includes("? -Math.abs(Number(request.amount))") &&
++    approvalSection.includes("isRechargeRefund ? '充值退款收回余额' : ''") &&
++    approvalSection.includes('type: logType') &&
++    approvalSection.includes('amount: balanceChangeAmount'),
++  'recharge refunds must reclaim balance with a negative admin_adjust instead of unconditionally crediting the user'
++)
+ assert.ok(
+   balanceDb.includes("status: 'rejected'") &&
+     balanceDb.includes("where: { id: requestId, status: 'pending' }"),
+diff --git a/server/src/db/balance.ts b/server/src/db/balance.ts
+index fdddb4e62cab45871e73ddb25d60f46ed1f6ad26..92dd7de8d75cc36adb18300ae21267dd1116f31a
+--- a/server/src/db/balance.ts
++++ b/server/src/db/balance.ts
+@@ -386,19 +386,24 @@
+       throw new Error('调账申请已处理')
+     }
+ 
+-    const logType: BalanceLogType = request.requestType === 'refund' && Number(request.amount) > 0
++    const isRechargeRefund = request.requestType === 'refund' && request.sourceType === 'recharge'
++    const logType: BalanceLogType = request.requestType === 'refund' && Number(request.amount) > 0 && !isRechargeRefund
+       ? 'refund'
+       : 'admin_adjust'
++    const balanceChangeAmount = isRechargeRefund
++      ? -Math.abs(Number(request.amount))
++      : Number(request.amount)
+     const remark = [
+       `[审批通过] ${request.reason}`,
+       request.orderNo ? `订单 ${request.orderNo}` : '',
++      isRechargeRefund ? '充值退款收回余额' : '',
+       reviewRemark ? `审核备注: ${reviewRemark}` : ''
+     ].filter(Boolean).join('；')
+ 
+     const balanceResult = await changeBalanceInTransaction(tx, {
+       userId: request.userId,
+       type: logType,
+-      amount: Number(request.amount),
++      amount: balanceChangeAmount,
+       orderId: request.orderNo || undefined,
+       remark
+     })
+
+diff --git a/server/scripts/test-balance-adjustment-approval-guards.ts b/server/scripts/test-balance-adjustment-approval-guards.ts
+index 7cc2a864bd796e39ffa576a7551791899b579942..808290767a6f005fdbf546f6dc3a7e670e90bf2f
+--- a/server/scripts/test-balance-adjustment-approval-guards.ts
++++ b/server/scripts/test-balance-adjustment-approval-guards.ts
+@@ -35,6 +35,20 @@
+     balanceDb.includes('balanceLogId: balanceResult.balanceLog.id'),
+   'approval must atomically claim pending request, mutate balance, and bind balance log'
+ )
++const approvalStart = balanceDb.indexOf('export async function approveBalanceAdjustmentRequest(')
++assert.notEqual(approvalStart, -1, 'missing approval execution db function')
++const approvalEnd = balanceDb.indexOf('export async function rejectBalanceAdjustmentRequest(', approvalStart)
++assert.notEqual(approvalEnd, -1, 'missing approval execution db function end marker')
++const approvalSection = balanceDb.slice(approvalStart, approvalEnd)
++assert.ok(
++  approvalSection.includes("const isRechargeRefund = request.requestType === 'refund' && request.sourceType === 'recharge'") &&
++    approvalSection.includes("const logType: BalanceLogType = request.requestType === 'refund' && Number(request.amount) > 0 && !isRechargeRefund") &&
++    approvalSection.includes("? -Math.abs(Number(request.amount))") &&
++    approvalSection.includes("isRechargeRefund ? '充值退款收回余额' : ''") &&
++    approvalSection.includes('type: logType') &&
++    approvalSection.includes('amount: balanceChangeAmount'),
++  'recharge refunds must reclaim balance with a negative admin_adjust instead of unconditionally crediting the user'
++)
+ assert.ok(
+   balanceDb.includes("status: 'rejected'") &&
+     balanceDb.includes("where: { id: requestId, status: 'pending' }"),
+diff --git a/server/src/db/balance.ts b/server/src/db/balance.ts
+index fdddb4e62cab45871e73ddb25d60f46ed1f6ad26..92dd7de8d75cc36adb18300ae21267dd1116f31a
+--- a/server/src/db/balance.ts
++++ b/server/src/db/balance.ts
+@@ -386,19 +386,24 @@
+       throw new Error('调账申请已处理')
+     }
+ 
+-    const logType: BalanceLogType = request.requestType === 'refund' && Number(request.amount) > 0
++    const isRechargeRefund = request.requestType === 'refund' && request.sourceType === 'recharge'
++    const logType: BalanceLogType = request.requestType === 'refund' && Number(request.amount) > 0 && !isRechargeRefund
+       ? 'refund'
+       : 'admin_adjust'
++    const balanceChangeAmount = isRechargeRefund
++      ? -Math.abs(Number(request.amount))
++      : Number(request.amount)
+     const remark = [
+       `[审批通过] ${request.reason}`,
+       request.orderNo ? `订单 ${request.orderNo}` : '',
++      isRechargeRefund ? '充值退款收回余额' : '',
+       reviewRemark ? `审核备注: ${reviewRemark}` : ''
+     ].filter(Boolean).join('；')
+ 
+     const balanceResult = await changeBalanceInTransaction(tx, {
+       userId: request.userId,
+       type: logType,
+-      amount: Number(request.amount),
++      amount: balanceChangeAmount,
+       orderId: request.orderNo || undefined,
+       remark
+     })
+
+diff --git a/server/scripts/test-balance-adjustment-approval-guards.ts b/server/scripts/test-balance-adjustment-approval-guards.ts
+index 7cc2a864bd796e39ffa576a7551791899b579942..808290767a6f005fdbf546f6dc3a7e670e90bf2f
+--- a/server/scripts/test-balance-adjustment-approval-guards.ts
++++ b/server/scripts/test-balance-adjustment-approval-guards.ts
+@@ -35,6 +35,20 @@
+     balanceDb.includes('balanceLogId: balanceResult.balanceLog.id'),
+   'approval must atomically claim pending request, mutate balance, and bind balance log'
+ )
++const approvalStart = balanceDb.indexOf('export async function approveBalanceAdjustmentRequest(')
++assert.notEqual(approvalStart, -1, 'missing approval execution db function')
++const approvalEnd = balanceDb.indexOf('export async function rejectBalanceAdjustmentRequest(', approvalStart)
++assert.notEqual(approvalEnd, -1, 'missing approval execution db function end marker')
++const approvalSection = balanceDb.slice(approvalStart, approvalEnd)
++assert.ok(
++  approvalSection.includes("const isRechargeRefund = request.requestType === 'refund' && request.sourceType === 'recharge'") &&
++    approvalSection.includes("const logType: BalanceLogType = request.requestType === 'refund' && Number(request.amount) > 0 && !isRechargeRefund") &&
++    approvalSection.includes("? -Math.abs(Number(request.amount))") &&
++    approvalSection.includes("isRechargeRefund ? '充值退款收回余额' : ''") &&
++    approvalSection.includes('type: logType') &&
++    approvalSection.includes('amount: balanceChangeAmount'),
++  'recharge refunds must reclaim balance with a negative admin_adjust instead of unconditionally crediting the user'
++)
+ assert.ok(
+   balanceDb.includes("status: 'rejected'") &&
+     balanceDb.includes("where: { id: requestId, status: 'pending' }"),
+diff --git a/server/src/db/balance.ts b/server/src/db/balance.ts
+index fdddb4e62cab45871e73ddb25d60f46ed1f6ad26..92dd7de8d75cc36adb18300ae21267dd1116f31a
+--- a/server/src/db/balance.ts
++++ b/server/src/db/balance.ts
+@@ -386,19 +386,24 @@
+       throw new Error('调账申请已处理')
+     }
+ 
+-    const logType: BalanceLogType = request.requestType === 'refund' && Number(request.amount) > 0
++    const isRechargeRefund = request.requestType === 'refund' && request.sourceType === 'recharge'
++    const logType: BalanceLogType = request.requestType === 'refund' && Number(request.amount) > 0 && !isRechargeRefund
+       ? 'refund'
+       : 'admin_adjust'
++    const balanceChangeAmount = isRechargeRefund
++      ? -Math.abs(Number(request.amount))
++      : Number(request.amount)
+     const remark = [
+       `[审批通过] ${request.reason}`,
+       request.orderNo ? `订单 ${request.orderNo}` : '',
++      isRechargeRefund ? '充值退款收回余额' : '',
+       reviewRemark ? `审核备注: ${reviewRemark}` : ''
+     ].filter(Boolean).join('；')
+ 
+     const balanceResult = await changeBalanceInTransaction(tx, {
+       userId: request.userId,
+       type: logType,
+-      amount: Number(request.amount),
++      amount: balanceChangeAmount,
+       orderId: request.orderNo || undefined,
+       remark
+     })
+
+diff --git a/server/scripts/test-balance-adjustment-approval-guards.ts b/server/scripts/test-balance-adjustment-approval-guards.ts
+index 7cc2a864bd796e39ffa576a7551791899b579942..808290767a6f005fdbf546f6dc3a7e670e90bf2f
+--- a/server/scripts/test-balance-adjustment-approval-guards.ts
++++ b/server/scripts/test-balance-adjustment-approval-guards.ts
+@@ -35,6 +35,20 @@
+     balanceDb.includes('balanceLogId: balanceResult.balanceLog.id'),
+   'approval must atomically claim pending request, mutate balance, and bind balance log'
+ )
++const approvalStart = balanceDb.indexOf('export async function approveBalanceAdjustmentRequest(')
++assert.notEqual(approvalStart, -1, 'missing approval execution db function')
++const approvalEnd = balanceDb.indexOf('export async function rejectBalanceAdjustmentRequest(', approvalStart)
++assert.notEqual(approvalEnd, -1, 'missing approval execution db function end marker')
++const approvalSection = balanceDb.slice(approvalStart, approvalEnd)
++assert.ok(
++  approvalSection.includes("const isRechargeRefund = request.requestType === 'refund' && request.sourceType === 'recharge'") &&
++    approvalSection.includes("const logType: BalanceLogType = request.requestType === 'refund' && Number(request.amount) > 0 && !isRechargeRefund") &&
++    approvalSection.includes("? -Math.abs(Number(request.amount))") &&
++    approvalSection.includes("isRechargeRefund ? '充值退款收回余额' : ''") &&
++    approvalSection.includes('type: logType') &&
++    approvalSection.includes('amount: balanceChangeAmount'),
++  'recharge refunds must reclaim balance with a negative admin_adjust instead of unconditionally crediting the user'
++)
+ assert.ok(
+   balanceDb.includes("status: 'rejected'") &&
+     balanceDb.includes("where: { id: requestId, status: 'pending' }"),
+diff --git a/server/src/db/balance.ts b/server/src/db/balance.ts
+index fdddb4e62cab45871e73ddb25d60f46ed1f6ad26..92dd7de8d75cc36adb18300ae21267dd1116f31a
+--- a/server/src/db/balance.ts
++++ b/server/src/db/balance.ts
+@@ -386,19 +386,24 @@
+       throw new Error('调账申请已处理')
+     }
+ 
+-    const logType: BalanceLogType = request.requestType === 'refund' && Number(request.amount) > 0
++    const isRechargeRefund = request.requestType === 'refund' && request.sourceType === 'recharge'
++    const logType: BalanceLogType = request.requestType === 'refund' && Number(request.amount) > 0 && !isRechargeRefund
+       ? 'refund'
+       : 'admin_adjust'
++    const balanceChangeAmount = isRechargeRefund
++      ? -Math.abs(Number(request.amount))
++      : Number(request.amount)
+     const remark = [
+       `[审批通过] ${request.reason}`,
+       request.orderNo ? `订单 ${request.orderNo}` : '',
++      isRechargeRefund ? '充值退款收回余额' : '',
+       reviewRemark ? `审核备注: ${reviewRemark}` : ''
+     ].filter(Boolean).join('；')
+ 
+     const balanceResult = await changeBalanceInTransaction(tx, {
+       userId: request.userId,
+       type: logType,
+-      amount: Number(request.amount),
++      amount: balanceChangeAmount,
+       orderId: request.orderNo || undefined,
+       remark
+     })
+
+diff --git a/server/scripts/test-balance-adjustment-approval-guards.ts b/server/scripts/test-balance-adjustment-approval-guards.ts
+index 7cc2a864bd796e39ffa576a7551791899b579942..808290767a6f005fdbf546f6dc3a7e670e90bf2f
+--- a/server/scripts/test-balance-adjustment-approval-guards.ts
++++ b/server/scripts/test-balance-adjustment-approval-guards.ts
+@@ -35,6 +35,20 @@
+     balanceDb.includes('balanceLogId: balanceResult.balanceLog.id'),
+   'approval must atomically claim pending request, mutate balance, and bind balance log'
+ )
++const approvalStart = balanceDb.indexOf('export async function approveBalanceAdjustmentRequest(')
++assert.notEqual(approvalStart, -1, 'missing approval execution db function')
++const approvalEnd = balanceDb.indexOf('export async function rejectBalanceAdjustmentRequest(', approvalStart)
++assert.notEqual(approvalEnd, -1, 'missing approval execution db function end marker')
++const approvalSection = balanceDb.slice(approvalStart, approvalEnd)
++assert.ok(
++  approvalSection.includes("const isRechargeRefund = request.requestType === 'refund' && request.sourceType === 'recharge'") &&
++    approvalSection.includes("const logType: BalanceLogType = request.requestType === 'refund' && Number(request.amount) > 0 && !isRechargeRefund") &&
++    approvalSection.includes("? -Math.abs(Number(request.amount))") &&
++    approvalSection.includes("isRechargeRefund ? '充值退款收回余额' : ''") &&
++    approvalSection.includes('type: logType') &&
++    approvalSection.includes('amount: balanceChangeAmount'),
++  'recharge refunds must reclaim balance with a negative admin_adjust instead of unconditionally crediting the user'
++)
+ assert.ok(
+   balanceDb.includes("status: 'rejected'") &&
+     balanceDb.includes("where: { id: requestId, status: 'pending' }"),
+diff --git a/server/src/db/balance.ts b/server/src/db/balance.ts
+index fdddb4e62cab45871e73ddb25d60f46ed1f6ad26..92dd7de8d75cc36adb18300ae21267dd1116f31a
+--- a/server/src/db/balance.ts
++++ b/server/src/db/balance.ts
+@@ -386,19 +386,24 @@
+       throw new Error('调账申请已处理')
+     }
+ 
+-    const logType: BalanceLogType = request.requestType === 'refund' && Number(request.amount) > 0
++    const isRechargeRefund = request.requestType === 'refund' && request.sourceType === 'recharge'
++    const logType: BalanceLogType = request.requestType === 'refund' && Number(request.amount) > 0 && !isRechargeRefund
+       ? 'refund'
+       : 'admin_adjust'
++    const balanceChangeAmount = isRechargeRefund
++      ? -Math.abs(Number(request.amount))
++      : Number(request.amount)
+     const remark = [
+       `[审批通过] ${request.reason}`,
+       request.orderNo ? `订单 ${request.orderNo}` : '',
++      isRechargeRefund ? '充值退款收回余额' : '',
+       reviewRemark ? `审核备注: ${reviewRemark}` : ''
+     ].filter(Boolean).join('；')
+ 
+     const balanceResult = await changeBalanceInTransaction(tx, {
+       userId: request.userId,
+       type: logType,
+-      amount: Number(request.amount),
++      amount: balanceChangeAmount,
+       orderId: request.orderNo || undefined,
+       remark
+     })
+
+diff --git a/server/scripts/test-balance-adjustment-approval-guards.ts b/server/scripts/test-balance-adjustment-approval-guards.ts
+index 7cc2a864bd796e39ffa576a7551791899b579942..808290767a6f005fdbf546f6dc3a7e670e90bf2f
+--- a/server/scripts/test-balance-adjustment-approval-guards.ts
++++ b/server/scripts/test-balance-adjustment-approval-guards.ts
+@@ -35,6 +35,20 @@
+     balanceDb.includes('balanceLogId: balanceResult.balanceLog.id'),
+   'approval must atomically claim pending request, mutate balance, and bind balance log'
+ )
++const approvalStart = balanceDb.indexOf('export async function approveBalanceAdjustmentRequest(')
++assert.notEqual(approvalStart, -1, 'missing approval execution db function')
++const approvalEnd = balanceDb.indexOf('export async function rejectBalanceAdjustmentRequest(', approvalStart)
++assert.notEqual(approvalEnd, -1, 'missing approval execution db function end marker')
++const approvalSection = balanceDb.slice(approvalStart, approvalEnd)
++assert.ok(
++  approvalSection.includes("const isRechargeRefund = request.requestType === 'refund' && request.sourceType === 'recharge'") &&
++    approvalSection.includes("const logType: BalanceLogType = request.requestType === 'refund' && Number(request.amount) > 0 && !isRechargeRefund") &&
++    approvalSection.includes("? -Math.abs(Number(request.amount))") &&
++    approvalSection.includes("isRechargeRefund ? '充值退款收回余额' : ''") &&
++    approvalSection.includes('type: logType') &&
++    approvalSection.includes('amount: balanceChangeAmount'),
++  'recharge refunds must reclaim balance with a negative admin_adjust instead of unconditionally crediting the user'
++)
+ assert.ok(
+   balanceDb.includes("status: 'rejected'") &&
+     balanceDb.includes("where: { id: requestId, status: 'pending' }"),
+diff --git a/server/src/db/balance.ts b/server/src/db/balance.ts
+index fdddb4e62cab45871e73ddb25d60f46ed1f6ad26..92dd7de8d75cc36adb18300ae21267dd1116f31a
+--- a/server/src/db/balance.ts
++++ b/server/src/db/balance.ts
+@@ -386,19 +386,24 @@
+       throw new Error('调账申请已处理')
+     }
+ 
+-    const logType: BalanceLogType = request.requestType === 'refund' && Number(request.amount) > 0
++    const isRechargeRefund = request.requestType === 'refund' && request.sourceType === 'recharge'
++    const logType: BalanceLogType = request.requestType === 'refund' && Number(request.amount) > 0 && !isRechargeRefund
+       ? 'refund'
+       : 'admin_adjust'
++    const balanceChangeAmount = isRechargeRefund
++      ? -Math.abs(Number(request.amount))
++      : Number(request.amount)
+     const remark = [
+       `[审批通过] ${request.reason}`,
+       request.orderNo ? `订单 ${request.orderNo}` : '',
++      isRechargeRefund ? '充值退款收回余额' : '',
+       reviewRemark ? `审核备注: ${reviewRemark}` : ''
+     ].filter(Boolean).join('；')
+ 
+     const balanceResult = await changeBalanceInTransaction(tx, {
+       userId: request.userId,
+       type: logType,
+-      amount: Number(request.amount),
++      amount: balanceChangeAmount,
+       orderId: request.orderNo || undefined,
+       remark
+     })
+
+diff --git a/server/scripts/test-balance-adjustment-approval-guards.ts b/server/scripts/test-balance-adjustment-approval-guards.ts
+index 7cc2a864bd796e39ffa576a7551791899b579942..808290767a6f005fdbf546f6dc3a7e670e90bf2f
+--- a/server/scripts/test-balance-adjustment-approval-guards.ts
++++ b/server/scripts/test-balance-adjustment-approval-guards.ts
+@@ -35,6 +35,20 @@
+     balanceDb.includes('balanceLogId: balanceResult.balanceLog.id'),
+   'approval must atomically claim pending request, mutate balance, and bind balance log'
+ )
++const approvalStart = balanceDb.indexOf('export async function approveBalanceAdjustmentRequest(')
++assert.notEqual(approvalStart, -1, 'missing approval execution db function')
++const approvalEnd = balanceDb.indexOf('export async function rejectBalanceAdjustmentRequest(', approvalStart)
++assert.notEqual(approvalEnd, -1, 'missing approval execution db function end marker')
++const approvalSection = balanceDb.slice(approvalStart, approvalEnd)
++assert.ok(
++  approvalSection.includes("const isRechargeRefund = request.requestType === 'refund' && request.sourceType === 'recharge'") &&
++    approvalSection.includes("const logType: BalanceLogType = request.requestType === 'refund' && Number(request.amount) > 0 && !isRechargeRefund") &&
++    approvalSection.includes("? -Math.abs(Number(request.amount))") &&
++    approvalSection.includes("isRechargeRefund ? '充值退款收回余额' : ''") &&
++    approvalSection.includes('type: logType') &&
++    approvalSection.includes('amount: balanceChangeAmount'),
++  'recharge refunds must reclaim balance with a negative admin_adjust instead of unconditionally crediting the user'
++)
+ assert.ok(
+   balanceDb.includes("status: 'rejected'") &&
+     balanceDb.includes("where: { id: requestId, status: 'pending' }"),
+diff --git a/server/src/db/balance.ts b/server/src/db/balance.ts
+index fdddb4e62cab45871e73ddb25d60f46ed1f6ad26..92dd7de8d75cc36adb18300ae21267dd1116f31a
+--- a/server/src/db/balance.ts
++++ b/server/src/db/balance.ts
+@@ -386,19 +386,24 @@
+       throw new Error('调账申请已处理')
+     }
+ 
+-    const logType: BalanceLogType = request.requestType === 'refund' && Number(request.amount) > 0
++    const isRechargeRefund = request.requestType === 'refund' && request.sourceType === 'recharge'
++    const logType: BalanceLogType = request.requestType === 'refund' && Number(request.amount) > 0 && !isRechargeRefund
+       ? 'refund'
+       : 'admin_adjust'
++    const balanceChangeAmount = isRechargeRefund
++      ? -Math.abs(Number(request.amount))
++      : Number(request.amount)
+     const remark = [
+       `[审批通过] ${request.reason}`,
+       request.orderNo ? `订单 ${request.orderNo}` : '',
++      isRechargeRefund ? '充值退款收回余额' : '',
+       reviewRemark ? `审核备注: ${reviewRemark}` : ''
+     ].filter(Boolean).join('；')
+ 
+     const balanceResult = await changeBalanceInTransaction(tx, {
+       userId: request.userId,
+       type: logType,
+-      amount: Number(request.amount),
++      amount: balanceChangeAmount,
+       orderId: request.orderNo || undefined,
+       remark
+     })
+
+diff --git a/server/scripts/test-balance-adjustment-approval-guards.ts b/server/scripts/test-balance-adjustment-approval-guards.ts
+index 7cc2a864bd796e39ffa576a7551791899b579942..808290767a6f005fdbf546f6dc3a7e670e90bf2f
+--- a/server/scripts/test-balance-adjustment-approval-guards.ts
++++ b/server/scripts/test-balance-adjustment-approval-guards.ts
+@@ -35,6 +35,20 @@
+     balanceDb.includes('balanceLogId: balanceResult.balanceLog.id'),
+   'approval must atomically claim pending request, mutate balance, and bind balance log'
+ )
++const approvalStart = balanceDb.indexOf('export async function approveBalanceAdjustmentRequest(')
++assert.notEqual(approvalStart, -1, 'missing approval execution db function')
++const approvalEnd = balanceDb.indexOf('export async function rejectBalanceAdjustmentRequest(', approvalStart)
++assert.notEqual(approvalEnd, -1, 'missing approval execution db function end marker')
++const approvalSection = balanceDb.slice(approvalStart, approvalEnd)
++assert.ok(
++  approvalSection.includes("const isRechargeRefund = request.requestType === 'refund' && request.sourceType === 'recharge'") &&
++    approvalSection.includes("const logType: BalanceLogType = request.requestType === 'refund' && Number(request.amount) > 0 && !isRechargeRefund") &&
++    approvalSection.includes("? -Math.abs(Number(request.amount))") &&
++    approvalSection.includes("isRechargeRefund ? '充值退款收回余额' : ''") &&
++    approvalSection.includes('type: logType') &&
++    approvalSection.includes('amount: balanceChangeAmount'),
++  'recharge refunds must reclaim balance with a negative admin_adjust instead of unconditionally crediting the user'
++)
+ assert.ok(
+   balanceDb.includes("status: 'rejected'") &&
+     balanceDb.includes("where: { id: requestId, status: 'pending' }"),
+diff --git a/server/src/db/balance.ts b/server/src/db/balance.ts
+index fdddb4e62cab45871e73ddb25d60f46ed1f6ad26..92dd7de8d75cc36adb18300ae21267dd1116f31a
+--- a/server/src/db/balance.ts
++++ b/server/src/db/balance.ts
+@@ -386,19 +386,24 @@
+       throw new Error('调账申请已处理')
+     }
+ 
+-    const logType: BalanceLogType = request.requestType === 'refund' && Number(request.amount) > 0
++    const isRechargeRefund = request.requestType === 'refund' && request.sourceType === 'recharge'
++    const logType: BalanceLogType = request.requestType === 'refund' && Number(request.amount) > 0 && !isRechargeRefund
+       ? 'refund'
+       : 'admin_adjust'
++    const balanceChangeAmount = isRechargeRefund
++      ? -Math.abs(Number(request.amount))
++      : Number(request.amount)
+     const remark = [
+       `[审批通过] ${request.reason}`,
+       request.orderNo ? `订单 ${request.orderNo}` : '',
++      isRechargeRefund ? '充值退款收回余额' : '',
+       reviewRemark ? `审核备注: ${reviewRemark}` : ''
+     ].filter(Boolean).join('；')
+ 
+     const balanceResult = await changeBalanceInTransaction(tx, {
+       userId: request.userId,
+       type: logType,
+-      amount: Number(request.amount),
++      amount: balanceChangeAmount,
+       orderId: request.orderNo || undefined,
+       remark
+     })
+
+diff --git a/server/scripts/test-balance-adjustment-approval-guards.ts b/server/scripts/test-balance-adjustment-approval-guards.ts
+index 7cc2a864bd796e39ffa576a7551791899b579942..808290767a6f005fdbf546f6dc3a7e670e90bf2f
+--- a/server/scripts/test-balance-adjustment-approval-guards.ts
++++ b/server/scripts/test-balance-adjustment-approval-guards.ts
+@@ -35,6 +35,20 @@
+     balanceDb.includes('balanceLogId: balanceResult.balanceLog.id'),
+   'approval must atomically claim pending request, mutate balance, and bind balance log'
+ )
++const approvalStart = balanceDb.indexOf('export async function approveBalanceAdjustmentRequest(')
++assert.notEqual(approvalStart, -1, 'missing approval execution db function')
++const approvalEnd = balanceDb.indexOf('export async function rejectBalanceAdjustmentRequest(', approvalStart)
++assert.notEqual(approvalEnd, -1, 'missing approval execution db function end marker')
++const approvalSection = balanceDb.slice(approvalStart, approvalEnd)
++assert.ok(
++  approvalSection.includes("const isRechargeRefund = request.requestType === 'refund' && request.sourceType === 'recharge'") &&
++    approvalSection.includes("const logType: BalanceLogType = request.requestType === 'refund' && Number(request.amount) > 0 && !isRechargeRefund") &&
++    approvalSection.includes("? -Math.abs(Number(request.amount))") &&
++    approvalSection.includes("isRechargeRefund ? '充值退款收回余额' : ''") &&
++    approvalSection.includes('type: logType') &&
++    approvalSection.includes('amount: balanceChangeAmount'),
++  'recharge refunds must reclaim balance with a negative admin_adjust instead of unconditionally crediting the user'
++)
+ assert.ok(
+   balanceDb.includes("status: 'rejected'") &&
+     balanceDb.includes("where: { id: requestId, status: 'pending' }"),
+diff --git a/server/src/db/balance.ts b/server/src/db/balance.ts
+index fdddb4e62cab45871e73ddb25d60f46ed1f6ad26..92dd7de8d75cc36adb18300ae21267dd1116f31a
+--- a/server/src/db/balance.ts
++++ b/server/src/db/balance.ts
+@@ -386,19 +386,24 @@
+       throw new Error('调账申请已处理')
+     }
+ 
+-    const logType: BalanceLogType = request.requestType === 'refund' && Number(request.amount) > 0
++    const isRechargeRefund = request.requestType === 'refund' && request.sourceType === 'recharge'
++    const logType: BalanceLogType = request.requestType === 'refund' && Number(request.amount) > 0 && !isRechargeRefund
+       ? 'refund'
+       : 'admin_adjust'
++    const balanceChangeAmount = isRechargeRefund
++      ? -Math.abs(Number(request.amount))
++      : Number(request.amount)
+     const remark = [
+       `[审批通过] ${request.reason}`,
+       request.orderNo ? `订单 ${request.orderNo}` : '',
++      isRechargeRefund ? '充值退款收回余额' : '',
+       reviewRemark ? `审核备注: ${reviewRemark}` : ''
+     ].filter(Boolean).join('；')
+ 
+     const balanceResult = await changeBalanceInTransaction(tx, {
+       userId: request.userId,
+       type: logType,
+-      amount: Number(request.amount),
++      amount: balanceChangeAmount,
+       orderId: request.orderNo || undefined,
+       remark
+     })
+
+diff --git a/server/scripts/test-balance-adjustment-approval-guards.ts b/server/scripts/test-balance-adjustment-approval-guards.ts
+index 7cc2a864bd796e39ffa576a7551791899b579942..808290767a6f005fdbf546f6dc3a7e670e90bf2f
+--- a/server/scripts/test-balance-adjustment-approval-guards.ts
++++ b/server/scripts/test-balance-adjustment-approval-guards.ts
+@@ -35,6 +35,20 @@
+     balanceDb.includes('balanceLogId: balanceResult.balanceLog.id'),
+   'approval must atomically claim pending request, mutate balance, and bind balance log'
+ )
++const approvalStart = balanceDb.indexOf('export async function approveBalanceAdjustmentRequest(')
++assert.notEqual(approvalStart, -1, 'missing approval execution db function')
++const approvalEnd = balanceDb.indexOf('export async function rejectBalanceAdjustmentRequest(', approvalStart)
++assert.notEqual(approvalEnd, -1, 'missing approval execution db function end marker')
++const approvalSection = balanceDb.slice(approvalStart, approvalEnd)
++assert.ok(
++  approvalSection.includes("const isRechargeRefund = request.requestType === 'refund' && request.sourceType === 'recharge'") &&
++    approvalSection.includes("const logType: BalanceLogType = request.requestType === 'refund' && Number(request.amount) > 0 && !isRechargeRefund") &&
++    approvalSection.includes("? -Math.abs(Number(request.amount))") &&
++    approvalSection.includes("isRechargeRefund ? '充值退款收回余额' : ''") &&
++    approvalSection.includes('type: logType') &&
++    approvalSection.includes('amount: balanceChangeAmount'),
++  'recharge refunds must reclaim balance with a negative admin_adjust instead of unconditionally crediting the user'
++)
+ assert.ok(
+   balanceDb.includes("status: 'rejected'") &&
+     balanceDb.includes("where: { id: requestId, status: 'pending' }"),
+diff --git a/server/src/db/balance.ts b/server/src/db/balance.ts
+index fdddb4e62cab45871e73ddb25d60f46ed1f6ad26..92dd7de8d75cc36adb18300ae21267dd1116f31a
+--- a/server/src/db/balance.ts
++++ b/server/src/db/balance.ts
+@@ -386,19 +386,24 @@
+       throw new Error('调账申请已处理')
+     }
+ 
+-    const logType: BalanceLogType = request.requestType === 'refund' && Number(request.amount) > 0
++    const isRechargeRefund = request.requestType === 'refund' && request.sourceType === 'recharge'
++    const logType: BalanceLogType = request.requestType === 'refund' && Number(request.amount) > 0 && !isRechargeRefund
+       ? 'refund'
+       : 'admin_adjust'
++    const balanceChangeAmount = isRechargeRefund
++      ? -Math.abs(Number(request.amount))
++      : Number(request.amount)
+     const remark = [
+       `[审批通过] ${request.reason}`,
+       request.orderNo ? `订单 ${request.orderNo}` : '',
++      isRechargeRefund ? '充值退款收回余额' : '',
+       reviewRemark ? `审核备注: ${reviewRemark}` : ''
+     ].filter(Boolean).join('；')
+ 
+     const balanceResult = await changeBalanceInTransaction(tx, {
+       userId: request.userId,
+       type: logType,
+-      amount: Number(request.amount),
++      amount: balanceChangeAmount,
+       orderId: request.orderNo || undefined,
+       remark
+     })
+
+ succeeded in 42174ms:
+
+> server@1.3.7 type-check C:\Users\Administrator\Desktop\payinces\server
+> tsc --noEmit
+
+
+> server@1.3.7 test:balance-adjustment-approval-guards C:\Users\Administrator\Desktop\payinces\server
+> node --import tsx scripts/test-balance-adjustment-approval-guards.ts
+
+balance adjustment approval guards passed
+
+> server@1.3.7 test:balance-change-amount-guard C:\Users\Administrator\Desktop\payinces\server
+> node --import tsx scripts/test-balance-change-amount-guard.ts
+
+balance change amount guard tests passed
+
+> server@1.3.7 test:recharge-accounting-guards C:\Users\Administrator\Desktop\payinces\server
+> node --import tsx scripts/test-recharge-accounting-guards.ts
+
+recharge accounting guard tests passed
+
+diff --git a/server/scripts/test-balance-adjustment-approval-guards.ts b/server/scripts/test-balance-adjustment-approval-guards.ts
+index 7cc2a864bd796e39ffa576a7551791899b579942..808290767a6f005fdbf546f6dc3a7e670e90bf2f
+--- a/server/scripts/test-balance-adjustment-approval-guards.ts
++++ b/server/scripts/test-balance-adjustment-approval-guards.ts
+@@ -35,6 +35,20 @@
+     balanceDb.includes('balanceLogId: balanceResult.balanceLog.id'),
+   'approval must atomically claim pending request, mutate balance, and bind balance log'
+ )
++const approvalStart = balanceDb.indexOf('export async function approveBalanceAdjustmentRequest(')
++assert.notEqual(approvalStart, -1, 'missing approval execution db function')
++const approvalEnd = balanceDb.indexOf('export async function rejectBalanceAdjustmentRequest(', approvalStart)
++assert.notEqual(approvalEnd, -1, 'missing approval execution db function end marker')
++const approvalSection = balanceDb.slice(approvalStart, approvalEnd)
++assert.ok(
++  approvalSection.includes("const isRechargeRefund = request.requestType === 'refund' && request.sourceType === 'recharge'") &&
++    approvalSection.includes("const logType: BalanceLogType = request.requestType === 'refund' && Number(request.amount) > 0 && !isRechargeRefund") &&
++    approvalSection.includes("? -Math.abs(Number(request.amount))") &&
++    approvalSection.includes("isRechargeRefund ? '充值退款收回余额' : ''") &&
++    approvalSection.includes('type: logType') &&
++    approvalSection.includes('amount: balanceChangeAmount'),
++  'recharge refunds must reclaim balance with a negative admin_adjust instead of unconditionally crediting the user'
++)
+ assert.ok(
+   balanceDb.includes("status: 'rejected'") &&
+     balanceDb.includes("where: { id: requestId, status: 'pending' }"),
+diff --git a/server/src/db/balance.ts b/server/src/db/balance.ts
+index fdddb4e62cab45871e73ddb25d60f46ed1f6ad26..92dd7de8d75cc36adb18300ae21267dd1116f31a
+--- a/server/src/db/balance.ts
++++ b/server/src/db/balance.ts
+@@ -386,19 +386,24 @@
+       throw new Error('调账申请已处理')
+     }
+ 
+-    const logType: BalanceLogType = request.requestType === 'refund' && Number(request.amount) > 0
++    const isRechargeRefund = request.requestType === 'refund' && request.sourceType === 'recharge'
++    const logType: BalanceLogType = request.requestType === 'refund' && Number(request.amount) > 0 && !isRechargeRefund
+       ? 'refund'
+       : 'admin_adjust'
++    const balanceChangeAmount = isRechargeRefund
++      ? -Math.abs(Number(request.amount))
++      : Number(request.amount)
+     const remark = [
+       `[审批通过] ${request.reason}`,
+       request.orderNo ? `订单 ${request.orderNo}` : '',
++      isRechargeRefund ? '充值退款收回余额' : '',
+       reviewRemark ? `审核备注: ${reviewRemark}` : ''
+     ].filter(Boolean).join('；')
+ 
+     const balanceResult = await changeBalanceInTransaction(tx, {
+       userId: request.userId,
+       type: logType,
+-      amount: Number(request.amount),
++      amount: balanceChangeAmount,
+       orderId: request.orderNo || undefined,
+       remark
+     })
+
+codex
+四项验收已全部通过。复核守卫语义时，我发现还可以把规格要求的 `admin_adjust` 字面量直接钉死（目前是通过分支结构间接覆盖）；我会补这一条显式断言后重跑目标守卫，并检查最终 diff，确保 D-176 内容没有被本次改动触碰。
+apply patch
+patch: completed
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-balance-adjustment-approval-guards.ts
+diff --git a/server/scripts/test-balance-adjustment-approval-guards.ts b/server/scripts/test-balance-adjustment-approval-guards.ts
+index 7cc2a864bd796e39ffa576a7551791899b579942..278f636cf52e40a0c567809fbfb72c20728b88d3
+--- a/server/scripts/test-balance-adjustment-approval-guards.ts
++++ b/server/scripts/test-balance-adjustment-approval-guards.ts
+@@ -35,6 +35,21 @@
+     balanceDb.includes('balanceLogId: balanceResult.balanceLog.id'),
+   'approval must atomically claim pending request, mutate balance, and bind balance log'
+ )
++const approvalStart = balanceDb.indexOf('export async function approveBalanceAdjustmentRequest(')
++assert.notEqual(approvalStart, -1, 'missing approval execution db function')
++const approvalEnd = balanceDb.indexOf('export async function rejectBalanceAdjustmentRequest(', approvalStart)
++assert.notEqual(approvalEnd, -1, 'missing approval execution db function end marker')
++const approvalSection = balanceDb.slice(approvalStart, approvalEnd)
++assert.ok(
++  approvalSection.includes("const isRechargeRefund = request.requestType === 'refund' && request.sourceType === 'recharge'") &&
++    approvalSection.includes("const logType: BalanceLogType = request.requestType === 'refund' && Number(request.amount) > 0 && !isRechargeRefund") &&
++    approvalSection.includes(": 'admin_adjust'") &&
++    approvalSection.includes("? -Math.abs(Number(request.amount))") &&
++    approvalSection.includes("isRechargeRefund ? '充值退款收回余额' : ''") &&
++    approvalSection.includes('type: logType') &&
++    approvalSection.includes('amount: balanceChangeAmount'),
++  'recharge refunds must reclaim balance with a negative admin_adjust instead of unconditionally crediting the user'
++)
+ assert.ok(
+   balanceDb.includes("status: 'rejected'") &&
+     balanceDb.includes("where: { id: requestId, status: 'pending' }"),
+diff --git a/server/src/db/balance.ts b/server/src/db/balance.ts
+index fdddb4e62cab45871e73ddb25d60f46ed1f6ad26..92dd7de8d75cc36adb18300ae21267dd1116f31a
+--- a/server/src/db/balance.ts
++++ b/server/src/db/balance.ts
+@@ -386,19 +386,24 @@
+       throw new Error('调账申请已处理')
+     }
+ 
+-    const logType: BalanceLogType = request.requestType === 'refund' && Number(request.amount) > 0
++    const isRechargeRefund = request.requestType === 'refund' && request.sourceType === 'recharge'
++    const logType: BalanceLogType = request.requestType === 'refund' && Number(request.amount) > 0 && !isRechargeRefund
+       ? 'refund'
+       : 'admin_adjust'
++    const balanceChangeAmount = isRechargeRefund
++      ? -Math.abs(Number(request.amount))
++      : Number(request.amount)
+     const remark = [
+       `[审批通过] ${request.reason}`,
+       request.orderNo ? `订单 ${request.orderNo}` : '',
++      isRechargeRefund ? '充值退款收回余额' : '',
+       reviewRemark ? `审核备注: ${reviewRemark}` : ''
+     ].filter(Boolean).join('；')
+ 
+     const balanceResult = await changeBalanceInTransaction(tx, {
+       userId: request.userId,
+       type: logType,
+-      amount: Number(request.amount),
++      amount: balanceChangeAmount,
+       orderId: request.orderNo || undefined,
+       remark
+     })
+
+diff --git a/server/scripts/test-balance-adjustment-approval-guards.ts b/server/scripts/test-balance-adjustment-approval-guards.ts
+index 7cc2a864bd796e39ffa576a7551791899b579942..278f636cf52e40a0c567809fbfb72c20728b88d3
+--- a/server/scripts/test-balance-adjustment-approval-guards.ts
++++ b/server/scripts/test-balance-adjustment-approval-guards.ts
+@@ -35,6 +35,21 @@
+     balanceDb.includes('balanceLogId: balanceResult.balanceLog.id'),
+   'approval must atomically claim pending request, mutate balance, and bind balance log'
+ )
++const approvalStart = balanceDb.indexOf('export async function approveBalanceAdjustmentRequest(')
++assert.notEqual(approvalStart, -1, 'missing approval execution db function')
++const approvalEnd = balanceDb.indexOf('export async function rejectBalanceAdjustmentRequest(', approvalStart)
++assert.notEqual(approvalEnd, -1, 'missing approval execution db function end marker')
++const approvalSection = balanceDb.slice(approvalStart, approvalEnd)
++assert.ok(
++  approvalSection.includes("const isRechargeRefund = request.requestType === 'refund' && request.sourceType === 'recharge'") &&
++    approvalSection.includes("const logType: BalanceLogType = request.requestType === 'refund' && Number(request.amount) > 0 && !isRechargeRefund") &&
++    approvalSection.includes(": 'admin_adjust'") &&
++    approvalSection.includes("? -Math.abs(Number(request.amount))") &&
++    approvalSection.includes("isRechargeRefund ? '充值退款收回余额' : ''") &&
++    approvalSection.includes('type: logType') &&
++    approvalSection.includes('amount: balanceChangeAmount'),
++  'recharge refunds must reclaim balance with a negative admin_adjust instead of unconditionally crediting the user'
++)
+ assert.ok(
+   balanceDb.includes("status: 'rejected'") &&
+     balanceDb.includes("where: { id: requestId, status: 'pending' }"),
+diff --git a/server/src/db/balance.ts b/server/src/db/balance.ts
+index fdddb4e62cab45871e73ddb25d60f46ed1f6ad26..92dd7de8d75cc36adb18300ae21267dd1116f31a
+--- a/server/src/db/balance.ts
++++ b/server/src/db/balance.ts
+@@ -386,19 +386,24 @@
+       throw new Error('调账申请已处理')
+     }
+ 
+-    const logType: BalanceLogType = request.requestType === 'refund' && Number(request.amount) > 0
++    const isRechargeRefund = request.requestType === 'refund' && request.sourceType === 'recharge'
++    const logType: BalanceLogType = request.requestType === 'refund' && Number(request.amount) > 0 && !isRechargeRefund
+       ? 'refund'
+       : 'admin_adjust'
++    const balanceChangeAmount = isRechargeRefund
++      ? -Math.abs(Number(request.amount))
++      : Number(request.amount)
+     const remark = [
+       `[审批通过] ${request.reason}`,
+       request.orderNo ? `订单 ${request.orderNo}` : '',
++      isRechargeRefund ? '充值退款收回余额' : '',
+       reviewRemark ? `审核备注: ${reviewRemark}` : ''
+     ].filter(Boolean).join('；')
+ 
+     const balanceResult = await changeBalanceInTransaction(tx, {
+       userId: request.userId,
+       type: logType,
+-      amount: Number(request.amount),
++      amount: balanceChangeAmount,
+       orderId: request.orderNo || undefined,
+       remark
+     })
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'pnpm --filter server test:balance-adjustment-approval-guards; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; $OutputEncoding = [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new(); git status --short -- server/src/db/balance.ts server/scripts/test-balance-adjustment-approval-guards.ts; git diff --check -- server/src/db/balance.ts server/scripts/test-balance-adjustment-approval-guards.ts; git diff -- server/src/db/balance.ts server/scripts/test-balance-adjustment-approval-guards.ts' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 1609ms:
+
+> server@1.3.7 test:balance-adjustment-approval-guards C:\Users\Administrator\Desktop\payinces\server
+> node --import tsx scripts/test-balance-adjustment-approval-guards.ts
+
+balance adjustment approval guards passed
+ M server/scripts/test-balance-adjustment-approval-guards.ts
+ M server/src/db/balance.ts
+diff --git a/server/scripts/test-balance-adjustment-approval-guards.ts b/server/scripts/test-balance-adjustment-approval-guards.ts
+index 7cc2a86..278f636 100644
+--- a/server/scripts/test-balance-adjustment-approval-guards.ts
++++ b/server/scripts/test-balance-adjustment-approval-guards.ts
+@@ -35,6 +35,21 @@ assert.ok(
+     balanceDb.includes('balanceLogId: balanceResult.balanceLog.id'),
+   'approval must atomically claim pending request, mutate balance, and bind balance log'
+ )
++const approvalStart = balanceDb.indexOf('export async function approveBalanceAdjustmentRequest(')
++assert.notEqual(approvalStart, -1, 'missing approval execution db function')
++const approvalEnd = balanceDb.indexOf('export async function rejectBalanceAdjustmentRequest(', approvalStart)
++assert.notEqual(approvalEnd, -1, 'missing approval execution db function end marker')
++const approvalSection = balanceDb.slice(approvalStart, approvalEnd)
++assert.ok(
++  approvalSection.includes("const isRechargeRefund = request.requestType === 'refund' && request.sourceType === 'recharge'") &&
++    approvalSection.includes("const logType: BalanceLogType = request.requestType === 'refund' && Number(request.amount) > 0 && !isRechargeRefund") &&
++    approvalSection.includes(": 'admin_adjust'") &&
++    approvalSection.includes("? -Math.abs(Number(request.amount))") &&
++    approvalSection.includes("isRechargeRefund ? '充值退款收回余额' : ''") &&
++    approvalSection.includes('type: logType') &&
++    approvalSection.includes('amount: balanceChangeAmount'),
++  'recharge refunds must reclaim balance with a negative admin_adjust instead of unconditionally crediting the user'
++)
+ assert.ok(
+   balanceDb.includes("status: 'rejected'") &&
+     balanceDb.includes("where: { id: requestId, status: 'pending' }"),
+diff --git a/server/src/db/balance.ts b/server/src/db/balance.ts
+index 7db4116..92dd7de 100644
+--- a/server/src/db/balance.ts
++++ b/server/src/db/balance.ts
+@@ -386,19 +386,24 @@ export async function approveBalanceAdjustmentRequest(
+       throw new Error('调账申请已处理')
+     }
+ 
+-    const logType: BalanceLogType = request.requestType === 'refund' && Number(request.amount) > 0
++    const isRechargeRefund = request.requestType === 'refund' && request.sourceType === 'recharge'
++    const logType: BalanceLogType = request.requestType === 'refund' && Number(request.amount) > 0 && !isRechargeRefund
+       ? 'refund'
+       : 'admin_adjust'
++    const balanceChangeAmount = isRechargeRefund
++      ? -Math.abs(Number(request.amount))
++      : Number(request.amount)
+     const remark = [
+       `[审批通过] ${request.reason}`,
+       request.orderNo ? `订单 ${request.orderNo}` : '',
++      isRechargeRefund ? '充值退款收回余额' : '',
+       reviewRemark ? `审核备注: ${reviewRemark}` : ''
+     ].filter(Boolean).join('；')
+ 
+     const balanceResult = await changeBalanceInTransaction(tx, {
+       userId: request.userId,
+       type: logType,
+-      amount: Number(request.amount),
++      amount: balanceChangeAmount,
+       orderId: request.orderNo || undefined,
+       remark
+     })
+@@ -536,9 +541,15 @@ export async function giftBalance(
+ }
+ 
+ /**
+- * 获取用户实际消费额。
+- * 历史上部分业务把 consume.amount 写成正数，不能直接 SUM(amount) 再取绝对值。
+- * 这里优先使用余额前后差额，兼容正负号不一致的历史日志。
++ * 获取用户实际消费额（净消费 = 实例消费 − 实例相关退款）。
++ * 历史上部分业务把 consume.amount 写成正数，不能直接 SUM(amount) 再取绝对值，
++ * 因此优先使用余额前后差额，兼容正负号不一致的历史日志。
++ *
++ * 退款按同样口径扣减，但**仅扣减挂了实例的退款**（type='refund' 且 instance_id 非空，
++ * 即实例创建失败自动退款、销毁退款、降级退款等消费冲正）。充值退款、管理员调账退款
++ * （走 type='refund' 但无 instance_id）不计入，避免把与消费无关的退款错误地从消费额中扣掉。
++ * 与实例级的 getInstanceRefundableAmount（消费 − 退款）口径保持一致，
++ * 修复「消费→退款→再消费」时累计消费被重复计数、进而虚高可兑换积分/VIP 等级的问题。
+  */
+ export async function getUsersTotalConsumeMap(
+   userIds: number[],
+@@ -555,15 +566,21 @@ export async function getUsersTotalConsumeMap(
+   const rows = await client.$queryRaw<Array<{ userId: number; totalConsume: unknown }>>(Prisma.sql`
+     SELECT
+       user_id AS "userId",
+-      COALESCE(SUM(
++      GREATEST(COALESCE(SUM(
+         CASE
+-          WHEN balance_before > balance_after THEN balance_before - balance_after
+-          ELSE ABS(amount)
++          WHEN type = 'consume' THEN
++            CASE WHEN balance_before > balance_after THEN balance_before - balance_after ELSE ABS(amount) END
++          WHEN type = 'refund' THEN
++            -1 * (CASE WHEN balance_after > balance_before THEN balance_after - balance_before ELSE ABS(amount) END)
++          ELSE 0
+         END
+-      ), 0)::numeric AS "totalConsume"
++      ), 0), 0)::numeric AS "totalConsume"
+     FROM balance_logs
+     WHERE user_id IN (${Prisma.join(validUserIds)})
+-      AND type = 'consume'
++      AND (
++        type = 'consume'
++        OR (type = 'refund' AND instance_id IS NOT NULL)
++      )
+     GROUP BY user_id
+   `)
+ 
+warning: in the working copy of 'server/scripts/test-balance-adjustment-approval-guards.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/db/balance.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/scripts/test-balance-adjustment-approval-guards.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/db/balance.ts', LF will be replaced by CRLF the next time Git touches it
+
+diff --git a/server/scripts/test-balance-adjustment-approval-guards.ts b/server/scripts/test-balance-adjustment-approval-guards.ts
+index 7cc2a864bd796e39ffa576a7551791899b579942..278f636cf52e40a0c567809fbfb72c20728b88d3
+--- a/server/scripts/test-balance-adjustment-approval-guards.ts
++++ b/server/scripts/test-balance-adjustment-approval-guards.ts
+@@ -35,6 +35,21 @@
+     balanceDb.includes('balanceLogId: balanceResult.balanceLog.id'),
+   'approval must atomically claim pending request, mutate balance, and bind balance log'
+ )
++const approvalStart = balanceDb.indexOf('export async function approveBalanceAdjustmentRequest(')
++assert.notEqual(approvalStart, -1, 'missing approval execution db function')
++const approvalEnd = balanceDb.indexOf('export async function rejectBalanceAdjustmentRequest(', approvalStart)
++assert.notEqual(approvalEnd, -1, 'missing approval execution db function end marker')
++const approvalSection = balanceDb.slice(approvalStart, approvalEnd)
++assert.ok(
++  approvalSection.includes("const isRechargeRefund = request.requestType === 'refund' && request.sourceType === 'recharge'") &&
++    approvalSection.includes("const logType: BalanceLogType = request.requestType === 'refund' && Number(request.amount) > 0 && !isRechargeRefund") &&
++    approvalSection.includes(": 'admin_adjust'") &&
++    approvalSection.includes("? -Math.abs(Number(request.amount))") &&
++    approvalSection.includes("isRechargeRefund ? '充值退款收回余额' : ''") &&
++    approvalSection.includes('type: logType') &&
++    approvalSection.includes('amount: balanceChangeAmount'),
++  'recharge refunds must reclaim balance with a negative admin_adjust instead of unconditionally crediting the user'
++)
+ assert.ok(
+   balanceDb.includes("status: 'rejected'") &&
+     balanceDb.includes("where: { id: requestId, status: 'pending' }"),
+diff --git a/server/src/db/balance.ts b/server/src/db/balance.ts
+index fdddb4e62cab45871e73ddb25d60f46ed1f6ad26..92dd7de8d75cc36adb18300ae21267dd1116f31a
+--- a/server/src/db/balance.ts
++++ b/server/src/db/balance.ts
+@@ -386,19 +386,24 @@
+       throw new Error('调账申请已处理')
+     }
+ 
+-    const logType: BalanceLogType = request.requestType === 'refund' && Number(request.amount) > 0
++    const isRechargeRefund = request.requestType === 'refund' && request.sourceType === 'recharge'
++    const logType: BalanceLogType = request.requestType === 'refund' && Number(request.amount) > 0 && !isRechargeRefund
+       ? 'refund'
+       : 'admin_adjust'
++    const balanceChangeAmount = isRechargeRefund
++      ? -Math.abs(Number(request.amount))
++      : Number(request.amount)
+     const remark = [
+       `[审批通过] ${request.reason}`,
+       request.orderNo ? `订单 ${request.orderNo}` : '',
++      isRechargeRefund ? '充值退款收回余额' : '',
+       reviewRemark ? `审核备注: ${reviewRemark}` : ''
+     ].filter(Boolean).join('；')
+ 
+     const balanceResult = await changeBalanceInTransaction(tx, {
+       userId: request.userId,
+       type: logType,
+-      amount: Number(request.amount),
++      amount: balanceChangeAmount,
+       orderId: request.orderNo || undefined,
+       remark
+     })
+
+codex
+已完成 FX-010：在 [balance.ts](C:/Users/Administrator/Desktop/payinces/server/src/db/balance.ts) 中新增 `isRechargeRefund` 判定，充值退款以 `admin_adjust` 和负数金额收回余额，并补充“充值退款收回余额”备注；余额不足沿用现有错误传播与事务回滚，不允许负余额。对应审批守卫已更新。`getUsersTotalConsumeMap`（D-176）未触碰。server type-check、审批守卫、余额金额守卫及充值会计守卫均通过；未 commit/push/发版。
+diff --git a/server/scripts/test-balance-adjustment-approval-guards.ts b/server/scripts/test-balance-adjustment-approval-guards.ts
+index 7cc2a864bd796e39ffa576a7551791899b579942..278f636cf52e40a0c567809fbfb72c20728b88d3
+--- a/server/scripts/test-balance-adjustment-approval-guards.ts
++++ b/server/scripts/test-balance-adjustment-approval-guards.ts
+@@ -35,6 +35,21 @@
+     balanceDb.includes('balanceLogId: balanceResult.balanceLog.id'),
+   'approval must atomically claim pending request, mutate balance, and bind balance log'
+ )
++const approvalStart = balanceDb.indexOf('export async function approveBalanceAdjustmentRequest(')
++assert.notEqual(approvalStart, -1, 'missing approval execution db function')
++const approvalEnd = balanceDb.indexOf('export async function rejectBalanceAdjustmentRequest(', approvalStart)
++assert.notEqual(approvalEnd, -1, 'missing approval execution db function end marker')
++const approvalSection = balanceDb.slice(approvalStart, approvalEnd)
++assert.ok(
++  approvalSection.includes("const isRechargeRefund = request.requestType === 'refund' && request.sourceType === 'recharge'") &&
++    approvalSection.includes("const logType: BalanceLogType = request.requestType === 'refund' && Number(request.amount) > 0 && !isRechargeRefund") &&
++    approvalSection.includes(": 'admin_adjust'") &&
++    approvalSection.includes("? -Math.abs(Number(request.amount))") &&
++    approvalSection.includes("isRechargeRefund ? '充值退款收回余额' : ''") &&
++    approvalSection.includes('type: logType') &&
++    approvalSection.includes('amount: balanceChangeAmount'),
++  'recharge refunds must reclaim balance with a negative admin_adjust instead of unconditionally crediting the user'
++)
+ assert.ok(
+   balanceDb.includes("status: 'rejected'") &&
+     balanceDb.includes("where: { id: requestId, status: 'pending' }"),
+diff --git a/server/src/db/balance.ts b/server/src/db/balance.ts
+index fdddb4e62cab45871e73ddb25d60f46ed1f6ad26..92dd7de8d75cc36adb18300ae21267dd1116f31a
+--- a/server/src/db/balance.ts
++++ b/server/src/db/balance.ts
+@@ -386,19 +386,24 @@
+       throw new Error('调账申请已处理')
+     }
+ 
+-    const logType: BalanceLogType = request.requestType === 'refund' && Number(request.amount) > 0
++    const isRechargeRefund = request.requestType === 'refund' && request.sourceType === 'recharge'
++    const logType: BalanceLogType = request.requestType === 'refund' && Number(request.amount) > 0 && !isRechargeRefund
+       ? 'refund'
+       : 'admin_adjust'
++    const balanceChangeAmount = isRechargeRefund
++      ? -Math.abs(Number(request.amount))
++      : Number(request.amount)
+     const remark = [
+       `[审批通过] ${request.reason}`,
+       request.orderNo ? `订单 ${request.orderNo}` : '',
++      isRechargeRefund ? '充值退款收回余额' : '',
+       reviewRemark ? `审核备注: ${reviewRemark}` : ''
+     ].filter(Boolean).join('；')
+ 
+     const balanceResult = await changeBalanceInTransaction(tx, {
+       userId: request.userId,
+       type: logType,
+-      amount: Number(request.amount),
++      amount: balanceChangeAmount,
+       orderId: request.orderNo || undefined,
+       remark
+     })
+
+tokens used
+43,639

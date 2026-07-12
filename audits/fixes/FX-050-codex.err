@@ -1,0 +1,3548 @@
+OpenAI Codex v0.144.0-alpha.4
+--------
+workdir: C:\Users\Administrator\Desktop\payinces
+model: gpt-5.6-sol
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: high
+reasoning summaries: none
+session id: 019f5360-0e64-7333-801a-45f4c909970d
+--------
+user
+你是 PayIncus 实现工程师。先读 AGENTS.md(实例高危,先读代码+守卫;不 commit/push/发版、不大重构;不改 schema/package)。严格按规格只改 instances.ts 的 boost-processes 段 + 守卫:Incus 失败回滚 DB 或返回部分失败,禁静默吞错。不要碰 resource-risk/traffic-scheduler(并行)。改完跑守卫报告,不 commit。
+---
+# FX-050 规格：boost-processes 先写 DB,Incus 失败不抛致漂移(P3高 / D-144 / M05-08)
+
+## 根因
+`routes/instances.ts:6001`:boost-processes(进程数提升)先写 DB,随后调 Incus 应用;**Incus 失败时不抛错**,DB 已改而 Incus 未生效 → DB 与实际不一致(漂移)。
+
+## 修法(只改 routes/instances.ts 的 boost-processes 段 + 守卫;不改 schema/package;不碰 resource-risk/traffic-scheduler(并行))
+1. 先只读:boost-processes 处理器、DB 写入与 Incus 调用顺序、错误处理。
+2. **Incus 失败回滚 DB 或返回部分失败**:
+   - 优先:先写 DB(或事务),再调 Incus;**Incus 失败 → 回滚 DB**(恢复原值)并返回明确错误,保证一致;
+   - 或若无法回滚(已部分生效),则**返回部分失败**并明确告知实际状态,不静默吞错。
+   - 不允许"DB 改了、Incus 没生效、还返回成功"。
+3. 保持正常 boost 成功路径不回归。
+
+## 加守卫
+`test:instance-route-id-guards` 追加:boost Incus 失败回滚 DB 或返回部分失败,不静默吞错。不改 package.json。
+
+## 不许动
+不碰 resource-risk/traffic-scheduler(并行)。不改 schema/package。不 commit。
+
+## 验收
+type-check 通过;`test:instance-route-id-guards`、`test:instance-operation-conflict-guards` 通过。交付一段话:回滚还是部分失败、如何避免静默吞错、守卫结果。
+
+codex
+我先按高危路径纪律只读 `AGENTS.md`、`boost-processes` 处理器及两项相关守卫，确认现有写库/Incus/异常顺序后，只改该处理段和既有守卫文件；不会触碰 schema、package、resource-risk、traffic-scheduler，也不会 commit/push/发版。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$ErrorActionPreference='"'Stop'; Get-Content -Raw AGENTS.md; rg -n -C 80 \"boost-processes|boost processes|boostProcesses\" server/src/routes/instances.ts; rg -n -C 50 \"boost-processes|boost processes|boostProcesses\" server/src -g \"test-*guards.ts\" -g \"*.ts\"" in C:\Users\Administrator\Desktop\payinces
+2026-07-11T22:50:40.569601Z ERROR codex_core::tools::router: error=Exit code: 1
+Wall time: 0.6 seconds
+Output:
+# PayIncus / Incudal â€” é¡¹ç›®ç»Ÿä¸€è§„çŸ©ï¼ˆAGENTS.mdï¼‰
+
+> æœ¬æ–‡ä»¶æ˜¯æœ¬ä»“åº“**æ‰€æœ‰ AI agentï¼ˆClaude Codeã€codex ç­‰ï¼‰çš„ç»Ÿä¸€å·¥ä½œè§„èŒƒ**ã€‚
+> `CLAUDE.md` é€šè¿‡ `@AGENTS.md` å¼•ç”¨æœ¬æ–‡ä»¶ â€”â€” Claude Code ä¸Ž codex è¯»åˆ°çš„æ˜¯**åŒä¸€å¥—è§„çŸ©**ï¼Œæ”¹è¿™ä¸€ä¸ªæ–‡ä»¶å³å¯ã€‚
+> æƒå¨è¿ç»´/å‘ç‰ˆäº‹å®žä»¥ä»“åº“æ ¹çš„ `OPERATIONS_HANDOFF.md`ï¼ˆæ“ä½œæ‰‹å†Œï¼‰ä¸Ž `HANDOFF.md`ï¼ˆç‰ˆæœ¬è¯æ®å°è´¦ï¼‰ä¸ºå‡†ã€‚
+
+---
+
+## 0. æ²Ÿé€šè¯­è¨€
+- ä¸Ž owner é»˜è®¤ç”¨**ä¸­æ–‡**æ²Ÿé€šã€‚
+
+## 1. è¿™æ˜¯ä»€ä¹ˆé¡¹ç›®
+**PayIncus**ï¼ˆå†…éƒ¨ä»£å· `incudal`ï¼‰â€”â€”å•†ç”¨ Incusï¼ˆLXC/KVMï¼‰NAT VPS å”®å–ä¸Žäº¤ä»˜å¹³å°ï¼Œ**çº¿ä¸Šè¿è¥ä¸­**ã€‚å½“å‰ç”Ÿäº§ç‰ˆæœ¬ **v1.3.7**ã€‚pnpm monorepoï¼š
+
+| ç›®å½• | æŠ€æœ¯æ ˆ / ä½œç”¨ |
+|------|----------------|
+| `client/` | Vue 3 + Vite SPAã€‚åŒç«¯æž„å»ºï¼ˆ`VITE_APP_ENTRY`ï¼‰â†’ `dist/user`ï¼ˆpay.payincus.comï¼‰+ `dist/admin`ï¼ˆadmin.payincus.comï¼‰ã€‚ä¸¤ç«¯ç‹¬ç«‹æºã€**ä¸å…±äº« cookie åŸŸ**ã€‚ |
+| `server/` | Fastify 5 + Prisma 7 + PostgreSQLï¼Œ~300 TS æ–‡ä»¶ã€~70 è·¯ç”±ã€~15 è°ƒåº¦/workerã€‚æ—  Redisï¼ˆç”¨ PG advisory lockï¼‰ã€‚ä¸‰å¥—é‰´æƒé¢ï¼šWeb çš„ JWT+refresh cookieã€Public API çš„ `pat_`/`poa_` tokenã€host agent çš„ HMACã€‚ |
+| `agent/` | Go å®¿ä¸» agentï¼Œåªè¯»ç›‘æŽ§ï¼ˆå¿ƒè·³/èµ„æº/å®žä¾‹æ€/æµé‡ï¼‰ï¼ŒHMAC ç­¾åï¼Œè‡ªå‡çº§ã€‚ |
+| å…¶å®ƒ | `docs-site/`ï¼ˆVitePressï¼‰ã€`deploy/`ï¼ˆsystemd+Nginxï¼‰ã€`scripts/`ï¼ˆå®‰è£…/æ ¡éªŒ/OTAï¼‰ã€`plugin-templates/`ã€`theme-templates/`ã€‚ |
+
+éƒ¨ç½²ï¼šä¸‰å±‚æ‹†åˆ†ï¼ˆuser / admin / ç§æœ‰åŽç«¯ `127.0.0.1:3001`ï¼‰ï¼Œè£…æœºæ ¹ `/opt/incudal`ï¼ŒåŽŸå­ OTAï¼ˆ`releases/<ver-ts>` + `current` è½¯é“¾ï¼‰+ è‡ªåŠ¨å›žæ»šã€‚
+
+---
+
+## 2. ðŸ”´ ç¡¬è§„çŸ©ï¼ˆä¸å¯åå•†ï¼Œè¿åå³äº‹æ•…ï¼‰
+
+1. **ä¸ç¢°ç”Ÿäº§**ï¼šæœªç» owner æ˜Žç¡®è¦æ±‚ï¼Œ**ç»ä¸** OTAã€å‘å¸ƒã€pushã€æ‰“ tagã€æ”¹ç”Ÿäº§çŽ¯å¢ƒã€‚
+2. **ä¸åšç ´åæ€§ git**ï¼šæœªç» owner æ˜Žç¡®è¦æ±‚ï¼Œ**ç»ä¸** `git reset`ã€`git checkout --`ã€å¼ºåˆ¶åˆ é™¤ã€æ¸…ç†æœªè·Ÿè¸ªæ–‡ä»¶ã€`git commit`/`git push`ã€‚
+3. **é«˜å±è·¯å¾„å…ˆè¯»åŽå†™**ï¼šæ”¹åŠ¨ä»¥ä¸‹ä»»ä¸€é¢†åŸŸï¼Œ**å¿…é¡»å…ˆè¯»ç›¸å…³ä»£ç  + å¯¹åº”å®ˆå«æµ‹è¯•**å†åŠ¨æ‰‹ï¼š
+   > é‰´æƒ Â· æ”¯ä»˜ Â· æƒé™ Â· é£ŽæŽ§ Â· èµ„æºäº¤ä»˜ Â· å…‘æ¢æµç¨‹ Â· å®žä¾‹åˆ›å»º Â· OTA
+4. **æ”¹åŠ¨æœ€å°åŒ–**ï¼šä¿® bug / å‘ç‰ˆæœŸé—´**ä¸åšå¤§èŒƒå›´é‡æž„**ï¼Œåªæ”¹å¿…è¦çš„ã€‚
+5. **ç»ä¸æ³„å¯†**ï¼šä»»ä½• commitã€handoffã€æ€»ç»“ã€æˆªå›¾ä¸­éƒ½**ä¸å¾—**å‡ºçŽ°å‡­è¯ / token / cookie / å¯†é’¥ã€‚
+6. **æœ¬åœ°è¿‡ â‰  ç”Ÿäº§éªŒè¯**ï¼šæœ¬åœ°é€šè¿‡ã€GitHub Actionsã€Release èµ„äº§ã€OTAã€çº¿ä¸Šå®žè¯æ˜¯**åˆ†å¼€çš„è¯æ®**ï¼Œä¸å¯æ··ä¸ºä¸€è°ˆã€‚
+7. **æ¯æ¬¡æ”¹åŠ¨å¿…é¡»è¿‡å¯¹åº”å®ˆå«**ï¼ˆè§ Â§4ï¼‰ï¼Œå¦åˆ™è§†ä¸º**æœªå®Œæˆ**ã€‚
+8. `RUN_DB_CHECKS=0 bash scripts/apply-online-update.sh <ver>` ä¼š**è·³è¿‡ DB/æ”¯ä»˜å°±ç»ªæ ¡éªŒ**ï¼Œä»…åœ¨ owner æ˜Žç¡®æ‰¹å‡†æ—¶ä½¿ç”¨ã€‚
+
+---
+
+## 3. æœ¬åœ°æ€Žä¹ˆè·‘
+
+- **çŽ¯å¢ƒ**ï¼šNode â‰¥ 20ã€pnpm 9.14.2ã€æœ¬åœ° PostgreSQL 16ã€‚
+- **è£…ä¾èµ–**ï¼š`pnpm install`
+- **ä¸€æŠŠèµ·å…¨éƒ¨ï¼ˆserver + user + adminï¼‰**ï¼š`pnpm dev`
+- **åˆ†å¼€èµ·**ï¼š
+  - åŽç«¯ï¼š`NODE_ENV=development JWT_SECRET=dev-secret-12345678 HOST=127.0.0.1 PORT=3001 pnpm --filter server exec tsx watch src/app.ts`
+  - ç”¨æˆ·å‰ç«¯ï¼š`pnpm dev:user`
+  - ç®¡ç†å‰ç«¯ï¼š`pnpm dev:admin`
+- **ç«¯å£**ï¼šåŽç«¯ API **3001** Â· ç”¨æˆ·å‰ç«¯ **3000** Â· ç®¡ç†å‰ç«¯ **3002**ï¼ˆå‰ç«¯ dev ç» proxy æ‰“åˆ° 3001ï¼‰ã€‚
+
+---
+
+## 4. ðŸ›¡ï¸ å®ˆå«æµ‹è¯•çºªå¾‹ï¼ˆæœ¬ä»“åº“çš„å‘½é—¨ï¼‰
+
+`server/package.json` é‡Œæœ‰ **200+ ä¸ªç‹¬ç«‹ `test-*-guards.ts`**ã€‚å®ƒä»¬æŠŠå…³é”®ä¸šåŠ¡/å‰ç«¯ç»“æž„â€œé’‰æ­»â€ï¼Œ`pnpm test` ä¼šè·‘å…¨å¥—ï¼ˆclient+server type-check + å…¨éƒ¨å®ˆå«ï¼‰ã€‚**ä»»ä½•æ”¹åŠ¨å¿…é¡»è®©ç›¸å…³å®ˆå«é€šè¿‡ã€‚**
+
+- **å…¨é‡**ï¼ˆæ…¢ï¼Œå‘ç‰ˆå‰è·‘ï¼‰ï¼š`pnpm test`
+- **å•ä¸ª**ï¼š`pnpm --filter server test:<guard-name>`
+- **å‰ç«¯æœ€å¸¸ç”¨ä¸‰ä¸ª**ï¼š
+  - `test:frontend-route-guards` â€”â€” è·¯ç”± / **è¡¨æ ¼å¸ƒå±€** / `@click` è·¯å¾„æ–­è¨€
+  - `test:frontend-dist-boundary-guards` â€”â€” åŒç«¯ dist è¾¹ç•Œ
+  - `test:frontend-i18n-keys` â€”â€” i18n key å®Œæ•´æ€§
+- **Go agent**ï¼š`pnpm test:agent`
+
+### âš ï¸ è¡¨æ ¼å¸ƒå±€å®ˆå«ï¼ˆæœ€å®¹æ˜“è¸©é›·ï¼‰
+ä¸€æ‰¹è¡¨è¢«å®ˆå«**é”å®š**ä¸ºâ€œ**ç§»åŠ¨å¡ + PC å®šå®½è¡¨ï¼ˆ`table-fixed` / `overflow-hidden`ï¼‰ï¼Œç»ä¸æ¨ªå‘æ»šåŠ¨**â€ï¼Œå¹¶**åå‘ç¦æ­¢** `overflow-x-auto` / `min-w-[...]` / åŽ»æŽ‰ `table-fixed`ã€‚
+- æƒ³ä¿®â€œå®½è¡¨æŒ¤åŽ‹â€æ—¶ï¼š**å…ˆåˆ¤æ–­è¯¥è¡¨æ˜¯å¦åœ¨å®ˆå«æ¸…å•é‡Œ**ã€‚é”å®šè¡¨**åªèƒ½åœ¨ `table-fixed` å†…å¹³è¡¡åˆ—å®½**ï¼ˆåˆ—å®½ç™¾åˆ†æ¯”åˆè®¡ = 100%ï¼‰+ å…è®¸å•å…ƒæ ¼æ¢è¡Œ + é ç§»åŠ¨å¡åº”å¯¹çª„å±ï¼›**ä¸èƒ½**æ”¹æˆæ¨ªå‘æ»šåŠ¨ã€‚
+- å—é”å®šçš„è¡¨ï¼ˆç”¨æˆ·ç«¯ï¼‰ï¼š`MyPackagesView`ã€`MyHostsView`ã€`TransfersView`ã€`OrdersView`ã€`InvitesView`ã€`FlashSalesView`ã€`HostingWalletView`ã€`InstancesView`ã€`LogsView`ã€`EntertainmentView`ï¼›ï¼ˆç®¡ç†ç«¯ï¼‰`admin/BillingView`ã€`admin/ImagesView`ã€`admin/HelpManageView`ã€`admin/MailView`ã€`admin/PluginCenterView`ï¼›ï¼ˆç»„ä»¶ï¼‰`HostPublicIpv4Tab`ã€`InstanceLogsTab`ã€`ConfigEditModal`ã€‚
+- æ”¹ä»»ä¸€å‰ç«¯æ–‡ä»¶åŽ**å¿…è·‘** `test:frontend-route-guards`ã€‚
+
+---
+
+## 5. æž„å»º / æ ¡éªŒå‘½ä»¤
+
+| ç›®çš„ | å‘½ä»¤ |
+|------|------|
+| æž„å»ºï¼ˆå« dist è¾¹ç•Œå®ˆå«ï¼‰| `pnpm build` |
+| åªæž„å»ºå‰ç«¯ / åŽç«¯ | `pnpm build:client` / `pnpm build:server` |
+| Lintï¼ˆæ£€æŸ¥ / è‡ªåŠ¨ä¿®ï¼‰| `pnpm lint` / `pnpm lint:fix` |
+| ç±»åž‹æ£€æŸ¥ | `pnpm --filter client type-check` Â· `pnpm --filter server type-check` |
+| å…¨å¥—å®ˆå« | `pnpm test` |
+| æ–‡æ¡£ç«™å¼€å‘ / æž„å»º | `pnpm docs:dev` / `pnpm docs:build` |
+
+---
+
+## 6. UI æ”¹åŠ¨çº¦æŸï¼ˆå•è‰²é‡åšè¿›è¡Œä¸­ï¼‰
+
+- **æ–¹å‘**ï¼šè‹¹æžœå¼**çº¯é»‘ç™½å•è‰²**ï¼ˆæµ…è‰²=ç™½åº•é»‘å­—ï¼Œæ·±è‰²=é»‘åº•ç™½å­—ï¼‰ï¼ŒåŽ»äºŒæ¬¡å…ƒ/å‰ç¥¥ç‰©/ç«‹ç»˜ã€‚çŠ¶æ€è‰²**åªä¿ç•™ç»¿/ç¥ç€/çº¢**ä¸‰ç§ï¼ˆè¿è¡Œ/å¾…å¤„ç†/å¤±è´¥ï¼‰ã€‚
+- **çº¢çº¿**ï¼šåªæ”¹**æ ·å¼ / å¸ƒå±€ / æ–‡æ¡ˆå±‚çº§**ï¼Œ**ä¸ç¢°**åŽç«¯æŽ¥å£ã€æƒé™ã€æ”¯ä»˜/è®¢å•/å®žä¾‹åˆ›å»º/OTA ç­‰ä¸šåŠ¡é€»è¾‘ä¸Žè·¯ç”±è¡Œä¸ºâ€”â€”**åŠŸèƒ½ 100% ä¸å˜**ã€‚
+- **é…è‰²èµ° token å±‚**ï¼ˆ`client/tailwind.config.js`ï¼‰ï¼šä¸€å †å½©è‰² ramp å·²æ˜ å°„åˆ°ä¸­æ€§ç°ï¼›`rose â†’ çœŸçº¢`ï¼ˆå±é™©/äºæŸè¯­ä¹‰ï¼‰**ä¿ç•™ä¸å¯ç°åŒ–**ï¼›æ¸¸æˆåŒ–æ¨¡å—ï¼ˆæˆå°±/ç­¾åˆ°/æŠ½å¥–/ç¨€æœ‰åº¦ï¼‰å½©è‰²**åˆ»æ„ä¿ç•™**ã€‚
+- `kawaii-cloud.css` **æ¸è¿›æ”¹é€ ã€ä¸é‡å†™**ï¼›å•é¡µåŽ»è‰²ç”¨é¡µé¢ `<style scoped>`ã€‚
+- åŠ¨æ•ˆå¯ç”¨ **GSAP**ï¼ˆå·²è£… gsap-skillsï¼Œè§ `.claude/skills/`ï¼‰ï¼›å°Šé‡ `prefers-reduced-motion`ã€‚
+
+---
+
+## 7. åä½œæ¨¡åž‹ï¼ˆClaude Code â‡„ codexï¼‰
+
+- **Claude Code = æŠ€æœ¯è´Ÿè´£äºº / é›†æˆæ–¹**ï¼šå®šæ ¹å› ã€åˆ‡ä»»åŠ¡ã€å†™è§„æ ¼ã€å®ˆä¸å˜é‡ã€å®¡ diffã€è·‘å®ˆå«ã€çœŸæœºéªŒè¯ã€ç®¡ gitï¼ˆ**ä»…åœ¨ owner åŒæ„æ—¶** commit / pushï¼‰ã€‚
+- **codex = å®žçŽ°å·¥äºº**ï¼šæŒ‰ Claude ç»™çš„è§„æ ¼å®žçŽ°æ”¹åŠ¨ï¼Œå°¤å…¶**ä½Ž/ä¸­å±ã€è‡ªåŒ…å«ã€å¯å¹¶è¡Œ**çš„å—ã€‚
+- **é£Žé™©åˆ†æ¡£**ï¼šé«˜å±è·¯å¾„ç”± Claude å®šæ ¹å›  + æ”¶ç´§è§„æ ¼ï¼›ä½Ž/ä¸­å± codex å¯ç«¯åˆ°ç«¯ä¿®ã€‚**ä»»ä½•ä¸€æ–¹æ”¹å®Œéƒ½è¦è·‘ç›¸å…³å®ˆå«ï¼ŒClaude ç»Ÿä¸€å®¡æŸ¥åŽæ‰è¿›å…¥ä¸‹ä¸€æ­¥ã€‚**
+- **é¿å…å†²çª**ï¼šåŒä¸€æ‰¹æ–‡ä»¶ä¸€æ¬¡åªè®©ä¸€ä¸ª agent æ”¹ã€‚
+
+---
+
+## 8. ä¸€ä¸ªæ”¹åŠ¨çš„ã€Œå®Œæˆã€å®šä¹‰
+
+1. ç›¸å…³ **type-check** é€šè¿‡ï¼›
+2. ç›¸å…³ **å®ˆå«æµ‹è¯•** é€šè¿‡ï¼›
+3. è‹¥åŠ¨å‰ç«¯ â†’ **åŒç«¯ build** é€šè¿‡ï¼›
+4. **çœŸæœºè·‘è¿‡**å—å½±å“æµç¨‹ï¼ˆä¸æ˜¯åªçœ‹æµ‹è¯•ï¼‰ï¼›
+5. **æŠ¥å‘Š**ï¼šæ”¹äº†å“ªäº›æ–‡ä»¶ / ä¸ºä»€ä¹ˆ / é£Žé™© / æ€Žä¹ˆéªŒè¯çš„ã€‚
+
+ä»¥ä¸Šä»»ä¸€æœªæ»¡è¶³ = **æœªå®Œæˆ**ã€‚
+
+rg : The term 'rg' is not recognized as the name of a cmdlet, function, script file, or operable program. Check the 
+spelling of the name, or if a path was included, verify that the path is correct and try again.
+At line:2 char:60
++ $ErrorActionPreference='Stop'; Get-Content -Raw AGENTS.md; rg -n -C 8 ...
++                                                            ~~
+    + CategoryInfo          : ObjectNotFound: (rg:String) [], ParentContainsErrorRecordException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+
+ exited 1 in 649ms:
+# PayIncus / Incudal â€” é¡¹ç›®ç»Ÿä¸€è§„çŸ©ï¼ˆAGENTS.mdï¼‰
+
+> æœ¬æ–‡ä»¶æ˜¯æœ¬ä»“åº“**æ‰€æœ‰ AI agentï¼ˆClaude Codeã€codex ç­‰ï¼‰çš„ç»Ÿä¸€å·¥ä½œè§„èŒƒ**ã€‚
+> `CLAUDE.md` é€šè¿‡ `@AGENTS.md` å¼•ç”¨æœ¬æ–‡ä»¶ â€”â€” Claude Code ä¸Ž codex è¯»åˆ°çš„æ˜¯**åŒä¸€å¥—è§„çŸ©**ï¼Œæ”¹è¿™ä¸€ä¸ªæ–‡ä»¶å³å¯ã€‚
+> æƒå¨è¿ç»´/å‘ç‰ˆäº‹å®žä»¥ä»“åº“æ ¹çš„ `OPERATIONS_HANDOFF.md`ï¼ˆæ“ä½œæ‰‹å†Œï¼‰ä¸Ž `HANDOFF.md`ï¼ˆç‰ˆæœ¬è¯æ®å°è´¦ï¼‰ä¸ºå‡†ã€‚
+
+---
+
+## 0. æ²Ÿé€šè¯­è¨€
+- ä¸Ž owner é»˜è®¤ç”¨**ä¸­æ–‡**æ²Ÿé€šã€‚
+
+## 1. è¿™æ˜¯ä»€ä¹ˆé¡¹ç›®
+**PayIncus**ï¼ˆå†…éƒ¨ä»£å· `incudal`ï¼‰â€”â€”å•†ç”¨ Incusï¼ˆLXC/KVMï¼‰NAT VPS å”®å–ä¸Žäº¤ä»˜å¹³å°ï¼Œ**çº¿ä¸Šè¿è¥ä¸­**ã€‚å½“å‰ç”Ÿäº§ç‰ˆæœ¬ **v1.3.7**ã€‚pnpm monorepoï¼š
+
+| ç›®å½• | æŠ€æœ¯æ ˆ / ä½œç”¨ |
+|------|----------------|
+| `client/` | Vue 3 + Vite SPAã€‚åŒç«¯æž„å»ºï¼ˆ`VITE_APP_ENTRY`ï¼‰â†’ `dist/user`ï¼ˆpay.payincus.comï¼‰+ `dist/admin`ï¼ˆadmin.payincus.comï¼‰ã€‚ä¸¤ç«¯ç‹¬ç«‹æºã€**ä¸å…±äº« cookie åŸŸ**ã€‚ |
+| `server/` | Fastify 5 + Prisma 7 + PostgreSQLï¼Œ~300 TS æ–‡ä»¶ã€~70 è·¯ç”±ã€~15 è°ƒåº¦/workerã€‚æ—  Redisï¼ˆç”¨ PG advisory lockï¼‰ã€‚ä¸‰å¥—é‰´æƒé¢ï¼šWeb çš„ JWT+refresh cookieã€Public API çš„ `pat_`/`poa_` tokenã€host agent çš„ HMACã€‚ |
+| `agent/` | Go å®¿ä¸» agentï¼Œåªè¯»ç›‘æŽ§ï¼ˆå¿ƒè·³/èµ„æº/å®žä¾‹æ€/æµé‡ï¼‰ï¼ŒHMAC ç­¾åï¼Œè‡ªå‡çº§ã€‚ |
+| å…¶å®ƒ | `docs-site/`ï¼ˆVitePressï¼‰ã€`deploy/`ï¼ˆsystemd+Nginxï¼‰ã€`scripts/`ï¼ˆå®‰è£…/æ ¡éªŒ/OTAï¼‰ã€`plugin-templates/`ã€`theme-templates/`ã€‚ |
+
+éƒ¨ç½²ï¼šä¸‰å±‚æ‹†åˆ†ï¼ˆuser / admin / ç§æœ‰åŽç«¯ `127.0.0.1:3001`ï¼‰ï¼Œè£…æœºæ ¹ `/opt/incudal`ï¼ŒåŽŸå­ OTAï¼ˆ`releases/<ver-ts>` + `current` è½¯é“¾ï¼‰+ è‡ªåŠ¨å›žæ»šã€‚
+
+---
+
+## 2. ðŸ”´ ç¡¬è§„çŸ©ï¼ˆä¸å¯åå•†ï¼Œè¿åå³äº‹æ•…ï¼‰
+
+1. **ä¸ç¢°ç”Ÿäº§**ï¼šæœªç» owner æ˜Žç¡®è¦æ±‚ï¼Œ**ç»ä¸** OTAã€å‘å¸ƒã€pushã€æ‰“ tagã€æ”¹ç”Ÿäº§çŽ¯å¢ƒã€‚
+2. **ä¸åšç ´åæ€§ git**ï¼šæœªç» owner æ˜Žç¡®è¦æ±‚ï¼Œ**ç»ä¸** `git reset`ã€`git checkout --`ã€å¼ºåˆ¶åˆ é™¤ã€æ¸…ç†æœªè·Ÿè¸ªæ–‡ä»¶ã€`git commit`/`git push`ã€‚
+3. **é«˜å±è·¯å¾„å…ˆè¯»åŽå†™**ï¼šæ”¹åŠ¨ä»¥ä¸‹ä»»ä¸€é¢†åŸŸï¼Œ**å¿…é¡»å…ˆè¯»ç›¸å…³ä»£ç  + å¯¹åº”å®ˆå«æµ‹è¯•**å†åŠ¨æ‰‹ï¼š
+   > é‰´æƒ Â· æ”¯ä»˜ Â· æƒé™ Â· é£ŽæŽ§ Â· èµ„æºäº¤ä»˜ Â· å…‘æ¢æµç¨‹ Â· å®žä¾‹åˆ›å»º Â· OTA
+4. **æ”¹åŠ¨æœ€å°åŒ–**ï¼šä¿® bug / å‘ç‰ˆæœŸé—´**ä¸åšå¤§èŒƒå›´é‡æž„**ï¼Œåªæ”¹å¿…è¦çš„ã€‚
+5. **ç»ä¸æ³„å¯†**ï¼šä»»ä½• commitã€handoffã€æ€»ç»“ã€æˆªå›¾ä¸­éƒ½**ä¸å¾—**å‡ºçŽ°å‡­è¯ / token / cookie / å¯†é’¥ã€‚
+6. **æœ¬åœ°è¿‡ â‰  ç”Ÿäº§éªŒè¯**ï¼šæœ¬åœ°é€šè¿‡ã€GitHub Actionsã€Release èµ„äº§ã€OTAã€çº¿ä¸Šå®žè¯æ˜¯**åˆ†å¼€çš„è¯æ®**ï¼Œä¸å¯æ··ä¸ºä¸€è°ˆã€‚
+7. **æ¯æ¬¡æ”¹åŠ¨å¿…é¡»è¿‡å¯¹åº”å®ˆå«**ï¼ˆè§ Â§4ï¼‰ï¼Œå¦åˆ™è§†ä¸º**æœªå®Œæˆ**ã€‚
+8. `RUN_DB_CHECKS=0 bash scripts/apply-online-update.sh <ver>` ä¼š**è·³è¿‡ DB/æ”¯ä»˜å°±ç»ªæ ¡éªŒ**ï¼Œä»…åœ¨ owner æ˜Žç¡®æ‰¹å‡†æ—¶ä½¿ç”¨ã€‚
+
+---
+
+## 3. æœ¬åœ°æ€Žä¹ˆè·‘
+
+- **çŽ¯å¢ƒ**ï¼šNode â‰¥ 20ã€pnpm 9.14.2ã€æœ¬åœ° PostgreSQL 16ã€‚
+- **è£…ä¾èµ–**ï¼š`pnpm install`
+- **ä¸€æŠŠèµ·å…¨éƒ¨ï¼ˆserver + user + adminï¼‰**ï¼š`pnpm dev`
+- **åˆ†å¼€èµ·**ï¼š
+  - åŽç«¯ï¼š`NODE_ENV=development JWT_SECRET=dev-secret-12345678 HOST=127.0.0.1 PORT=3001 pnpm --filter server exec tsx watch src/app.ts`
+  - ç”¨æˆ·å‰ç«¯ï¼š`pnpm dev:user`
+  - ç®¡ç†å‰ç«¯ï¼š`pnpm dev:admin`
+- **ç«¯å£**ï¼šåŽç«¯ API **3001** Â· ç”¨æˆ·å‰ç«¯ **3000** Â· ç®¡ç†å‰ç«¯ **3002**ï¼ˆå‰ç«¯ dev ç» proxy æ‰“åˆ° 3001ï¼‰ã€‚
+
+---
+
+## 4. ðŸ›¡ï¸ å®ˆå«æµ‹è¯•çºªå¾‹ï¼ˆæœ¬ä»“åº“çš„å‘½é—¨ï¼‰
+
+`server/package.json` é‡Œæœ‰ **200+ ä¸ªç‹¬ç«‹ `test-*-guards.ts`**ã€‚å®ƒä»¬æŠŠå…³é”®ä¸šåŠ¡/å‰ç«¯ç»“æž„â€œé’‰æ­»â€ï¼Œ`pnpm test` ä¼šè·‘å…¨å¥—ï¼ˆclient+server type-check + å…¨éƒ¨å®ˆå«ï¼‰ã€‚**ä»»ä½•æ”¹åŠ¨å¿…é¡»è®©ç›¸å…³å®ˆå«é€šè¿‡ã€‚**
+
+- **å…¨é‡**ï¼ˆæ…¢ï¼Œå‘ç‰ˆå‰è·‘ï¼‰ï¼š`pnpm test`
+- **å•ä¸ª**ï¼š`pnpm --filter server test:<guard-name>`
+- **å‰ç«¯æœ€å¸¸ç”¨ä¸‰ä¸ª**ï¼š
+  - `test:frontend-route-guards` â€”â€” è·¯ç”± / **è¡¨æ ¼å¸ƒå±€** / `@click` è·¯å¾„æ–­è¨€
+  - `test:frontend-dist-boundary-guards` â€”â€” åŒç«¯ dist è¾¹ç•Œ
+  - `test:frontend-i18n-keys` â€”â€” i18n key å®Œæ•´æ€§
+- **Go agent**ï¼š`pnpm test:agent`
+
+### âš ï¸ è¡¨æ ¼å¸ƒå±€å®ˆå«ï¼ˆæœ€å®¹æ˜“è¸©é›·ï¼‰
+ä¸€æ‰¹è¡¨è¢«å®ˆå«**é”å®š**ä¸ºâ€œ**ç§»åŠ¨å¡ + PC å®šå®½è¡¨ï¼ˆ`table-fixed` / `overflow-hidden`ï¼‰ï¼Œç»ä¸æ¨ªå‘æ»šåŠ¨**â€ï¼Œå¹¶**åå‘ç¦æ­¢** `overflow-x-auto` / `min-w-[...]` / åŽ»æŽ‰ `table-fixed`ã€‚
+- æƒ³ä¿®â€œå®½è¡¨æŒ¤åŽ‹â€æ—¶ï¼š**å…ˆåˆ¤æ–­è¯¥è¡¨æ˜¯å¦åœ¨å®ˆå«æ¸…å•é‡Œ**ã€‚é”å®šè¡¨**åªèƒ½åœ¨ `table-fixed` å†…å¹³è¡¡åˆ—å®½**ï¼ˆåˆ—å®½ç™¾åˆ†æ¯”åˆè®¡ = 100%ï¼‰+ å…è®¸å•å…ƒæ ¼æ¢è¡Œ + é ç§»åŠ¨å¡åº”å¯¹çª„å±ï¼›**ä¸èƒ½**æ”¹æˆæ¨ªå‘æ»šåŠ¨ã€‚
+- å—é”å®šçš„è¡¨ï¼ˆç”¨æˆ·ç«¯ï¼‰ï¼š`MyPackagesView`ã€`MyHostsView`ã€`TransfersView`ã€`OrdersView`ã€`InvitesView`ã€`FlashSalesView`ã€`HostingWalletView`ã€`InstancesView`ã€`LogsView`ã€`EntertainmentView`ï¼›ï¼ˆç®¡ç†ç«¯ï¼‰`admin/BillingView`ã€`admin/ImagesView`ã€`admin/HelpManageView`ã€`admin/MailView`ã€`admin/PluginCenterView`ï¼›ï¼ˆç»„ä»¶ï¼‰`HostPublicIpv4Tab`ã€`InstanceLogsTab`ã€`ConfigEditModal`ã€‚
+- æ”¹ä»»ä¸€å‰ç«¯æ–‡ä»¶åŽ**å¿…è·‘** `test:frontend-route-guards`ã€‚
+
+---
+
+## 5. æž„å»º / æ ¡éªŒå‘½ä»¤
+
+| ç›®çš„ | å‘½ä»¤ |
+|------|------|
+| æž„å»ºï¼ˆå« dist è¾¹ç•Œå®ˆå«ï¼‰| `pnpm build` |
+| åªæž„å»ºå‰ç«¯ / åŽç«¯ | `pnpm build:client` / `pnpm build:server` |
+| Lintï¼ˆæ£€æŸ¥ / è‡ªåŠ¨ä¿®ï¼‰| `pnpm lint` / `pnpm lint:fix` |
+| ç±»åž‹æ£€æŸ¥ | `pnpm --filter client type-check` Â· `pnpm --filter server type-check` |
+| å…¨å¥—å®ˆå« | `pnpm test` |
+| æ–‡æ¡£ç«™å¼€å‘ / æž„å»º | `pnpm docs:dev` / `pnpm docs:build` |
+
+---
+
+## 6. UI æ”¹åŠ¨çº¦æŸï¼ˆå•è‰²é‡åšè¿›è¡Œä¸­ï¼‰
+
+- **æ–¹å‘**ï¼šè‹¹æžœå¼**çº¯é»‘ç™½å•è‰²**ï¼ˆæµ…è‰²=ç™½åº•é»‘å­—ï¼Œæ·±è‰²=é»‘åº•ç™½å­—ï¼‰ï¼ŒåŽ»äºŒæ¬¡å…ƒ/å‰ç¥¥ç‰©/ç«‹ç»˜ã€‚çŠ¶æ€è‰²**åªä¿ç•™ç»¿/ç¥ç€/çº¢**ä¸‰ç§ï¼ˆè¿è¡Œ/å¾…å¤„ç†/å¤±è´¥ï¼‰ã€‚
+- **çº¢çº¿**ï¼šåªæ”¹**æ ·å¼ / å¸ƒå±€ / æ–‡æ¡ˆå±‚çº§**ï¼Œ**ä¸ç¢°**åŽç«¯æŽ¥å£ã€æƒé™ã€æ”¯ä»˜/è®¢å•/å®žä¾‹åˆ›å»º/OTA ç­‰ä¸šåŠ¡é€»è¾‘ä¸Žè·¯ç”±è¡Œä¸ºâ€”â€”**åŠŸèƒ½ 100% ä¸å˜**ã€‚
+- **é…è‰²èµ° token å±‚**ï¼ˆ`client/tailwind.config.js`ï¼‰ï¼šä¸€å †å½©è‰² ramp å·²æ˜ å°„åˆ°ä¸­æ€§ç°ï¼›`rose â†’ çœŸçº¢`ï¼ˆå±é™©/äºæŸè¯­ä¹‰ï¼‰**ä¿ç•™ä¸å¯ç°åŒ–**ï¼›æ¸¸æˆåŒ–æ¨¡å—ï¼ˆæˆå°±/ç­¾åˆ°/æŠ½å¥–/ç¨€æœ‰åº¦ï¼‰å½©è‰²**åˆ»æ„ä¿ç•™**ã€‚
+- `kawaii-cloud.css` **æ¸è¿›æ”¹é€ ã€ä¸é‡å†™**ï¼›å•é¡µåŽ»è‰²ç”¨é¡µé¢ `<style scoped>`ã€‚
+- åŠ¨æ•ˆå¯ç”¨ **GSAP**ï¼ˆå·²è£… gsap-skillsï¼Œè§ `.claude/skills/`ï¼‰ï¼›å°Šé‡ `prefers-reduced-motion`ã€‚
+
+---
+
+## 7. åä½œæ¨¡åž‹ï¼ˆClaude Code â‡„ codexï¼‰
+
+- **Claude Code = æŠ€æœ¯è´Ÿè´£äºº / é›†æˆæ–¹**ï¼šå®šæ ¹å› ã€åˆ‡ä»»åŠ¡ã€å†™è§„æ ¼ã€å®ˆä¸å˜é‡ã€å®¡ diffã€è·‘å®ˆå«ã€çœŸæœºéªŒè¯ã€ç®¡ gitï¼ˆ**ä»…åœ¨ owner åŒæ„æ—¶** commit / pushï¼‰ã€‚
+- **codex = å®žçŽ°å·¥äºº**ï¼šæŒ‰ Claude ç»™çš„è§„æ ¼å®žçŽ°æ”¹åŠ¨ï¼Œå°¤å…¶**ä½Ž/ä¸­å±ã€è‡ªåŒ…å«ã€å¯å¹¶è¡Œ**çš„å—ã€‚
+- **é£Žé™©åˆ†æ¡£**ï¼šé«˜å±è·¯å¾„ç”± Claude å®šæ ¹å›  + æ”¶ç´§è§„æ ¼ï¼›ä½Ž/ä¸­å± codex å¯ç«¯åˆ°ç«¯ä¿®ã€‚**ä»»ä½•ä¸€æ–¹æ”¹å®Œéƒ½è¦è·‘ç›¸å…³å®ˆå«ï¼ŒClaude ç»Ÿä¸€å®¡æŸ¥åŽæ‰è¿›å…¥ä¸‹ä¸€æ­¥ã€‚**
+- **é¿å…å†²çª**ï¼šåŒä¸€æ‰¹æ–‡ä»¶ä¸€æ¬¡åªè®©ä¸€ä¸ª agent æ”¹ã€‚
+
+---
+
+## 8. ä¸€ä¸ªæ”¹åŠ¨çš„ã€Œå®Œæˆã€å®šä¹‰
+
+1. ç›¸å…³ **type-check** é€šè¿‡ï¼›
+2. ç›¸å…³ **å®ˆå«æµ‹è¯•** é€šè¿‡ï¼›
+3. è‹¥åŠ¨å‰ç«¯ â†’ **åŒç«¯ build** é€šè¿‡ï¼›
+4. **çœŸæœºè·‘è¿‡**å—å½±å“æµç¨‹ï¼ˆä¸æ˜¯åªçœ‹æµ‹è¯•ï¼‰ï¼›
+5. **æŠ¥å‘Š**ï¼šæ”¹äº†å“ªäº›æ–‡ä»¶ / ä¸ºä»€ä¹ˆ / é£Žé™© / æ€Žä¹ˆéªŒè¯çš„ã€‚
+
+ä»¥ä¸Šä»»ä¸€æœªæ»¡è¶³ = **æœªå®Œæˆ**ã€‚
+
+rg : The term 'rg' is not recognized as the name of a cmdlet, function, script file, or operable program. Check the 
+spelling of the name, or if a path was included, verify that the path is correct and try again.
+At line:2 char:60
++ $ErrorActionPreference='Stop'; Get-Content -Raw AGENTS.md; rg -n -C 8 ...
++                                                            ~~
+    + CategoryInfo          : ObjectNotFound: (rg:String) [], ParentContainsErrorRecordException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+
+codex
+`rg` 在当前 Windows 环境不可用；`AGENTS.md` 已读取。现在改用 PowerShell 只读定位处理器和守卫，不影响工作区。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$ErrorActionPreference='"'Stop'; "'$matches = Get-ChildItem -Path server'"\\src -Recurse -File -Filter *.ts | Select-String -Pattern 'boost-processes|boostProcesses'; "'$matches | ForEach-Object { "{0}:{1}:{2}" -f $_.Path,$_.LineNumber,$_.Line.Trim() }; Get-ChildItem -Path server -Recurse -File -Filter '"'*instance*guards.ts' | ForEach-Object { "'$_.FullName }' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 796ms:
+C:\Users\Administrator\Desktop\payinces\server\src\routes\instances.ts:5973:}>('/:id/boost-processes', {
+C:\Users\Administrator\Desktop\payinces\server\src\routes\instances.ts:6048:console.error(`[BoostProcesses] Failed to apply to Incus for instance ${instance.name}:`, err)
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-instance-billing-route-id-guards.ts
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-instance-create-turnstile-guards.ts
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-instance-operation-conflict-guards.ts
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-instance-quota-zero-guards.ts
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-instance-route-id-guards.ts
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-instance-task-query-guards.ts
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$ErrorActionPreference='"'Stop'; "'$p='"'server\\src\\routes\\instances.ts'; "'$lines=Get-Content $p; for($i=5880;$i -le 6085;$i++){ if($i -le $lines.Count){ '"'{0,5}: {1}' -f "'$i,$lines[$i-1] } }; Write-Output '"'--- route-id guard ---'; Get-Content -Raw server\\scripts\\test-instance-route-id-guards.ts; Write-Output '--- conflict guard ---'; Get-Content -Raw server\\scripts\\test-instance-operation-conflict-guards.ts" in C:\Users\Administrator\Desktop\payinces
+ succeeded in 643ms:
+ 5880:       })
+ 5881: 
+ 5882:       await createLog(
+ 5883:         user.id,
+ 5884:         'instance',
+ 5885:         'instance.disable_swap',
+ 5886:         `Disabled SWAP for instance "${instance.name}"`,
+ 5887:         'success',
+ 5888:         { instanceId }
+ 5889:       )
+ 5890: 
+ 5891:       return {
+ 5892:         message: 'SWAP disabled',
+ 5893:         swapEnabled: false,
+ 5894:         swapSize: currentSwapSizeMb
+ 5895:       }
+ 5896:     } catch (error) {
+ 5897:       const errorMessage = error instanceof Error ? error.message : String(error)
+ 5898:       await createLog(
+ 5899:         user.id,
+ 5900:         'instance',
+ 5901:         'instance.disable_swap',
+ 5902:         `Failed to disable SWAP for instance "${instance.name}": ${errorMessage}`,
+ 5903:         'failed',
+ 5904:         { instanceId }
+ 5905:       )
+ 5906:       return reply.code(500).send(apiError(ErrorCode.CONFIG_UPDATE_FAILED, errorMessage))
+ 5907:     }
+ 5908:   })
+ 5909: 
+ 5910:   // æ›´æ–°å®žä¾‹é…ç½®è¦†ç›–ï¼ˆå·²ç¦ç”¨ï¼‰
+ 5911:   fastify.patch<{
+ 5912:     Params: { id: string }
+ 5913:     Body: {
+ 5914:       limitsRead?: string | null
+ 5915:       limitsWrite?: string | null
+ 5916:       limitsReadIops?: number | null
+ 5917:       limitsWriteIops?: number | null
+ 5918:       limitsIngress?: string | null
+ 5919:       limitsEgress?: string | null
+ 5920:       limitsProcesses?: number | null
+ 5921:       limitsCpuPriority?: number | null
+ 5922:       bootAutostart?: boolean | null
+ 5923:       bootAutostartPriority?: number | null
+ 5924:       bootAutostartDelay?: number | null
+ 5925:       bootHostShutdownTimeout?: number | null
+ 5926:     }
+ 5927:   }>('/:id/advanced-config', {
+ 5928:     onRequest: [fastify.authenticate],
+ 5929:     schema: {
+ 5930:       body: {
+ 5931:         type: 'object',
+ 5932:         properties: {
+ 5933:           limitsRead: { type: ['string', 'null'] },
+ 5934:           limitsWrite: { type: ['string', 'null'] },
+ 5935:           limitsReadIops: { type: ['integer', 'null'], minimum: 0 },
+ 5936:           limitsWriteIops: { type: ['integer', 'null'], minimum: 0 },
+ 5937:           limitsIngress: { type: ['string', 'null'] },
+ 5938:           limitsEgress: { type: ['string', 'null'] },
+ 5939:           limitsProcesses: { type: ['integer', 'null'], minimum: 0 },
+ 5940:           limitsCpuPriority: { type: ['integer', 'null'], minimum: 0, maximum: 10 },
+ 5941:           bootAutostart: { type: ['boolean', 'null'] },
+ 5942:           bootAutostartPriority: { type: ['integer', 'null'], minimum: 0, maximum: 100 },
+ 5943:           bootAutostartDelay: { type: ['integer', 'null'], minimum: 5, maximum: 600 },
+ 5944:           bootHostShutdownTimeout: { type: ['integer', 'null'], minimum: 30, maximum: 600 }
+ 5945:         }
+ 5946:       }
+ 5947:     }
+ 5948:   }, async (_request: FastifyRequest<{
+ 5949:     Params: { id: string }
+ 5950:     Body: {
+ 5951:       limitsRead?: string | null
+ 5952:       limitsWrite?: string | null
+ 5953:       limitsReadIops?: number | null
+ 5954:       limitsWriteIops?: number | null
+ 5955:       limitsIngress?: string | null
+ 5956:       limitsEgress?: string | null
+ 5957:       limitsProcesses?: number | null
+ 5958:       limitsCpuPriority?: number | null
+ 5959:       bootAutostart?: boolean | null
+ 5960:       bootAutostartPriority?: number | null
+ 5961:       bootAutostartDelay?: number | null
+ 5962:       bootHostShutdownTimeout?: number | null
+ 5963:     }
+ 5964:   }>, reply: FastifyReply) => {
+ 5965:     // åŠŸèƒ½å·²ç¦ç”¨ï¼Œç›´æŽ¥è¿”å›ž 403
+ 5966:     return reply.code(403).send(apiError(ErrorCode.FEATURE_DISABLED))
+ 5967:   })
+ 5968: 
+ 5969:   // æå‡è¿›ç¨‹æ•°é™åˆ¶
+ 5970:   // LXC å®žä¾‹æå‡åˆ° 1000ï¼ŒKVM å®žä¾‹æå‡åˆ° 2000
+ 5971:   fastify.post<{
+ 5972:     Params: { id: string }
+ 5973:   }>('/:id/boost-processes', {
+ 5974:     onRequest: [fastify.authenticate],
+ 5975:     schema: {
+ 5976:       params: {
+ 5977:         type: 'object',
+ 5978:         properties: {
+ 5979:           id: { type: 'string' }
+ 5980:         },
+ 5981:         required: ['id']
+ 5982:       }
+ 5983:     }
+ 5984:   }, async (request: FastifyRequest<{
+ 5985:     Params: { id: string }
+ 5986:   }>, reply: FastifyReply) => {
+ 5987:     const { id } = request.params
+ 5988:     const instanceId = parsePositiveRouteId(id)
+ 5989: 
+ 5990:     if (!instanceId) {
+ 5991:       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
+ 5992:     }
+ 5993: 
+ 5994:     const { user } = request
+ 5995: 
+ 5996:     const instance = await db.getInstanceById(instanceId)
+ 5997:     if (!instance) {
+ 5998:       return reply.code(404).send(apiError(ErrorCode.INSTANCE_NOT_FOUND))
+ 5999:     }
+ 6000: 
+ 6001:     // æƒé™æ£€æŸ¥ï¼šåªæœ‰å®žä¾‹æ‰€æœ‰è€…å¯ä»¥æå‡è¿›ç¨‹æ•°
+ 6002:     if (instance.user_id !== user.id && user.role !== 'admin') {
+ 6003:       return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
+ 6004:     }
+ 6005: 
+ 6006:     // èŽ·å–å®¿ä¸»æœºä¿¡æ¯
+ 6007:     const host = await db.getHostById(instance.host_id)
+ 6008:     if (!host) {
+ 6009:       return reply.code(404).send(apiError(ErrorCode.HOST_NOT_FOUND))
+ 6010:     }
+ 6011: 
+ 6012:     // æ£€æŸ¥è½¬ç§»é”å®š
+ 6013:     if (await checkTransferLock(instanceId, reply)) return
+ 6014: 
+ 6015:     // èŽ·å–å®žä¾‹ç±»åž‹ï¼ˆä»Žå¥—é¤èŽ·å–ï¼‰
+ 6016:     const pkg = instance.package_id ? await db.getPackageById(instance.package_id) : null
+ 6017:     const instanceType = (pkg as { instance_type?: 'container' | 'vm' } | null)?.instance_type || 'container'
+ 6018: 
+ 6019:     // ç¡®å®šè¿›ç¨‹æ•°ä¸Šé™ï¼šLXC=1000, KVM=2000
+ 6020:     const targetLimit = instanceType === 'vm' ? 2000 : 1000
+ 6021: 
+ 6022:     // èŽ·å–å½“å‰è¿›ç¨‹æ•°é…ç½®
+ 6023:     const instanceConfig = await db.getInstanceConfig(instanceId)
+ 6024:     const currentProcesses = instanceConfig?.limits_processes ?? 500
+ 6025: 
+ 6026:     // æ£€æŸ¥æ˜¯å¦å·²è¾¾ä¸Šé™
+ 6027:     if (currentProcesses >= targetLimit) {
+ 6028:       return reply.code(400).send({
+ 6029:         error: `Process limit already at maximum (${targetLimit})`,
+ 6030:         code: 'PROCESS_LIMIT_ALREADY_MAX'
+ 6031:       })
+ 6032:     }
+ 6033: 
+ 6034:     // æ›´æ–°æ•°æ®åº“ä¸­çš„å®žä¾‹é…ç½®
+ 6035:     await db.updateInstanceConfig(instanceId, {
+ 6036:       limitsProcesses: targetLimit
+ 6037:     })
+ 6038: 
+ 6039:     // åº”ç”¨é…ç½®åˆ° Incus å®¹å™¨
+ 6040:     try {
+ 6041:       const client = await getIncusClient(host)
+ 6042:       await updateInstance(client, instance.incus_id, {
+ 6043:         config: {
+ 6044:           'limits.processes': String(targetLimit)
+ 6045:         }
+ 6046:       })
+ 6047:     } catch (err) {
+ 6048:       console.error(`[BoostProcesses] Failed to apply to Incus for instance ${instance.name}:`, err)
+ 6049:       // ä¸æŠ›å‡ºé”™è¯¯ï¼Œæ•°æ®åº“å·²æ›´æ–°æˆåŠŸ
+ 6050:     }
+ 6051: 
+ 6052:     await createLog(
+ 6053:       user.id,
+ 6054:       'instance',
+ 6055:       'instance.boost_processes',
+ 6056:       `Boosted process limit for instance "${instance.name}" to ${targetLimit}`,
+ 6057:       'success',
+ 6058:       { instanceId }
+ 6059:     )
+ 6060: 
+ 6061:     return {
+ 6062:       message: 'Process limit boosted successfully',
+ 6063:       newLimit: targetLimit
+ 6064:     }
+ 6065:   })
+ 6066: 
+ 6067:   // èŽ·å–å®žä¾‹çš„æ´»è·ƒä»»åŠ¡
+ 6068:   fastify.get<{ Params: { id: string } }>('/:id/task', {
+ 6069:     onRequest: [fastify.authenticate]
+ 6070:   }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+ 6071:     const { id } = request.params
+ 6072:     const instanceId = parsePositiveRouteId(id)
+ 6073: 
+ 6074:     if (!instanceId) {
+ 6075:       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
+ 6076:     }
+ 6077: 
+ 6078:     const { user } = request
+ 6079: 
+ 6080:     const instance = await db.getInstanceById(instanceId)
+ 6081:     if (!instance) {
+ 6082:       return reply.code(404).send(apiError(ErrorCode.INSTANCE_NOT_FOUND))
+ 6083:     }
+ 6084: 
+ 6085:     // æƒé™æ£€æŸ¥
+--- route-id guard ---
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+
+const source = readFileSync(resolve(__dirname, '../src/routes/instances.ts'), 'utf8')
+
+assert.ok(
+  source.includes('const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\\d*$/') &&
+    source.includes('function parsePositiveRouteId(value: string): number | null') &&
+    source.includes('Number.isSafeInteger(parsed)'),
+  'instance routes must define strict positive safe-integer route ID parsing'
+)
+
+assert.ok(
+  source.includes('function parseOptionalPositiveQueryInteger(value: string | undefined): number | null | undefined') &&
+    source.includes('function parseInstanceListPageSize(value: string | undefined): number | null | undefined') &&
+    source.includes('const INSTANCE_LIST_MAX_PAGE_SIZE = 100') &&
+    source.includes('function parseOptionalInstanceStatus(value: string | undefined): InstanceStatus | null | undefined'),
+  'instance list route must define strict query parsing helpers for IDs, pagination, and status'
+)
+
+assert.ok(
+  source.includes("id: { type: 'string', pattern: '^[1-9]\\\\d*$' }"),
+  'instance order route schema must reject zero and malformed IDs'
+)
+
+assert.equal(
+  source.match(/parsePositiveRouteId\(id\)/g)?.length ?? 0,
+  27,
+  'all instance routes that destructure id must use strict positive route ID parsing'
+)
+
+assert.equal(
+  source.match(/parsePositiveRouteId\(request\.params\.id\)/g)?.length ?? 0,
+  3,
+  'all direct request.params.id routes must use strict positive route ID parsing'
+)
+
+assert.equal(
+  source.match(/parsePositiveRouteId\(portId\)/g)?.length ?? 0,
+  1,
+  'port mapping delete route must strictly validate portId'
+)
+
+assert.equal(
+  source.match(/parsePositiveRouteId\(taskId\)/g)?.length ?? 0,
+  2,
+  'task detail and cancellation routes must strictly validate taskId'
+)
+
+const listRouteStart = source.indexOf("fastify.get<{")
+assert.ok(listRouteStart >= 0, 'instance list route not found')
+const listRouteEnd = source.indexOf('// èŽ·å–å¯ç”¨å®¿ä¸»æœºåˆ—è¡¨', listRouteStart)
+assert.ok(listRouteEnd > listRouteStart, 'instance list route end marker not found')
+const listRoute = source.slice(listRouteStart, listRouteEnd)
+
+assert.ok(
+  listRoute.includes('const parsedPage = parseOptionalPositiveQueryInteger(page)') &&
+    listRoute.includes('const parsedPageSize = parseInstanceListPageSize(pageSize)') &&
+    listRoute.includes('const parsedHostId = parseOptionalPositiveQueryInteger(hostId)') &&
+    listRoute.includes('const parsedQueryUserId = parseOptionalPositiveQueryInteger(queryUserId)') &&
+    listRoute.includes('const parsedStatus = parseOptionalInstanceStatus(status)'),
+  'instance list route must parse query IDs, pagination, and status through strict helpers'
+)
+assert.ok(
+  listRoute.includes('return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS') &&
+    listRoute.includes('parsedHostId === null') &&
+    listRoute.includes('parsedQueryUserId === null') &&
+    listRoute.includes('parsedStatus === null'),
+  'instance list route must reject malformed query filters before DB access'
+)
+assert.ok(
+  !listRoute.includes('parseInt(page') &&
+    !listRoute.includes('parseInt(pageSize') &&
+    !listRoute.includes('parseInt(queryUserId') &&
+    !listRoute.includes('parseInt(hostId'),
+  'instance list route must not use loose parseInt for query parameters'
+)
+
+for (const forbiddenPattern of [
+  'const instanceId = Number(id)',
+  'const instanceId = Number(request.params.id)',
+  'const portMappingId = Number(portId)',
+  'const taskIdNum = Number(taskId)',
+  'parseInt(request.params.id',
+  'isNaN(instanceId)',
+  'isNaN(portMappingId)',
+  'isNaN(taskIdNum)'
+] as const) {
+  assert.ok(
+    !source.includes(forbiddenPattern),
+    `instance routes must not use loose path ID parsing: ${forbiddenPattern}`
+  )
+}
+
+console.log('instance route ID guard tests passed')
+
+--- conflict guard ---
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+
+const instancesSource = readFileSync(resolve(__dirname, '../src/routes/instances.ts'), 'utf8')
+const dbInstancesSource = readFileSync(resolve(__dirname, '../src/db/instances.ts'), 'utf8')
+const hostsSource = readFileSync(resolve(__dirname, '../src/routes/hosts.ts'), 'utf8')
+
+function sectionBetween(source: string, startMarker: string, endMarker: string): string {
+  const start = source.indexOf(startMarker)
+  assert.notEqual(start, -1, `missing start marker: ${startMarker}`)
+  const end = source.indexOf(endMarker, start + startMarker.length)
+  assert.notEqual(end, -1, `missing end marker: ${endMarker}`)
+  return source.slice(start, end)
+}
+
+const userConflictGuard = sectionBetween(
+  instancesSource,
+  'async function rejectActiveInstanceWorkflowConflict(',
+  'function isUniqueConstraintError('
+)
+
+assert.ok(
+  userConflictGuard.includes('prisma.restoreTask.findFirst') &&
+    userConflictGuard.includes('prisma.backupUploadTask.findFirst') &&
+    userConflictGuard.includes('getActiveTaskForInstance(instanceId)'),
+  'user instance operation guard must check restore, backup upload, and instance tasks'
+)
+assert.ok(
+  userConflictGuard.includes("code: 'RESTORE_IN_PROGRESS'") &&
+    userConflictGuard.includes("code: 'UPLOAD_IN_PROGRESS'") &&
+    userConflictGuard.includes('sendActiveTaskConflict(reply, activeInstanceTask)'),
+  'user instance operation guard must return explicit 409 conflicts for each active workflow'
+)
+
+const guardedUserRoutes = [
+  ['start', '// å¯åŠ¨å®žä¾‹', '// åœæ­¢å®žä¾‹'],
+  ['stop', '// åœæ­¢å®žä¾‹', '// é‡å¯å®žä¾‹'],
+  ['restart', '// é‡å¯å®žä¾‹', '// å°åœå®žä¾‹'],
+  ['rebuild', '// é‡è£…ç³»ç»Ÿ', '// é‡å»ºå®žä¾‹'],
+  ['recreate', '// é‡å»ºå®žä¾‹', '// åˆ é™¤å®žä¾‹'],
+  ['clone', '// ==================== å¤åˆ¶å®žä¾‹ ====================', '// ==================== é‡å‘½åå®žä¾‹ ====================']
+]
+
+for (const [name, startMarker, endMarker] of guardedUserRoutes) {
+  const routeSection = sectionBetween(instancesSource, startMarker, endMarker)
+  assert.ok(
+    routeSection.includes('rejectActiveInstanceWorkflowConflict(reply, instanceId)'),
+    `${name} route must reject active restore/upload/instance workflows before queueing an instance task`
+  )
+}
+
+const hostConflictGuard = sectionBetween(
+  hostsSource,
+  'async function rejectActiveHostInstanceWorkflowConflict(',
+  'async function createHostInstanceTaskOrConflict('
+)
+
+assert.ok(
+  hostConflictGuard.includes('prisma.restoreTask.findFirst') &&
+    hostConflictGuard.includes('prisma.backupUploadTask.findFirst') &&
+    hostConflictGuard.includes('getActiveTaskForInstance(instanceId)'),
+  'host dangerous-action guard must check restore, backup upload, and instance tasks'
+)
+assert.ok(
+  hostsSource.includes('error instanceof InstanceTaskConflictError') &&
+    hostsSource.includes('sendHostActiveTaskConflict(reply, error.activeTask)'),
+  'host dangerous-action task creation must convert concurrent instance task conflicts to 409'
+)
+
+const hostDangerousAction = sectionBetween(
+  hostsSource,
+  "}>('/:id/ops/instances/:instanceId/dangerous-action'",
+  "await createLog(user.id, 'host', `host.ops.${action}`"
+)
+assert.ok(
+  hostDangerousAction.includes('rejectActiveHostInstanceWorkflowConflict(reply, instanceId)'),
+  'host dangerous-action route must reject active restore/upload/instance workflows before queueing'
+)
+assert.ok(
+  hostDangerousAction.includes('createHostInstanceTaskOrConflict(reply, {') &&
+    hostDangerousAction.includes('if (!task) return'),
+  'host dangerous-action route must use conflict-safe task creation'
+)
+
+const syncStatusRoute = sectionBetween(
+  instancesSource,
+  "}>('/:id/sync-status'",
+  "}>('/:id/change-host-options'"
+)
+assert.ok(
+  syncStatusRoute.includes("currentStatus !== 'suspended' && currentStatus !== incusStatus") &&
+    syncStatusRoute.includes('await db.updateInstanceStatus('),
+  'sync-status route must preserve suspended while continuing normal running/stopped status sync'
+)
+
+const updateInstanceStatus = sectionBetween(
+  dbInstancesSource,
+  'export async function updateInstanceStatus(',
+  'export async function updateInstance('
+)
+assert.ok(
+  updateInstanceStatus.includes("status: { notIn: ['deleted', 'suspended'] }") &&
+    updateInstanceStatus.includes('await prisma.instance.updateMany({'),
+  'database status writes must not overwrite suspended with stopped or running'
+)
+
+console.log('instance operation conflict guard tests passed')
+
+
+codex
+现状确认：处理器先把 `limitsProcesses` 写成目标值，Incus 异常仅 `console.error`，随后仍写成功日志并返回成功，确实会漂移。下一步我会只读 DB 配置更新实现和同文件相邻的配置失败处理，确定能否精确恢复原值（含原值为空的情况）及统一错误码。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$ErrorActionPreference='"'Stop'; "'$files=Get-ChildItem server'"\\src -Recurse -File -Filter *.ts; "'$hits=$files | Select-String -Pattern '"'export async function updateInstanceConfig|function updateInstanceConfig|getInstanceConfig\\('; "'$hits | ForEach-Object { "{0}:{1}:{2}" -f $_.Path,$_.LineNumber,$_.Line.Trim() }; $p='"'server\\src\\routes\\instances.ts'; "'$lines=Get-Content $p; $matches=Select-String -Path $p -Pattern '"'CONFIG_UPDATE_FAILED|updateInstanceConfig\\('; foreach("'$m in $matches){$s=[Math]::Max(1,$m.LineNumber-20);$e=[Math]::Min($lines.Count,$m.LineNumber+30); Write-Output ("--- {0} ---" -f $m.LineNumber); for($i=$s;$i -le $e;$i++){'"'{0,5}: {1}' -f "'$i,$lines[$i-1]}}' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 1024ms:
+C:\Users\Administrator\Desktop\payinces\server\src\db\instances.ts:468:export async function getInstanceConfig(instanceId: number): Promise<{
+C:\Users\Administrator\Desktop\payinces\server\src\db\instances.ts:521:export async function updateInstanceConfig(instanceId: number, data: {
+C:\Users\Administrator\Desktop\payinces\server\src\routes\instances.ts:5594:const instanceConfig = await db.getInstanceConfig(instanceId)
+C:\Users\Administrator\Desktop\payinces\server\src\routes\instances.ts:6023:const instanceConfig = await db.getInstanceConfig(instanceId)
+--- 5395 ---
+ 5375: 
+ 5376:       return {
+ 5377:         message: 'Instance configuration updated',
+ 5378:         instance: {
+ 5379:           id: instanceId,
+ 5380:           cpu: newCpu,
+ 5381:           memory: newMemory,
+ 5382:           disk: newDisk
+ 5383:         }
+ 5384:       }
+ 5385:     } catch (error) {
+ 5386:       const errorMessage = error instanceof Error ? error.message : String(error)
+ 5387:       await createLog(
+ 5388:         user.id,
+ 5389:         'instance',
+ 5390:         'instance.update_config',
+ 5391:         `Failed to update instance "${instance.name}" config: ${errorMessage}`,
+ 5392:         'failed',
+ 5393:         { instanceId }
+ 5394:       )
+ 5395:       return reply.code(500).send(apiError(ErrorCode.CONFIG_UPDATE_FAILED, errorMessage))
+ 5396:     }
+ 5397:   })
+ 5398: 
+ 5399:   // ==================== å¤åˆ¶å®žä¾‹ ====================
+ 5400: 
+ 5401:   /**
+ 5402:    * å¤åˆ¶å®žä¾‹ï¼ˆå…‹éš†ï¼‰
+ 5403:    * è¦æ±‚ï¼šå®žä¾‹å¿…é¡»å¤„äºŽåœæ­¢çŠ¶æ€
+ 5404:    */
+ 5405:   fastify.post<{ Params: { id: string } }>('/:id/clone', {
+ 5406:     onRequest: [fastify.authenticateUser]
+ 5407:   }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+ 5408:     const { id } = request.params
+ 5409:     const instanceId = parsePositiveRouteId(id)
+ 5410:     const { user } = request
+ 5411: 
+ 5412:     if (!instanceId) {
+ 5413:       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
+ 5414:     }
+ 5415: 
+ 5416:     const sourceInstance = await db.getInstanceById(instanceId)
+ 5417:     if (!sourceInstance) {
+ 5418:       return reply.code(404).send(apiError(ErrorCode.INSTANCE_NOT_FOUND))
+ 5419:     }
+ 5420: 
+ 5421:     // AUTH004: å…‹éš†å®žä¾‹ä»…é™å®žä¾‹æ‰€æœ‰è€…ï¼Œç®¡ç†å‘˜å’Œå®¿ä¸»æœºæ‰€æœ‰è€…ç¦æ­¢
+ 5422:     // åŽŸå› ï¼šå…‹éš†ä¼šå¤åˆ¶å®žä¾‹æ•°æ®ï¼Œå±žäºŽæ•æ„Ÿæ“ä½œ
+ 5423:     if (sourceInstance.user_id !== user.id) {
+ 5424:       return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
+ 5425:     }
+--- 5803 ---
+ 5783:         `Enabled SWAP for instance "${instance.name}" (${effectiveSwapSizeMb}MB)`,
+ 5784:         'success',
+ 5785:         { instanceId }
+ 5786:       )
+ 5787: 
+ 5788:       return {
+ 5789:         message: 'SWAP enabled',
+ 5790:         swapEnabled: true,
+ 5791:         swapSize: effectiveSwapSizeMb
+ 5792:       }
+ 5793:     } catch (error) {
+ 5794:       const errorMessage = error instanceof Error ? error.message : String(error)
+ 5795:       await createLog(
+ 5796:         user.id,
+ 5797:         'instance',
+ 5798:         'instance.enable_swap',
+ 5799:         `Failed to enable SWAP for instance "${instance.name}": ${errorMessage}`,
+ 5800:         'failed',
+ 5801:         { instanceId }
+ 5802:       )
+ 5803:       return reply.code(500).send(apiError(ErrorCode.CONFIG_UPDATE_FAILED, errorMessage))
+ 5804:     }
+ 5805:   })
+ 5806: 
+ 5807:   // å…³é—­å®žä¾‹ SWAP
+ 5808:   fastify.post<{ Params: { id: string } }>('/:id/swap/disable', {
+ 5809:     onRequest: [fastify.authenticate],
+ 5810:     config: { rateLimit: { max: 5, timeWindow: '1 minute' } }
+ 5811:   }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+ 5812:     const { id } = request.params
+ 5813:     const instanceId = parsePositiveRouteId(id)
+ 5814: 
+ 5815:     if (!instanceId) {
+ 5816:       return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
+ 5817:     }
+ 5818: 
+ 5819:     const { user } = request
+ 5820:     const instance = await db.getInstanceById(instanceId)
+ 5821:     if (!instance) {
+ 5822:       return reply.code(404).send(apiError(ErrorCode.INSTANCE_NOT_FOUND))
+ 5823:     }
+ 5824: 
+ 5825:     if (user.role !== 'admin' && instance.user_id !== user.id) {
+ 5826:       return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
+ 5827:     }
+ 5828: 
+ 5829:     // äº¤æ˜“æ‰€æŒ‚ç‰Œ/äº¤å‰²æœŸé—´ç¦æ­¢ä¿®æ”¹å®žä¾‹è¿è¡Œé…ç½®ã€‚
+ 5830:     if (await checkTransferLock(instanceId, reply)) return
+ 5831: 
+ 5832:     if (instance.status !== 'running' && instance.status !== 'stopped') {
+ 5833:       return reply.code(400).send(apiError(ErrorCode.INSTANCE_STATUS_INVALID, `current status: ${instance.status}`))
+--- 5906 ---
+ 5886:         `Disabled SWAP for instance "${instance.name}"`,
+ 5887:         'success',
+ 5888:         { instanceId }
+ 5889:       )
+ 5890: 
+ 5891:       return {
+ 5892:         message: 'SWAP disabled',
+ 5893:         swapEnabled: false,
+ 5894:         swapSize: currentSwapSizeMb
+ 5895:       }
+ 5896:     } catch (error) {
+ 5897:       const errorMessage = error instanceof Error ? error.message : String(error)
+ 5898:       await createLog(
+ 5899:         user.id,
+ 5900:         'instance',
+ 5901:         'instance.disable_swap',
+ 5902:         `Failed to disable SWAP for instance "${instance.name}": ${errorMessage}`,
+ 5903:         'failed',
+ 5904:         { instanceId }
+ 5905:       )
+ 5906:       return reply.code(500).send(apiError(ErrorCode.CONFIG_UPDATE_FAILED, errorMessage))
+ 5907:     }
+ 5908:   })
+ 5909: 
+ 5910:   // æ›´æ–°å®žä¾‹é…ç½®è¦†ç›–ï¼ˆå·²ç¦ç”¨ï¼‰
+ 5911:   fastify.patch<{
+ 5912:     Params: { id: string }
+ 5913:     Body: {
+ 5914:       limitsRead?: string | null
+ 5915:       limitsWrite?: string | null
+ 5916:       limitsReadIops?: number | null
+ 5917:       limitsWriteIops?: number | null
+ 5918:       limitsIngress?: string | null
+ 5919:       limitsEgress?: string | null
+ 5920:       limitsProcesses?: number | null
+ 5921:       limitsCpuPriority?: number | null
+ 5922:       bootAutostart?: boolean | null
+ 5923:       bootAutostartPriority?: number | null
+ 5924:       bootAutostartDelay?: number | null
+ 5925:       bootHostShutdownTimeout?: number | null
+ 5926:     }
+ 5927:   }>('/:id/advanced-config', {
+ 5928:     onRequest: [fastify.authenticate],
+ 5929:     schema: {
+ 5930:       body: {
+ 5931:         type: 'object',
+ 5932:         properties: {
+ 5933:           limitsRead: { type: ['string', 'null'] },
+ 5934:           limitsWrite: { type: ['string', 'null'] },
+ 5935:           limitsReadIops: { type: ['integer', 'null'], minimum: 0 },
+ 5936:           limitsWriteIops: { type: ['integer', 'null'], minimum: 0 },
+--- 6035 ---
+ 6015:     // èŽ·å–å®žä¾‹ç±»åž‹ï¼ˆä»Žå¥—é¤èŽ·å–ï¼‰
+ 6016:     const pkg = instance.package_id ? await db.getPackageById(instance.package_id) : null
+ 6017:     const instanceType = (pkg as { instance_type?: 'container' | 'vm' } | null)?.instance_type || 'container'
+ 6018: 
+ 6019:     // ç¡®å®šè¿›ç¨‹æ•°ä¸Šé™ï¼šLXC=1000, KVM=2000
+ 6020:     const targetLimit = instanceType === 'vm' ? 2000 : 1000
+ 6021: 
+ 6022:     // èŽ·å–å½“å‰è¿›ç¨‹æ•°é…ç½®
+ 6023:     const instanceConfig = await db.getInstanceConfig(instanceId)
+ 6024:     const currentProcesses = instanceConfig?.limits_processes ?? 500
+ 6025: 
+ 6026:     // æ£€æŸ¥æ˜¯å¦å·²è¾¾ä¸Šé™
+ 6027:     if (currentProcesses >= targetLimit) {
+ 6028:       return reply.code(400).send({
+ 6029:         error: `Process limit already at maximum (${targetLimit})`,
+ 6030:         code: 'PROCESS_LIMIT_ALREADY_MAX'
+ 6031:       })
+ 6032:     }
+ 6033: 
+ 6034:     // æ›´æ–°æ•°æ®åº“ä¸­çš„å®žä¾‹é…ç½®
+ 6035:     await db.updateInstanceConfig(instanceId, {
+ 6036:       limitsProcesses: targetLimit
+ 6037:     })
+ 6038: 
+ 6039:     // åº”ç”¨é…ç½®åˆ° Incus å®¹å™¨
+ 6040:     try {
+ 6041:       const client = await getIncusClient(host)
+ 6042:       await updateInstance(client, instance.incus_id, {
+ 6043:         config: {
+ 6044:           'limits.processes': String(targetLimit)
+ 6045:         }
+ 6046:       })
+ 6047:     } catch (err) {
+ 6048:       console.error(`[BoostProcesses] Failed to apply to Incus for instance ${instance.name}:`, err)
+ 6049:       // ä¸æŠ›å‡ºé”™è¯¯ï¼Œæ•°æ®åº“å·²æ›´æ–°æˆåŠŸ
+ 6050:     }
+ 6051: 
+ 6052:     await createLog(
+ 6053:       user.id,
+ 6054:       'instance',
+ 6055:       'instance.boost_processes',
+ 6056:       `Boosted process limit for instance "${instance.name}" to ${targetLimit}`,
+ 6057:       'success',
+ 6058:       { instanceId }
+ 6059:     )
+ 6060: 
+ 6061:     return {
+ 6062:       message: 'Process limit boosted successfully',
+ 6063:       newLimit: targetLimit
+ 6064:     }
+ 6065:   })
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$ErrorActionPreference='"'Stop'; "'$p='"'server\\src\\db\\instances.ts'; "'$lines=Get-Content $p; for($i=440;$i -le 590;$i++){if($i -le $lines.Count){'"'{0,5}: {1}' -f "'$i,$lines[$i-1]}}; Write-Output '"'--- error codes ---'; Get-ChildItem server\\src -Recurse -File -Filter *.ts | Select-String -Pattern 'CONFIG_UPDATE_FAILED' | ForEach-Object { \"{0}:{1}:{2}\" -f "'$_.Path,$_.LineNumber,$_.Line.Trim() }' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 704ms:
+  440:   cpu?: number
+  441:   memory?: number
+  442:   disk?: number
+  443:   monthlyTrafficLimit?: bigint | null
+  444: }): Promise<void> {
+  445:   const updateData: {
+  446:     cpu?: number
+  447:     memory?: number
+  448:     disk?: number
+  449:     monthlyTrafficLimit?: bigint | null
+  450:   } = {}
+  451: 
+  452:   if (data.cpu !== undefined) updateData.cpu = data.cpu
+  453:   if (data.memory !== undefined) updateData.memory = data.memory
+  454:   if (data.disk !== undefined) updateData.disk = data.disk
+  455:   if (data.monthlyTrafficLimit !== undefined) updateData.monthlyTrafficLimit = data.monthlyTrafficLimit
+  456: 
+  457:   if (Object.keys(updateData).length === 0) return
+  458: 
+  459:   await prisma.instance.update({
+  460:     where: { id },
+  461:     data: updateData
+  462:   })
+  463: }
+  464: 
+  465: /**
+  466:  * èŽ·å–å®žä¾‹é…ç½®ï¼ˆåŒ…å«è¦†ç›–å­—æ®µï¼‰
+  467:  */
+  468: export async function getInstanceConfig(instanceId: number): Promise<{
+  469:   limits_read: string | null
+  470:   limits_write: string | null
+  471:   limits_read_iops: number | null
+  472:   limits_write_iops: number | null
+  473:   limits_ingress: string | null
+  474:   limits_egress: string | null
+  475:   limits_processes: number | null
+  476:   limits_cpu_priority: number | null
+  477:   boot_autostart: boolean | null
+  478:   boot_autostart_priority: number | null
+  479:   boot_autostart_delay: number | null
+  480:   boot_host_shutdown_timeout: number | null
+  481: } | null> {
+  482:   const instance = await prisma.instance.findUnique({
+  483:     where: { id: instanceId },
+  484:     select: {
+  485:       limitsRead: true,
+  486:       limitsWrite: true,
+  487:       limitsReadIops: true,
+  488:       limitsWriteIops: true,
+  489:       limitsIngress: true,
+  490:       limitsEgress: true,
+  491:       limitsProcesses: true,
+  492:       limitsCpuPriority: true,
+  493:       bootAutostart: true,
+  494:       bootAutostartPriority: true,
+  495:       bootAutostartDelay: true,
+  496:       bootHostShutdownTimeout: true
+  497:     }
+  498:   })
+  499: 
+  500:   if (!instance) return null
+  501: 
+  502:   return {
+  503:     limits_read: instance.limitsRead,
+  504:     limits_write: instance.limitsWrite,
+  505:     limits_read_iops: instance.limitsReadIops,
+  506:     limits_write_iops: instance.limitsWriteIops,
+  507:     limits_ingress: instance.limitsIngress,
+  508:     limits_egress: instance.limitsEgress,
+  509:     limits_processes: instance.limitsProcesses,
+  510:     limits_cpu_priority: instance.limitsCpuPriority,
+  511:     boot_autostart: instance.bootAutostart,
+  512:     boot_autostart_priority: instance.bootAutostartPriority,
+  513:     boot_autostart_delay: instance.bootAutostartDelay,
+  514:     boot_host_shutdown_timeout: instance.bootHostShutdownTimeout
+  515:   }
+  516: }
+  517: 
+  518: /**
+  519:  * æ›´æ–°å®žä¾‹é…ç½®è¦†ç›–
+  520:  */
+  521: export async function updateInstanceConfig(instanceId: number, data: {
+  522:   limitsRead?: string | null
+  523:   limitsWrite?: string | null
+  524:   limitsReadIops?: number | null
+  525:   limitsWriteIops?: number | null
+  526:   limitsIngress?: string | null
+  527:   limitsEgress?: string | null
+  528:   limitsProcesses?: number | null
+  529:   limitsCpuPriority?: number | null
+  530:   bootAutostart?: boolean | null
+  531:   bootAutostartPriority?: number | null
+  532:   bootAutostartDelay?: number | null
+  533:   bootHostShutdownTimeout?: number | null
+  534: }): Promise<void> {
+  535:   const updateData: {
+  536:     limitsRead?: string | null
+  537:     limitsWrite?: string | null
+  538:     limitsReadIops?: number | null
+  539:     limitsWriteIops?: number | null
+  540:     limitsIngress?: string | null
+  541:     limitsEgress?: string | null
+  542:     limitsProcesses?: number | null
+  543:     limitsCpuPriority?: number | null
+  544:     bootAutostart?: boolean | null
+  545:     bootAutostartPriority?: number | null
+  546:     bootAutostartDelay?: number | null
+  547:     bootHostShutdownTimeout?: number | null
+  548:   } = {}
+  549: 
+  550:   if (data.limitsRead !== undefined) updateData.limitsRead = data.limitsRead
+  551:   if (data.limitsWrite !== undefined) updateData.limitsWrite = data.limitsWrite
+  552:   if (data.limitsReadIops !== undefined) updateData.limitsReadIops = data.limitsReadIops
+  553:   if (data.limitsWriteIops !== undefined) updateData.limitsWriteIops = data.limitsWriteIops
+  554:   if (data.limitsIngress !== undefined) updateData.limitsIngress = data.limitsIngress
+  555:   if (data.limitsEgress !== undefined) updateData.limitsEgress = data.limitsEgress
+  556:   if (data.limitsProcesses !== undefined) updateData.limitsProcesses = data.limitsProcesses
+  557:   if (data.limitsCpuPriority !== undefined) updateData.limitsCpuPriority = data.limitsCpuPriority
+  558:   if (data.bootAutostart !== undefined) updateData.bootAutostart = data.bootAutostart
+  559:   if (data.bootAutostartPriority !== undefined) updateData.bootAutostartPriority = data.bootAutostartPriority
+  560:   if (data.bootAutostartDelay !== undefined) updateData.bootAutostartDelay = data.bootAutostartDelay
+  561:   if (data.bootHostShutdownTimeout !== undefined) updateData.bootHostShutdownTimeout = data.bootHostShutdownTimeout
+  562: 
+  563:   if (Object.keys(updateData).length === 0) return
+  564: 
+  565:   await prisma.instance.update({
+  566:     where: { id: instanceId },
+  567:     data: updateData
+  568:   })
+  569: }
+  570: 
+  571: /**
+  572:  * æ›´æ–°å®žä¾‹ SWAP é…ç½®
+  573:  */
+  574: export async function updateInstanceSwap(instanceId: number, data: {
+  575:   swapEnabled?: boolean
+  576:   swapSize?: number | null
+  577: }): Promise<void> {
+  578:   const updateData: {
+  579:     swapEnabled?: boolean
+  580:     swapSize?: number | null
+  581:   } = {}
+  582: 
+  583:   if (data.swapEnabled !== undefined) updateData.swapEnabled = data.swapEnabled
+  584:   if (data.swapSize !== undefined) updateData.swapSize = data.swapSize ?? null
+  585: 
+  586:   if (Object.keys(updateData).length === 0) return
+  587: 
+  588:   await prisma.instance.update({
+  589:     where: { id: instanceId },
+  590:     data: updateData
+--- error codes ---
+C:\Users\Administrator\Desktop\payinces\server\src\lib\errors.ts:243:STORAGE_CONFIG_UPDATE_FAILED: 'STORAGE_CONFIG_UPDATE_FAILED',
+C:\Users\Administrator\Desktop\payinces\server\src\lib\errors.ts:256:CONFIG_UPDATE_FAILED: 'CONFIG_UPDATE_FAILED',
+C:\Users\Administrator\Desktop\payinces\server\src\lib\errors.ts:590:[ErrorCode.STORAGE_CONFIG_UPDATE_FAILED]: 'Failed to update storage configuration',
+C:\Users\Administrator\Desktop\payinces\server\src\lib\errors.ts:603:[ErrorCode.CONFIG_UPDATE_FAILED]: 'Failed to update instance configuration',
+C:\Users\Administrator\Desktop\payinces\server\src\routes\instances.ts:5395:return reply.code(500).send(apiError(ErrorCode.CONFIG_UPDATE_FAILED, errorMessage))
+C:\Users\Administrator\Desktop\payinces\server\src\routes\instances.ts:5803:return reply.code(500).send(apiError(ErrorCode.CONFIG_UPDATE_FAILED, errorMessage))
+C:\Users\Administrator\Desktop\payinces\server\src\routes\instances.ts:5906:return reply.code(500).send(apiError(ErrorCode.CONFIG_UPDATE_FAILED, errorMessage))
+C:\Users\Administrator\Desktop\payinces\server\src\routes\storage-configs.ts:302:return reply.code(500).send(apiError(ErrorCode.STORAGE_CONFIG_UPDATE_FAILED, errorMessage))
+C:\Users\Administrator\Desktop\payinces\server\src\routes\storage-configs.ts:411:return reply.code(500).send(apiError(ErrorCode.STORAGE_CONFIG_UPDATE_FAILED))
+
+codex
+DB 层允许把 `limitsProcesses` 精确写回 `number | null`，因此采用“回滚优先”：保存原始数据库值（不把 `null` 错写成默认 500），Incus 失败后立即恢复；若回滚本身也失败，则返回明确的部分失败响应，标出 DB 仍为目标值、Incus 状态未知，且两条失败路径都写失败日志，不会继续成功日志。现在先检查目标文件是否已有未提交改动，再做最小补丁。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$ErrorActionPreference='"'Stop'; git status --short -- server/src/routes/instances.ts server/scripts/test-instance-route-id-guards.ts server/scripts/test-instance-operation-conflict-guards.ts; git diff -- server/src/routes/instances.ts server/scripts/test-instance-route-id-guards.ts" in C:\Users\Administrator\Desktop\payinces
+ succeeded in 614ms:
+ M server/scripts/test-instance-operation-conflict-guards.ts
+ M server/src/routes/instances.ts
+diff --git a/server/src/routes/instances.ts b/server/src/routes/instances.ts
+index 714f500..a73f706 100644
+--- a/server/src/routes/instances.ts
++++ b/server/src/routes/instances.ts
+@@ -119,6 +119,7 @@ const PORT_MAPPING_LOCK_OPTIONS = {
+   waitTimeoutMs: 5000,
+   retryIntervalMs: 100
+ }
++const MAX_BATCH_PORT_MAPPINGS = 100
+ 
+ function getInstancePortMappingLockKey(instanceId: number): string {
+   return `instance:${instanceId}:port-mappings`
+@@ -1445,7 +1446,21 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
+     const requestedMemory = selectedPlan ? selectedPlan.memory : (memory || 128)
+     const requestedDisk = selectedPlan ? selectedPlan.disk : (disk || 512)
+ 
+-    // 注意：能否开通实例只跟宿主机的资源有关，不检查套餐包资源限制
++    if (!selectedPlan) {
++      if (requestedCpu > pkg.cpu_max) {
++        return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS,
++          `CPU 不能超过套餐上限 ${pkg.cpu_max}%`))
++      }
++      if (requestedMemory > pkg.memory_max) {
++        return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS,
++          `内存不能超过套餐上限 ${pkg.memory_max}MB`))
++      }
++      if (requestedDisk > pkg.disk_max) {
++        return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS,
++          `磁盘不能超过套餐上限 ${pkg.disk_max}MB`))
++      }
++    }
++
+     // 宿主机资源检查在 selectAvailableHost 中进行
+ 
+     // 3. 验证认证方式（必须提供 SSH 公钥）
+@@ -1655,6 +1670,7 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
+     let staticIPv4: string | null = null
+     let staticIPv6: string | null = null
+     let publicIpv4Assignment: PublicIpv4Assignment | null = null
++    let staticIpAllocationError: string | null = null
+     let selectedStoragePool: string | null = null
+     const normalizedPlanTrafficLimitSpeed = selectedPlan
+       ? normalizePlanTrafficLimitSpeed(selectedPlan.trafficLimitSpeed)
+@@ -2063,7 +2079,6 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
+     }
+ 
+     // 事务成功后，完成 IP 分配和存储池选择（这些不需要在事务中）
+-    // 如果这些步骤失败，实例会处于 creating 状态，后续清理任务会处理
+ 
+     // 类型断言：host 在事务成功后一定不为 null
+     if (!host) {
+@@ -2076,7 +2091,10 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
+       ipv6_gateway?: string | null
+       ipv6_parent_interface?: string | null
+     }
+-    console.log(`[Provisioning] Host IPv6 config: mode=${hostWithIpv6.ipv6_mode}, subnet=${hostWithIpv6.ipv6_subnet}, gateway=${hostWithIpv6.ipv6_gateway}, parent_interface=${hostWithIpv6.ipv6_parent_interface}`)
++    let finalConfigPayload = configPayload
++
++    try {
++      console.log(`[Provisioning] Host IPv6 config: mode=${hostWithIpv6.ipv6_mode}, subnet=${hostWithIpv6.ipv6_subnet}, gateway=${hostWithIpv6.ipv6_gateway}, parent_interface=${hostWithIpv6.ipv6_parent_interface}`)
+ 
+     if (networkModeNeedsNatIpv4(networkMode)) {
+       try {
+@@ -2098,34 +2116,19 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
+         }
+ 
+         if (!staticIPv4) {
+-          console.error(`[Provisioning] IPv4 分配失败（已尝试 ${maxAttempts} 次），实例将使用动态 IP`)
+-          // 不在这里返回错误，让实例使用动态 IP
++          staticIpAllocationError = `NAT 内网 IPv4 分配失败（已尝试 ${maxAttempts} 次）`
++          console.error(`[Provisioning] ${staticIpAllocationError}`)
+         }
+       } catch (err) {
+         console.error(`[Provisioning] IPv4 分配错误:`, err)
+-        // 不在这里返回错误，让实例使用动态 IP
++        staticIpAllocationError = `NAT 内网 IPv4 分配错误: ${err instanceof Error ? err.message : String(err)}`
+       }
+     } else if (networkModeNeedsPublicIpv4(networkMode)) {
+       publicIpv4Assignment = await prisma.$transaction(async (tx) => {
+         return db.reservePublicIpv4ForInstance(tx, { hostId: host.id, instanceId })
+       })
+       if (!publicIpv4Assignment) {
+-        await prisma.instance.updateMany({
+-          where: { id: instanceId, status: 'creating' },
+-          data: { status: 'error' }
+-        }).catch(() => null)
+-        await db.rollbackResources({
+-          hostId: host.id,
+-          cpu: requestedCpu,
+-          memory: requestedMemory,
+-          disk: requestedDisk,
+-          portCount: networkModeAllowsPortMapping(networkMode) ? (pkgWithExtras.port_limit || 0) : 0
+-        }).catch(err => console.error('[Provisioning] 独立 IPv4 分配失败后资源回滚失败:', err))
+-        await db.compensateFailedInstancePurchase(instanceId, user.id, host.id).catch(err => {
+-          console.error('[Provisioning] 独立 IPv4 分配失败后计费补偿失败:', err)
+-        })
+-        return reply.code(503).send(apiError(ErrorCode.HOST_RESOURCES_INSUFFICIENT,
+-          `宿主机 ${host.name} 没有可用独立 IPv4 地址`))
++        throw new Error(`宿主机 ${host.name} 没有可用独立 IPv4 地址`)
+       }
+       staticIPv4 = publicIpv4Assignment.address
+       console.log(`[Provisioning] 分配独立 IPv4: ${staticIPv4}`)
+@@ -2134,8 +2137,11 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
+     // 分配 IPv6（仅当存在 IPv6 子网配置且是 Routed 模式时，即需要独立 IPv6 地址）
+     // nat_ipv6 和 ipv6_only 从子网分配独立 IPv6，nat_ipv6_nat 和 ipv6_nat 共享宿主机 IPv6
+     const needsRoutedIPv6 = networkModeNeedsRoutedIpv6(networkMode)
+-    if (hostWithIpv6.ipv6_subnet && needsRoutedIPv6) {
+-      try {
++    if (needsRoutedIPv6) {
++      if (!hostWithIpv6.ipv6_subnet) {
++        staticIpAllocationError ||= '宿主机未配置 routed IPv6 子网'
++        console.error(`[Provisioning] ${staticIpAllocationError}`)
++      } else try {
+         let attempts = 0
+         const maxAttempts = 50
+ 
+@@ -2153,19 +2159,24 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
+         }
+ 
+         if (!staticIPv6) {
+-          console.warn(`[Provisioning] IPv6 分配失败（已尝试 ${maxAttempts} 次），将使用动态分配`)
++          staticIpAllocationError ||= `routed IPv6 分配失败（已尝试 ${maxAttempts} 次）`
++          console.error(`[Provisioning] ${staticIpAllocationError}`)
+         }
+       } catch (err) {
+-        console.warn(`[Provisioning] IPv6 分配错误，将使用动态分配:`, err)
++        console.error(`[Provisioning] routed IPv6 分配错误:`, err)
+         staticIPv6 = null
++        staticIpAllocationError ||= `routed IPv6 分配错误: ${err instanceof Error ? err.message : String(err)}`
+       }
+     }
+ 
++    if (staticIpAllocationError) {
++      throw new Error(staticIpAllocationError)
++    }
++
+     console.log(`[Provisioning] IP 分配完成: IPv4=${staticIPv4}, IPv6=${staticIPv6}`)
+ 
+     // VM 和容器都需要在 IP 分配完成后重新生成 cloud-init network-config
+     // 确保静态 IPv4 和 IPv6 地址正确注入到 guest OS
+-    let finalConfigPayload = configPayload
+     const ipv4Cidr = publicIpv4Assignment
+       ? `${publicIpv4Assignment.address}/${publicIpv4Assignment.prefixLength}`
+       : (staticIPv4 ? `${staticIPv4}/22` : null)
+@@ -2225,6 +2236,21 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
+         storagePoolName: selectedStoragePool
+       }
+     })
++    } catch (error) {
++      const errorMessage = error instanceof Error ? error.message : String(error)
++      console.error(`[Provisioning] 事务后同步准备失败:`, errorMessage)
++      await compensateFailedInstanceCreation({
++        instanceId,
++        host,
++        userId: user.id,
++        resources: { cpu: requestedCpu, memory: requestedMemory, disk: requestedDisk },
++        networkMode,
++        portLimit: pkgWithExtras.port_limit || 0,
++        instanceName: incusId,
++        errorMessage
++      })
++      return reply.code(503).send(apiError(ErrorCode.HOST_RESOURCES_INSUFFICIENT, errorMessage))
++    }
+ 
+     // ==================== 阶段六: 异步执行创建 ====================
+     // Cast pkg to include advanced config fields
+@@ -3325,7 +3351,7 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
+       let proxySitesUpdated = 0
+ 
+       // 更新数据库状态
+-      if (currentStatus !== incusStatus) {
++      if (currentStatus !== 'suspended' && currentStatus !== incusStatus) {
+         await db.updateInstanceStatus(
+           instanceId,
+           incusStatus as 'creating' | 'running' | 'stopped' | 'error'
+@@ -3399,7 +3425,7 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
+         statusChanged,
+         from: statusChanged ? currentStatus : undefined,
+         to: statusChanged ? incusStatus : undefined,
+-        currentStatus: incusStatus,
++        currentStatus: currentStatus === 'suspended' ? currentStatus : incusStatus,
+         ipv4Changed,
+         oldIpv4: ipv4Changed ? oldIpv4 : undefined,
+         newIpv4: ipv4Changed ? newIpv4 : undefined,
+@@ -4450,11 +4476,11 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
+           return reply.code(400).send(apiError(ErrorCode.PORT_RANGE_INVALID, `${host.nat_port_start}-${host.nat_port_end}`))
+         }
+       }
++    }
+ 
+-      const existingPort = await db.checkPortInUse(instance.host_id, allocatedPort, protocol)
+-      if (existingPort) {
+-        return reply.code(400).send(apiError(ErrorCode.PORT_IN_USE))
+-      }
++    const existingPort = await db.checkPortInUse(instance.host_id, allocatedPort, protocol)
++    if (existingPort) {
++      return reply.code(400).send(apiError(ErrorCode.PORT_IN_USE))
+     }
+ 
+     const createdDeviceNames: string[] = []
+@@ -4651,6 +4677,7 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
+           remark: { type: 'string', maxLength: 100 },
+           portMappings: {
+             type: 'array',
++            maxItems: MAX_BATCH_PORT_MAPPINGS,
+             items: {
+               type: 'object',
+               required: ['privatePort', 'publicPort'],
+@@ -4717,25 +4744,10 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
+     }
+ 
+     try {
+-    // 2. 计算端口数量
++    // 2. 计算连续端口数量（用于生成最终映射列表）
+     const privatePortCount = privatePortEnd - privatePortStart + 1
+-    if (privatePortCount <= 0 || privatePortCount > 100) {
+-      return reply.code(400).send({ error: '端口范围无效，最多支持 100 个连续端口' })
+-    }
+-
+-    // 3. 检查配额
+-    // TCP/UDP 各占 1 个配额，Both 占 2 个配额
+-    const quotaNeeded = protocol === 'both' ? privatePortCount * 2 : privatePortCount
+-    const quotaCheck = await db.checkPortQuota(instance.user_id, instanceId)
+-    const remainingQuota = quotaCheck.limit - quotaCheck.current
+-
+-    if (remainingQuota < quotaNeeded) {
+-      return reply.code(400).send({
+-        error: ErrorCode.QUOTA_PORT_BATCH_EXCEEDED,
+-        message: `配额不足，需要 ${quotaNeeded} 个，剩余 ${remainingQuota} 个`,
+-        needed: quotaNeeded,
+-        remaining: remainingQuota
+-      })
++    if (privatePortCount <= 0 || privatePortCount > MAX_BATCH_PORT_MAPPINGS) {
++      return reply.code(400).send({ error: `端口范围无效，最多支持 ${MAX_BATCH_PORT_MAPPINGS} 个连续端口` })
+     }
+ 
+     const host = await db.getHostById(instance.host_id)
+@@ -4743,7 +4755,7 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
+       return reply.code(404).send(apiError(ErrorCode.HOST_NOT_FOUND))
+     }
+ 
+-    // 4. 确定映射关系
++    // 3. 统一归一为最终映射列表
+     let finalMappings: Array<{ privatePort: number; publicPort: number }> = []
+ 
+     if (portMappings && portMappings.length > 0) {
+@@ -4756,13 +4768,6 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
+         return reply.code(400).send(apiError(ErrorCode.PORT_RANGE_MISMATCH, `内网 ${privatePortCount} 个端口，公网 ${publicPortCount} 个端口`))
+       }
+ 
+-      // 检查公网端口范围是否在允许范围内
+-      if (host.nat_port_start && host.nat_port_end) {
+-        if (publicPortStart < host.nat_port_start || publicPortEnd > host.nat_port_end) {
+-          return reply.code(400).send(apiError(ErrorCode.PORT_RANGE_INVALID, `允许范围: ${host.nat_port_start}-${host.nat_port_end}`))
+-        }
+-      }
+-
+       // 生成映射关系
+       for (let i = 0; i < privatePortCount; i++) {
+         finalMappings.push({
+@@ -4832,6 +4837,46 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
+       }
+     }
+ 
++    // 4. 所有入参路径统一按最终映射校验数量、唯一性与 NAT 允许范围
++    if (finalMappings.length === 0 || finalMappings.length > MAX_BATCH_PORT_MAPPINGS) {
++      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, `端口映射数量必须为 1-${MAX_BATCH_PORT_MAPPINGS}`))
++    }
++
++    const privatePorts = finalMappings.map(mapping => mapping.privatePort)
++    const publicPorts = finalMappings.map(mapping => mapping.publicPort)
++    if (new Set(privatePorts).size !== finalMappings.length) {
++      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '内网端口不能重复'))
++    }
++    if (new Set(publicPorts).size !== finalMappings.length) {
++      return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, '公网端口不能重复'))
++    }
++
++    const natPortStart = host.nat_port_start
++    const natPortEnd = host.nat_port_end
++    if (!natPortStart || !natPortEnd) {
++      return reply.code(400).send(apiError(ErrorCode.PORT_RANGE_INVALID, '宿主机未配置 NAT 端口范围'))
++    }
++    const hasOutOfRangePort = finalMappings.some(mapping =>
++      mapping.privatePort < natPortStart || mapping.privatePort > natPortEnd ||
++      mapping.publicPort < natPortStart || mapping.publicPort > natPortEnd
++    )
++    if (hasOutOfRangePort) {
++      return reply.code(400).send(apiError(ErrorCode.PORT_RANGE_INVALID, `允许范围: ${natPortStart}-${natPortEnd}`))
++    }
++
++    // 5. 最终映射数量计入实例套餐配额；Both 会实际创建 TCP/UDP 两组映射
++    const quotaNeeded = finalMappings.length * (protocol === 'both' ? 2 : 1)
++    const quotaCheck = await db.checkPortQuota(instance.user_id, instanceId)
++    const remainingQuota = quotaCheck.limit - quotaCheck.current
++    if (remainingQuota < quotaNeeded) {
++      return reply.code(400).send({
++        error: ErrorCode.QUOTA_PORT_BATCH_EXCEEDED,
++        message: `配额不足，需要 ${quotaNeeded} 个，剩余 ${remainingQuota} 个`,
++        needed: quotaNeeded,
++        remaining: remainingQuota
++      })
++    }
++
+     // 6. 批量创建映射
+     const createdMappings: Array<{ id: number; protocol: string; publicPort: number; privatePort: number }> = []
+     const createdDeviceNames: string[] = []
+@@ -5300,10 +5345,11 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
+ 
+       // 更新宿主机资源使用量
+       if (cpuDelta !== 0 || memoryDelta !== 0 || diskDelta !== 0) {
++        const usedResources = await db.calculateHostResourcesFromInstances(instance.host_id)
+         await db.updateHostResources(instance.host_id, {
+-          cpuUsed: host.cpu_used + cpuDelta,
+-          memoryUsed: host.memory_used + memoryDelta,
+-          diskUsed: host.disk_used + diskDelta
++          cpuUsed: usedResources.cpuUsed,
++          memoryUsed: usedResources.memoryUsed,
++          diskUsed: usedResources.diskUsed
+         })
+       }
+ 
+@@ -6587,6 +6633,123 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
+ 
+ // ==================== 辅助函数 ====================
+ 
++async function releaseReservedPublicIpv4ForFailedCreation(
++  instanceId: number,
++  networkMode: NetworkMode
++): Promise<void> {
++  if (!networkModeNeedsPublicIpv4(networkMode)) {
++    return
++  }
++
++  await prisma.$transaction((tx) => db.releasePublicIpv4ForInstance(tx, instanceId))
++  console.log(`[Provisioning] 独立 IPv4 已释放: instance=${instanceId}`)
++}
++
++async function compensateFailedInstanceCreation(input: {
++  instanceId: number
++  host: Host
++  userId: number
++  resources: { cpu: number; memory: number; disk: number }
++  networkMode: NetworkMode
++  portLimit: number
++  instanceName: string
++  errorMessage: string
++}): Promise<boolean> {
++  const {
++    instanceId,
++    host,
++    userId,
++    resources,
++    networkMode,
++    portLimit,
++    instanceName,
++    errorMessage
++  } = input
++  const updateResult = await prisma.instance.updateMany({
++    where: {
++      id: instanceId,
++      status: 'creating'
++    },
++    data: {
++      status: 'error'
++    }
++  })
++
++  // creating -> error 是资源、IPv4 和账务补偿的幂等总闸门。
++  if (updateResult.count === 0) {
++    console.log(`[Provisioning] 实例 ${instanceId} 已被其他失败补偿或超时清理处理，跳过重复补偿`)
++    return false
++  }
++
++  const rollbackPortCount = networkModeAllowsPortMapping(networkMode) ? portLimit : 0
++  try {
++    await db.rollbackResources({
++      hostId: host.id,
++      cpu: resources.cpu,
++      memory: resources.memory,
++      disk: resources.disk,
++      portCount: rollbackPortCount
++    })
++    emitServiceResourceRollbackPluginEvent({
++      event: 'service.resource.rollback.completed',
++      instanceId,
++      userId,
++      hostId: host.id,
++      instanceName,
++      source: 'instance.provisioning.failure',
++      reason: 'provisioning_failed',
++      cpu: resources.cpu,
++      memory: resources.memory,
++      disk: resources.disk,
++      portCount: rollbackPortCount,
++      dedupeKey: `service.resource.rollback.completed:provisioning:${instanceId}`
++    })
++    console.log(`[Provisioning] 用户 ${userId} 资源已回滚 (CPU=${resources.cpu}, Mem=${resources.memory}MB, Disk=${resources.disk}MB)`)
++  } catch (rollbackErr) {
++    emitServiceResourceRollbackPluginEvent({
++      event: 'service.resource.rollback.failed',
++      instanceId,
++      userId,
++      hostId: host.id,
++      instanceName,
++      source: 'instance.provisioning.failure',
++      reason: 'rollback_failed',
++      cpu: resources.cpu,
++      memory: resources.memory,
++      disk: resources.disk,
++      portCount: rollbackPortCount,
++      dedupeKey: `service.resource.rollback.failed:provisioning:${instanceId}`,
++      metadata: { failureType: 'resource_rollback_failed' }
++    })
++    console.error(`[Provisioning] 资源回滚失败:`, rollbackErr)
++  }
++
++  try {
++    await releaseReservedPublicIpv4ForFailedCreation(instanceId, networkMode)
++  } catch (releaseErr) {
++    console.error(`[Provisioning] 释放独立 IPv4 失败:`, releaseErr)
++  }
++
++  try {
++    const compensation = await db.compensateFailedInstancePurchase(instanceId, userId, host.id)
++    await markFlashSaleFailed(instanceId, errorMessage, compensation.refunded).catch((err) => {
++      console.error(`[Provisioning] 秒杀失败状态回写失败:`, err)
++    })
++    if (compensation.refunded) {
++      console.log(`[Provisioning] 实例 ${instanceId} 创建失败已自动退款 ¥${compensation.refundAmount.toFixed(2)}`)
++    } else if (compensation.reason !== 'not_paid_purchase') {
++      console.log(`[Provisioning] 实例 ${instanceId} 创建失败无需退款: ${compensation.reason || 'unknown'}`)
++    }
++  } catch (compensationErr) {
++    console.error(`[Provisioning] 实例 ${instanceId} 创建失败后的账务补偿失败:`, compensationErr)
++    await markFlashSaleFailed(instanceId, errorMessage, false).catch((err) => {
++      console.error(`[Provisioning] 秒杀失败状态回写失败:`, err)
++    })
++  }
++
++  return true
++}
++
+ /**
+  * 异步创建实例
+  */
+@@ -6883,92 +7046,17 @@ async function createInstanceAsync(
+     const errorMessage = error instanceof Error ? error.message : String(error)
+     console.error(`[Provisioning] ✘ 实例 ${instanceId} 创建失败:`, errorMessage)
+ 
+-    // 使用原子操作更新状态，防止与超时清理任务竞争
+-    // 只有状态仍为 creating 时才更新为 error 并回滚资源
+-    const updateResult = await prisma.instance.updateMany({
+-      where: {
+-        id: instanceId,
+-        status: 'creating' // 原子条件
+-      },
+-      data: {
+-        status: 'error'
+-      }
++    await compensateFailedInstanceCreation({
++      instanceId,
++      host,
++      userId,
++      resources,
++      networkMode: config.networkMode,
++      portLimit: config.portLimit || 0,
++      instanceName: config.name,
++      errorMessage
+     })
+ 
+-    // 只有成功更新状态时才回滚资源（避免与超时清理任务双重回滚）
+-    if (updateResult.count > 0 && userId && resources) {
+-      const rollbackPortCount = networkModeAllowsPortMapping(config.networkMode) ? (config.portLimit || 0) : 0
+-      try {
+-        await db.rollbackResources({
+-          hostId: host.id,
+-          cpu: resources.cpu,
+-          memory: resources.memory,
+-          disk: resources.disk,
+-          portCount: rollbackPortCount
+-        })
+-        emitServiceResourceRollbackPluginEvent({
+-          event: 'service.resource.rollback.completed',
+-          instanceId,
+-          userId,
+-          hostId: host.id,
+-          instanceName: config.name,
+-          source: 'instance.provisioning.failure',
+-          reason: 'provisioning_failed',
+-          cpu: resources.cpu,
+-          memory: resources.memory,
+-          disk: resources.disk,
+-          portCount: rollbackPortCount,
+-          dedupeKey: `service.resource.rollback.completed:provisioning:${instanceId}`
+-        })
+-        console.log(`[Provisioning] 用户 ${userId} 资源已回滚 (CPU=${resources.cpu}, Mem=${resources.memory}MB, Disk=${resources.disk}MB)`)
+-      } catch (rollbackErr) {
+-        emitServiceResourceRollbackPluginEvent({
+-          event: 'service.resource.rollback.failed',
+-          instanceId,
+-          userId,
+-          hostId: host.id,
+-          instanceName: config.name,
+-          source: 'instance.provisioning.failure',
+-          reason: 'rollback_failed',
+-          cpu: resources.cpu,
+-          memory: resources.memory,
+-          disk: resources.disk,
+-          portCount: rollbackPortCount,
+-          dedupeKey: `service.resource.rollback.failed:provisioning:${instanceId}`,
+-          metadata: { failureType: 'resource_rollback_failed' }
+-        })
+-        console.error(`[Provisioning] 资源回滚失败:`, rollbackErr)
+-      }
+-
+-      if (networkModeNeedsPublicIpv4(config.networkMode)) {
+-        try {
+-          await prisma.$transaction((tx) => db.releasePublicIpv4ForInstance(tx, instanceId))
+-          console.log(`[Provisioning] 独立 IPv4 已释放: instance=${instanceId}`)
+-        } catch (releaseErr) {
+-          console.error(`[Provisioning] 释放独立 IPv4 失败:`, releaseErr)
+-        }
+-      }
+-
+-      try {
+-        const compensation = await db.compensateFailedInstancePurchase(instanceId, userId, host.id)
+-        await markFlashSaleFailed(instanceId, errorMessage, compensation.refunded).catch((err) => {
+-          console.error(`[Provisioning] 秒杀失败状态回写失败:`, err)
+-        })
+-        if (compensation.refunded) {
+-          console.log(`[Provisioning] 实例 ${instanceId} 创建失败已自动退款 ¥${compensation.refundAmount.toFixed(2)}`)
+-        } else if (compensation.reason !== 'not_paid_purchase') {
+-          console.log(`[Provisioning] 实例 ${instanceId} 创建失败无需退款: ${compensation.reason || 'unknown'}`)
+-        }
+-      } catch (compensationErr) {
+-        console.error(`[Provisioning] 实例 ${instanceId} 创建失败后的账务补偿失败:`, compensationErr)
+-        await markFlashSaleFailed(instanceId, errorMessage, false).catch((err) => {
+-          console.error(`[Provisioning] 秒杀失败状态回写失败:`, err)
+-        })
+-      }
+-    } else if (updateResult.count === 0) {
+-      console.log(`[Provisioning] 实例 ${instanceId} 已被超时清理任务处理，跳过资源回滚`)
+-    }
+-
+     try {
+       const client = await getIncusClient(host)
+       await deleteInstance(client, config.name)
+warning: in the working copy of 'server/src/routes/instances.ts', LF will be replaced by CRLF the next time Git touches it
+
+apply patch
+patch: completed
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-instance-route-id-guards.ts
+C:\Users\Administrator\Desktop\payinces\server\src\routes\instances.ts
+diff --git a/server/scripts/test-instance-route-id-guards.ts b/server/scripts/test-instance-route-id-guards.ts
+index 8590b8695370541d170b55d8abc689506da166e3..8b8ab92ba64d3edfb29f182778bb9f1e520724be
+--- a/server/scripts/test-instance-route-id-guards.ts
++++ b/server/scripts/test-instance-route-id-guards.ts
+@@ -97,4 +97,28 @@
+   )
+ }
+ 
++const boostRouteStart = source.indexOf("}>('/:id/boost-processes'")
++assert.ok(boostRouteStart >= 0, 'boost-processes route not found')
++const boostRouteEnd = source.indexOf("}>('/:id/task'", boostRouteStart)
++assert.ok(boostRouteEnd > boostRouteStart, 'boost-processes route end marker not found')
++const boostRoute = source.slice(boostRouteStart, boostRouteEnd)
++
++assert.ok(
++  boostRoute.includes('const previousProcesses = instanceConfig?.limits_processes ?? null') &&
++    boostRoute.includes('limitsProcesses: previousProcesses'),
++  'boost-processes must preserve and restore the exact previous database limit when Incus fails'
++)
++assert.ok(
++  boostRoute.includes("code: 'PROCESS_LIMIT_BOOST_PARTIAL_FAILURE'") &&
++    boostRoute.includes("incusLimitApplied: 'unknown'") &&
++    boostRoute.includes('databaseLimit: targetLimit'),
++  'boost-processes must return explicit actual-state details when database rollback also fails'
++)
++assert.ok(
++  boostRoute.includes("'failed'") &&
++    boostRoute.includes('return reply.code(500).send(apiError(') &&
++    !boostRoute.includes('不抛出错误'),
++  'boost-processes Incus failures must be logged and returned instead of silently succeeding'
++)
++
+ console.log('instance route ID guard tests passed')
+diff --git a/server/src/routes/instances.ts b/server/src/routes/instances.ts
+index a73f706ba43e759343976af9152705a854450675..0193dda865ae72eb59b4125e52b50235e5877f57
+--- a/server/src/routes/instances.ts
++++ b/server/src/routes/instances.ts
+@@ -6021,7 +6021,8 @@
+ 
+     // 获取当前进程数配置
+     const instanceConfig = await db.getInstanceConfig(instanceId)
+-    const currentProcesses = instanceConfig?.limits_processes ?? 500
++    const previousProcesses = instanceConfig?.limits_processes ?? null
++    const currentProcesses = previousProcesses ?? 500
+ 
+     // 检查是否已达上限
+     if (currentProcesses >= targetLimit) {
+@@ -6044,9 +6045,50 @@
+           'limits.processes': String(targetLimit)
+         }
+       })
+-    } catch (err) {
+-      console.error(`[BoostProcesses] Failed to apply to Incus for instance ${instance.name}:`, err)
+-      // 不抛出错误，数据库已更新成功
++    } catch (error) {
++      const errorMessage = error instanceof Error ? error.message : String(error)
++      console.error(`[BoostProcesses] Failed to apply to Incus for instance ${instance.name}:`, error)
++
++      try {
++        await db.updateInstanceConfig(instanceId, {
++          limitsProcesses: previousProcesses
++        })
++      } catch (rollbackError) {
++        const rollbackErrorMessage = rollbackError instanceof Error ? rollbackError.message : String(rollbackError)
++        console.error(`[BoostProcesses] Failed to roll back database config for instance ${instance.name}:`, rollbackError)
++        await createLog(
++          user.id,
++          'instance',
++          'instance.boost_processes',
++          `Failed to apply process limit for instance "${instance.name}" and database rollback failed`,
++          'failed',
++          { instanceId }
++        )
++        return reply.code(500).send({
++          error: 'Process limit boost partially failed',
++          code: 'PROCESS_LIMIT_BOOST_PARTIAL_FAILURE',
++          details: {
++            incusError: errorMessage,
++            rollbackError: rollbackErrorMessage,
++            databaseLimit: targetLimit,
++            previousDatabaseLimit: previousProcesses,
++            incusLimitApplied: 'unknown'
++          }
++        })
++      }
++
++      await createLog(
++        user.id,
++        'instance',
++        'instance.boost_processes',
++        `Failed to apply process limit for instance "${instance.name}"; database change rolled back`,
++        'failed',
++        { instanceId }
++      )
++      return reply.code(500).send(apiError(
++        ErrorCode.CONFIG_UPDATE_FAILED,
++        `${errorMessage}; database change rolled back`
++      ))
+     }
+ 
+     await createLog(
+
+diff --git a/server/scripts/test-instance-route-id-guards.ts b/server/scripts/test-instance-route-id-guards.ts
+index 8590b8695370541d170b55d8abc689506da166e3..8b8ab92ba64d3edfb29f182778bb9f1e520724be
+--- a/server/scripts/test-instance-route-id-guards.ts
++++ b/server/scripts/test-instance-route-id-guards.ts
+@@ -97,4 +97,28 @@
+   )
+ }
+ 
++const boostRouteStart = source.indexOf("}>('/:id/boost-processes'")
++assert.ok(boostRouteStart >= 0, 'boost-processes route not found')
++const boostRouteEnd = source.indexOf("}>('/:id/task'", boostRouteStart)
++assert.ok(boostRouteEnd > boostRouteStart, 'boost-processes route end marker not found')
++const boostRoute = source.slice(boostRouteStart, boostRouteEnd)
++
++assert.ok(
++  boostRoute.includes('const previousProcesses = instanceConfig?.limits_processes ?? null') &&
++    boostRoute.includes('limitsProcesses: previousProcesses'),
++  'boost-processes must preserve and restore the exact previous database limit when Incus fails'
++)
++assert.ok(
++  boostRoute.includes("code: 'PROCESS_LIMIT_BOOST_PARTIAL_FAILURE'") &&
++    boostRoute.includes("incusLimitApplied: 'unknown'") &&
++    boostRoute.includes('databaseLimit: targetLimit'),
++  'boost-processes must return explicit actual-state details when database rollback also fails'
++)
++assert.ok(
++  boostRoute.includes("'failed'") &&
++    boostRoute.includes('return reply.code(500).send(apiError(') &&
++    !boostRoute.includes('不抛出错误'),
++  'boost-processes Incus failures must be logged and returned instead of silently succeeding'
++)
++
+ console.log('instance route ID guard tests passed')
+diff --git a/server/src/routes/instances.ts b/server/src/routes/instances.ts
+index a73f706ba43e759343976af9152705a854450675..0193dda865ae72eb59b4125e52b50235e5877f57
+--- a/server/src/routes/instances.ts
++++ b/server/src/routes/instances.ts
+@@ -6021,7 +6021,8 @@
+ 
+     // 获取当前进程数配置
+     const instanceConfig = await db.getInstanceConfig(instanceId)
+-    const currentProcesses = instanceConfig?.limits_processes ?? 500
++    const previousProcesses = instanceConfig?.limits_processes ?? null
++    const currentProcesses = previousProcesses ?? 500
+ 
+     // 检查是否已达上限
+     if (currentProcesses >= targetLimit) {
+@@ -6044,9 +6045,50 @@
+           'limits.processes': String(targetLimit)
+         }
+       })
+-    } catch (err) {
+-      console.error(`[BoostProcesses] Failed to apply to Incus for instance ${instance.name}:`, err)
+-      // 不抛出错误，数据库已更新成功
++    } catch (error) {
++      const errorMessage = error instanceof Error ? error.message : String(error)
++      console.error(`[BoostProcesses] Failed to apply to Incus for instance ${instance.name}:`, error)
++
++      try {
++        await db.updateInstanceConfig(instanceId, {
++          limitsProcesses: previousProcesses
++        })
++      } catch (rollbackError) {
++        const rollbackErrorMessage = rollbackError instanceof Error ? rollbackError.message : String(rollbackError)
++        console.error(`[BoostProcesses] Failed to roll back database config for instance ${instance.name}:`, rollbackError)
++        await createLog(
++          user.id,
++          'instance',
++          'instance.boost_processes',
++          `Failed to apply process limit for instance "${instance.name}" and database rollback failed`,
++          'failed',
++          { instanceId }
++        )
++        return reply.code(500).send({
++          error: 'Process limit boost partially failed',
++          code: 'PROCESS_LIMIT_BOOST_PARTIAL_FAILURE',
++          details: {
++            incusError: errorMessage,
++            rollbackError: rollbackErrorMessage,
++            databaseLimit: targetLimit,
++            previousDatabaseLimit: previousProcesses,
++            incusLimitApplied: 'unknown'
++          }
++        })
++      }
++
++      await createLog(
++        user.id,
++        'instance',
++        'instance.boost_processes',
++        `Failed to apply process limit for instance "${instance.name}"; database change rolled back`,
++        'failed',
++        { instanceId }
++      )
++      return reply.code(500).send(apiError(
++        ErrorCode.CONFIG_UPDATE_FAILED,
++        `${errorMessage}; database change rolled back`
++      ))
+     }
+ 
+     await createLog(
+
+codex
+补丁已落在指定范围：保留精确原值、Incus 异常回滚、回滚异常显式部分失败；守卫新增了三类断言（精确恢复、部分失败状态说明、禁止静默成功）。我先核对局部 diff，随后运行 server type-check 和两项指定守卫。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$ErrorActionPreference='"'Stop'; git diff --unified=60 -- server/src/routes/instances.ts server/scripts/test-instance-route-id-guards.ts | Select-String -Pattern 'previousProcesses|BoostProcesses|PROCESS_LIMIT_BOOST|boostRoute|database change rolled back|"'^@@|''^diff|''^'"\\+\\+\\+|"'^---'"' -Context 8,12" in C:\Users\Administrator\Desktop\payinces
+ succeeded in 676ms:
+
+> diff --git a/server/scripts/test-instance-route-id-guards.ts b/server/scripts/test-instance-route-id-guards.ts
+  index 8590b86..8b8ab92 100644
+> --- a/server/scripts/test-instance-route-id-guards.ts
+> +++ b/server/scripts/test-instance-route-id-guards.ts
+> @@ -40,61 +40,85 @@ assert.equal(
+     'all direct request.params.id routes must use strict positive route ID parsing'
+   )
+   
+   assert.equal(
+     source.match(/parsePositiveRouteId\(portId\)/g)?.length ?? 0,
+     1,
+     'port mapping delete route must strictly validate portId'
+   )
+   
+   assert.equal(
+     source.match(/parsePositiveRouteId\(taskId\)/g)?.length ?? 0,
+     2,
+     'isNaN(taskIdNum)'
+   ] as const) {
+     assert.ok(
+       !source.includes(forbiddenPattern),
+       `instance routes must not use loose path ID parsing: ${forbiddenPattern}`
+     )
+   }
+   
+> +const boostRouteStart = source.indexOf("}>('/:id/boost-processes'")
+> +assert.ok(boostRouteStart >= 0, 'boost-processes route not found')
+> +const boostRouteEnd = source.indexOf("}>('/:id/task'", boostRouteStart)
+> +assert.ok(boostRouteEnd > boostRouteStart, 'boost-processes route end marker not found')
+> +const boostRoute = source.slice(boostRouteStart, boostRouteEnd)
+  +
+  +assert.ok(
+> +  boostRoute.includes('const previousProcesses = instanceConfig?.limits_processes ?? null') &&
+> +    boostRoute.includes('limitsProcesses: previousProcesses'),
+  +  'boost-processes must preserve and restore the exact previous database limit when Incus fails'
+  +)
+  +assert.ok(
+> +  boostRoute.includes("code: 'PROCESS_LIMIT_BOOST_PARTIAL_FAILURE'") &&
+> +    boostRoute.includes("incusLimitApplied: 'unknown'") &&
+> +    boostRoute.includes('databaseLimit: targetLimit'),
+  +  'boost-processes must return explicit actual-state details when database rollback also fails'
+  +)
+  +assert.ok(
+> +  boostRoute.includes("'failed'") &&
+> +    boostRoute.includes('return reply.code(500).send(apiError(') &&
+> +    !boostRoute.includes('不抛出错误'),
+  +  'boost-processes Incus failures must be logged and returned instead of silently succeeding'
+  +)
+  +
+   console.log('instance route ID guard tests passed')
+> diff --git a/server/src/routes/instances.ts b/server/src/routes/instances.ts
+  index 714f500..0193dda 100644
+> --- a/server/src/routes/instances.ts
+> +++ b/server/src/routes/instances.ts
+> @@ -62,120 +62,121 @@ const nanoid = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 8)
+   import type { Host } from '../types/database.js'
+   import {
+     getImageDisplayName,
+     getSystemImageAvailabilityForHost,
+     isImageCompatibleWithInstanceType,
+     isImageCompatibleWithMemory,
+     isValidSystemImage
+   } from '../db/images.js'
+   import { generateRandomIPv4, generateRandomIPv6 } from '../lib/ip-calculator.js'
+   import { getProxySitesByInstanceId, deleteProxySite } from '../db/proxy-sites.js'
+   import { calculateVipLevel, getVipBadgeStyleForLevel, getVipRules } from '../services/vip-levels.js'
+   import { ProxyStrategyFactory } from '../lib/proxy/index.js'
+   }
+   
+   function parseOptionalPositiveQueryInteger(value: string | undefined): number | null | undefined {
+     if (value === undefined || value === '') {
+       return undefined
+     }
+   
+     return parsePositiveRouteId(value)
+> @@ -1388,121 +1389,135 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
+             itemId: flashSaleItemId,
+             userId: user.id,
+             packageId,
+             planId: selectedPlan.id,
+             promoCode,
+             turnstileToken,
+             remoteIp: request.ip
+           })
+         } catch (error) {
+           if (error instanceof FlashSaleError) {
+             return reply.code(error.httpStatus).send({ error: error.message, code: error.code })
+           }
+         packageHostIds: packageHostIds.length > 0 ? packageHostIds : undefined,
+         nodeSelectors: JSON.parse(pkgWithExtras.node_selectors || '[]'),
+         cpu: requestedCpu,
+         memory: requestedMemory,
+         disk: requestedDisk,
+         hostId: hostId,
+         ownerId: pkg.user_id!,  // 套餐所有者ID，限制只能在其宿主机上创建实例
+         packageId
+> @@ -1598,120 +1613,121 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
+         const imageDistro = getImageDistroFromAlias(actualImageAlias)
+         const compatibleCmds = cmdValidation.commands.filter(cmd => {
+           return cmd.distros.includes('all') || cmd.distros.includes(imageDistro)
+         })
+   
+         // 如果有不兼容的命令，跳过它们（不报错，只用兼容的）
+         if (compatibleCmds.length > 0) {
+           extraShellCommands = mergeCommandContents(compatibleCmds)
+           console.log(`[Provisioning] 应用 ${compatibleCmds.length} 条自定义初始化命令`)
+         }
+       }
+   
+   
+           if (requiredPackageId !== null) {
+             const txHasRequiredPackageInstance = await db.userHasNormalInstanceForPackage(user.id, requiredPackageId, 
+tx as any)
+             if (!txHasRequiredPackageInstance) {
+               const requiredPackageName = (pkg as typeof pkg & { required_package_name?: string | null 
+}).required_package_name || `#${requiredPackageId}`
+               throw new Error(`PACKAGE_PREREQUISITE_MISSING: 必须持有 ${requiredPackageName} 实例才可以开通本套餐的实例`)
+             }
+           }
+> @@ -2006,282 +2022,292 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
+       } catch (err: any) {
+         const errorMessage = err?.message || String(err)
+   
+         if (err instanceof FlashSaleError) {
+           return reply.code(err.httpStatus).send({ error: err.message, code: err.code })
+         }
+   
+         if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+           return reply.code(409).send({ error: '秒杀请求已提交，请勿重复操作', code: 'FLASH_SALE_DUPLICATE_REQUEST' })
+         }
+   
+         // 处理宿主机资源不足错误
+         limitsReadIops: ioMode === 'iops' ? pkgConfig.limits_read_iops : null,
+         limitsWriteIops: ioMode === 'iops' ? pkgConfig.limits_write_iops : null,
+         limitsIngress: effectiveBandwidthLimit || pkgConfig.limits_ingress,
+         limitsEgress: effectiveBandwidthLimit || pkgConfig.limits_egress,
+         limitsProcesses: pkgConfig.limits_processes,
+         limitsCpuPriority: pkgConfig.limits_cpu_priority,
+         bootAutostart: pkgConfig.boot_autostart,
+         bootAutostartPriority: pkgConfig.boot_autostart_priority,
+> @@ -3268,195 +3294,195 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
+   
+       // 权限检查：实例所有者、节点所有者或管理员
+       const host = await db.getHostById(instance.host_id)
+       const isInstanceOwner = instance.user_id === user.id
+       const isHostOwner = host && host.user_id === user.id
+       const isAdmin = user.role === 'admin'
+   
+       if (!isInstanceOwner && !isHostOwner && !isAdmin) {
+         return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
+       }
+   
+       if (!host) {
+         body: {
+           type: 'object',
+           required: ['targetHostId', 'sshKeyId'],
+           properties: {
+             targetHostId: { type: 'integer', minimum: 1 },
+             sshKeyId: { type: 'integer', minimum: 1 }
+           }
+         }
+> @@ -4393,125 +4419,125 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
+         return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
+       }
+   
+       let { protocol, publicPort, privatePort, remark } = request.body
+       const { user } = request
+   
+       const instance = await db.getInstanceById(instanceId)
+       if (!instance) {
+         return reply.code(404).send(apiError(ErrorCode.INSTANCE_NOT_FOUND))
+       }
+   
+       if (instance.user_id !== user.id) {
+           hostId: instance.host_id,
+           protocol,
+           publicPort: allocatedPort,
+           privatePort,
+           remark: remark?.trim()
+         })
+   
+         for (const deviceEntry of deviceConfigs) {
+> @@ -4594,301 +4620,320 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
+   
+       const portLockKey = getInstancePortMappingLockKey(instanceId)
+       const portLock = await acquireLock(portLockKey, PORT_MAPPING_LOCK_OPTIONS)
+       if (!portLock.success || !portLock.ownerId) {
+         return reply.code(409).send(apiError(ErrorCode.PORT_CONFLICT, 'Port mapping operation is busy, please retry 
+later'))
+       }
+   
+       try {
+         const host = await db.getHostById(instance.host_id)
+         if (!host) {
+           throw new Error('Host not found')
+         }
+             }
+   
+             // == 一切参数交付给隔离后的独立网络策略类以规避共振 ==
+             const proxyStrategy = ProxyStrategyFactory.getStrategy(actualInstanceType);
+             const bindableIpv4 = selectBindableIpv4ListenAddress(
+               (host as any).nat_bind_ip || null,
+               host.nat_public_ip || null,
+               host.url,
+> @@ -5243,124 +5288,125 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
+   
+       // 计算资源变化量
+       const cpuDelta = newCpu - instance.cpu
+       const memoryDelta = newMemory - instance.memory
+       const diskDelta = newDisk - instance.disk
+       const currentTrafficLimit = instance.monthly_traffic_limit ? BigInt(instance.monthly_traffic_limit) : null
+       const trafficChanged = monthlyTrafficLimit !== undefined && newTrafficLimit !== currentTrafficLimit
+   
+       // 如果没有实际变化，直接返回成功
+       if (cpuDelta === 0 && memoryDelta === 0 && diskDelta === 0 && !trafficChanged) {
+         return { message: 'No changes applied', instance: { id: instanceId, cpu: instance.cpu, memory: 
+instance.memory, disk: instance.disk } }
+       }
+     fastify.post<{ Params: { id: string } }>('/:id/clone', {
+       onRequest: [fastify.authenticateUser]
+     }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+       const { id } = request.params
+       const instanceId = parsePositiveRouteId(id)
+       const { user } = request
+   
+       if (!instanceId) {
+> @@ -5918,146 +5964,188 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
+     }>, reply: FastifyReply) => {
+       // 功能已禁用，直接返回 403
+       return reply.code(403).send(apiError(ErrorCode.FEATURE_DISABLED))
+     })
+   
+     // 提升进程数限制
+     // LXC 实例提升到 1000，KVM 实例提升到 2000
+     fastify.post<{
+       Params: { id: string }
+     }>('/:id/boost-processes', {
+       onRequest: [fastify.authenticate],
+       schema: {
+       const instanceType = (pkg as { instance_type?: 'container' | 'vm' } | null)?.instance_type || 'container'
+   
+       // 确定进程数上限：LXC=1000, KVM=2000
+       const targetLimit = instanceType === 'vm' ? 2000 : 1000
+   
+       // 获取当前进程数配置
+       const instanceConfig = await db.getInstanceConfig(instanceId)
+  -    const currentProcesses = instanceConfig?.limits_processes ?? 500
+> +    const previousProcesses = instanceConfig?.limits_processes ?? null
+> +    const currentProcesses = previousProcesses ?? 500
+   
+       // 检查是否已达上限
+       if (currentProcesses >= targetLimit) {
+         return reply.code(400).send({
+           error: `Process limit already at maximum (${targetLimit})`,
+           code: 'PROCESS_LIMIT_ALREADY_MAX'
+         })
+       }
+   
+       // 更新数据库中的实例配置
+       await db.updateInstanceConfig(instanceId, {
+         limitsProcesses: targetLimit
+       try {
+         const client = await getIncusClient(host)
+         await updateInstance(client, instance.incus_id, {
+           config: {
+             'limits.processes': String(targetLimit)
+           }
+         })
+  -    } catch (err) {
+> -      console.error(`[BoostProcesses] Failed to apply to Incus for instance ${instance.name}:`, err)
+  -      // 不抛出错误，数据库已更新成功
+  +    } catch (error) {
+  +      const errorMessage = error instanceof Error ? error.message : String(error)
+> +      console.error(`[BoostProcesses] Failed to apply to Incus for instance ${instance.name}:`, error)
+  +
+  +      try {
+  +        await db.updateInstanceConfig(instanceId, {
+> +          limitsProcesses: previousProcesses
+  +        })
+  +      } catch (rollbackError) {
+  +        const rollbackErrorMessage = rollbackError instanceof Error ? rollbackError.message : String(rollbackError)
+> +        console.error(`[BoostProcesses] Failed to roll back database config for instance ${instance.name}:`, 
+rollbackError)
+  +        await createLog(
+  +          user.id,
+  +          'instance',
+  +          'instance.boost_processes',
+  +          `Failed to apply process limit for instance "${instance.name}" and database rollback failed`,
+  +          'failed',
+  +          { instanceId }
+  +        )
+  +        return reply.code(500).send({
+  +          error: 'Process limit boost partially failed',
+> +          code: 'PROCESS_LIMIT_BOOST_PARTIAL_FAILURE',
+  +          details: {
+  +            incusError: errorMessage,
+  +            rollbackError: rollbackErrorMessage,
+  +            databaseLimit: targetLimit,
+> +            previousDatabaseLimit: previousProcesses,
+  +            incusLimitApplied: 'unknown'
+  +          }
+  +        })
+  +      }
+  +
+  +      await createLog(
+  +        user.id,
+  +        'instance',
+  +        'instance.boost_processes',
+> +        `Failed to apply process limit for instance "${instance.name}"; database change rolled back`,
+  +        'failed',
+  +        { instanceId }
+  +      )
+  +      return reply.code(500).send(apiError(
+  +        ErrorCode.CONFIG_UPDATE_FAILED,
+> +        `${errorMessage}; database change rolled back`
+  +      ))
+       }
+   
+       await createLog(
+         user.id,
+         'instance',
+         'instance.boost_processes',
+         `Boosted process limit for instance "${instance.name}" to ${targetLimit}`,
+         'success',
+         { instanceId }
+       )
+   
+           taskType: task.taskType,
+           status: task.status,
+           progress: task.progress,
+           error: task.error,
+           queuePosition,
+           createdAt: task.createdAt,
+           startedAt: task.startedAt,
+           finishedAt: task.finishedAt
+> @@ -6530,120 +6618,237 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
+         })
+   
+         // 5.2 更新 IpAddress 表
+         // 先删除旧的 IPv6 记录
+         if (oldIPv6) {
+           await prisma.ipAddress.deleteMany({
+             where: {
+               instanceId,
+               type: 'inet6',
+               address: oldIPv6
+             }
+           })
+   
+       console.log(`[Provisioning] 正在构建 Incus 配置...`)
+       // 构建 IPv6Config (如果有静态 IPv6)
+       const ipv6Config = config.ipv6Address ? {
+         primaryIp: config.ipv6Address
+       } : null
+   
+       const incusConfig = buildInstanceConfig({
+> @@ -6826,182 +7031,107 @@ async function createInstanceAsync(
+             disk: config.disk,
+             networkMode: config.networkMode,
+             ipv4: ipv4 || null,
+             ipv6: ipv6 || null
+           }
+         })
+   
+         // 发送实例创建成功邮件通知
+         try {
+           const { sendInstanceCreatedEmail } = await import('../lib/mailer.js')
+           const user = await db.findUserById(userId)
+           if (user && user.email) {
+
+
+warning: in the working copy of 'server/scripts/test-instance-route-id-guards.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/instances.ts', LF will be replaced by CRLF the next time Git touches it
+
+diff --git a/server/scripts/test-instance-route-id-guards.ts b/server/scripts/test-instance-route-id-guards.ts
+index 8590b8695370541d170b55d8abc689506da166e3..8b8ab92ba64d3edfb29f182778bb9f1e520724be
+--- a/server/scripts/test-instance-route-id-guards.ts
++++ b/server/scripts/test-instance-route-id-guards.ts
+@@ -97,4 +97,28 @@
+   )
+ }
+ 
++const boostRouteStart = source.indexOf("}>('/:id/boost-processes'")
++assert.ok(boostRouteStart >= 0, 'boost-processes route not found')
++const boostRouteEnd = source.indexOf("}>('/:id/task'", boostRouteStart)
++assert.ok(boostRouteEnd > boostRouteStart, 'boost-processes route end marker not found')
++const boostRoute = source.slice(boostRouteStart, boostRouteEnd)
++
++assert.ok(
++  boostRoute.includes('const previousProcesses = instanceConfig?.limits_processes ?? null') &&
++    boostRoute.includes('limitsProcesses: previousProcesses'),
++  'boost-processes must preserve and restore the exact previous database limit when Incus fails'
++)
++assert.ok(
++  boostRoute.includes("code: 'PROCESS_LIMIT_BOOST_PARTIAL_FAILURE'") &&
++    boostRoute.includes("incusLimitApplied: 'unknown'") &&
++    boostRoute.includes('databaseLimit: targetLimit'),
++  'boost-processes must return explicit actual-state details when database rollback also fails'
++)
++assert.ok(
++  boostRoute.includes("'failed'") &&
++    boostRoute.includes('return reply.code(500).send(apiError(') &&
++    !boostRoute.includes('不抛出错误'),
++  'boost-processes Incus failures must be logged and returned instead of silently succeeding'
++)
++
+ console.log('instance route ID guard tests passed')
+diff --git a/server/src/routes/instances.ts b/server/src/routes/instances.ts
+index a73f706ba43e759343976af9152705a854450675..0193dda865ae72eb59b4125e52b50235e5877f57
+--- a/server/src/routes/instances.ts
++++ b/server/src/routes/instances.ts
+@@ -6021,7 +6021,8 @@
+ 
+     // 获取当前进程数配置
+     const instanceConfig = await db.getInstanceConfig(instanceId)
+-    const currentProcesses = instanceConfig?.limits_processes ?? 500
++    const previousProcesses = instanceConfig?.limits_processes ?? null
++    const currentProcesses = previousProcesses ?? 500
+ 
+     // 检查是否已达上限
+     if (currentProcesses >= targetLimit) {
+@@ -6044,9 +6045,50 @@
+           'limits.processes': String(targetLimit)
+         }
+       })
+-    } catch (err) {
+-      console.error(`[BoostProcesses] Failed to apply to Incus for instance ${instance.name}:`, err)
+-      // 不抛出错误，数据库已更新成功
++    } catch (error) {
++      const errorMessage = error instanceof Error ? error.message : String(error)
++      console.error(`[BoostProcesses] Failed to apply to Incus for instance ${instance.name}:`, error)
++
++      try {
++        await db.updateInstanceConfig(instanceId, {
++          limitsProcesses: previousProcesses
++        })
++      } catch (rollbackError) {
++        const rollbackErrorMessage = rollbackError instanceof Error ? rollbackError.message : String(rollbackError)
++        console.error(`[BoostProcesses] Failed to roll back database config for instance ${instance.name}:`, rollbackError)
++        await createLog(
++          user.id,
++          'instance',
++          'instance.boost_processes',
++          `Failed to apply process limit for instance "${instance.name}" and database rollback failed`,
++          'failed',
++          { instanceId }
++        )
++        return reply.code(500).send({
++          error: 'Process limit boost partially failed',
++          code: 'PROCESS_LIMIT_BOOST_PARTIAL_FAILURE',
++          details: {
++            incusError: errorMessage,
++            rollbackError: rollbackErrorMessage,
++            databaseLimit: targetLimit,
++            previousDatabaseLimit: previousProcesses,
++            incusLimitApplied: 'unknown'
++          }
++        })
++      }
++
++      await createLog(
++        user.id,
++        'instance',
++        'instance.boost_processes',
++        `Failed to apply process limit for instance "${instance.name}"; database change rolled back`,
++        'failed',
++        { instanceId }
++      )
++      return reply.code(500).send(apiError(
++        ErrorCode.CONFIG_UPDATE_FAILED,
++        `${errorMessage}; database change rolled back`
++      ))
+     }
+ 
+     await createLog(
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'pnpm --filter server test:instance-operation-conflict-guards' in C:\Users\Administrator\Desktop\payinces
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'pnpm --filter server type-check' in C:\Users\Administrator\Desktop\payinces
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'pnpm --filter server test:instance-route-id-guards' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 1760ms:
+
+> server@1.3.7 test:instance-route-id-guards C:\Users\Administrator\Desktop\payinces\server
+> node --import tsx scripts/test-instance-route-id-guards.ts
+
+instance route ID guard tests passed
+
+ succeeded in 1852ms:
+
+> server@1.3.7 test:instance-operation-conflict-guards C:\Users\Administrator\Desktop\payinces\server
+> node --import tsx scripts/test-instance-operation-conflict-guards.ts
+
+instance operation conflict guard tests passed
+
+diff --git a/server/scripts/test-instance-route-id-guards.ts b/server/scripts/test-instance-route-id-guards.ts
+index 8590b8695370541d170b55d8abc689506da166e3..8b8ab92ba64d3edfb29f182778bb9f1e520724be
+--- a/server/scripts/test-instance-route-id-guards.ts
++++ b/server/scripts/test-instance-route-id-guards.ts
+@@ -97,4 +97,28 @@
+   )
+ }
+ 
++const boostRouteStart = source.indexOf("}>('/:id/boost-processes'")
++assert.ok(boostRouteStart >= 0, 'boost-processes route not found')
++const boostRouteEnd = source.indexOf("}>('/:id/task'", boostRouteStart)
++assert.ok(boostRouteEnd > boostRouteStart, 'boost-processes route end marker not found')
++const boostRoute = source.slice(boostRouteStart, boostRouteEnd)
++
++assert.ok(
++  boostRoute.includes('const previousProcesses = instanceConfig?.limits_processes ?? null') &&
++    boostRoute.includes('limitsProcesses: previousProcesses'),
++  'boost-processes must preserve and restore the exact previous database limit when Incus fails'
++)
++assert.ok(
++  boostRoute.includes("code: 'PROCESS_LIMIT_BOOST_PARTIAL_FAILURE'") &&
++    boostRoute.includes("incusLimitApplied: 'unknown'") &&
++    boostRoute.includes('databaseLimit: targetLimit'),
++  'boost-processes must return explicit actual-state details when database rollback also fails'
++)
++assert.ok(
++  boostRoute.includes("'failed'") &&
++    boostRoute.includes('return reply.code(500).send(apiError(') &&
++    !boostRoute.includes('不抛出错误'),
++  'boost-processes Incus failures must be logged and returned instead of silently succeeding'
++)
++
+ console.log('instance route ID guard tests passed')
+diff --git a/server/src/routes/instances.ts b/server/src/routes/instances.ts
+index a73f706ba43e759343976af9152705a854450675..0193dda865ae72eb59b4125e52b50235e5877f57
+--- a/server/src/routes/instances.ts
++++ b/server/src/routes/instances.ts
+@@ -6021,7 +6021,8 @@
+ 
+     // 获取当前进程数配置
+     const instanceConfig = await db.getInstanceConfig(instanceId)
+-    const currentProcesses = instanceConfig?.limits_processes ?? 500
++    const previousProcesses = instanceConfig?.limits_processes ?? null
++    const currentProcesses = previousProcesses ?? 500
+ 
+     // 检查是否已达上限
+     if (currentProcesses >= targetLimit) {
+@@ -6044,9 +6045,50 @@
+           'limits.processes': String(targetLimit)
+         }
+       })
+-    } catch (err) {
+-      console.error(`[BoostProcesses] Failed to apply to Incus for instance ${instance.name}:`, err)
+-      // 不抛出错误，数据库已更新成功
++    } catch (error) {
++      const errorMessage = error instanceof Error ? error.message : String(error)
++      console.error(`[BoostProcesses] Failed to apply to Incus for instance ${instance.name}:`, error)
++
++      try {
++        await db.updateInstanceConfig(instanceId, {
++          limitsProcesses: previousProcesses
++        })
++      } catch (rollbackError) {
++        const rollbackErrorMessage = rollbackError instanceof Error ? rollbackError.message : String(rollbackError)
++        console.error(`[BoostProcesses] Failed to roll back database config for instance ${instance.name}:`, rollbackError)
++        await createLog(
++          user.id,
++          'instance',
++          'instance.boost_processes',
++          `Failed to apply process limit for instance "${instance.name}" and database rollback failed`,
++          'failed',
++          { instanceId }
++        )
++        return reply.code(500).send({
++          error: 'Process limit boost partially failed',
++          code: 'PROCESS_LIMIT_BOOST_PARTIAL_FAILURE',
++          details: {
++            incusError: errorMessage,
++            rollbackError: rollbackErrorMessage,
++            databaseLimit: targetLimit,
++            previousDatabaseLimit: previousProcesses,
++            incusLimitApplied: 'unknown'
++          }
++        })
++      }
++
++      await createLog(
++        user.id,
++        'instance',
++        'instance.boost_processes',
++        `Failed to apply process limit for instance "${instance.name}"; database change rolled back`,
++        'failed',
++        { instanceId }
++      )
++      return reply.code(500).send(apiError(
++        ErrorCode.CONFIG_UPDATE_FAILED,
++        `${errorMessage}; database change rolled back`
++      ))
+     }
+ 
+     await createLog(
+
+codex
+三项校验正在并行执行（只读测试/类型检查）；当前尚未返回结果。我会等完成后再核对最终 diff，确保没有覆盖并行任务在 `instances.ts` 和冲突守卫中的既有改动。
+diff --git a/server/scripts/test-instance-route-id-guards.ts b/server/scripts/test-instance-route-id-guards.ts
+index 8590b8695370541d170b55d8abc689506da166e3..8b8ab92ba64d3edfb29f182778bb9f1e520724be
+--- a/server/scripts/test-instance-route-id-guards.ts
++++ b/server/scripts/test-instance-route-id-guards.ts
+@@ -97,4 +97,28 @@
+   )
+ }
+ 
++const boostRouteStart = source.indexOf("}>('/:id/boost-processes'")
++assert.ok(boostRouteStart >= 0, 'boost-processes route not found')
++const boostRouteEnd = source.indexOf("}>('/:id/task'", boostRouteStart)
++assert.ok(boostRouteEnd > boostRouteStart, 'boost-processes route end marker not found')
++const boostRoute = source.slice(boostRouteStart, boostRouteEnd)
++
++assert.ok(
++  boostRoute.includes('const previousProcesses = instanceConfig?.limits_processes ?? null') &&
++    boostRoute.includes('limitsProcesses: previousProcesses'),
++  'boost-processes must preserve and restore the exact previous database limit when Incus fails'
++)
++assert.ok(
++  boostRoute.includes("code: 'PROCESS_LIMIT_BOOST_PARTIAL_FAILURE'") &&
++    boostRoute.includes("incusLimitApplied: 'unknown'") &&
++    boostRoute.includes('databaseLimit: targetLimit'),
++  'boost-processes must return explicit actual-state details when database rollback also fails'
++)
++assert.ok(
++  boostRoute.includes("'failed'") &&
++    boostRoute.includes('return reply.code(500).send(apiError(') &&
++    !boostRoute.includes('不抛出错误'),
++  'boost-processes Incus failures must be logged and returned instead of silently succeeding'
++)
++
+ console.log('instance route ID guard tests passed')
+diff --git a/server/src/routes/instances.ts b/server/src/routes/instances.ts
+index a73f706ba43e759343976af9152705a854450675..0193dda865ae72eb59b4125e52b50235e5877f57
+--- a/server/src/routes/instances.ts
++++ b/server/src/routes/instances.ts
+@@ -6021,7 +6021,8 @@
+ 
+     // 获取当前进程数配置
+     const instanceConfig = await db.getInstanceConfig(instanceId)
+-    const currentProcesses = instanceConfig?.limits_processes ?? 500
++    const previousProcesses = instanceConfig?.limits_processes ?? null
++    const currentProcesses = previousProcesses ?? 500
+ 
+     // 检查是否已达上限
+     if (currentProcesses >= targetLimit) {
+@@ -6044,9 +6045,50 @@
+           'limits.processes': String(targetLimit)
+         }
+       })
+-    } catch (err) {
+-      console.error(`[BoostProcesses] Failed to apply to Incus for instance ${instance.name}:`, err)
+-      // 不抛出错误，数据库已更新成功
++    } catch (error) {
++      const errorMessage = error instanceof Error ? error.message : String(error)
++      console.error(`[BoostProcesses] Failed to apply to Incus for instance ${instance.name}:`, error)
++
++      try {
++        await db.updateInstanceConfig(instanceId, {
++          limitsProcesses: previousProcesses
++        })
++      } catch (rollbackError) {
++        const rollbackErrorMessage = rollbackError instanceof Error ? rollbackError.message : String(rollbackError)
++        console.error(`[BoostProcesses] Failed to roll back database config for instance ${instance.name}:`, rollbackError)
++        await createLog(
++          user.id,
++          'instance',
++          'instance.boost_processes',
++          `Failed to apply process limit for instance "${instance.name}" and database rollback failed`,
++          'failed',
++          { instanceId }
++        )
++        return reply.code(500).send({
++          error: 'Process limit boost partially failed',
++          code: 'PROCESS_LIMIT_BOOST_PARTIAL_FAILURE',
++          details: {
++            incusError: errorMessage,
++            rollbackError: rollbackErrorMessage,
++            databaseLimit: targetLimit,
++            previousDatabaseLimit: previousProcesses,
++            incusLimitApplied: 'unknown'
++          }
++        })
++      }
++
++      await createLog(
++        user.id,
++        'instance',
++        'instance.boost_processes',
++        `Failed to apply process limit for instance "${instance.name}"; database change rolled back`,
++        'failed',
++        { instanceId }
++      )
++      return reply.code(500).send(apiError(
++        ErrorCode.CONFIG_UPDATE_FAILED,
++        `${errorMessage}; database change rolled back`
++      ))
+     }
+ 
+     await createLog(
+
+diff --git a/server/scripts/test-instance-route-id-guards.ts b/server/scripts/test-instance-route-id-guards.ts
+index 8590b8695370541d170b55d8abc689506da166e3..8b8ab92ba64d3edfb29f182778bb9f1e520724be
+--- a/server/scripts/test-instance-route-id-guards.ts
++++ b/server/scripts/test-instance-route-id-guards.ts
+@@ -97,4 +97,28 @@
+   )
+ }
+ 
++const boostRouteStart = source.indexOf("}>('/:id/boost-processes'")
++assert.ok(boostRouteStart >= 0, 'boost-processes route not found')
++const boostRouteEnd = source.indexOf("}>('/:id/task'", boostRouteStart)
++assert.ok(boostRouteEnd > boostRouteStart, 'boost-processes route end marker not found')
++const boostRoute = source.slice(boostRouteStart, boostRouteEnd)
++
++assert.ok(
++  boostRoute.includes('const previousProcesses = instanceConfig?.limits_processes ?? null') &&
++    boostRoute.includes('limitsProcesses: previousProcesses'),
++  'boost-processes must preserve and restore the exact previous database limit when Incus fails'
++)
++assert.ok(
++  boostRoute.includes("code: 'PROCESS_LIMIT_BOOST_PARTIAL_FAILURE'") &&
++    boostRoute.includes("incusLimitApplied: 'unknown'") &&
++    boostRoute.includes('databaseLimit: targetLimit'),
++  'boost-processes must return explicit actual-state details when database rollback also fails'
++)
++assert.ok(
++  boostRoute.includes("'failed'") &&
++    boostRoute.includes('return reply.code(500).send(apiError(') &&
++    !boostRoute.includes('不抛出错误'),
++  'boost-processes Incus failures must be logged and returned instead of silently succeeding'
++)
++
+ console.log('instance route ID guard tests passed')
+diff --git a/server/src/routes/instances.ts b/server/src/routes/instances.ts
+index a73f706ba43e759343976af9152705a854450675..0193dda865ae72eb59b4125e52b50235e5877f57
+--- a/server/src/routes/instances.ts
++++ b/server/src/routes/instances.ts
+@@ -6021,7 +6021,8 @@
+ 
+     // 获取当前进程数配置
+     const instanceConfig = await db.getInstanceConfig(instanceId)
+-    const currentProcesses = instanceConfig?.limits_processes ?? 500
++    const previousProcesses = instanceConfig?.limits_processes ?? null
++    const currentProcesses = previousProcesses ?? 500
+ 
+     // 检查是否已达上限
+     if (currentProcesses >= targetLimit) {
+@@ -6044,9 +6045,50 @@
+           'limits.processes': String(targetLimit)
+         }
+       })
+-    } catch (err) {
+-      console.error(`[BoostProcesses] Failed to apply to Incus for instance ${instance.name}:`, err)
+-      // 不抛出错误，数据库已更新成功
++    } catch (error) {
++      const errorMessage = error instanceof Error ? error.message : String(error)
++      console.error(`[BoostProcesses] Failed to apply to Incus for instance ${instance.name}:`, error)
++
++      try {
++        await db.updateInstanceConfig(instanceId, {
++          limitsProcesses: previousProcesses
++        })
++      } catch (rollbackError) {
++        const rollbackErrorMessage = rollbackError instanceof Error ? rollbackError.message : String(rollbackError)
++        console.error(`[BoostProcesses] Failed to roll back database config for instance ${instance.name}:`, rollbackError)
++        await createLog(
++          user.id,
++          'instance',
++          'instance.boost_processes',
++          `Failed to apply process limit for instance "${instance.name}" and database rollback failed`,
++          'failed',
++          { instanceId }
++        )
++        return reply.code(500).send({
++          error: 'Process limit boost partially failed',
++          code: 'PROCESS_LIMIT_BOOST_PARTIAL_FAILURE',
++          details: {
++            incusError: errorMessage,
++            rollbackError: rollbackErrorMessage,
++            databaseLimit: targetLimit,
++            previousDatabaseLimit: previousProcesses,
++            incusLimitApplied: 'unknown'
++          }
++        })
++      }
++
++      await createLog(
++        user.id,
++        'instance',
++        'instance.boost_processes',
++        `Failed to apply process limit for instance "${instance.name}"; database change rolled back`,
++        'failed',
++        { instanceId }
++      )
++      return reply.code(500).send(apiError(
++        ErrorCode.CONFIG_UPDATE_FAILED,
++        `${errorMessage}; database change rolled back`
++      ))
+     }
+ 
+     await createLog(
+
+diff --git a/server/scripts/test-instance-route-id-guards.ts b/server/scripts/test-instance-route-id-guards.ts
+index 8590b8695370541d170b55d8abc689506da166e3..8b8ab92ba64d3edfb29f182778bb9f1e520724be
+--- a/server/scripts/test-instance-route-id-guards.ts
++++ b/server/scripts/test-instance-route-id-guards.ts
+@@ -97,4 +97,28 @@
+   )
+ }
+ 
++const boostRouteStart = source.indexOf("}>('/:id/boost-processes'")
++assert.ok(boostRouteStart >= 0, 'boost-processes route not found')
++const boostRouteEnd = source.indexOf("}>('/:id/task'", boostRouteStart)
++assert.ok(boostRouteEnd > boostRouteStart, 'boost-processes route end marker not found')
++const boostRoute = source.slice(boostRouteStart, boostRouteEnd)
++
++assert.ok(
++  boostRoute.includes('const previousProcesses = instanceConfig?.limits_processes ?? null') &&
++    boostRoute.includes('limitsProcesses: previousProcesses'),
++  'boost-processes must preserve and restore the exact previous database limit when Incus fails'
++)
++assert.ok(
++  boostRoute.includes("code: 'PROCESS_LIMIT_BOOST_PARTIAL_FAILURE'") &&
++    boostRoute.includes("incusLimitApplied: 'unknown'") &&
++    boostRoute.includes('databaseLimit: targetLimit'),
++  'boost-processes must return explicit actual-state details when database rollback also fails'
++)
++assert.ok(
++  boostRoute.includes("'failed'") &&
++    boostRoute.includes('return reply.code(500).send(apiError(') &&
++    !boostRoute.includes('不抛出错误'),
++  'boost-processes Incus failures must be logged and returned instead of silently succeeding'
++)
++
+ console.log('instance route ID guard tests passed')
+diff --git a/server/src/routes/instances.ts b/server/src/routes/instances.ts
+index a73f706ba43e759343976af9152705a854450675..0193dda865ae72eb59b4125e52b50235e5877f57
+--- a/server/src/routes/instances.ts
++++ b/server/src/routes/instances.ts
+@@ -6021,7 +6021,8 @@
+ 
+     // 获取当前进程数配置
+     const instanceConfig = await db.getInstanceConfig(instanceId)
+-    const currentProcesses = instanceConfig?.limits_processes ?? 500
++    const previousProcesses = instanceConfig?.limits_processes ?? null
++    const currentProcesses = previousProcesses ?? 500
+ 
+     // 检查是否已达上限
+     if (currentProcesses >= targetLimit) {
+@@ -6044,9 +6045,50 @@
+           'limits.processes': String(targetLimit)
+         }
+       })
+-    } catch (err) {
+-      console.error(`[BoostProcesses] Failed to apply to Incus for instance ${instance.name}:`, err)
+-      // 不抛出错误，数据库已更新成功
++    } catch (error) {
++      const errorMessage = error instanceof Error ? error.message : String(error)
++      console.error(`[BoostProcesses] Failed to apply to Incus for instance ${instance.name}:`, error)
++
++      try {
++        await db.updateInstanceConfig(instanceId, {
++          limitsProcesses: previousProcesses
++        })
++      } catch (rollbackError) {
++        const rollbackErrorMessage = rollbackError instanceof Error ? rollbackError.message : String(rollbackError)
++        console.error(`[BoostProcesses] Failed to roll back database config for instance ${instance.name}:`, rollbackError)
++        await createLog(
++          user.id,
++          'instance',
++          'instance.boost_processes',
++          `Failed to apply process limit for instance "${instance.name}" and database rollback failed`,
++          'failed',
++          { instanceId }
++        )
++        return reply.code(500).send({
++          error: 'Process limit boost partially failed',
++          code: 'PROCESS_LIMIT_BOOST_PARTIAL_FAILURE',
++          details: {
++            incusError: errorMessage,
++            rollbackError: rollbackErrorMessage,
++            databaseLimit: targetLimit,
++            previousDatabaseLimit: previousProcesses,
++            incusLimitApplied: 'unknown'
++          }
++        })
++      }
++
++      await createLog(
++        user.id,
++        'instance',
++        'instance.boost_processes',
++        `Failed to apply process limit for instance "${instance.name}"; database change rolled back`,
++        'failed',
++        { instanceId }
++      )
++      return reply.code(500).send(apiError(
++        ErrorCode.CONFIG_UPDATE_FAILED,
++        `${errorMessage}; database change rolled back`
++      ))
+     }
+ 
+     await createLog(
+
+diff --git a/server/scripts/test-instance-route-id-guards.ts b/server/scripts/test-instance-route-id-guards.ts
+index 8590b8695370541d170b55d8abc689506da166e3..8b8ab92ba64d3edfb29f182778bb9f1e520724be
+--- a/server/scripts/test-instance-route-id-guards.ts
++++ b/server/scripts/test-instance-route-id-guards.ts
+@@ -97,4 +97,28 @@
+   )
+ }
+ 
++const boostRouteStart = source.indexOf("}>('/:id/boost-processes'")
++assert.ok(boostRouteStart >= 0, 'boost-processes route not found')
++const boostRouteEnd = source.indexOf("}>('/:id/task'", boostRouteStart)
++assert.ok(boostRouteEnd > boostRouteStart, 'boost-processes route end marker not found')
++const boostRoute = source.slice(boostRouteStart, boostRouteEnd)
++
++assert.ok(
++  boostRoute.includes('const previousProcesses = instanceConfig?.limits_processes ?? null') &&
++    boostRoute.includes('limitsProcesses: previousProcesses'),
++  'boost-processes must preserve and restore the exact previous database limit when Incus fails'
++)
++assert.ok(
++  boostRoute.includes("code: 'PROCESS_LIMIT_BOOST_PARTIAL_FAILURE'") &&
++    boostRoute.includes("incusLimitApplied: 'unknown'") &&
++    boostRoute.includes('databaseLimit: targetLimit'),
++  'boost-processes must return explicit actual-state details when database rollback also fails'
++)
++assert.ok(
++  boostRoute.includes("'failed'") &&
++    boostRoute.includes('return reply.code(500).send(apiError(') &&
++    !boostRoute.includes('不抛出错误'),
++  'boost-processes Incus failures must be logged and returned instead of silently succeeding'
++)
++
+ console.log('instance route ID guard tests passed')
+diff --git a/server/src/routes/instances.ts b/server/src/routes/instances.ts
+index a73f706ba43e759343976af9152705a854450675..0193dda865ae72eb59b4125e52b50235e5877f57
+--- a/server/src/routes/instances.ts
++++ b/server/src/routes/instances.ts
+@@ -6021,7 +6021,8 @@
+ 
+     // 获取当前进程数配置
+     const instanceConfig = await db.getInstanceConfig(instanceId)
+-    const currentProcesses = instanceConfig?.limits_processes ?? 500
++    const previousProcesses = instanceConfig?.limits_processes ?? null
++    const currentProcesses = previousProcesses ?? 500
+ 
+     // 检查是否已达上限
+     if (currentProcesses >= targetLimit) {
+@@ -6044,9 +6045,50 @@
+           'limits.processes': String(targetLimit)
+         }
+       })
+-    } catch (err) {
+-      console.error(`[BoostProcesses] Failed to apply to Incus for instance ${instance.name}:`, err)
+-      // 不抛出错误，数据库已更新成功
++    } catch (error) {
++      const errorMessage = error instanceof Error ? error.message : String(error)
++      console.error(`[BoostProcesses] Failed to apply to Incus for instance ${instance.name}:`, error)
++
++      try {
++        await db.updateInstanceConfig(instanceId, {
++          limitsProcesses: previousProcesses
++        })
++      } catch (rollbackError) {
++        const rollbackErrorMessage = rollbackError instanceof Error ? rollbackError.message : String(rollbackError)
++        console.error(`[BoostProcesses] Failed to roll back database config for instance ${instance.name}:`, rollbackError)
++        await createLog(
++          user.id,
++          'instance',
++          'instance.boost_processes',
++          `Failed to apply process limit for instance "${instance.name}" and database rollback failed`,
++          'failed',
++          { instanceId }
++        )
++        return reply.code(500).send({
++          error: 'Process limit boost partially failed',
++          code: 'PROCESS_LIMIT_BOOST_PARTIAL_FAILURE',
++          details: {
++            incusError: errorMessage,
++            rollbackError: rollbackErrorMessage,
++            databaseLimit: targetLimit,
++            previousDatabaseLimit: previousProcesses,
++            incusLimitApplied: 'unknown'
++          }
++        })
++      }
++
++      await createLog(
++        user.id,
++        'instance',
++        'instance.boost_processes',
++        `Failed to apply process limit for instance "${instance.name}"; database change rolled back`,
++        'failed',
++        { instanceId }
++      )
++      return reply.code(500).send(apiError(
++        ErrorCode.CONFIG_UPDATE_FAILED,
++        `${errorMessage}; database change rolled back`
++      ))
+     }
+ 
+     await createLog(
+
+diff --git a/server/scripts/test-instance-route-id-guards.ts b/server/scripts/test-instance-route-id-guards.ts
+index 8590b8695370541d170b55d8abc689506da166e3..8b8ab92ba64d3edfb29f182778bb9f1e520724be
+--- a/server/scripts/test-instance-route-id-guards.ts
++++ b/server/scripts/test-instance-route-id-guards.ts
+@@ -97,4 +97,28 @@
+   )
+ }
+ 
++const boostRouteStart = source.indexOf("}>('/:id/boost-processes'")
++assert.ok(boostRouteStart >= 0, 'boost-processes route not found')
++const boostRouteEnd = source.indexOf("}>('/:id/task'", boostRouteStart)
++assert.ok(boostRouteEnd > boostRouteStart, 'boost-processes route end marker not found')
++const boostRoute = source.slice(boostRouteStart, boostRouteEnd)
++
++assert.ok(
++  boostRoute.includes('const previousProcesses = instanceConfig?.limits_processes ?? null') &&
++    boostRoute.includes('limitsProcesses: previousProcesses'),
++  'boost-processes must preserve and restore the exact previous database limit when Incus fails'
++)
++assert.ok(
++  boostRoute.includes("code: 'PROCESS_LIMIT_BOOST_PARTIAL_FAILURE'") &&
++    boostRoute.includes("incusLimitApplied: 'unknown'") &&
++    boostRoute.includes('databaseLimit: targetLimit'),
++  'boost-processes must return explicit actual-state details when database rollback also fails'
++)
++assert.ok(
++  boostRoute.includes("'failed'") &&
++    boostRoute.includes('return reply.code(500).send(apiError(') &&
++    !boostRoute.includes('不抛出错误'),
++  'boost-processes Incus failures must be logged and returned instead of silently succeeding'
++)
++
+ console.log('instance route ID guard tests passed')
+diff --git a/server/src/routes/instances.ts b/server/src/routes/instances.ts
+index a73f706ba43e759343976af9152705a854450675..0193dda865ae72eb59b4125e52b50235e5877f57
+--- a/server/src/routes/instances.ts
++++ b/server/src/routes/instances.ts
+@@ -6021,7 +6021,8 @@
+ 
+     // 获取当前进程数配置
+     const instanceConfig = await db.getInstanceConfig(instanceId)
+-    const currentProcesses = instanceConfig?.limits_processes ?? 500
++    const previousProcesses = instanceConfig?.limits_processes ?? null
++    const currentProcesses = previousProcesses ?? 500
+ 
+     // 检查是否已达上限
+     if (currentProcesses >= targetLimit) {
+@@ -6044,9 +6045,50 @@
+           'limits.processes': String(targetLimit)
+         }
+       })
+-    } catch (err) {
+-      console.error(`[BoostProcesses] Failed to apply to Incus for instance ${instance.name}:`, err)
+-      // 不抛出错误，数据库已更新成功
++    } catch (error) {
++      const errorMessage = error instanceof Error ? error.message : String(error)
++      console.error(`[BoostProcesses] Failed to apply to Incus for instance ${instance.name}:`, error)
++
++      try {
++        await db.updateInstanceConfig(instanceId, {
++          limitsProcesses: previousProcesses
++        })
++      } catch (rollbackError) {
++        const rollbackErrorMessage = rollbackError instanceof Error ? rollbackError.message : String(rollbackError)
++        console.error(`[BoostProcesses] Failed to roll back database config for instance ${instance.name}:`, rollbackError)
++        await createLog(
++          user.id,
++          'instance',
++          'instance.boost_processes',
++          `Failed to apply process limit for instance "${instance.name}" and database rollback failed`,
++          'failed',
++          { instanceId }
++        )
++        return reply.code(500).send({
++          error: 'Process limit boost partially failed',
++          code: 'PROCESS_LIMIT_BOOST_PARTIAL_FAILURE',
++          details: {
++            incusError: errorMessage,
++            rollbackError: rollbackErrorMessage,
++            databaseLimit: targetLimit,
++            previousDatabaseLimit: previousProcesses,
++            incusLimitApplied: 'unknown'
++          }
++        })
++      }
++
++      await createLog(
++        user.id,
++        'instance',
++        'instance.boost_processes',
++        `Failed to apply process limit for instance "${instance.name}"; database change rolled back`,
++        'failed',
++        { instanceId }
++      )
++      return reply.code(500).send(apiError(
++        ErrorCode.CONFIG_UPDATE_FAILED,
++        `${errorMessage}; database change rolled back`
++      ))
+     }
+ 
+     await createLog(
+
+diff --git a/server/scripts/test-instance-route-id-guards.ts b/server/scripts/test-instance-route-id-guards.ts
+index 8590b8695370541d170b55d8abc689506da166e3..8b8ab92ba64d3edfb29f182778bb9f1e520724be
+--- a/server/scripts/test-instance-route-id-guards.ts
++++ b/server/scripts/test-instance-route-id-guards.ts
+@@ -97,4 +97,28 @@
+   )
+ }
+ 
++const boostRouteStart = source.indexOf("}>('/:id/boost-processes'")
++assert.ok(boostRouteStart >= 0, 'boost-processes route not found')
++const boostRouteEnd = source.indexOf("}>('/:id/task'", boostRouteStart)
++assert.ok(boostRouteEnd > boostRouteStart, 'boost-processes route end marker not found')
++const boostRoute = source.slice(boostRouteStart, boostRouteEnd)
++
++assert.ok(
++  boostRoute.includes('const previousProcesses = instanceConfig?.limits_processes ?? null') &&
++    boostRoute.includes('limitsProcesses: previousProcesses'),
++  'boost-processes must preserve and restore the exact previous database limit when Incus fails'
++)
++assert.ok(
++  boostRoute.includes("code: 'PROCESS_LIMIT_BOOST_PARTIAL_FAILURE'") &&
++    boostRoute.includes("incusLimitApplied: 'unknown'") &&
++    boostRoute.includes('databaseLimit: targetLimit'),
++  'boost-processes must return explicit actual-state details when database rollback also fails'
++)
++assert.ok(
++  boostRoute.includes("'failed'") &&
++    boostRoute.includes('return reply.code(500).send(apiError(') &&
++    !boostRoute.includes('不抛出错误'),
++  'boost-processes Incus failures must be logged and returned instead of silently succeeding'
++)
++
+ console.log('instance route ID guard tests passed')
+diff --git a/server/src/routes/instances.ts b/server/src/routes/instances.ts
+index a73f706ba43e759343976af9152705a854450675..0193dda865ae72eb59b4125e52b50235e5877f57
+--- a/server/src/routes/instances.ts
++++ b/server/src/routes/instances.ts
+@@ -6021,7 +6021,8 @@
+ 
+     // 获取当前进程数配置
+     const instanceConfig = await db.getInstanceConfig(instanceId)
+-    const currentProcesses = instanceConfig?.limits_processes ?? 500
++    const previousProcesses = instanceConfig?.limits_processes ?? null
++    const currentProcesses = previousProcesses ?? 500
+ 
+     // 检查是否已达上限
+     if (currentProcesses >= targetLimit) {
+@@ -6044,9 +6045,50 @@
+           'limits.processes': String(targetLimit)
+         }
+       })
+-    } catch (err) {
+-      console.error(`[BoostProcesses] Failed to apply to Incus for instance ${instance.name}:`, err)
+-      // 不抛出错误，数据库已更新成功
++    } catch (error) {
++      const errorMessage = error instanceof Error ? error.message : String(error)
++      console.error(`[BoostProcesses] Failed to apply to Incus for instance ${instance.name}:`, error)
++
++      try {
++        await db.updateInstanceConfig(instanceId, {
++          limitsProcesses: previousProcesses
++        })
++      } catch (rollbackError) {
++        const rollbackErrorMessage = rollbackError instanceof Error ? rollbackError.message : String(rollbackError)
++        console.error(`[BoostProcesses] Failed to roll back database config for instance ${instance.name}:`, rollbackError)
++        await createLog(
++          user.id,
++          'instance',
++          'instance.boost_processes',
++          `Failed to apply process limit for instance "${instance.name}" and database rollback failed`,
++          'failed',
++          { instanceId }
++        )
++        return reply.code(500).send({
++          error: 'Process limit boost partially failed',
++          code: 'PROCESS_LIMIT_BOOST_PARTIAL_FAILURE',
++          details: {
++            incusError: errorMessage,
++            rollbackError: rollbackErrorMessage,
++            databaseLimit: targetLimit,
++            previousDatabaseLimit: previousProcesses,
++            incusLimitApplied: 'unknown'
++          }
++        })
++      }
++
++      await createLog(
++        user.id,
++        'instance',
++        'instance.boost_processes',
++        `Failed to apply process limit for instance "${instance.name}"; database change rolled back`,
++        'failed',
++        { instanceId }
++      )
++      return reply.code(500).send(apiError(
++        ErrorCode.CONFIG_UPDATE_FAILED,
++        `${errorMessage}; database change rolled back`
++      ))
+     }
+ 
+     await createLog(
+
+diff --git a/server/scripts/test-instance-route-id-guards.ts b/server/scripts/test-instance-route-id-guards.ts
+index 8590b8695370541d170b55d8abc689506da166e3..8b8ab92ba64d3edfb29f182778bb9f1e520724be
+--- a/server/scripts/test-instance-route-id-guards.ts
++++ b/server/scripts/test-instance-route-id-guards.ts
+@@ -97,4 +97,28 @@
+   )
+ }
+ 
++const boostRouteStart = source.indexOf("}>('/:id/boost-processes'")
++assert.ok(boostRouteStart >= 0, 'boost-processes route not found')
++const boostRouteEnd = source.indexOf("}>('/:id/task'", boostRouteStart)
++assert.ok(boostRouteEnd > boostRouteStart, 'boost-processes route end marker not found')
++const boostRoute = source.slice(boostRouteStart, boostRouteEnd)
++
++assert.ok(
++  boostRoute.includes('const previousProcesses = instanceConfig?.limits_processes ?? null') &&
++    boostRoute.includes('limitsProcesses: previousProcesses'),
++  'boost-processes must preserve and restore the exact previous database limit when Incus fails'
++)
++assert.ok(
++  boostRoute.includes("code: 'PROCESS_LIMIT_BOOST_PARTIAL_FAILURE'") &&
++    boostRoute.includes("incusLimitApplied: 'unknown'") &&
++    boostRoute.includes('databaseLimit: targetLimit'),
++  'boost-processes must return explicit actual-state details when database rollback also fails'
++)
++assert.ok(
++  boostRoute.includes("'failed'") &&
++    boostRoute.includes('return reply.code(500).send(apiError(') &&
++    !boostRoute.includes('不抛出错误'),
++  'boost-processes Incus failures must be logged and returned instead of silently succeeding'
++)
++
+ console.log('instance route ID guard tests passed')
+diff --git a/server/src/routes/instances.ts b/server/src/routes/instances.ts
+index a73f706ba43e759343976af9152705a854450675..0193dda865ae72eb59b4125e52b50235e5877f57
+--- a/server/src/routes/instances.ts
++++ b/server/src/routes/instances.ts
+@@ -6021,7 +6021,8 @@
+ 
+     // 获取当前进程数配置
+     const instanceConfig = await db.getInstanceConfig(instanceId)
+-    const currentProcesses = instanceConfig?.limits_processes ?? 500
++    const previousProcesses = instanceConfig?.limits_processes ?? null
++    const currentProcesses = previousProcesses ?? 500
+ 
+     // 检查是否已达上限
+     if (currentProcesses >= targetLimit) {
+@@ -6044,9 +6045,50 @@
+           'limits.processes': String(targetLimit)
+         }
+       })
+-    } catch (err) {
+-      console.error(`[BoostProcesses] Failed to apply to Incus for instance ${instance.name}:`, err)
+-      // 不抛出错误，数据库已更新成功
++    } catch (error) {
++      const errorMessage = error instanceof Error ? error.message : String(error)
++      console.error(`[BoostProcesses] Failed to apply to Incus for instance ${instance.name}:`, error)
++
++      try {
++        await db.updateInstanceConfig(instanceId, {
++          limitsProcesses: previousProcesses
++        })
++      } catch (rollbackError) {
++        const rollbackErrorMessage = rollbackError instanceof Error ? rollbackError.message : String(rollbackError)
++        console.error(`[BoostProcesses] Failed to roll back database config for instance ${instance.name}:`, rollbackError)
++        await createLog(
++          user.id,
++          'instance',
++          'instance.boost_processes',
++          `Failed to apply process limit for instance "${instance.name}" and database rollback failed`,
++          'failed',
++          { instanceId }
++        )
++        return reply.code(500).send({
++          error: 'Process limit boost partially failed',
++          code: 'PROCESS_LIMIT_BOOST_PARTIAL_FAILURE',
++          details: {
++            incusError: errorMessage,
++            rollbackError: rollbackErrorMessage,
++            databaseLimit: targetLimit,
++            previousDatabaseLimit: previousProcesses,
++            incusLimitApplied: 'unknown'
++          }
++        })
++      }
++
++      await createLog(
++        user.id,
++        'instance',
++        'instance.boost_processes',
++        `Failed to apply process limit for instance "${instance.name}"; database change rolled back`,
++        'failed',
++        { instanceId }
++      )
++      return reply.code(500).send(apiError(
++        ErrorCode.CONFIG_UPDATE_FAILED,
++        `${errorMessage}; database change rolled back`
++      ))
+     }
+ 
+     await createLog(
+
+ succeeded in 38404ms:
+
+> server@1.3.7 type-check C:\Users\Administrator\Desktop\payinces\server
+> tsc --noEmit
+
+
+diff --git a/server/scripts/test-instance-route-id-guards.ts b/server/scripts/test-instance-route-id-guards.ts
+index 8590b8695370541d170b55d8abc689506da166e3..8b8ab92ba64d3edfb29f182778bb9f1e520724be
+--- a/server/scripts/test-instance-route-id-guards.ts
++++ b/server/scripts/test-instance-route-id-guards.ts
+@@ -97,4 +97,28 @@
+   )
+ }
+ 
++const boostRouteStart = source.indexOf("}>('/:id/boost-processes'")
++assert.ok(boostRouteStart >= 0, 'boost-processes route not found')
++const boostRouteEnd = source.indexOf("}>('/:id/task'", boostRouteStart)
++assert.ok(boostRouteEnd > boostRouteStart, 'boost-processes route end marker not found')
++const boostRoute = source.slice(boostRouteStart, boostRouteEnd)
++
++assert.ok(
++  boostRoute.includes('const previousProcesses = instanceConfig?.limits_processes ?? null') &&
++    boostRoute.includes('limitsProcesses: previousProcesses'),
++  'boost-processes must preserve and restore the exact previous database limit when Incus fails'
++)
++assert.ok(
++  boostRoute.includes("code: 'PROCESS_LIMIT_BOOST_PARTIAL_FAILURE'") &&
++    boostRoute.includes("incusLimitApplied: 'unknown'") &&
++    boostRoute.includes('databaseLimit: targetLimit'),
++  'boost-processes must return explicit actual-state details when database rollback also fails'
++)
++assert.ok(
++  boostRoute.includes("'failed'") &&
++    boostRoute.includes('return reply.code(500).send(apiError(') &&
++    !boostRoute.includes('不抛出错误'),
++  'boost-processes Incus failures must be logged and returned instead of silently succeeding'
++)
++
+ console.log('instance route ID guard tests passed')
+diff --git a/server/src/routes/instances.ts b/server/src/routes/instances.ts
+index a73f706ba43e759343976af9152705a854450675..0193dda865ae72eb59b4125e52b50235e5877f57
+--- a/server/src/routes/instances.ts
++++ b/server/src/routes/instances.ts
+@@ -6021,7 +6021,8 @@
+ 
+     // 获取当前进程数配置
+     const instanceConfig = await db.getInstanceConfig(instanceId)
+-    const currentProcesses = instanceConfig?.limits_processes ?? 500
++    const previousProcesses = instanceConfig?.limits_processes ?? null
++    const currentProcesses = previousProcesses ?? 500
+ 
+     // 检查是否已达上限
+     if (currentProcesses >= targetLimit) {
+@@ -6044,9 +6045,50 @@
+           'limits.processes': String(targetLimit)
+         }
+       })
+-    } catch (err) {
+-      console.error(`[BoostProcesses] Failed to apply to Incus for instance ${instance.name}:`, err)
+-      // 不抛出错误，数据库已更新成功
++    } catch (error) {
++      const errorMessage = error instanceof Error ? error.message : String(error)
++      console.error(`[BoostProcesses] Failed to apply to Incus for instance ${instance.name}:`, error)
++
++      try {
++        await db.updateInstanceConfig(instanceId, {
++          limitsProcesses: previousProcesses
++        })
++      } catch (rollbackError) {
++        const rollbackErrorMessage = rollbackError instanceof Error ? rollbackError.message : String(rollbackError)
++        console.error(`[BoostProcesses] Failed to roll back database config for instance ${instance.name}:`, rollbackError)
++        await createLog(
++          user.id,
++          'instance',
++          'instance.boost_processes',
++          `Failed to apply process limit for instance "${instance.name}" and database rollback failed`,
++          'failed',
++          { instanceId }
++        )
++        return reply.code(500).send({
++          error: 'Process limit boost partially failed',
++          code: 'PROCESS_LIMIT_BOOST_PARTIAL_FAILURE',
++          details: {
++            incusError: errorMessage,
++            rollbackError: rollbackErrorMessage,
++            databaseLimit: targetLimit,
++            previousDatabaseLimit: previousProcesses,
++            incusLimitApplied: 'unknown'
++          }
++        })
++      }
++
++      await createLog(
++        user.id,
++        'instance',
++        'instance.boost_processes',
++        `Failed to apply process limit for instance "${instance.name}"; database change rolled back`,
++        'failed',
++        { instanceId }
++      )
++      return reply.code(500).send(apiError(
++        ErrorCode.CONFIG_UPDATE_FAILED,
++        `${errorMessage}; database change rolled back`
++      ))
+     }
+ 
+     await createLog(
+
+codex
+三项验收均已通过：server type-check、`test:instance-route-id-guards`、`test:instance-operation-conflict-guards`。我再做一次只读收尾核对（目标行号、diff 格式、schema/package 未被本次触碰、未 commit），然后交付简报。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$ErrorActionPreference='"'Stop'; git diff --check -- server/src/routes/instances.ts server/scripts/test-instance-route-id-guards.ts; Write-Output '--- target lines ---'; Select-String -Path server\\src\\routes\\instances.ts -Pattern 'previousProcesses|PROCESS_LIMIT_BOOST_PARTIAL_FAILURE|database change rolled back' | ForEach-Object { \"{0}:{1}:{2}\" -f "'$_.Path,$_.LineNumber,$_.Line.Trim() }; Select-String -Path server'"\\scripts\\test-instance-route-id-guards.ts -Pattern 'boostRouteStart|PROCESS_LIMIT_BOOST_PARTIAL_FAILURE|silently succeeding' | ForEach-Object { \"{0}:{1}:{2}\" -f "'$_.Path,$_.LineNumber,$_.Line.Trim() }; Write-Output '"'--- protected files status ---'; git status --short | Select-String -Pattern 'package\\.json|schema\\.prisma|resource-risk|traffic-scheduler' | ForEach-Object { "'$_.Line }; Write-Output '"'--- target status ---'; git status --short -- server/src/routes/instances.ts server/scripts/test-instance-route-id-guards.ts server/scripts/test-instance-operation-conflict-guards.ts" in C:\Users\Administrator\Desktop\payinces
+ succeeded in 666ms:
+--- target lines ---
+C:\Users\Administrator\Desktop\payinces\server\src\routes\instances.ts:6024:const previousProcesses = instanceConfig?.limits_processes ?? null
+C:\Users\Administrator\Desktop\payinces\server\src\routes\instances.ts:6025:const currentProcesses = previousProcesses ?? 500
+C:\Users\Administrator\Desktop\payinces\server\src\routes\instances.ts:6054:limitsProcesses: previousProcesses
+C:\Users\Administrator\Desktop\payinces\server\src\routes\instances.ts:6069:code: 'PROCESS_LIMIT_BOOST_PARTIAL_FAILURE',
+C:\Users\Administrator\Desktop\payinces\server\src\routes\instances.ts:6074:previousDatabaseLimit: previousProcesses,
+C:\Users\Administrator\Desktop\payinces\server\src\routes\instances.ts:6084:`Failed to apply process limit for instance "${instance.name}"; database change rolled back`,
+C:\Users\Administrator\Desktop\payinces\server\src\routes\instances.ts:6090:`${errorMessage}; database change rolled back`
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-instance-route-id-guards.ts:100:const boostRouteStart = source.indexOf("}>('/:id/boost-processes'")
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-instance-route-id-guards.ts:101:assert.ok(boostRouteStart >= 0, 'boost-processes route not found')
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-instance-route-id-guards.ts:102:const boostRouteEnd = source.indexOf("}>('/:id/task'", boostRouteStart)
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-instance-route-id-guards.ts:103:assert.ok(boostRouteEnd > boostRouteStart, 'boost-processes route end marker not found')
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-instance-route-id-guards.ts:104:const boostRoute = source.slice(boostRouteStart, boostRouteEnd)
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-instance-route-id-guards.ts:112:boostRoute.includes("code: 'PROCESS_LIMIT_BOOST_PARTIAL_FAILURE'") &&
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-instance-route-id-guards.ts:121:'boost-processes Incus failures must be logged and returned instead of silently succeeding'
+--- protected files status ---
+ M package.json
+ M server/package.json
+ M server/scripts/test-resource-risk-guards.ts
+ M server/src/routes/resource-risk.ts
+ M server/src/services/resource-risk.ts
+ M server/src/services/traffic-scheduler.ts
+--- target status ---
+ M server/scripts/test-instance-operation-conflict-guards.ts
+ M server/scripts/test-instance-route-id-guards.ts
+ M server/src/routes/instances.ts
+warning: in the working copy of 'server/scripts/test-instance-route-id-guards.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/instances.ts', LF will be replaced by CRLF the next time Git touches it
+
+diff --git a/server/scripts/test-instance-route-id-guards.ts b/server/scripts/test-instance-route-id-guards.ts
+index 8590b8695370541d170b55d8abc689506da166e3..8b8ab92ba64d3edfb29f182778bb9f1e520724be
+--- a/server/scripts/test-instance-route-id-guards.ts
++++ b/server/scripts/test-instance-route-id-guards.ts
+@@ -97,4 +97,28 @@
+   )
+ }
+ 
++const boostRouteStart = source.indexOf("}>('/:id/boost-processes'")
++assert.ok(boostRouteStart >= 0, 'boost-processes route not found')
++const boostRouteEnd = source.indexOf("}>('/:id/task'", boostRouteStart)
++assert.ok(boostRouteEnd > boostRouteStart, 'boost-processes route end marker not found')
++const boostRoute = source.slice(boostRouteStart, boostRouteEnd)
++
++assert.ok(
++  boostRoute.includes('const previousProcesses = instanceConfig?.limits_processes ?? null') &&
++    boostRoute.includes('limitsProcesses: previousProcesses'),
++  'boost-processes must preserve and restore the exact previous database limit when Incus fails'
++)
++assert.ok(
++  boostRoute.includes("code: 'PROCESS_LIMIT_BOOST_PARTIAL_FAILURE'") &&
++    boostRoute.includes("incusLimitApplied: 'unknown'") &&
++    boostRoute.includes('databaseLimit: targetLimit'),
++  'boost-processes must return explicit actual-state details when database rollback also fails'
++)
++assert.ok(
++  boostRoute.includes("'failed'") &&
++    boostRoute.includes('return reply.code(500).send(apiError(') &&
++    !boostRoute.includes('不抛出错误'),
++  'boost-processes Incus failures must be logged and returned instead of silently succeeding'
++)
++
+ console.log('instance route ID guard tests passed')
+diff --git a/server/src/routes/instances.ts b/server/src/routes/instances.ts
+index a73f706ba43e759343976af9152705a854450675..0193dda865ae72eb59b4125e52b50235e5877f57
+--- a/server/src/routes/instances.ts
++++ b/server/src/routes/instances.ts
+@@ -6021,7 +6021,8 @@
+ 
+     // 获取当前进程数配置
+     const instanceConfig = await db.getInstanceConfig(instanceId)
+-    const currentProcesses = instanceConfig?.limits_processes ?? 500
++    const previousProcesses = instanceConfig?.limits_processes ?? null
++    const currentProcesses = previousProcesses ?? 500
+ 
+     // 检查是否已达上限
+     if (currentProcesses >= targetLimit) {
+@@ -6044,9 +6045,50 @@
+           'limits.processes': String(targetLimit)
+         }
+       })
+-    } catch (err) {
+-      console.error(`[BoostProcesses] Failed to apply to Incus for instance ${instance.name}:`, err)
+-      // 不抛出错误，数据库已更新成功
++    } catch (error) {
++      const errorMessage = error instanceof Error ? error.message : String(error)
++      console.error(`[BoostProcesses] Failed to apply to Incus for instance ${instance.name}:`, error)
++
++      try {
++        await db.updateInstanceConfig(instanceId, {
++          limitsProcesses: previousProcesses
++        })
++      } catch (rollbackError) {
++        const rollbackErrorMessage = rollbackError instanceof Error ? rollbackError.message : String(rollbackError)
++        console.error(`[BoostProcesses] Failed to roll back database config for instance ${instance.name}:`, rollbackError)
++        await createLog(
++          user.id,
++          'instance',
++          'instance.boost_processes',
++          `Failed to apply process limit for instance "${instance.name}" and database rollback failed`,
++          'failed',
++          { instanceId }
++        )
++        return reply.code(500).send({
++          error: 'Process limit boost partially failed',
++          code: 'PROCESS_LIMIT_BOOST_PARTIAL_FAILURE',
++          details: {
++            incusError: errorMessage,
++            rollbackError: rollbackErrorMessage,
++            databaseLimit: targetLimit,
++            previousDatabaseLimit: previousProcesses,
++            incusLimitApplied: 'unknown'
++          }
++        })
++      }
++
++      await createLog(
++        user.id,
++        'instance',
++        'instance.boost_processes',
++        `Failed to apply process limit for instance "${instance.name}"; database change rolled back`,
++        'failed',
++        { instanceId }
++      )
++      return reply.code(500).send(apiError(
++        ErrorCode.CONFIG_UPDATE_FAILED,
++        `${errorMessage}; database change rolled back`
++      ))
+     }
+ 
+     await createLog(
+
+codex
+已完成 FX-050：在 [instances.ts](C:/Users/Administrator/Desktop/payinces/server/src/routes/instances.ts:6024) 保存 DB 原始值，Incus 失败时精确回滚（包括 `null`）；若回滚也失败，则返回 `PROCESS_LIMIT_BOOST_PARTIAL_FAILURE`，明确 DB 值及 Incus 状态未知，所有失败均记录失败日志，不再静默返回成功。已在 [守卫](C:/Users/Administrator/Desktop/payinces/server/scripts/test-instance-route-id-guards.ts:100) 增加对应断言。server type-check、`test:instance-route-id-guards`、`test:instance-operation-conflict-guards` 全部通过；未改 schema/package/resource-risk/traffic-scheduler，保留了工作区原有并行改动，未 commit/push/发版。
+diff --git a/server/scripts/test-instance-route-id-guards.ts b/server/scripts/test-instance-route-id-guards.ts
+index 8590b8695370541d170b55d8abc689506da166e3..8b8ab92ba64d3edfb29f182778bb9f1e520724be
+--- a/server/scripts/test-instance-route-id-guards.ts
++++ b/server/scripts/test-instance-route-id-guards.ts
+@@ -97,4 +97,28 @@
+   )
+ }
+ 
++const boostRouteStart = source.indexOf("}>('/:id/boost-processes'")
++assert.ok(boostRouteStart >= 0, 'boost-processes route not found')
++const boostRouteEnd = source.indexOf("}>('/:id/task'", boostRouteStart)
++assert.ok(boostRouteEnd > boostRouteStart, 'boost-processes route end marker not found')
++const boostRoute = source.slice(boostRouteStart, boostRouteEnd)
++
++assert.ok(
++  boostRoute.includes('const previousProcesses = instanceConfig?.limits_processes ?? null') &&
++    boostRoute.includes('limitsProcesses: previousProcesses'),
++  'boost-processes must preserve and restore the exact previous database limit when Incus fails'
++)
++assert.ok(
++  boostRoute.includes("code: 'PROCESS_LIMIT_BOOST_PARTIAL_FAILURE'") &&
++    boostRoute.includes("incusLimitApplied: 'unknown'") &&
++    boostRoute.includes('databaseLimit: targetLimit'),
++  'boost-processes must return explicit actual-state details when database rollback also fails'
++)
++assert.ok(
++  boostRoute.includes("'failed'") &&
++    boostRoute.includes('return reply.code(500).send(apiError(') &&
++    !boostRoute.includes('不抛出错误'),
++  'boost-processes Incus failures must be logged and returned instead of silently succeeding'
++)
++
+ console.log('instance route ID guard tests passed')
+diff --git a/server/src/routes/instances.ts b/server/src/routes/instances.ts
+index a73f706ba43e759343976af9152705a854450675..0193dda865ae72eb59b4125e52b50235e5877f57
+--- a/server/src/routes/instances.ts
++++ b/server/src/routes/instances.ts
+@@ -6021,7 +6021,8 @@
+ 
+     // 获取当前进程数配置
+     const instanceConfig = await db.getInstanceConfig(instanceId)
+-    const currentProcesses = instanceConfig?.limits_processes ?? 500
++    const previousProcesses = instanceConfig?.limits_processes ?? null
++    const currentProcesses = previousProcesses ?? 500
+ 
+     // 检查是否已达上限
+     if (currentProcesses >= targetLimit) {
+@@ -6044,9 +6045,50 @@
+           'limits.processes': String(targetLimit)
+         }
+       })
+-    } catch (err) {
+-      console.error(`[BoostProcesses] Failed to apply to Incus for instance ${instance.name}:`, err)
+-      // 不抛出错误，数据库已更新成功
++    } catch (error) {
++      const errorMessage = error instanceof Error ? error.message : String(error)
++      console.error(`[BoostProcesses] Failed to apply to Incus for instance ${instance.name}:`, error)
++
++      try {
++        await db.updateInstanceConfig(instanceId, {
++          limitsProcesses: previousProcesses
++        })
++      } catch (rollbackError) {
++        const rollbackErrorMessage = rollbackError instanceof Error ? rollbackError.message : String(rollbackError)
++        console.error(`[BoostProcesses] Failed to roll back database config for instance ${instance.name}:`, rollbackError)
++        await createLog(
++          user.id,
++          'instance',
++          'instance.boost_processes',
++          `Failed to apply process limit for instance "${instance.name}" and database rollback failed`,
++          'failed',
++          { instanceId }
++        )
++        return reply.code(500).send({
++          error: 'Process limit boost partially failed',
++          code: 'PROCESS_LIMIT_BOOST_PARTIAL_FAILURE',
++          details: {
++            incusError: errorMessage,
++            rollbackError: rollbackErrorMessage,
++            databaseLimit: targetLimit,
++            previousDatabaseLimit: previousProcesses,
++            incusLimitApplied: 'unknown'
++          }
++        })
++      }
++
++      await createLog(
++        user.id,
++        'instance',
++        'instance.boost_processes',
++        `Failed to apply process limit for instance "${instance.name}"; database change rolled back`,
++        'failed',
++        { instanceId }
++      )
++      return reply.code(500).send(apiError(
++        ErrorCode.CONFIG_UPDATE_FAILED,
++        `${errorMessage}; database change rolled back`
++      ))
+     }
+ 
+     await createLog(
+
+tokens used
+58,798

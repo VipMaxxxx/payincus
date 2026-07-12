@@ -1,0 +1,1 @@
+已完成 FX-011：复用 `instance-destroy` 的 `hostId + 实际退款金额 + instanceId + 备注 + tx` 调用方式，由 `deductHostingBalance` 内部判定用户/peer 托管节点（官方节点返回 `null`）；已在管理员“退款”和“删除并退款”两个事务中分别按 `amount`、`refundAmount` 回扣，并在现有 admin-billing 守卫中增加路由级断言。`server type-check`、`admin-billing-route-id-guards`、`financial-reconciliation-guards` 均通过；仅修改指定两个文件，未 commit/push/发版。

@@ -1,0 +1,1 @@
+采用 **remark 前缀排除方案**，未改 schema：`users.ts` 将管理员 available 补发统一使用固定 `[Admin]` 前缀，余额增量逻辑保持不变；`hosting.ts` 的累计收入、本月收入、托管 VIP 收入及最近收入均排除该前缀记录，并保留 `remark = null` 的真实历史收入。已追加托管余额守卫。`server type-check`、`test:hosting-balance-guards`、`test:vip-level-rules-ui-guards` 均通过；未触碰 `instance-destroy.ts`，未 commit/push/发版。

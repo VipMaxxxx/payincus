@@ -1,0 +1,1 @@
+已按 FX-004 完成，未 commit。`getTrustProxyConfig()` 取值矩阵：空值/`false|0|no|off` → `false`；`true|1|yes|on` → 默认 `1` 跳，合法 `TRUST_PROXY_HOPS` 可覆盖；纯正整数 → 对应跳数；IP/CIDR 列表 → `string[]`；非法值告警并返回 `false`，绝不返回布尔 `true`。`app.ts` 已改用该配置，`getTrustProxyEnabled()` 保留为布尔判断。仅修改规格允许的 3 个文件，既有其他工作区改动未触碰。验收全部通过：server type-check、`test:trust-proxy-config`、`test:security-config`、`test:cors-origin-config`。

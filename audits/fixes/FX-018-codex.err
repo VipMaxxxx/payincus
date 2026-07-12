@@ -1,0 +1,2654 @@
+OpenAI Codex v0.144.0-alpha.4
+--------
+workdir: C:\Users\Administrator\Desktop\payinces
+model: gpt-5.6-sol
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: high
+reasoning summaries: none
+session id: 019f52cc-2770-7e60-9824-7d3af5a0bf6a
+--------
+user
+你是 PayIncus 仓库实现工程师。先读仓库根 AGENTS.md(计费属高危,先读代码+守卫;不 commit/push/发版、不大重构)。严格按规格,只改 mail.ts 续费入口与其守卫,改完跑守卫报告。不要 commit。
+---
+# FX-018 规格：年付邮箱套餐可绕前端按"年价÷12"单月续费(E21 / BF-9-05)
+
+## owner 裁决(BEHAVIOR.md E21)
+年付套餐必须只允许 12 个月整数倍续费。
+
+## 根因
+server/src/routes/mail.ts(约 291-296、1223-1228)续费接受 1–12 任意月数,按年度月均价收费;
+若年价含折扣,用户可只续 1 月享年度优惠月价,破坏价格梯度。
+
+## 修法（只改 server/src/routes/mail.ts 续费入口;不碰 package.json)
+1. 先只读通读 mail.ts 续费相关(291-296 报价、1223-1228 结算),弄清套餐"计费周期/是否年付"如何判定(找 plan 的 billingCycle / period / 年付标识字段)。
+2. 对**年付类套餐**(billingCycle=12 或等价年付),续费 months 必须是 **12 的整数倍**(1年=12月、2年=24月…);非整数倍 → 返回明确的 400 校验错误(用现有 apiError/ErrorCode 体系,文案如"年付套餐只能按年续费")。月付类套餐维持现状。
+3. 若存在其它周期(季付/半年),按同样原则:续费月数必须是该套餐周期的整数倍(季付=3的倍数、半年=6的倍数)。以套餐自身 billingCycle 为基准做整除校验最通用。
+4. 前后端一致:后端强制,前端若也有月数选择器不在本条范围(前端调整归后续)。
+
+## 加守卫
+在现有 server/scripts/test-mail-renewal-month-guards.ts 追加断言:年付/多月套餐续费月数须为套餐周期整数倍,非整数倍被拒。不改 package.json。
+
+## 不许动
+- 不改月付续费、不改报价公式本身(仅加月数合法性校验)。不做大重构。
+
+## 验收
+- pnpm --filter server type-check 通过;pnpm --filter server test:mail-renewal-month-guards 通过;test:mail-plan-financial-guards 通过。
+
+## 交付
+一段话:年付判定字段、整除校验实现、守卫结果。不要 commit。
+
+codex
+我会先按高危计费路径要求，只读 `AGENTS.md`、`mail.ts` 两处续费入口及两个相关守卫，确认实际周期字段与错误体系；随后仅修改 `mail.ts` 和续费月数守卫，不改 `package.json`，最后跑指定 type-check 与两项守卫。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Content -Raw AGENTS.md; rg -n -C 16 "renew|续费|months|billingCycle|period|apiError|ErrorCode" server/src/routes/mail.ts; Get-Content -Raw server/scripts/test-mail-renewal-month-guards.ts; Get-Content -Raw server/scripts/test-mail-plan-financial-guards.ts' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 681ms:
+# PayIncus / Incudal â€” é¡¹ç›®ç»Ÿä¸€è§„çŸ©ï¼ˆAGENTS.mdï¼‰
+
+> æœ¬æ–‡ä»¶æ˜¯æœ¬ä»“åº“**æ‰€æœ‰ AI agentï¼ˆClaude Codeã€codex ç­‰ï¼‰çš„ç»Ÿä¸€å·¥ä½œè§„èŒƒ**ã€‚
+> `CLAUDE.md` é€šè¿‡ `@AGENTS.md` å¼•ç”¨æœ¬æ–‡ä»¶ â€”â€” Claude Code ä¸Ž codex è¯»åˆ°çš„æ˜¯**åŒä¸€å¥—è§„çŸ©**ï¼Œæ”¹è¿™ä¸€ä¸ªæ–‡ä»¶å³å¯ã€‚
+> æƒå¨è¿ç»´/å‘ç‰ˆäº‹å®žä»¥ä»“åº“æ ¹çš„ `OPERATIONS_HANDOFF.md`ï¼ˆæ“ä½œæ‰‹å†Œï¼‰ä¸Ž `HANDOFF.md`ï¼ˆç‰ˆæœ¬è¯æ®å°è´¦ï¼‰ä¸ºå‡†ã€‚
+
+---
+
+## 0. æ²Ÿé€šè¯­è¨€
+- ä¸Ž owner é»˜è®¤ç”¨**ä¸­æ–‡**æ²Ÿé€šã€‚
+
+## 1. è¿™æ˜¯ä»€ä¹ˆé¡¹ç›®
+**PayIncus**ï¼ˆå†…éƒ¨ä»£å· `incudal`ï¼‰â€”â€”å•†ç”¨ Incusï¼ˆLXC/KVMï¼‰NAT VPS å”®å–ä¸Žäº¤ä»˜å¹³å°ï¼Œ**çº¿ä¸Šè¿è¥ä¸­**ã€‚å½“å‰ç”Ÿäº§ç‰ˆæœ¬ **v1.3.7**ã€‚pnpm monorepoï¼š
+
+| ç›®å½• | æŠ€æœ¯æ ˆ / ä½œç”¨ |
+|------|----------------|
+| `client/` | Vue 3 + Vite SPAã€‚åŒç«¯æž„å»ºï¼ˆ`VITE_APP_ENTRY`ï¼‰â†’ `dist/user`ï¼ˆpay.payincus.comï¼‰+ `dist/admin`ï¼ˆadmin.payincus.comï¼‰ã€‚ä¸¤ç«¯ç‹¬ç«‹æºã€**ä¸å…±äº« cookie åŸŸ**ã€‚ |
+| `server/` | Fastify 5 + Prisma 7 + PostgreSQLï¼Œ~300 TS æ–‡ä»¶ã€~70 è·¯ç”±ã€~15 è°ƒåº¦/workerã€‚æ—  Redisï¼ˆç”¨ PG advisory lockï¼‰ã€‚ä¸‰å¥—é‰´æƒé¢ï¼šWeb çš„ JWT+refresh cookieã€Public API çš„ `pat_`/`poa_` tokenã€host agent çš„ HMACã€‚ |
+| `agent/` | Go å®¿ä¸» agentï¼Œåªè¯»ç›‘æŽ§ï¼ˆå¿ƒè·³/èµ„æº/å®žä¾‹æ€/æµé‡ï¼‰ï¼ŒHMAC ç­¾åï¼Œè‡ªå‡çº§ã€‚ |
+| å…¶å®ƒ | `docs-site/`ï¼ˆVitePressï¼‰ã€`deploy/`ï¼ˆsystemd+Nginxï¼‰ã€`scripts/`ï¼ˆå®‰è£…/æ ¡éªŒ/OTAï¼‰ã€`plugin-templates/`ã€`theme-templates/`ã€‚ |
+
+éƒ¨ç½²ï¼šä¸‰å±‚æ‹†åˆ†ï¼ˆuser / admin / ç§æœ‰åŽç«¯ `127.0.0.1:3001`ï¼‰ï¼Œè£…æœºæ ¹ `/opt/incudal`ï¼ŒåŽŸå­ OTAï¼ˆ`releases/<ver-ts>` + `current` è½¯é“¾ï¼‰+ è‡ªåŠ¨å›žæ»šã€‚
+
+---
+
+## 2. ðŸ”´ ç¡¬è§„çŸ©ï¼ˆä¸å¯åå•†ï¼Œè¿åå³äº‹æ•…ï¼‰
+
+1. **ä¸ç¢°ç”Ÿäº§**ï¼šæœªç» owner æ˜Žç¡®è¦æ±‚ï¼Œ**ç»ä¸** OTAã€å‘å¸ƒã€pushã€æ‰“ tagã€æ”¹ç”Ÿäº§çŽ¯å¢ƒã€‚
+2. **ä¸åšç ´åæ€§ git**ï¼šæœªç» owner æ˜Žç¡®è¦æ±‚ï¼Œ**ç»ä¸** `git reset`ã€`git checkout --`ã€å¼ºåˆ¶åˆ é™¤ã€æ¸…ç†æœªè·Ÿè¸ªæ–‡ä»¶ã€`git commit`/`git push`ã€‚
+3. **é«˜å±è·¯å¾„å…ˆè¯»åŽå†™**ï¼šæ”¹åŠ¨ä»¥ä¸‹ä»»ä¸€é¢†åŸŸï¼Œ**å¿…é¡»å…ˆè¯»ç›¸å…³ä»£ç  + å¯¹åº”å®ˆå«æµ‹è¯•**å†åŠ¨æ‰‹ï¼š
+   > é‰´æƒ Â· æ”¯ä»˜ Â· æƒé™ Â· é£ŽæŽ§ Â· èµ„æºäº¤ä»˜ Â· å…‘æ¢æµç¨‹ Â· å®žä¾‹åˆ›å»º Â· OTA
+4. **æ”¹åŠ¨æœ€å°åŒ–**ï¼šä¿® bug / å‘ç‰ˆæœŸé—´**ä¸åšå¤§èŒƒå›´é‡æž„**ï¼Œåªæ”¹å¿…è¦çš„ã€‚
+5. **ç»ä¸æ³„å¯†**ï¼šä»»ä½• commitã€handoffã€æ€»ç»“ã€æˆªå›¾ä¸­éƒ½**ä¸å¾—**å‡ºçŽ°å‡­è¯ / token / cookie / å¯†é’¥ã€‚
+6. **æœ¬åœ°è¿‡ â‰  ç”Ÿäº§éªŒè¯**ï¼šæœ¬åœ°é€šè¿‡ã€GitHub Actionsã€Release èµ„äº§ã€OTAã€çº¿ä¸Šå®žè¯æ˜¯**åˆ†å¼€çš„è¯æ®**ï¼Œä¸å¯æ··ä¸ºä¸€è°ˆã€‚
+7. **æ¯æ¬¡æ”¹åŠ¨å¿…é¡»è¿‡å¯¹åº”å®ˆå«**ï¼ˆè§ Â§4ï¼‰ï¼Œå¦åˆ™è§†ä¸º**æœªå®Œæˆ**ã€‚
+8. `RUN_DB_CHECKS=0 bash scripts/apply-online-update.sh <ver>` ä¼š**è·³è¿‡ DB/æ”¯ä»˜å°±ç»ªæ ¡éªŒ**ï¼Œä»…åœ¨ owner æ˜Žç¡®æ‰¹å‡†æ—¶ä½¿ç”¨ã€‚
+
+---
+
+## 3. æœ¬åœ°æ€Žä¹ˆè·‘
+
+- **çŽ¯å¢ƒ**ï¼šNode â‰¥ 20ã€pnpm 9.14.2ã€æœ¬åœ° PostgreSQL 16ã€‚
+- **è£…ä¾èµ–**ï¼š`pnpm install`
+- **ä¸€æŠŠèµ·å…¨éƒ¨ï¼ˆserver + user + adminï¼‰**ï¼š`pnpm dev`
+- **åˆ†å¼€èµ·**ï¼š
+  - åŽç«¯ï¼š`NODE_ENV=development JWT_SECRET=dev-secret-12345678 HOST=127.0.0.1 PORT=3001 pnpm --filter server exec tsx watch src/app.ts`
+  - ç”¨æˆ·å‰ç«¯ï¼š`pnpm dev:user`
+  - ç®¡ç†å‰ç«¯ï¼š`pnpm dev:admin`
+- **ç«¯å£**ï¼šåŽç«¯ API **3001** Â· ç”¨æˆ·å‰ç«¯ **3000** Â· ç®¡ç†å‰ç«¯ **3002**ï¼ˆå‰ç«¯ dev ç» proxy æ‰“åˆ° 3001ï¼‰ã€‚
+
+---
+
+## 4. ðŸ›¡ï¸ å®ˆå«æµ‹è¯•çºªå¾‹ï¼ˆæœ¬ä»“åº“çš„å‘½é—¨ï¼‰
+
+`server/package.json` é‡Œæœ‰ **200+ ä¸ªç‹¬ç«‹ `test-*-guards.ts`**ã€‚å®ƒä»¬æŠŠå…³é”®ä¸šåŠ¡/å‰ç«¯ç»“æž„â€œé’‰æ­»â€ï¼Œ`pnpm test` ä¼šè·‘å…¨å¥—ï¼ˆclient+server type-check + å…¨éƒ¨å®ˆå«ï¼‰ã€‚**ä»»ä½•æ”¹åŠ¨å¿…é¡»è®©ç›¸å…³å®ˆå«é€šè¿‡ã€‚**
+
+- **å…¨é‡**ï¼ˆæ…¢ï¼Œå‘ç‰ˆå‰è·‘ï¼‰ï¼š`pnpm test`
+- **å•ä¸ª**ï¼š`pnpm --filter server test:<guard-name>`
+- **å‰ç«¯æœ€å¸¸ç”¨ä¸‰ä¸ª**ï¼š
+  - `test:frontend-route-guards` â€”â€” è·¯ç”± / **è¡¨æ ¼å¸ƒå±€** / `@click` è·¯å¾„æ–­è¨€
+  - `test:frontend-dist-boundary-guards` â€”â€” åŒç«¯ dist è¾¹ç•Œ
+  - `test:frontend-i18n-keys` â€”â€” i18n key å®Œæ•´æ€§
+- **Go agent**ï¼š`pnpm test:agent`
+
+### âš ï¸ è¡¨æ ¼å¸ƒå±€å®ˆå«ï¼ˆæœ€å®¹æ˜“è¸©é›·ï¼‰
+ä¸€æ‰¹è¡¨è¢«å®ˆå«**é”å®š**ä¸ºâ€œ**ç§»åŠ¨å¡ + PC å®šå®½è¡¨ï¼ˆ`table-fixed` / `overflow-hidden`ï¼‰ï¼Œç»ä¸æ¨ªå‘æ»šåŠ¨**â€ï¼Œå¹¶**åå‘ç¦æ­¢** `overflow-x-auto` / `min-w-[...]` / åŽ»æŽ‰ `table-fixed`ã€‚
+- æƒ³ä¿®â€œå®½è¡¨æŒ¤åŽ‹â€æ—¶ï¼š**å…ˆåˆ¤æ–­è¯¥è¡¨æ˜¯å¦åœ¨å®ˆå«æ¸…å•é‡Œ**ã€‚é”å®šè¡¨**åªèƒ½åœ¨ `table-fixed` å†…å¹³è¡¡åˆ—å®½**ï¼ˆåˆ—å®½ç™¾åˆ†æ¯”åˆè®¡ = 100%ï¼‰+ å…è®¸å•å…ƒæ ¼æ¢è¡Œ + é ç§»åŠ¨å¡åº”å¯¹çª„å±ï¼›**ä¸èƒ½**æ”¹æˆæ¨ªå‘æ»šåŠ¨ã€‚
+- å—é”å®šçš„è¡¨ï¼ˆç”¨æˆ·ç«¯ï¼‰ï¼š`MyPackagesView`ã€`MyHostsView`ã€`TransfersView`ã€`OrdersView`ã€`InvitesView`ã€`FlashSalesView`ã€`HostingWalletView`ã€`InstancesView`ã€`LogsView`ã€`EntertainmentView`ï¼›ï¼ˆç®¡ç†ç«¯ï¼‰`admin/BillingView`ã€`admin/ImagesView`ã€`admin/HelpManageView`ã€`admin/MailView`ã€`admin/PluginCenterView`ï¼›ï¼ˆç»„ä»¶ï¼‰`HostPublicIpv4Tab`ã€`InstanceLogsTab`ã€`ConfigEditModal`ã€‚
+- æ”¹ä»»ä¸€å‰ç«¯æ–‡ä»¶åŽ**å¿…è·‘** `test:frontend-route-guards`ã€‚
+
+---
+
+## 5. æž„å»º / æ ¡éªŒå‘½ä»¤
+
+| ç›®çš„ | å‘½ä»¤ |
+|------|------|
+| æž„å»ºï¼ˆå« dist è¾¹ç•Œå®ˆå«ï¼‰| `pnpm build` |
+| åªæž„å»ºå‰ç«¯ / åŽç«¯ | `pnpm build:client` / `pnpm build:server` |
+| Lintï¼ˆæ£€æŸ¥ / è‡ªåŠ¨ä¿®ï¼‰| `pnpm lint` / `pnpm lint:fix` |
+| ç±»åž‹æ£€æŸ¥ | `pnpm --filter client type-check` Â· `pnpm --filter server type-check` |
+| å…¨å¥—å®ˆå« | `pnpm test` |
+| æ–‡æ¡£ç«™å¼€å‘ / æž„å»º | `pnpm docs:dev` / `pnpm docs:build` |
+
+---
+
+## 6. UI æ”¹åŠ¨çº¦æŸï¼ˆå•è‰²é‡åšè¿›è¡Œä¸­ï¼‰
+
+- **æ–¹å‘**ï¼šè‹¹æžœå¼**çº¯é»‘ç™½å•è‰²**ï¼ˆæµ…è‰²=ç™½åº•é»‘å­—ï¼Œæ·±è‰²=é»‘åº•ç™½å­—ï¼‰ï¼ŒåŽ»äºŒæ¬¡å…ƒ/å‰ç¥¥ç‰©/ç«‹ç»˜ã€‚çŠ¶æ€è‰²**åªä¿ç•™ç»¿/ç¥ç€/çº¢**ä¸‰ç§ï¼ˆè¿è¡Œ/å¾…å¤„ç†/å¤±è´¥ï¼‰ã€‚
+- **çº¢çº¿**ï¼šåªæ”¹**æ ·å¼ / å¸ƒå±€ / æ–‡æ¡ˆå±‚çº§**ï¼Œ**ä¸ç¢°**åŽç«¯æŽ¥å£ã€æƒé™ã€æ”¯ä»˜/è®¢å•/å®žä¾‹åˆ›å»º/OTA ç­‰ä¸šåŠ¡é€»è¾‘ä¸Žè·¯ç”±è¡Œä¸ºâ€”â€”**åŠŸèƒ½ 100% ä¸å˜**ã€‚
+- **é…è‰²èµ° token å±‚**ï¼ˆ`client/tailwind.config.js`ï¼‰ï¼šä¸€å †å½©è‰² ramp å·²æ˜ å°„åˆ°ä¸­æ€§ç°ï¼›`rose â†’ çœŸçº¢`ï¼ˆå±é™©/äºæŸè¯­ä¹‰ï¼‰**ä¿ç•™ä¸å¯ç°åŒ–**ï¼›æ¸¸æˆåŒ–æ¨¡å—ï¼ˆæˆå°±/ç­¾åˆ°/æŠ½å¥–/ç¨€æœ‰åº¦ï¼‰å½©è‰²**åˆ»æ„ä¿ç•™**ã€‚
+- `kawaii-cloud.css` **æ¸è¿›æ”¹é€ ã€ä¸é‡å†™**ï¼›å•é¡µåŽ»è‰²ç”¨é¡µé¢ `<style scoped>`ã€‚
+- åŠ¨æ•ˆå¯ç”¨ **GSAP**ï¼ˆå·²è£… gsap-skillsï¼Œè§ `.claude/skills/`ï¼‰ï¼›å°Šé‡ `prefers-reduced-motion`ã€‚
+
+---
+
+## 7. åä½œæ¨¡åž‹ï¼ˆClaude Code â‡„ codexï¼‰
+
+- **Claude Code = æŠ€æœ¯è´Ÿè´£äºº / é›†æˆæ–¹**ï¼šå®šæ ¹å› ã€åˆ‡ä»»åŠ¡ã€å†™è§„æ ¼ã€å®ˆä¸å˜é‡ã€å®¡ diffã€è·‘å®ˆå«ã€çœŸæœºéªŒè¯ã€ç®¡ gitï¼ˆ**ä»…åœ¨ owner åŒæ„æ—¶** commit / pushï¼‰ã€‚
+- **codex = å®žçŽ°å·¥äºº**ï¼šæŒ‰ Claude ç»™çš„è§„æ ¼å®žçŽ°æ”¹åŠ¨ï¼Œå°¤å…¶**ä½Ž/ä¸­å±ã€è‡ªåŒ…å«ã€å¯å¹¶è¡Œ**çš„å—ã€‚
+- **é£Žé™©åˆ†æ¡£**ï¼šé«˜å±è·¯å¾„ç”± Claude å®šæ ¹å›  + æ”¶ç´§è§„æ ¼ï¼›ä½Ž/ä¸­å± codex å¯ç«¯åˆ°ç«¯ä¿®ã€‚**ä»»ä½•ä¸€æ–¹æ”¹å®Œéƒ½è¦è·‘ç›¸å…³å®ˆå«ï¼ŒClaude ç»Ÿä¸€å®¡æŸ¥åŽæ‰è¿›å…¥ä¸‹ä¸€æ­¥ã€‚**
+- **é¿å…å†²çª**ï¼šåŒä¸€æ‰¹æ–‡ä»¶ä¸€æ¬¡åªè®©ä¸€ä¸ª agent æ”¹ã€‚
+
+---
+
+## 8. ä¸€ä¸ªæ”¹åŠ¨çš„ã€Œå®Œæˆã€å®šä¹‰
+
+1. ç›¸å…³ **type-check** é€šè¿‡ï¼›
+2. ç›¸å…³ **å®ˆå«æµ‹è¯•** é€šè¿‡ï¼›
+3. è‹¥åŠ¨å‰ç«¯ â†’ **åŒç«¯ build** é€šè¿‡ï¼›
+4. **çœŸæœºè·‘è¿‡**å—å½±å“æµç¨‹ï¼ˆä¸æ˜¯åªçœ‹æµ‹è¯•ï¼‰ï¼›
+5. **æŠ¥å‘Š**ï¼šæ”¹äº†å“ªäº›æ–‡ä»¶ / ä¸ºä»€ä¹ˆ / é£Žé™© / æ€Žä¹ˆéªŒè¯çš„ã€‚
+
+ä»¥ä¸Šä»»ä¸€æœªæ»¡è¶³ = **æœªå®Œæˆ**ã€‚
+
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+
+const routeSource = readFileSync(resolve(__dirname, '../src/routes/mail.ts'), 'utf8')
+const dbSource = readFileSync(resolve(__dirname, '../src/db/mail.ts'), 'utf8')
+const expirySchedulerSource = readFileSync(resolve(__dirname, '../src/services/mail-expiry-scheduler.ts'), 'utf8')
+
+function sectionBetween(source: string, startMarker: string, endMarker: string): string {
+  const start = source.indexOf(startMarker)
+  assert.notEqual(start, -1, `missing start marker: ${startMarker}`)
+  const end = source.indexOf(endMarker, start + startMarker.length)
+  assert.notEqual(end, -1, `missing end marker: ${endMarker}`)
+  return source.slice(start, end)
+}
+
+const routeRenewSection = sectionBetween(
+  routeSource,
+  '// ç»­è´¹è®¢é˜…',
+  '// ==================== ç”¨æˆ·ç«¯ï¼šåŸŸåç®¡ç† ===================='
+)
+const dbRenewSection = sectionBetween(
+  dbSource,
+  'export async function renewMailSubscription',
+  '// ==================== åŸŸå (MailDomain) ===================='
+)
+const expiryUpdateSection = sectionBetween(
+  expirySchedulerSource,
+  'const result = await prisma.mailSubscription.updateMany({',
+  'console.log(`[Mail] Updated ${result.count} mail subscriptions to expired status`)'
+)
+
+assert.ok(
+  routeSource.includes('function normalizeMailRenewMonths(value: unknown): number'),
+  'mail renewal route must normalize runtime months input'
+)
+assert.ok(
+  routeSource.includes('function normalizeMailSubscriptionRenewInput(input: unknown): number') &&
+    routeSource.includes('return normalizeMailRenewMonths(input.months)'),
+  'mail renewal route must validate runtime body shape before reading months'
+)
+assert.ok(
+  routeSource.includes("const months = requireSafeInteger(value, 'ç»­è´¹æœˆæ•°')"),
+  'mail renewal months must require a runtime JSON integer'
+)
+assert.ok(
+  !routeSource.includes('const months = Number(value)'),
+  'mail renewal months must not use loose numeric coercion'
+)
+assert.ok(
+  routeSource.includes('if (months < 1 || months > 12)'),
+  'mail renewal months must be an integer between 1 and 12'
+)
+assert.ok(
+  routeRenewSection.includes('Body: { months: unknown }'),
+  'mail renewal request body must not trust compile-time number typing at runtime'
+)
+assert.ok(
+  routeRenewSection.includes('renewMonths = normalizeMailSubscriptionRenewInput(request.body)'),
+  'mail renewal route must normalize the request body before billing'
+)
+assert.ok(
+  routeRenewSection.includes('monthlyPrice * renewMonths'),
+  'mail renewal price must use normalized renewal months'
+)
+assert.ok(
+  routeRenewSection.includes('newExpiry.getMonth() + renewMonths'),
+  'mail renewal expiry update must use normalized renewal months'
+)
+assert.ok(
+  routeRenewSection.includes('Renewed mail subscription for ${renewMonths} months'),
+  'mail renewal audit log must use normalized renewal months'
+)
+assert.ok(
+  !routeRenewSection.includes('monthlyPrice * months'),
+  'mail renewal price must not use raw request months'
+)
+assert.ok(
+  !routeRenewSection.includes('newExpiry.getMonth() + months'),
+  'mail renewal expiry update must not use raw request months'
+)
+assert.ok(
+  !routeRenewSection.includes('const { months } = request.body'),
+  'mail renewal route must not destructure raw typed request bodies'
+)
+assert.ok(
+  dbRenewSection.includes('!Number.isSafeInteger(months) || months < 1 || months > 12'),
+  'mail renewal database helper must also reject invalid month values'
+)
+assert.ok(
+  expiryUpdateSection.includes("status: 'active'") &&
+    expiryUpdateSection.includes('expiresAt: { lt: now }') &&
+    expiryUpdateSection.indexOf("status: 'active'") < expiryUpdateSection.indexOf('expiresAt: { lt: now }'),
+  'mail expiry scheduler must re-check expiresAt in the conditional update so renewed rows are not marked expired'
+)
+assert.ok(
+  expirySchedulerSource.includes('expired mail subscription candidate(s)') &&
+    !expirySchedulerSource.includes('for (const sub of expiredSubscriptions)') &&
+    !expirySchedulerSource.includes('Subscription expired: userId='),
+  'mail expiry scheduler logs must not report every stale candidate as actually expired'
+)
+
+console.log('mail renewal month guard tests passed')
+
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+
+const source = readFileSync(resolve(__dirname, '../src/routes/mail.ts'), 'utf8')
+
+assert.ok(
+  source.includes('function normalizeMailPlanInput'),
+  'mail plan create/update routes must share normalized backend validation'
+)
+assert.ok(
+  source.includes('function requireNumber(value: unknown, field: string): number') &&
+    source.includes('function requireSafeInteger(value: unknown, field: string): number'),
+  'mail plan validation must require runtime JSON numbers instead of loose coercion'
+)
+assert.ok(
+  source.includes("const sourceId = requireSafeInteger(input.sourceId, 'é‚®ç®±æº')") &&
+    source.includes("const domainLimit = requireSafeInteger(input.domainLimit, 'åŸŸåæ•°é‡é™åˆ¶')") &&
+    source.includes("const diskLimitGb = requireSafeInteger(input.diskLimitGb, 'ç£ç›˜å®¹é‡')") &&
+    source.includes("const price = requireNumber(input.price, 'ä»·æ ¼')") &&
+    source.includes("const sortOrder = requireSafeInteger(input.sortOrder, 'æŽ’åºå€¼')"),
+  'mail plan financial and quota fields must use strict runtime number helpers'
+)
+for (const looseCoercion of [
+  'const sourceId = Number(input.sourceId)',
+  'const domainLimit = Number(input.domainLimit)',
+  'const diskLimitGb = Number(input.diskLimitGb)',
+  'const price = Number(input.price)',
+  'const sortOrder = Number(input.sortOrder)'
+]) {
+  assert.ok(
+    !source.includes(looseCoercion),
+    `mail plan validation must not use loose numeric coercion: ${looseCoercion}`
+  )
+}
+assert.ok(
+  source.includes('price <= 0') && source.includes('price > 99999999.99'),
+  'mail plan prices must reject negative, zero, and unbounded values'
+)
+assert.ok(
+  source.includes('Math.abs(price - roundedPrice) > 1e-8'),
+  'mail plan prices must reject more than two decimal places'
+)
+assert.ok(
+  source.includes('domainLimit <= 0') && source.includes('domainLimit > 1000'),
+  'mail plan domain limits must be bounded positive integers'
+)
+assert.ok(
+  source.includes('diskLimitGb <= 0') && source.includes('diskLimitGb > 102400'),
+  'mail plan disk limits must be bounded positive integers'
+)
+assert.ok(
+  source.includes("input.billingCycle !== 'monthly' && input.billingCycle !== 'yearly'"),
+  'mail plan billing cycle must reject unexpected enum values before Prisma writes'
+)
+
+const createSectionStart = source.indexOf('// åˆ›å»ºæ–¹æ¡ˆ')
+const updateSectionStart = source.indexOf('// æ›´æ–°æ–¹æ¡ˆ')
+const deleteSectionStart = source.indexOf('// åˆ é™¤æ–¹æ¡ˆ')
+const purchaseSectionStart = source.indexOf('// è´­ä¹°è®¢é˜…')
+const renewSectionStart = source.indexOf('// ç»­è´¹è®¢é˜…')
+assert.notEqual(createSectionStart, -1, 'mail plan create section not found')
+assert.notEqual(updateSectionStart, -1, 'mail plan update section not found')
+assert.notEqual(deleteSectionStart, -1, 'mail plan delete section not found')
+assert.notEqual(purchaseSectionStart, -1, 'mail subscription purchase section not found')
+assert.notEqual(renewSectionStart, -1, 'mail subscription renew section not found')
+
+const createSection = source.slice(createSectionStart, updateSectionStart)
+const updateSection = source.slice(updateSectionStart, deleteSectionStart)
+const purchaseSection = source.slice(purchaseSectionStart, renewSectionStart)
+
+assert.ok(
+  createSection.includes('const planInput = normalizeMailPlanInput(request.body, true)'),
+  'mail plan create route must normalize and require all financial/quota fields'
+)
+assert.ok(
+  createSection.includes('price: planInput.price!'),
+  'mail plan create route must persist normalized price'
+)
+assert.ok(
+  updateSection.includes('const data = normalizeMailPlanInput(request.body, false)'),
+  'mail plan update route must validate partial direct API updates'
+)
+assert.ok(
+  updateSection.includes('if (data.sourceId !== undefined)'),
+  'mail plan update route must verify a changed source exists before persistence'
+)
+assert.ok(
+  source.includes('type MailSubscriptionPurchaseInput = {') &&
+    source.includes('const MAIL_AFF_CODE_MAX_LENGTH = 64') &&
+    source.includes('function normalizeMailSubscriptionPurchaseInput(input: unknown): MailSubscriptionPurchaseInput'),
+  'mail subscription purchase must define a runtime body normalizer'
+)
+assert.ok(
+  source.includes("const planId = requireSafeInteger(input.planId, 'é‚®ç®±æ–¹æ¡ˆ')") &&
+    source.includes('if (planId <= 0)') &&
+    source.includes("typeof input.affCode !== 'string'") &&
+    source.includes('input.affCode.trim().toUpperCase()') &&
+    source.includes('normalizedAffCode.length > MAIL_AFF_CODE_MAX_LENGTH'),
+  'mail subscription purchase must validate planId and optional AFF code before billing'
+)
+assert.ok(
+  purchaseSection.includes('purchaseInput = normalizeMailSubscriptionPurchaseInput(request.body)') &&
+    purchaseSection.includes('const { planId, affCode: affCodeInput } = purchaseInput') &&
+    purchaseSection.includes('const validation = await validateMailAffCode(affCodeInput, userId)'),
+  'mail subscription purchase route must use normalized purchase input for plan lookup and AFF validation'
+)
+assert.ok(
+  !purchaseSection.includes('const { planId, affCode: affCodeInput } = request.body') &&
+    !purchaseSection.includes('validateMailAffCode(affCodeInput.trim(), userId)'),
+  'mail subscription purchase route must not destructure raw typed bodies or trim AFF codes inline'
+)
+
+console.log('mail plan financial guard tests passed')
+
+rg : The term 'rg' is not recognized as the name of a cmdlet, function, script file, or operable program. Check the 
+spelling of the name, or if a path was included, verify that the path is correct and try again.
+At line:2 char:29
++ Get-Content -Raw AGENTS.md; rg -n -C 16 "renew|续费|months|billingCycle ...
++                             ~~
+    + CategoryInfo          : ObjectNotFound: (rg:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+
+codex
+当前环境没有 `rg`，我改用 PowerShell 原生检索。守卫显示现有续费上限仍是 12 月，且套餐字段是 `billingCycle: 'monthly' | 'yearly'`；我继续核对报价与结算的完整上下文、订阅关联的 `plan` 取数范围和既有错误码写法，再做最小补丁。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$p='"'server/src/routes/mail.ts'; "'$lines=Get-Content -Encoding utf8 $p; $patterns='"'normalizeMailRenewMonths','normalizeMailSubscriptionRenewInput','billingCycle','续费订阅','monthlyPrice','renewMonths','apiError','ErrorCode'; Select-String -Path "'$p -Pattern $patterns -Encoding utf8 | ForEach-Object { '"'{0}:{1}' -f "'$_.LineNumber,$_.Line.Trim() }; $ranges=@(@(240,330),@(1140,1285)); foreach($range in $ranges){ for($i=$range[0];$i -le $range[1];$i++){ '"'{0,5}: {1}' -f "'$i,$lines[$i-1] } }' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 778ms:
+10:import { apiError, ErrorCode } from '../lib/errors.js'
+28:billingCycle?: 'monthly' | 'yearly'
+73:throw apiError(ErrorCode.VALIDATION_ERROR, `${field} 无效`)
+80:throw apiError(ErrorCode.VALIDATION_ERROR, `${field} 无效`)
+88:if (requireAll && (!input.sourceId || !input.name || !input.domainLimit || !input.diskLimitGb || !input.billingCycle || input.price === undefined)) {
+89:throw apiError(ErrorCode.VALIDATION_ERROR, '请填写所有必填字段')
+95:throw apiError(ErrorCode.VALIDATION_ERROR, '邮箱源无效')
+103:throw apiError(ErrorCode.VALIDATION_ERROR, '方案名称需为 1-100 个字符')
+111:throw apiError(ErrorCode.VALIDATION_ERROR, '方案描述不能超过 1000 个字符')
+119:throw apiError(ErrorCode.VALIDATION_ERROR, '域名数量限制需为 1-1000 的整数')
+127:throw apiError(ErrorCode.VALIDATION_ERROR, '磁盘容量需为 1-102400 GB 的整数')
+132:if (input.billingCycle !== undefined) {
+133:if (input.billingCycle !== 'monthly' && input.billingCycle !== 'yearly') {
+134:throw apiError(ErrorCode.VALIDATION_ERROR, '计费周期无效')
+136:normalized.billingCycle = input.billingCycle
+142:throw apiError(ErrorCode.VALIDATION_ERROR, '价格需大于 0 且不超过 99999999.99')
+146:throw apiError(ErrorCode.VALIDATION_ERROR, '价格最多支持两位小数')
+158:throw apiError(ErrorCode.VALIDATION_ERROR, '排序值无效')
+169:throw apiError(ErrorCode.VALIDATION_ERROR, `${field} 无效`)
+173:throw apiError(ErrorCode.VALIDATION_ERROR, `${field} 需为 1-${maxLength} 个字符`)
+180:throw apiError(ErrorCode.VALIDATION_ERROR, '请求参数无效')
+186:throw apiError(ErrorCode.VALIDATION_ERROR, '请填写所有必填字段')
+198:throw apiError(ErrorCode.VALIDATION_ERROR, '地区代码只能包含 2-32 位字母、数字、下划线和连字符')
+215:throw apiError(ErrorCode.VALIDATION_ERROR, 'API Key 无效')
+219:throw apiError(ErrorCode.VALIDATION_ERROR, 'API Key 不能为空')
+222:throw apiError(ErrorCode.VALIDATION_ERROR, `API Key 不能超过 ${MAIL_SOURCE_SECRET_MAX_LENGTH} 个字符`)
+229:throw apiError(ErrorCode.VALIDATION_ERROR, '启用状态无效')
+237:throw apiError(ErrorCode.VALIDATION_ERROR, '排序值无效')
+253:throw apiError(ErrorCode.VALIDATION_ERROR, '订阅磁盘配额无效')
+259:throw apiError(ErrorCode.VALIDATION_ERROR, '用户名只能包含 1-64 位字母、数字、点、下划线和连字符')
+267:throw apiError(ErrorCode.VALIDATION_ERROR, '密码长度需为 8-128 位')
+275:throw apiError(ErrorCode.VALIDATION_ERROR, '显示名称不能超过 100 个字符')
+283:throw apiError(ErrorCode.VALIDATION_ERROR, `邮箱容量需为 1-${maxDiskLimitMb} MB 的整数`)
+291:function normalizeMailRenewMonths(value: unknown): number {
+294:throw apiError(ErrorCode.VALIDATION_ERROR, '续费月数需为 1-12 的整数')
+301:throw apiError(ErrorCode.VALIDATION_ERROR, '请求参数无效')
+306:throw apiError(ErrorCode.VALIDATION_ERROR, '邮箱方案无效')
+312:throw apiError(ErrorCode.VALIDATION_ERROR, '优惠码无效')
+317:throw apiError(ErrorCode.VALIDATION_ERROR, `优惠码不能超过 ${MAIL_AFF_CODE_MAX_LENGTH} 个字符`)
+326:function normalizeMailSubscriptionRenewInput(input: unknown): number {
+328:throw apiError(ErrorCode.VALIDATION_ERROR, '请求参数无效')
+331:return normalizeMailRenewMonths(input.months)
+336:throw apiError(ErrorCode.VALIDATION_ERROR, '请求参数无效')
+341:throw apiError(ErrorCode.VALIDATION_ERROR, '请选择退款方式')
+345:throw apiError(ErrorCode.VALIDATION_ERROR, '退款原因无效')
+350:throw apiError(ErrorCode.VALIDATION_ERROR, `退款原因不能超过 ${MAIL_CANCEL_REASON_MAX_LENGTH} 个字符`)
+354:throw apiError(ErrorCode.VALIDATION_ERROR, '退款时必须填写原因')
+383:throw apiError(ErrorCode.INVALID_PARAMS, 'ID 无效')
+387:throw apiError(ErrorCode.INVALID_PARAMS, 'ID 无效')
+392:throw apiError(ErrorCode.INVALID_PARAMS, 'ID 无效')
+413:throw apiError(ErrorCode.VALIDATION_ERROR, message)
+459:throw apiError(ErrorCode.SLUG_EXISTS, '该地区代码已存在')
+508:throw apiError(ErrorCode.NOT_FOUND, '邮箱源不存在')
+515:throw apiError(ErrorCode.SLUG_EXISTS, '该地区代码已存在')
+555:throw apiError(ErrorCode.NOT_FOUND, '邮箱源不存在')
+561:throw apiError(ErrorCode.OPERATION_NOT_ALLOWED, '该邮箱源下有订阅或域名，无法删除')
+595:billingCycle: 'monthly' | 'yearly'
+608:throw apiError(ErrorCode.NOT_FOUND, '邮箱源不存在')
+617:billingCycle: planInput.billingCycle!,
+642:billingCycle?: 'monthly' | 'yearly'
+655:throw apiError(ErrorCode.NOT_FOUND, '方案不存在')
+661:throw apiError(ErrorCode.NOT_FOUND, '邮箱源不存在')
+688:throw apiError(ErrorCode.NOT_FOUND, '方案不存在')
+694:throw apiError(ErrorCode.OPERATION_NOT_ALLOWED, '该方案下有订阅，无法删除')
+765:return reply.code(404).send(apiError(ErrorCode.NOT_FOUND, '订阅不存在'))
+770:return reply.code(404).send(apiError(ErrorCode.NOT_FOUND, '邮箱源不存在'))
+783:const totalMs = subscription.plan.billingCycle === 'monthly'
+799:return reply.code(502).send(apiError(ErrorCode.UPSTREAM_ERROR, `删除远端域名 ${domain.domain} 失败: ${err.message}`))
+808:throw apiError(ErrorCode.OPERATION_NOT_ALLOWED, '用户余额正在处理，请稍后重试')
+912:billingCycle: plan.billingCycle,
+981:billingCycle: subscription.plan.billingCycle,
+1030:return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您已有邮箱订阅，请续费或等待过期后再购买'))
+1036:return reply.code(404).send(apiError(ErrorCode.NOT_FOUND, '方案不存在或已下架'))
+1041:return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '该邮箱源已停用'))
+1055:return reply.code(400).send(apiError(ErrorCode.VALIDATION_ERROR, validation.error || '优惠码无效'))
+1073:return reply.code(400).send(apiError(ErrorCode.INSUFFICIENT_BALANCE, `余额不足，需要 ¥${finalPrice.toFixed(2)}，当前余额 ¥${Number(user?.balance || 0).toFixed(2)}`))
+1078:if (plan.billingCycle === 'monthly') {
+1088:return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '邮箱订阅正在处理，请稍后重试') }
+1092:return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '用户余额正在处理，请稍后重试') }
+1099:return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '您已有邮箱订阅，请续费或等待过期后再购买') }
+1114:return { error: apiError(ErrorCode.INSUFFICIENT_BALANCE, `余额不足，需要 ¥${finalPrice.toFixed(2)}，当前余额 ¥${Number(currentUser?.balance || 0).toFixed(2)}`) }
+1199:// 续费订阅
+1206:let renewMonths: number
+1208:renewMonths = normalizeMailSubscriptionRenewInput(request.body)
+1215:return reply.code(404).send(apiError(ErrorCode.NOT_FOUND, '您没有邮箱订阅'))
+1220:return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '订阅已被暂停，无法续费'))
+1224:const monthlyPrice = plan.billingCycle === 'monthly'
+1228:const originalPrice = Math.round(monthlyPrice * renewMonths * 100) / 100
+1249:return reply.code(400).send(apiError(ErrorCode.INSUFFICIENT_BALANCE, `余额不足，需要 ¥${finalPrice.toFixed(2)}，当前余额 ¥${Number(user?.balance || 0).toFixed(2)}`))
+1256:return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '邮箱订阅正在处理，请稍后重试') }
+1260:return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '用户余额正在处理，请稍后重试') }
+1268:return { error: apiError(ErrorCode.NOT_FOUND, '您没有邮箱订阅') }
+1271:return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '订阅已被暂停，无法续费') }
+1286:return { error: apiError(ErrorCode.INSUFFICIENT_BALANCE, `余额不足，需要 ¥${finalPrice.toFixed(2)}，当前余额 ¥${Number(currentUser?.balance || 0).toFixed(2)}`) }
+1296:? `续费域名邮箱 ${renewMonths} 个月（优惠码折扣 -¥${discountAmount.toFixed(2)}）`
+1297:: `续费域名邮箱 ${renewMonths} 个月`
+1313:newExpiry.setMonth(newExpiry.getMonth() + renewMonths)
+1345:`Renewed mail subscription for ${renewMonths} months, price=${finalPrice}${discountAmount > 0 ? `, affDiscount=${discountAmount}` : ''}`,
+1392:return reply.code(404).send(apiError(ErrorCode.NOT_FOUND, '域名不存在'))
+1430:return reply.code(404).send(apiError(ErrorCode.NOT_FOUND, '域名不存在'))
+1449:return reply.code(400).send(apiError(ErrorCode.VALIDATION_ERROR, '请输入有效的域名'))
+1454:return reply.code(404).send(apiError(ErrorCode.NOT_FOUND, '您没有邮箱订阅'))
+1458:return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '订阅已过期或暂停'))
+1464:return { statusCode: 400, error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '邮箱订阅正在处理，请稍后重试') }
+1469:return { statusCode: 400, error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '邮箱域名正在处理，请稍后重试') }
+1476:return { statusCode: 404, error: apiError(ErrorCode.NOT_FOUND, '您没有邮箱订阅') }
+1479:return { statusCode: 400, error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '订阅已过期或暂停') }
+1486:return { statusCode: 400, error: apiError(ErrorCode.QUOTA_EXCEEDED, '已达域名数量上限') }
+1498:return { statusCode: 400, error: apiError(ErrorCode.RESOURCE_EXISTS, '该域名已被使用') }
+1505:return { statusCode: 502, error: apiError(ErrorCode.UPSTREAM_ERROR, `创建域名失败: ${err.message}`) }
+1567:return reply.code(404).send(apiError(ErrorCode.NOT_FOUND, '域名不存在'))
+1588:return reply.code(502).send(apiError(ErrorCode.UPSTREAM_ERROR, `检查验证状态失败: ${err.message}`))
+1602:return reply.code(404).send(apiError(ErrorCode.NOT_FOUND, '域名不存在'))
+1618:return reply.code(502).send(apiError(ErrorCode.UPSTREAM_ERROR, `获取 DNS 配置失败: ${err.message}`))
+1632:return reply.code(404).send(apiError(ErrorCode.NOT_FOUND, '域名不存在'))
+1640:return reply.code(502).send(apiError(ErrorCode.UPSTREAM_ERROR, `删除远端域名失败: ${err.message}`))
+1668:return reply.code(404).send(apiError(ErrorCode.NOT_FOUND, '域名不存在'))
+1704:return reply.code(404).send(apiError(ErrorCode.NOT_FOUND, '域名不存在'))
+1708:return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '请先完成域名验证'))
+1722:return reply.code(400).send(apiError(ErrorCode.RESOURCE_EXISTS, '该邮箱账户已存在'))
+1742:return reply.code(502).send(apiError(ErrorCode.UPSTREAM_ERROR, `创建邮箱账户失败: ${err.message}`))
+1767:return reply.code(502).send(apiError(ErrorCode.UPSTREAM_ERROR, '邮箱账户已在远端创建，但本地记录保存失败且远端补偿删除失败，请联系管理员处理'))
+1771:return reply.code(500).send(apiError(ErrorCode.INTERNAL_ERROR, '邮箱账户创建失败，已回滚远端账号，请重试'))
+1810:return reply.code(404).send(apiError(ErrorCode.NOT_FOUND, '域名不存在'))
+1815:return reply.code(404).send(apiError(ErrorCode.NOT_FOUND, '邮箱账户不存在'))
+1836:return reply.code(502).send(apiError(ErrorCode.UPSTREAM_ERROR, `更新邮箱账户失败: ${err.message}`))
+1867:return reply.code(404).send(apiError(ErrorCode.NOT_FOUND, '域名不存在'))
+1872:return reply.code(404).send(apiError(ErrorCode.NOT_FOUND, '邮箱账户不存在'))
+1891:return reply.code(502).send(apiError(ErrorCode.UPSTREAM_ERROR, `重置密码失败: ${err.message}`))
+1916:return reply.code(404).send(apiError(ErrorCode.NOT_FOUND, '域名不存在'))
+1921:return reply.code(404).send(apiError(ErrorCode.NOT_FOUND, '邮箱账户不存在'))
+1935:return reply.code(502).send(apiError(ErrorCode.UPSTREAM_ERROR, `删除远端邮箱账户失败: ${err.message}`))
+  240:   }
+  241: 
+  242:   return normalized
+  243: }
+  244: 
+  245: function normalizeMailAccountInput(input: MailAccountInput, options: {
+  246:   requireUsername?: boolean
+  247:   requirePassword?: boolean
+  248:   maxDiskLimitMb: number
+  249: }): MailAccountInput {
+  250:   const normalized: MailAccountInput = {}
+  251:   const maxDiskLimitMb = Math.floor(Number(options.maxDiskLimitMb))
+  252:   if (!Number.isInteger(maxDiskLimitMb) || maxDiskLimitMb <= 0) {
+  253:     throw apiError(ErrorCode.VALIDATION_ERROR, '订阅磁盘配额无效')
+  254:   }
+  255: 
+  256:   if (options.requireUsername || input.username !== undefined) {
+  257:     const username = String(input.username || '').trim().toLowerCase()
+  258:     if (!username || username.length > 64 || !/^[a-z0-9._-]+$/i.test(username)) {
+  259:       throw apiError(ErrorCode.VALIDATION_ERROR, '用户名只能包含 1-64 位字母、数字、点、下划线和连字符')
+  260:     }
+  261:     normalized.username = username
+  262:   }
+  263: 
+  264:   if (options.requirePassword || input.password !== undefined) {
+  265:     const password = String(input.password || '')
+  266:     if (password.length < 8 || password.length > 128) {
+  267:       throw apiError(ErrorCode.VALIDATION_ERROR, '密码长度需为 8-128 位')
+  268:     }
+  269:     normalized.password = password
+  270:   }
+  271: 
+  272:   if (input.displayName !== undefined) {
+  273:     const displayName = String(input.displayName).trim()
+  274:     if (displayName.length > 100) {
+  275:       throw apiError(ErrorCode.VALIDATION_ERROR, '显示名称不能超过 100 个字符')
+  276:     }
+  277:     normalized.displayName = displayName || undefined
+  278:   }
+  279: 
+  280:   if (input.diskLimitMb !== undefined) {
+  281:     const diskLimitMb = requireSafeInteger(input.diskLimitMb, '邮箱容量')
+  282:     if (diskLimitMb <= 0 || diskLimitMb > maxDiskLimitMb) {
+  283:       throw apiError(ErrorCode.VALIDATION_ERROR, `邮箱容量需为 1-${maxDiskLimitMb} MB 的整数`)
+  284:     }
+  285:     normalized.diskLimitMb = diskLimitMb
+  286:   }
+  287: 
+  288:   return normalized
+  289: }
+  290: 
+  291: function normalizeMailRenewMonths(value: unknown): number {
+  292:   const months = requireSafeInteger(value, '续费月数')
+  293:   if (months < 1 || months > 12) {
+  294:     throw apiError(ErrorCode.VALIDATION_ERROR, '续费月数需为 1-12 的整数')
+  295:   }
+  296:   return months
+  297: }
+  298: 
+  299: function normalizeMailSubscriptionPurchaseInput(input: unknown): MailSubscriptionPurchaseInput {
+  300:   if (!isPlainRecord(input)) {
+  301:     throw apiError(ErrorCode.VALIDATION_ERROR, '请求参数无效')
+  302:   }
+  303: 
+  304:   const planId = requireSafeInteger(input.planId, '邮箱方案')
+  305:   if (planId <= 0) {
+  306:     throw apiError(ErrorCode.VALIDATION_ERROR, '邮箱方案无效')
+  307:   }
+  308: 
+  309:   let affCode: string | undefined
+  310:   if (input.affCode !== undefined && input.affCode !== null) {
+  311:     if (typeof input.affCode !== 'string') {
+  312:       throw apiError(ErrorCode.VALIDATION_ERROR, '优惠码无效')
+  313:     }
+  314:     const normalizedAffCode = input.affCode.trim().toUpperCase()
+  315:     if (normalizedAffCode) {
+  316:       if (normalizedAffCode.length > MAIL_AFF_CODE_MAX_LENGTH) {
+  317:         throw apiError(ErrorCode.VALIDATION_ERROR, `优惠码不能超过 ${MAIL_AFF_CODE_MAX_LENGTH} 个字符`)
+  318:       }
+  319:       affCode = normalizedAffCode
+  320:     }
+  321:   }
+  322: 
+  323:   return { planId, affCode }
+  324: }
+  325: 
+  326: function normalizeMailSubscriptionRenewInput(input: unknown): number {
+  327:   if (!isPlainRecord(input)) {
+  328:     throw apiError(ErrorCode.VALIDATION_ERROR, '请求参数无效')
+  329:   }
+  330: 
+ 1140:           userId,
+ 1141:           sourceId: source.id,
+ 1142:           planId: plan.id,
+ 1143:           domainLimit: plan.domainLimit,
+ 1144:           diskLimitGb: plan.diskLimitGb,
+ 1145:           expiresAt
+ 1146:         },
+ 1147:         include: {
+ 1148:           source: true,
+ 1149:           plan: true
+ 1150:         }
+ 1151:       })
+ 1152: 
+ 1153:       // 如果使用了优惠码，创建 AFF 绑定并处理返利
+ 1154:       if (validatedAffCode) {
+ 1155:         const { createMailAffBinding, processMailAffCommission } = await import('../db/aff.js')
+ 1156:         // 创建订阅与优惠码的永久绑定
+ 1157:         await createMailAffBinding(newSubscription.id, validatedAffCode.id, tx as any)
+ 1158:         // 给优惠码创建者返利（基于原价，不是折扣后价格）
+ 1159:         await processMailAffCommission(
+ 1160:           validatedAffCode.id,
+ 1161:           newSubscription.id,
+ 1162:           originalPrice,
+ 1163:           'new_purchase',
+ 1164:           tx as any
+ 1165:         )
+ 1166:       }
+ 1167: 
+ 1168:       return { subscription: newSubscription }
+ 1169:     })
+ 1170: 
+ 1171:     if ('error' in purchaseResult) {
+ 1172:       return reply.code(400).send(purchaseResult.error)
+ 1173:     }
+ 1174: 
+ 1175:     const subscription = purchaseResult.subscription
+ 1176: 
+ 1177:     await createLog(
+ 1178:       userId,
+ 1179:       'mail',
+ 1180:       'purchase_mail_subscription',
+ 1181:       `Purchased mail subscription: planId=${planId}, price=${finalPrice}${validatedAffCode ? `, affDiscount=${discountAmount}` : ''}`,
+ 1182:       'success'
+ 1183:     )
+ 1184: 
+ 1185:     return {
+ 1186:       subscription: {
+ 1187:         id: subscription.id,
+ 1188:         status: subscription.status,
+ 1189:         expiresAt: subscription.expiresAt,
+ 1190:         source: { id: subscription.source.id, name: subscription.source.name },
+ 1191:         plan: { id: subscription.plan.id, name: subscription.plan.name }
+ 1192:       },
+ 1193:       discountApplied: discountAmount > 0,
+ 1194:       discountAmount,
+ 1195:       finalPrice
+ 1196:     }
+ 1197:   })
+ 1198: 
+ 1199:   // 续费订阅
+ 1200:   fastify.post<{
+ 1201:     Body: { months: unknown }
+ 1202:   }>('/subscription/renew', {
+ 1203:     onRequest: [fastify.authenticate]
+ 1204:   }, async (request, reply) => {
+ 1205:     const userId = request.user.id
+ 1206:     let renewMonths: number
+ 1207:     try {
+ 1208:       renewMonths = normalizeMailSubscriptionRenewInput(request.body)
+ 1209:     } catch (error) {
+ 1210:       return reply.code(400).send(error)
+ 1211:     }
+ 1212: 
+ 1213:     const subscription = await db.getUserMailSubscription(userId)
+ 1214:     if (!subscription) {
+ 1215:       return reply.code(404).send(apiError(ErrorCode.NOT_FOUND, '您没有邮箱订阅'))
+ 1216:     }
+ 1217: 
+ 1218:     // 检查订阅状态
+ 1219:     if (subscription.status === 'suspended') {
+ 1220:       return reply.code(400).send(apiError(ErrorCode.OPERATION_NOT_ALLOWED, '订阅已被暂停，无法续费'))
+ 1221:     }
+ 1222: 
+ 1223:     const plan = subscription.plan
+ 1224:     const monthlyPrice = plan.billingCycle === 'monthly' 
+ 1225:       ? Number(plan.price) 
+ 1226:       : Number(plan.price) / 12
+ 1227:     
+ 1228:     const originalPrice = Math.round(monthlyPrice * renewMonths * 100) / 100
+ 1229: 
+ 1230:     // 检查 AFF 绑定，计算折扣
+ 1231:     const { getMailSubscriptionAffBinding, processMailAffCommission } = await import('../db/aff.js')
+ 1232:     const affBinding = await getMailSubscriptionAffBinding(subscription.id)
+ 1233:     let discountRate = 0
+ 1234:     let discountAmount = 0
+ 1235:     let finalPrice = originalPrice
+ 1236: 
+ 1237:     if (affBinding && affBinding.affCode.enabled) {
+ 1238:       discountRate = Number(affBinding.affCode.discountRate)
+ 1239:       discountAmount = calculateDiscountAmount(originalPrice, discountRate)
+ 1240:       finalPrice = calculateDiscountedPrice(originalPrice, discountRate)
+ 1241:     }
+ 1242: 
+ 1243:     // 检查余额
+ 1244:     const user = await prisma.user.findUnique({
+ 1245:       where: { id: userId },
+ 1246:       select: { balance: true }
+ 1247:     })
+ 1248:     if (!user || Number(user.balance) < finalPrice) {
+ 1249:       return reply.code(400).send(apiError(ErrorCode.INSUFFICIENT_BALANCE, `余额不足，需要 ¥${finalPrice.toFixed(2)}，当前余额 ¥${Number(user?.balance || 0).toFixed(2)}`))
+ 1250:     }
+ 1251: 
+ 1252:     // 事务：扣费 + 续费 + 返利
+ 1253:     const renewResult = await prisma.$transaction(async (tx) => {
+ 1254:       const locked = await tryAdvisoryTransactionLock(tx, MAIL_SUBSCRIPTION_LOCK_NAMESPACE, userId)
+ 1255:       if (!locked) {
+ 1256:         return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '邮箱订阅正在处理，请稍后重试') }
+ 1257:       }
+ 1258:       const balanceLocked = await tryAdvisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, userId)
+ 1259:       if (!balanceLocked) {
+ 1260:         return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '用户余额正在处理，请稍后重试') }
+ 1261:       }
+ 1262: 
+ 1263:       const currentSubscription = await tx.mailSubscription.findUnique({
+ 1264:         where: { id: subscription.id },
+ 1265:         include: { plan: true }
+ 1266:       })
+ 1267:       if (!currentSubscription || currentSubscription.userId !== userId) {
+ 1268:         return { error: apiError(ErrorCode.NOT_FOUND, '您没有邮箱订阅') }
+ 1269:       }
+ 1270:       if (currentSubscription.status === 'suspended') {
+ 1271:         return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '订阅已被暂停，无法续费') }
+ 1272:       }
+ 1273: 
+ 1274:       const deductResult = await tx.user.updateMany({
+ 1275:         where: {
+ 1276:           id: userId,
+ 1277:           balance: { gte: finalPrice }
+ 1278:         },
+ 1279:         data: { balance: { decrement: finalPrice } }
+ 1280:       })
+ 1281:       if (deductResult.count === 0) {
+ 1282:         const currentUser = await tx.user.findUnique({
+ 1283:           where: { id: userId },
+ 1284:           select: { balance: true }
+ 1285:         })
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$p='"'server/src/routes/mail.ts'; "'$lines=Get-Content -Encoding utf8 $p; for($i=326;$i -le 345;$i++){ '"'{0,5}: {1}' -f "'$i,$lines[$i-1] }; for($i=1260;$i -le 1355;$i++){ '"'{0,5}: {1}' -f "'$i,$lines[$i-1] }; Select-String -Path '"'server/prisma/schema.prisma','server/src/db/mail.ts' -Pattern 'billingCycle|renewMailSubscription|months > 12' -Encoding utf8 -Context 3,5 | ForEach-Object { "'$_.ToString() }' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 963ms:
+  326: function normalizeMailSubscriptionRenewInput(input: unknown): number {
+  327:   if (!isPlainRecord(input)) {
+  328:     throw apiError(ErrorCode.VALIDATION_ERROR, '请求参数无效')
+  329:   }
+  330: 
+  331:   return normalizeMailRenewMonths(input.months)
+  332: }
+  333: 
+  334: function normalizeMailSubscriptionCancelInput(input: unknown): MailSubscriptionCancelInput {
+  335:   if (!isPlainRecord(input)) {
+  336:     throw apiError(ErrorCode.VALIDATION_ERROR, '请求参数无效')
+  337:   }
+  338: 
+  339:   const refundType = input.refundType
+  340:   if (refundType !== 'none' && refundType !== 'full' && refundType !== 'remaining') {
+  341:     throw apiError(ErrorCode.VALIDATION_ERROR, '请选择退款方式')
+  342:   }
+  343: 
+  344:   if (input.reason !== undefined && typeof input.reason !== 'string') {
+  345:     throw apiError(ErrorCode.VALIDATION_ERROR, '退款原因无效')
+ 1260:         return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '用户余额正在处理，请稍后重试') }
+ 1261:       }
+ 1262: 
+ 1263:       const currentSubscription = await tx.mailSubscription.findUnique({
+ 1264:         where: { id: subscription.id },
+ 1265:         include: { plan: true }
+ 1266:       })
+ 1267:       if (!currentSubscription || currentSubscription.userId !== userId) {
+ 1268:         return { error: apiError(ErrorCode.NOT_FOUND, '您没有邮箱订阅') }
+ 1269:       }
+ 1270:       if (currentSubscription.status === 'suspended') {
+ 1271:         return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '订阅已被暂停，无法续费') }
+ 1272:       }
+ 1273: 
+ 1274:       const deductResult = await tx.user.updateMany({
+ 1275:         where: {
+ 1276:           id: userId,
+ 1277:           balance: { gte: finalPrice }
+ 1278:         },
+ 1279:         data: { balance: { decrement: finalPrice } }
+ 1280:       })
+ 1281:       if (deductResult.count === 0) {
+ 1282:         const currentUser = await tx.user.findUnique({
+ 1283:           where: { id: userId },
+ 1284:           select: { balance: true }
+ 1285:         })
+ 1286:         return { error: apiError(ErrorCode.INSUFFICIENT_BALANCE, `余额不足，需要 ¥${finalPrice.toFixed(2)}，当前余额 ¥${Number(currentUser?.balance || 0).toFixed(2)}`) }
+ 1287:       }
+ 1288: 
+ 1289:       const updatedUser = await tx.user.findUnique({
+ 1290:         where: { id: userId },
+ 1291:         select: { balance: true }
+ 1292:       })
+ 1293:       const balanceAfter = Number(updatedUser?.balance || 0)
+ 1294:       const balanceBefore = Number((balanceAfter + finalPrice).toFixed(2))
+ 1295:       const remarkText = discountAmount > 0
+ 1296:         ? `续费域名邮箱 ${renewMonths} 个月（优惠码折扣 -¥${discountAmount.toFixed(2)}）`
+ 1297:         : `续费域名邮箱 ${renewMonths} 个月`
+ 1298:       
+ 1299:       await tx.balanceLog.create({
+ 1300:         data: {
+ 1301:           userId,
+ 1302:           type: 'consume',
+ 1303:           amount: -finalPrice,
+ 1304:           balanceBefore,
+ 1305:           balanceAfter,
+ 1306:           remark: remarkText
+ 1307:         }
+ 1308:       })
+ 1309: 
+ 1310:       // 计算新的过期时间
+ 1311:       const currentExpiry = currentSubscription.expiresAt > new Date() ? currentSubscription.expiresAt : new Date()
+ 1312:       const newExpiry = new Date(currentExpiry)
+ 1313:       newExpiry.setMonth(newExpiry.getMonth() + renewMonths)
+ 1314: 
+ 1315:       // 更新订阅
+ 1316:       const result = await tx.mailSubscription.update({
+ 1317:         where: { id: subscription.id },
+ 1318:         data: { expiresAt: newExpiry, status: 'active' }
+ 1319:       })
+ 1320: 
+ 1321:       // 如果有 AFF 绑定，给推荐人返利
+ 1322:       if (affBinding) {
+ 1323:         await processMailAffCommission(
+ 1324:           affBinding.affCode.id,
+ 1325:           subscription.id,
+ 1326:           originalPrice, // 基于原价计算返利
+ 1327:           'renew',
+ 1328:           tx as any
+ 1329:         )
+ 1330:       }
+ 1331: 
+ 1332:       return { subscription: result }
+ 1333:     })
+ 1334: 
+ 1335:     if ('error' in renewResult) {
+ 1336:       return reply.code(400).send(renewResult.error)
+ 1337:     }
+ 1338: 
+ 1339:     const updated = renewResult.subscription
+ 1340: 
+ 1341:     await createLog(
+ 1342:       userId,
+ 1343:       'mail',
+ 1344:       'renew_mail_subscription',
+ 1345:       `Renewed mail subscription for ${renewMonths} months, price=${finalPrice}${discountAmount > 0 ? `, affDiscount=${discountAmount}` : ''}`,
+ 1346:       'success'
+ 1347:     )
+ 1348: 
+ 1349:     return { 
+ 1350:       expiresAt: updated.expiresAt,
+ 1351:       discountApplied: discountAmount > 0,
+ 1352:       discountAmount,
+ 1353:       finalPrice
+ 1354:     }
+ 1355:   })
+  C:\Users\Administrator\Desktop\payinces\server\prisma\schema.prisma:1445:  suspendReason    String?   @map("suspend_reason")    // 封停原因（expired=到期封停，其他=手动封停原因）
+  C:\Users\Administrator\Desktop\payinces\server\prisma\schema.prisma:1446:  // 计费价格（从方案复制，支持后续调整）
+  C:\Users\Administrator\Desktop\payinces\server\prisma\schema.prisma:1447:  billingPrice     Decimal?  @map("billing_price") @db.Decimal(10, 2)  // 单周期价格
+> C:\Users\Administrator\Desktop\payinces\server\prisma\schema.prisma:1448:  billingCycle     Int?      @map("billing_cycle")  // 计费周期（月）
+  C:\Users\Administrator\Desktop\payinces\server\prisma\schema.prisma:1449:  // 自动续费
+  C:\Users\Administrator\Desktop\payinces\server\prisma\schema.prisma:1450:  autoRenew        Boolean   @default(false) @map("auto_renew")
+  C:\Users\Administrator\Desktop\payinces\server\prisma\schema.prisma:1451:  iconBadgeId      String?   @map("icon_badge_id")
+  C:\Users\Administrator\Desktop\payinces\server\prisma\schema.prisma:1452:  autoRenewAttempts     Int        @default(0) @map("auto_renew_attempts")      // 已尝试次数
+  C:\Users\Administrator\Desktop\payinces\server\prisma\schema.prisma:1453:  lastAutoRenewAttemptAt DateTime? @map("last_auto_renew_attempt_at")           // 上次尝试时间
+  C:\Users\Administrator\Desktop\payinces\server\prisma\schema.prisma:4221:
+  C:\Users\Administrator\Desktop\payinces\server\prisma\schema.prisma:4222:  // ========== 计费配置 ==========
+  C:\Users\Administrator\Desktop\payinces\server\prisma\schema.prisma:4223:  price        Decimal @db.Decimal(10, 2)                             // 价格
+> C:\Users\Administrator\Desktop\payinces\server\prisma\schema.prisma:4224:  billingCycle Int     @default(1) @map("billing_cycle")              // 计费周期（月）
+  C:\Users\Administrator\Desktop\payinces\server\prisma\schema.prisma:4225:  setupFee     Decimal @default(0) @map("setup_fee") @db.Decimal(10, 2) // 开通费
+  C:\Users\Administrator\Desktop\payinces\server\prisma\schema.prisma:4226:  trafficResetPrice Decimal? @map("traffic_reset_price") @db.Decimal(10, 2) // 用户自助重置月流量价格覆盖（分），null=继承套餐
+  C:\Users\Administrator\Desktop\payinces\server\prisma\schema.prisma:4227:
+  C:\Users\Administrator\Desktop\payinces\server\prisma\schema.prisma:4228:  // ========== 状态与排序 ==========
+  C:\Users\Administrator\Desktop\payinces\server\prisma\schema.prisma:4229:  isActive  Boolean @default(true) @map("is_active") // 是否启用
+  C:\Users\Administrator\Desktop\payinces\server\prisma\schema.prisma:4837:}
+  C:\Users\Administrator\Desktop\payinces\server\prisma\schema.prisma:4838:
+  C:\Users\Administrator\Desktop\payinces\server\prisma\schema.prisma:4839:// 计费周期
+> C:\Users\Administrator\Desktop\payinces\server\prisma\schema.prisma:4840:enum MailBillingCycle {
+  C:\Users\Administrator\Desktop\payinces\server\prisma\schema.prisma:4841:  monthly // 月付
+  C:\Users\Administrator\Desktop\payinces\server\prisma\schema.prisma:4842:  yearly  // 年付
+  C:\Users\Administrator\Desktop\payinces\server\prisma\schema.prisma:4843:}
+  C:\Users\Administrator\Desktop\payinces\server\prisma\schema.prisma:4844:
+  C:\Users\Administrator\Desktop\payinces\server\prisma\schema.prisma:4845:// 邮箱源（数据中心）
+  C:\Users\Administrator\Desktop\payinces\server\prisma\schema.prisma:4870:  description   String?          // 方案描述
+  C:\Users\Administrator\Desktop\payinces\server\prisma\schema.prisma:4871:  domainLimit   Int              @map("domain_limit")  // 主域名数量限制
+  C:\Users\Administrator\Desktop\payinces\server\prisma\schema.prisma:4872:  diskLimitGb   Int              @map("disk_limit_gb") // 存储空间 GB
+> C:\Users\Administrator\Desktop\payinces\server\prisma\schema.prisma:4873:  billingCycle  MailBillingCycle @map("billing_cycle") // 计费周期
+  C:\Users\Administrator\Desktop\payinces\server\prisma\schema.prisma:4874:  price         Decimal          @db.Decimal(10, 2)    // 价格
+  C:\Users\Administrator\Desktop\payinces\server\prisma\schema.prisma:4875:  enabled       Boolean          @default(true)
+  C:\Users\Administrator\Desktop\payinces\server\prisma\schema.prisma:4876:  sortOrder     Int              @default(0) @map("sort_order")
+  C:\Users\Administrator\Desktop\payinces\server\prisma\schema.prisma:4877:  createdAt     DateTime         @default(now()) @map("created_at")
+  C:\Users\Administrator\Desktop\payinces\server\prisma\schema.prisma:4878:  updatedAt     DateTime         @updatedAt @map("updated_at")
+  C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts:4: */
+  C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts:5:
+  C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts:6:import { prisma } from './prisma.js'
+> C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts:7:import type { MailSource, MailPlan, MailSubscription, MailDomain, MailAccount, MailBillingCycle, MailDomainStatus, MailSubscriptionStatus, Prisma } from '@prisma/client'
+  C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts:8:import { decryptSensitiveData, encryptSensitiveData, isEncrypted } from '../lib/security.js'
+  C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts:9:
+  C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts:10:export const MASKED_MAIL_SOURCE_API_KEY_VALUE = '__SECRET_SET__'
+  C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts:11:
+  C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts:12:const MAIL_LIST_SEARCH_MAX_LENGTH = 128
+  C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts:295:  description?: string
+  C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts:296:  domainLimit: number
+  C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts:297:  diskLimitGb: number
+> C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts:298:  billingCycle: MailBillingCycle
+  C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts:299:  price: number
+  C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts:300:  enabled?: boolean
+  C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts:301:  sortOrder?: number
+  C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts:302:}): Promise<MailPlan> {
+  C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts:303:  return prisma.mailPlan.create({ data: { ...data, price: data.price } })
+  C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts:311:  description?: string
+  C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts:312:  domainLimit?: number
+  C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts:313:  diskLimitGb?: number
+> C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts:314:  billingCycle?: MailBillingCycle
+  C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts:315:  price?: number
+  C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts:316:  enabled?: boolean
+  C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts:317:  sortOrder?: number
+  C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts:318:}): Promise<MailPlan> {
+  C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts:319:  return prisma.mailPlan.update({ where: { id }, data })
+  C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts:450:/**
+  C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts:451: * 续费订阅
+  C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts:452: */
+> C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts:453:export async function renewMailSubscription(id: number, months: number): Promise<MailSubscription> {
+> C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts:454:  if (!Number.isSafeInteger(months) || months < 1 || months > 12) {
+  C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts:455:    throw new Error('Invalid mail renewal months')
+  C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts:456:  }
+  C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts:457:
+  C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts:458:  const subscription = await prisma.mailSubscription.findUnique({ where: { id } })
+  C:\Users\Administrator\Desktop\payinces\server\src\db\mail.ts:459:  if (!subscription) throw new Error('Subscription not found')
+
+codex
+已确认邮箱套餐的实际判定字段是 Prisma 枚举 `MailPlan.billingCycle`，当前仅有 `monthly/yearly`，其中 `yearly` 等价 12 个月。为同时满足“月付仍限 1–12 月”和“年付允许 12、24…月”，我会把基础输入校验保留为正安全整数，再按套餐周期做校验：月付继续封顶 12，年付必须整除 12；并在扣款事务读取当前套餐后再次校验，避免套餐状态变化时绕过结算约束。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'git status --short -- server/src/routes/mail.ts server/scripts/test-mail-renewal-month-guards.ts' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 274ms:
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Content -Encoding utf8 server/src/routes/mail.ts -TotalCount 45' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 588ms:
+/**
+ * 域名邮箱路由
+ * 包含管理员配置和用户端管理功能
+ */
+
+import type { FastifyInstance } from 'fastify'
+import type { MailAccount } from '@prisma/client'
+import { prisma } from '../db/prisma.js'
+import { createLog } from '../db/logs.js'
+import { apiError, ErrorCode } from '../lib/errors.js'
+import * as db from '../db/mail.js'
+import { calculateDiscountAmount, calculateDiscountedPrice } from '../lib/billing-calc.js'
+import * as craneMailService from '../services/cranemail.js'
+import * as smarterMailService from '../services/smartermail.js'
+import { MAIL_DOMAIN_LOCK_NAMESPACE, MAIL_SUBSCRIPTION_LOCK_NAMESPACE, USER_BALANCE_LOCK_NAMESPACE, tryAdvisoryTransactionLock } from '../db/advisory-locks.js'
+import { assertSafeHttpUrl } from '../lib/outbound-security.js'
+
+function normalizeBaseUrl(url: URL): string {
+  return url.toString().replace(/\/+$/, '')
+}
+
+type MailPlanInput = {
+  sourceId?: number
+  name?: string
+  description?: string
+  domainLimit?: number
+  diskLimitGb?: number
+  billingCycle?: 'monthly' | 'yearly'
+  price?: number
+  enabled?: boolean
+  sortOrder?: number
+}
+
+type MailSourceInput = {
+  name?: string
+  code?: string
+  apiUrl?: string
+  apiKey?: string
+  smarterMailUrl?: string
+  enabled?: boolean
+  sortOrder?: number
+}
+
+type MailAccountInput = {
+  username?: string
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Content -Encoding utf8 server/src/lib/errors.ts -TotalCount 180' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 890ms:
+/**
+ * Standardized API error codes and messages
+ * Frontend will translate these based on error codes
+ */
+
+import { sanitizeTokensInString } from './log-sanitizer.js'
+
+export const ErrorCode = {
+    // Common errors
+    INVALID_ID: 'INVALID_ID',
+    NOT_FOUND: 'NOT_FOUND',
+    UNAUTHORIZED: 'UNAUTHORIZED',
+    FORBIDDEN: 'FORBIDDEN',
+    ADMIN_REQUIRED: 'ADMIN_REQUIRED',
+    FEATURE_DISABLED: 'FEATURE_DISABLED',
+    INVALID_INPUT: 'INVALID_INPUT',
+
+    // User errors
+    USER_NOT_FOUND: 'USER_NOT_FOUND',
+    USER_EXISTS: 'USER_EXISTS',
+    CANNOT_MODIFY_SELF: 'CANNOT_MODIFY_SELF',
+    CANNOT_DELETE_SELF: 'CANNOT_DELETE_SELF',
+    CANNOT_BAN_ADMIN: 'CANNOT_BAN_ADMIN',
+    CANNOT_DELETE_ADMIN: 'CANNOT_DELETE_ADMIN',
+    USER_HAS_INSTANCES: 'USER_HAS_INSTANCES',
+    USER_HAS_RESOURCES: 'USER_HAS_RESOURCES',
+
+    // Auth errors
+    INVALID_CREDENTIALS: 'INVALID_CREDENTIALS',
+    ACCOUNT_BANNED: 'ACCOUNT_BANNED',
+    TOO_MANY_ATTEMPTS: 'TOO_MANY_ATTEMPTS',
+    REGISTRATION_DISABLED: 'REGISTRATION_DISABLED',
+    INVALID_INVITE_CODE: 'INVALID_INVITE_CODE',
+    INVITE_CODE_EXPIRED: 'INVITE_CODE_EXPIRED',
+    INVALID_2FA_CODE: 'INVALID_2FA_CODE',
+    TWO_FA_REQUIRED: 'TWO_FA_REQUIRED',
+    TWO_FA_ALREADY_ENABLED: 'TWO_FA_ALREADY_ENABLED',
+    TWO_FA_NOT_ENABLED: 'TWO_FA_NOT_ENABLED',
+    REFRESH_TOKEN_MISSING: 'REFRESH_TOKEN_MISSING',
+    REFRESH_TOKEN_INVALID: 'REFRESH_TOKEN_INVALID',
+    SESSION_NOT_FOUND: 'SESSION_NOT_FOUND',
+
+    // Validation errors
+    INVALID_EMAIL: 'INVALID_EMAIL',
+    EMAIL_CONTAINS_ILLEGAL: 'EMAIL_CONTAINS_ILLEGAL',
+    USERNAME_CONTAINS_ILLEGAL: 'USERNAME_CONTAINS_ILLEGAL',
+    PASSWORD_TOO_WEAK: 'PASSWORD_TOO_WEAK',
+    INVALID_SSH_KEY: 'INVALID_SSH_KEY',
+    SSH_KEY_EXISTS: 'SSH_KEY_EXISTS',
+    INVALID_NAME: 'INVALID_NAME',
+
+    // Instance errors
+    INSTANCE_NOT_FOUND: 'INSTANCE_NOT_FOUND',
+    INSTANCE_ALREADY_RUNNING: 'INSTANCE_ALREADY_RUNNING',
+    INSTANCE_ALREADY_STOPPED: 'INSTANCE_ALREADY_STOPPED',
+    INSTANCE_STATUS_INVALID: 'INSTANCE_STATUS_INVALID',
+    INSTANCE_SUSPENDED: 'INSTANCE_SUSPENDED',
+    INSTANCE_NOT_SUSPENDED: 'INSTANCE_NOT_SUSPENDED',
+    INSTANCE_SUSPENDED_EXPIRED: 'INSTANCE_SUSPENDED_EXPIRED',
+    INSTANCE_DESTROY_TRAFFIC_LIMIT_EXCEEDED: 'INSTANCE_DESTROY_TRAFFIC_LIMIT_EXCEEDED',
+    ORDER_RESTRICTED_BY_RISK: 'ORDER_RESTRICTED_BY_RISK',
+
+    // Host errors
+    HOST_NOT_FOUND: 'HOST_NOT_FOUND',
+    HOST_OFFLINE: 'HOST_OFFLINE',
+    HOST_ONLINE: 'HOST_ONLINE',
+    HOST_HAS_INSTANCES: 'HOST_HAS_INSTANCES',
+    HOST_ALREADY_OFFICIAL: 'HOST_ALREADY_OFFICIAL',
+    HOST_TAKEOVER_PACKAGE_BINDING_CONFLICT: 'HOST_TAKEOVER_PACKAGE_BINDING_CONFLICT',
+    NO_AVAILABLE_HOSTS: 'NO_AVAILABLE_HOSTS',
+
+    // Image errors
+    IMAGE_NOT_FOUND: 'IMAGE_NOT_FOUND',
+    IMAGE_SYNCED_ON_HOSTS: 'IMAGE_SYNCED_ON_HOSTS',
+    IMAGE_TYPE_MISMATCH: 'IMAGE_TYPE_MISMATCH',
+    IMAGE_MEMORY_INCOMPATIBLE: 'IMAGE_MEMORY_INCOMPATIBLE',
+
+    // Package errors
+    PACKAGE_NOT_FOUND: 'PACKAGE_NOT_FOUND',
+    PACKAGE_IN_USE: 'PACKAGE_IN_USE',
+    PACKAGE_PREREQUISITE_MISSING: 'PACKAGE_PREREQUISITE_MISSING',
+
+    // Quota errors
+    QUOTA_EXCEEDED: 'QUOTA_EXCEEDED',
+    QUOTA_CPU_EXCEEDED: 'QUOTA_CPU_EXCEEDED',
+    QUOTA_MEMORY_EXCEEDED: 'QUOTA_MEMORY_EXCEEDED',
+    QUOTA_DISK_EXCEEDED: 'QUOTA_DISK_EXCEEDED',
+    QUOTA_INSTANCE_EXCEEDED: 'QUOTA_INSTANCE_EXCEEDED',
+    QUOTA_PORT_EXCEEDED: 'QUOTA_PORT_EXCEEDED',
+    QUOTA_SNAPSHOT_EXCEEDED: 'QUOTA_SNAPSHOT_EXCEEDED',
+    QUOTA_BACKUP_EXCEEDED: 'QUOTA_BACKUP_EXCEEDED',
+    QUOTA_NOT_ALLOCATED: 'QUOTA_NOT_ALLOCATED',
+
+    // Snapshot errors
+    SNAPSHOT_NOT_FOUND: 'SNAPSHOT_NOT_FOUND',
+    SNAPSHOT_RESTORE_REQUIRES_STOP: 'SNAPSHOT_RESTORE_REQUIRES_STOP',
+
+    // Backup errors
+    BACKUP_NOT_FOUND: 'BACKUP_NOT_FOUND',
+    BACKUP_NOT_READY: 'BACKUP_NOT_READY',
+    EXPORT_TASK_NOT_FOUND: 'EXPORT_TASK_NOT_FOUND',
+    EXPORT_TASK_EXPIRED: 'EXPORT_TASK_EXPIRED',
+
+    // Port mapping errors
+    PORT_IN_USE: 'PORT_IN_USE',
+    PORT_OUT_OF_RANGE: 'PORT_OUT_OF_RANGE',
+    PORT_MAPPING_NOT_FOUND: 'PORT_MAPPING_NOT_FOUND',
+    PORT_CONFLICT: 'PORT_CONFLICT',
+    PORT_RANGE_MISMATCH: 'PORT_RANGE_MISMATCH',
+    QUOTA_PORT_BATCH_EXCEEDED: 'QUOTA_PORT_BATCH_EXCEEDED',
+
+    // Notification errors
+    NOTIFICATION_CHANNEL_NOT_FOUND: 'NOTIFICATION_CHANNEL_NOT_FOUND',
+
+    // Help errors
+    ARTICLE_NOT_FOUND: 'ARTICLE_NOT_FOUND',
+    SLUG_EXISTS: 'SLUG_EXISTS',
+
+    // Invite code errors
+    INVITE_CODE_USED: 'INVITE_CODE_USED',
+    INVITE_CODE_NOT_FOUND: 'INVITE_CODE_NOT_FOUND',
+
+    // OAuth errors
+    OAUTH_PROVIDER_DISABLED: 'OAUTH_PROVIDER_DISABLED',
+    OAUTH_ALREADY_BOUND: 'OAUTH_ALREADY_BOUND',
+    OAUTH_NOT_BOUND: 'OAUTH_NOT_BOUND',
+    OAUTH_TOKEN_ERROR: 'OAUTH_TOKEN_ERROR',
+
+    // SSH Key errors
+    SSH_KEY_NOT_FOUND: 'SSH_KEY_NOT_FOUND',
+    SSH_KEY_REQUIRED: 'SSH_KEY_REQUIRED',
+    SSH_KEY_NOT_OWNED: 'SSH_KEY_NOT_OWNED',
+
+    // Package/Plan errors
+    PACKAGE_UNAVAILABLE: 'PACKAGE_UNAVAILABLE',
+    PLAN_REQUIRED: 'PLAN_REQUIRED',
+    PLAN_NOT_FOUND: 'PLAN_NOT_FOUND',
+    PLAN_INACTIVE: 'PLAN_INACTIVE',
+    PLAN_SOLD_OUT: 'PLAN_SOLD_OUT',
+    CANNOT_CREATE_OWN_PAID_PACKAGE: 'CANNOT_CREATE_OWN_PAID_PACKAGE',
+    BALANCE_INSUFFICIENT: 'BALANCE_INSUFFICIENT',
+
+    // Host resource errors
+    HOST_UNAVAILABLE: 'HOST_UNAVAILABLE',
+    HOST_NO_ONLINE: 'HOST_NO_ONLINE',
+    HOST_RESOURCES_NOT_SYNCED: 'HOST_RESOURCES_NOT_SYNCED',
+    HOST_NODE_GROUP_NO_HOSTS: 'HOST_NODE_GROUP_NO_HOSTS',
+    HOST_RESOURCES_INSUFFICIENT: 'HOST_RESOURCES_INSUFFICIENT',
+    HOST_NAME_EXISTS: 'HOST_NAME_EXISTS',
+    HOST_ADDRESS_EXISTS: 'HOST_ADDRESS_EXISTS',
+    HOST_ADDRESS_UNRESOLVABLE: 'HOST_ADDRESS_UNRESOLVABLE',
+    HOST_CERT_NOT_CONFIGURED: 'HOST_CERT_NOT_CONFIGURED',
+    HOST_INVALID_CPU_MAX: 'HOST_INVALID_CPU_MAX',
+    HOST_INVALID_MEMORY_MAX: 'HOST_INVALID_MEMORY_MAX',
+    HOST_INVALID_IPV6_MODE: 'HOST_INVALID_IPV6_MODE',
+    HOST_IPV6_ROUTE_REQUIRES_CONFIG: 'HOST_IPV6_ROUTE_REQUIRES_CONFIG',
+    HOST_CPU_BELOW_USED: 'HOST_CPU_BELOW_USED',
+    HOST_MEMORY_BELOW_USED: 'HOST_MEMORY_BELOW_USED',
+    HOST_INSTANCE_TYPE_MISMATCH: 'HOST_INSTANCE_TYPE_MISMATCH',
+
+    // Instance operation errors
+    INSTANCE_STOP_REQUIRED: 'INSTANCE_STOP_REQUIRED',
+    INSTANCE_IMAGE_REQUIRED: 'INSTANCE_IMAGE_REQUIRED',
+    INSTANCE_IMAGE_UNAVAILABLE: 'INSTANCE_IMAGE_UNAVAILABLE',
+    INSTANCE_REBUILD_FAILED: 'INSTANCE_REBUILD_FAILED',
+    INSTANCE_CLONE_FAILED: 'INSTANCE_CLONE_FAILED',
+    INSTANCE_IPV6_NOT_SUPPORTED: 'INSTANCE_IPV6_NOT_SUPPORTED',
+    INSTANCE_IPV6_REASSIGN_FAILED: 'INSTANCE_IPV6_REASSIGN_FAILED',
+    INSTANCE_NO_IPV4: 'INSTANCE_NO_IPV4',
+    HOST_NO_IPV6_SUBNET: 'HOST_NO_IPV6_SUBNET',
+    IPV6_POOL_EXHAUSTED: 'IPV6_POOL_EXHAUSTED',
+    IPV6_REASSIGN_COOLDOWN: 'IPV6_REASSIGN_COOLDOWN',
+
+    // Port mapping errors (additional)
+    PORT_MAPPING_NAT_ONLY: 'PORT_MAPPING_NAT_ONLY',
+    PORT_NO_AVAILABLE: 'PORT_NO_AVAILABLE',
+    PORT_MAPPING_INVALID_ID: 'PORT_MAPPING_INVALID_ID',
+
+    // Image errors (additional)
+    IMAGE_CREATE_FAILED: 'IMAGE_CREATE_FAILED',
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "Select-String -Path server/src/lib/errors.ts -Pattern 'export function apiError' -Encoding utf8 -Context 0,18" in C:\Users\Administrator\Desktop\payinces
+ succeeded in 813ms:
+
+> server\src\lib\errors.ts:706:export function apiError(code: ErrorCodeType, details?: string) {
+  server\src\lib\errors.ts:707:    const response = {
+  server\src\lib\errors.ts:708:        error: ErrorMessages[code],
+  server\src\lib\errors.ts:709:        code,
+  server\src\lib\errors.ts:710:    }
+  server\src\lib\errors.ts:711:
+  server\src\lib\errors.ts:712:    if (INTERNAL_ERROR_CODES.has(code) || details === undefined) {
+  server\src\lib\errors.ts:713:        return response
+  server\src\lib\errors.ts:714:    }
+  server\src\lib\errors.ts:715:
+  server\src\lib\errors.ts:716:    return {
+  server\src\lib\errors.ts:717:        ...response,
+  server\src\lib\errors.ts:718:        details: sanitizeTokensInString(details).slice(0, 256),
+  server\src\lib\errors.ts:719:    }
+  server\src\lib\errors.ts:720:}
+
+
+
+apply patch
+patch: completed
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-mail-renewal-month-guards.ts
+C:\Users\Administrator\Desktop\payinces\server\src\routes\mail.ts
+diff --git a/server/scripts/test-mail-renewal-month-guards.ts b/server/scripts/test-mail-renewal-month-guards.ts
+index 69b5fa40f6e58724344f5a7db24d5ad77ed020d5..c1c1d1a815d71ef5c83ba372ce24868209206e73
+--- a/server/scripts/test-mail-renewal-month-guards.ts
++++ b/server/scripts/test-mail-renewal-month-guards.ts
+@@ -52,10 +52,24 @@
+   'mail renewal months must not use loose numeric coercion'
+ )
+ assert.ok(
+-  routeSource.includes('if (months < 1 || months > 12)'),
+-  'mail renewal months must be an integer between 1 and 12'
++  routeSource.includes('if (months < 1)'),
++  'mail renewal months must be a positive integer before plan-cycle validation'
++)
++assert.ok(
++  routeSource.includes("function validateMailRenewMonthsForBillingCycle(months: number, billingCycle: 'monthly' | 'yearly'): void") &&
++    routeSource.includes("const billingCycleMonths = billingCycle === 'yearly' ? 12 : 1") &&
++    routeSource.includes('months % billingCycleMonths !== 0'),
++  'mail renewal months must be divisible by the plan billing cycle'
+ )
+ assert.ok(
++  routeSource.includes("throw apiError(ErrorCode.VALIDATION_ERROR, '年付套餐只能按年续费')"),
++  'mail renewal must reject non-year multiples for yearly plans with a clear validation error'
++)
++assert.ok(
++  routeSource.includes("billingCycle === 'monthly' && months > 12"),
++  'monthly mail renewal must retain the existing 1-12 month limit'
++)
++assert.ok(
+   routeRenewSection.includes('Body: { months: unknown }'),
+   'mail renewal request body must not trust compile-time number typing at runtime'
+ )
+@@ -64,6 +78,11 @@
+   'mail renewal route must normalize the request body before billing'
+ )
+ assert.ok(
++  routeRenewSection.includes('validateMailRenewMonthsForBillingCycle(renewMonths, plan.billingCycle)') &&
++    routeRenewSection.includes('validateMailRenewMonthsForBillingCycle(renewMonths, currentSubscription.plan.billingCycle)'),
++  'mail renewal route must enforce plan-cycle multiples before quoting and again before transactional settlement'
++)
++assert.ok(
+   routeRenewSection.includes('monthlyPrice * renewMonths'),
+   'mail renewal price must use normalized renewal months'
+ )
+diff --git a/server/src/routes/mail.ts b/server/src/routes/mail.ts
+index 0caaaf6e78eae2f45ced3610dcd6c56ab5f2a5ab..a02157ec72e37230daef7d2e96a0db26c2d33760
+--- a/server/src/routes/mail.ts
++++ b/server/src/routes/mail.ts
+@@ -290,10 +290,20 @@
+ 
+ function normalizeMailRenewMonths(value: unknown): number {
+   const months = requireSafeInteger(value, '续费月数')
+-  if (months < 1 || months > 12) {
++  if (months < 1) {
++    throw apiError(ErrorCode.VALIDATION_ERROR, '续费月数需为正整数')
++  }
++  return months
++}
++
++function validateMailRenewMonthsForBillingCycle(months: number, billingCycle: 'monthly' | 'yearly'): void {
++  const billingCycleMonths = billingCycle === 'yearly' ? 12 : 1
++  if (months % billingCycleMonths !== 0) {
++    throw apiError(ErrorCode.VALIDATION_ERROR, '年付套餐只能按年续费')
++  }
++  if (billingCycle === 'monthly' && months > 12) {
+     throw apiError(ErrorCode.VALIDATION_ERROR, '续费月数需为 1-12 的整数')
+   }
+-  return months
+ }
+ 
+ function normalizeMailSubscriptionPurchaseInput(input: unknown): MailSubscriptionPurchaseInput {
+@@ -1221,6 +1231,11 @@
+     }
+ 
+     const plan = subscription.plan
++    try {
++      validateMailRenewMonthsForBillingCycle(renewMonths, plan.billingCycle)
++    } catch (error) {
++      return reply.code(400).send(error)
++    }
+     const monthlyPrice = plan.billingCycle === 'monthly' 
+       ? Number(plan.price) 
+       : Number(plan.price) / 12
+@@ -1270,6 +1285,11 @@
+       if (currentSubscription.status === 'suspended') {
+         return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '订阅已被暂停，无法续费') }
+       }
++      try {
++        validateMailRenewMonthsForBillingCycle(renewMonths, currentSubscription.plan.billingCycle)
++      } catch (error) {
++        return { error }
++      }
+ 
+       const deductResult = await tx.user.updateMany({
+         where: {
+
+diff --git a/server/scripts/test-mail-renewal-month-guards.ts b/server/scripts/test-mail-renewal-month-guards.ts
+index 69b5fa40f6e58724344f5a7db24d5ad77ed020d5..c1c1d1a815d71ef5c83ba372ce24868209206e73
+--- a/server/scripts/test-mail-renewal-month-guards.ts
++++ b/server/scripts/test-mail-renewal-month-guards.ts
+@@ -52,10 +52,24 @@
+   'mail renewal months must not use loose numeric coercion'
+ )
+ assert.ok(
+-  routeSource.includes('if (months < 1 || months > 12)'),
+-  'mail renewal months must be an integer between 1 and 12'
++  routeSource.includes('if (months < 1)'),
++  'mail renewal months must be a positive integer before plan-cycle validation'
++)
++assert.ok(
++  routeSource.includes("function validateMailRenewMonthsForBillingCycle(months: number, billingCycle: 'monthly' | 'yearly'): void") &&
++    routeSource.includes("const billingCycleMonths = billingCycle === 'yearly' ? 12 : 1") &&
++    routeSource.includes('months % billingCycleMonths !== 0'),
++  'mail renewal months must be divisible by the plan billing cycle'
+ )
+ assert.ok(
++  routeSource.includes("throw apiError(ErrorCode.VALIDATION_ERROR, '年付套餐只能按年续费')"),
++  'mail renewal must reject non-year multiples for yearly plans with a clear validation error'
++)
++assert.ok(
++  routeSource.includes("billingCycle === 'monthly' && months > 12"),
++  'monthly mail renewal must retain the existing 1-12 month limit'
++)
++assert.ok(
+   routeRenewSection.includes('Body: { months: unknown }'),
+   'mail renewal request body must not trust compile-time number typing at runtime'
+ )
+@@ -64,6 +78,11 @@
+   'mail renewal route must normalize the request body before billing'
+ )
+ assert.ok(
++  routeRenewSection.includes('validateMailRenewMonthsForBillingCycle(renewMonths, plan.billingCycle)') &&
++    routeRenewSection.includes('validateMailRenewMonthsForBillingCycle(renewMonths, currentSubscription.plan.billingCycle)'),
++  'mail renewal route must enforce plan-cycle multiples before quoting and again before transactional settlement'
++)
++assert.ok(
+   routeRenewSection.includes('monthlyPrice * renewMonths'),
+   'mail renewal price must use normalized renewal months'
+ )
+diff --git a/server/src/routes/mail.ts b/server/src/routes/mail.ts
+index 0caaaf6e78eae2f45ced3610dcd6c56ab5f2a5ab..a02157ec72e37230daef7d2e96a0db26c2d33760
+--- a/server/src/routes/mail.ts
++++ b/server/src/routes/mail.ts
+@@ -290,10 +290,20 @@
+ 
+ function normalizeMailRenewMonths(value: unknown): number {
+   const months = requireSafeInteger(value, '续费月数')
+-  if (months < 1 || months > 12) {
++  if (months < 1) {
++    throw apiError(ErrorCode.VALIDATION_ERROR, '续费月数需为正整数')
++  }
++  return months
++}
++
++function validateMailRenewMonthsForBillingCycle(months: number, billingCycle: 'monthly' | 'yearly'): void {
++  const billingCycleMonths = billingCycle === 'yearly' ? 12 : 1
++  if (months % billingCycleMonths !== 0) {
++    throw apiError(ErrorCode.VALIDATION_ERROR, '年付套餐只能按年续费')
++  }
++  if (billingCycle === 'monthly' && months > 12) {
+     throw apiError(ErrorCode.VALIDATION_ERROR, '续费月数需为 1-12 的整数')
+   }
+-  return months
+ }
+ 
+ function normalizeMailSubscriptionPurchaseInput(input: unknown): MailSubscriptionPurchaseInput {
+@@ -1221,6 +1231,11 @@
+     }
+ 
+     const plan = subscription.plan
++    try {
++      validateMailRenewMonthsForBillingCycle(renewMonths, plan.billingCycle)
++    } catch (error) {
++      return reply.code(400).send(error)
++    }
+     const monthlyPrice = plan.billingCycle === 'monthly' 
+       ? Number(plan.price) 
+       : Number(plan.price) / 12
+@@ -1270,6 +1285,11 @@
+       if (currentSubscription.status === 'suspended') {
+         return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '订阅已被暂停，无法续费') }
+       }
++      try {
++        validateMailRenewMonthsForBillingCycle(renewMonths, currentSubscription.plan.billingCycle)
++      } catch (error) {
++        return { error }
++      }
+ 
+       const deductResult = await tx.user.updateMany({
+         where: {
+
+codex
+最小补丁已落在两个获准文件：报价前按订阅套餐校验，事务扣款前按锁内重新读取的套餐再校验；价格公式未改，月付 1–12 月限制保留，年付放开到 12 的安全整数倍。现在先审查 diff，再运行指定 type-check 和两项守卫。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'git diff --check; git diff -- server/src/routes/mail.ts server/scripts/test-mail-renewal-month-guards.ts' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 688ms:
+diff --git a/server/scripts/test-mail-renewal-month-guards.ts b/server/scripts/test-mail-renewal-month-guards.ts
+index 69b5fa4..c1c1d1a 100644
+--- a/server/scripts/test-mail-renewal-month-guards.ts
++++ b/server/scripts/test-mail-renewal-month-guards.ts
+@@ -52,8 +52,22 @@ assert.ok(
+   'mail renewal months must not use loose numeric coercion'
+ )
+ assert.ok(
+-  routeSource.includes('if (months < 1 || months > 12)'),
+-  'mail renewal months must be an integer between 1 and 12'
++  routeSource.includes('if (months < 1)'),
++  'mail renewal months must be a positive integer before plan-cycle validation'
++)
++assert.ok(
++  routeSource.includes("function validateMailRenewMonthsForBillingCycle(months: number, billingCycle: 'monthly' | 'yearly'): void") &&
++    routeSource.includes("const billingCycleMonths = billingCycle === 'yearly' ? 12 : 1") &&
++    routeSource.includes('months % billingCycleMonths !== 0'),
++  'mail renewal months must be divisible by the plan billing cycle'
++)
++assert.ok(
++  routeSource.includes("throw apiError(ErrorCode.VALIDATION_ERROR, '年付套餐只能按年续费')"),
++  'mail renewal must reject non-year multiples for yearly plans with a clear validation error'
++)
++assert.ok(
++  routeSource.includes("billingCycle === 'monthly' && months > 12"),
++  'monthly mail renewal must retain the existing 1-12 month limit'
+ )
+ assert.ok(
+   routeRenewSection.includes('Body: { months: unknown }'),
+@@ -63,6 +77,11 @@ assert.ok(
+   routeRenewSection.includes('renewMonths = normalizeMailSubscriptionRenewInput(request.body)'),
+   'mail renewal route must normalize the request body before billing'
+ )
++assert.ok(
++  routeRenewSection.includes('validateMailRenewMonthsForBillingCycle(renewMonths, plan.billingCycle)') &&
++    routeRenewSection.includes('validateMailRenewMonthsForBillingCycle(renewMonths, currentSubscription.plan.billingCycle)'),
++  'mail renewal route must enforce plan-cycle multiples before quoting and again before transactional settlement'
++)
+ assert.ok(
+   routeRenewSection.includes('monthlyPrice * renewMonths'),
+   'mail renewal price must use normalized renewal months'
+diff --git a/server/src/routes/mail.ts b/server/src/routes/mail.ts
+index 0caaaf6..a02157e 100644
+--- a/server/src/routes/mail.ts
++++ b/server/src/routes/mail.ts
+@@ -290,12 +290,22 @@ function normalizeMailAccountInput(input: MailAccountInput, options: {
+ 
+ function normalizeMailRenewMonths(value: unknown): number {
+   const months = requireSafeInteger(value, '续费月数')
+-  if (months < 1 || months > 12) {
+-    throw apiError(ErrorCode.VALIDATION_ERROR, '续费月数需为 1-12 的整数')
++  if (months < 1) {
++    throw apiError(ErrorCode.VALIDATION_ERROR, '续费月数需为正整数')
+   }
+   return months
+ }
+ 
++function validateMailRenewMonthsForBillingCycle(months: number, billingCycle: 'monthly' | 'yearly'): void {
++  const billingCycleMonths = billingCycle === 'yearly' ? 12 : 1
++  if (months % billingCycleMonths !== 0) {
++    throw apiError(ErrorCode.VALIDATION_ERROR, '年付套餐只能按年续费')
++  }
++  if (billingCycle === 'monthly' && months > 12) {
++    throw apiError(ErrorCode.VALIDATION_ERROR, '续费月数需为 1-12 的整数')
++  }
++}
++
+ function normalizeMailSubscriptionPurchaseInput(input: unknown): MailSubscriptionPurchaseInput {
+   if (!isPlainRecord(input)) {
+     throw apiError(ErrorCode.VALIDATION_ERROR, '请求参数无效')
+@@ -1221,6 +1231,11 @@ export default async function mailRoutes(fastify: FastifyInstance) {
+     }
+ 
+     const plan = subscription.plan
++    try {
++      validateMailRenewMonthsForBillingCycle(renewMonths, plan.billingCycle)
++    } catch (error) {
++      return reply.code(400).send(error)
++    }
+     const monthlyPrice = plan.billingCycle === 'monthly' 
+       ? Number(plan.price) 
+       : Number(plan.price) / 12
+@@ -1270,6 +1285,11 @@ export default async function mailRoutes(fastify: FastifyInstance) {
+       if (currentSubscription.status === 'suspended') {
+         return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '订阅已被暂停，无法续费') }
+       }
++      try {
++        validateMailRenewMonthsForBillingCycle(renewMonths, currentSubscription.plan.billingCycle)
++      } catch (error) {
++        return { error }
++      }
+ 
+       const deductResult = await tx.user.updateMany({
+         where: {
+warning: in the working copy of 'client/src/components/plugins/PluginFrame.vue', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'client/src/utils/validation.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'deploy/incudal-backend.service.example', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'deploy/incudal-online-rollback@.service.example', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'deploy/incudal-online-update@.service.example', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'package.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/package.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/scripts/test-admin-billing-route-id-guards.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/scripts/test-aff-review-ui-guards.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/scripts/test-balance-adjustment-approval-guards.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/scripts/test-capacity-cost-guards.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/scripts/test-log-sanitizer.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/scripts/test-mail-renewal-month-guards.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/scripts/test-plugin-client-boundary-guards.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/scripts/test-system-config-value-guards.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/scripts/test-system-update-guards.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/scripts/test-trust-proxy-config.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/app.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/db/aff.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/db/balance.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/db/billing-operations.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/lib/epay.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/lib/errors.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/lib/heleket.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/lib/log-sanitizer.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/lib/lottery-notifier.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/lib/lsky.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/lib/notifier.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/lib/outbound-security.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/lib/plugin-market-submission-scan.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/lib/redirect-validator.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/lib/theme-market-submission-scan.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/lib/trust-proxy-config.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/admin-billing.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/admin-capacity-cost.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/mail.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/system-config.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/tickets.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/services/cranemail.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/services/smartermail.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/services/system-monitor.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/services/traffic-notifier.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/scripts/test-mail-renewal-month-guards.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/mail.ts', LF will be replaced by CRLF the next time Git touches it
+
+diff --git a/server/scripts/test-mail-renewal-month-guards.ts b/server/scripts/test-mail-renewal-month-guards.ts
+index 69b5fa40f6e58724344f5a7db24d5ad77ed020d5..c1c1d1a815d71ef5c83ba372ce24868209206e73
+--- a/server/scripts/test-mail-renewal-month-guards.ts
++++ b/server/scripts/test-mail-renewal-month-guards.ts
+@@ -52,10 +52,24 @@
+   'mail renewal months must not use loose numeric coercion'
+ )
+ assert.ok(
+-  routeSource.includes('if (months < 1 || months > 12)'),
+-  'mail renewal months must be an integer between 1 and 12'
++  routeSource.includes('if (months < 1)'),
++  'mail renewal months must be a positive integer before plan-cycle validation'
++)
++assert.ok(
++  routeSource.includes("function validateMailRenewMonthsForBillingCycle(months: number, billingCycle: 'monthly' | 'yearly'): void") &&
++    routeSource.includes("const billingCycleMonths = billingCycle === 'yearly' ? 12 : 1") &&
++    routeSource.includes('months % billingCycleMonths !== 0'),
++  'mail renewal months must be divisible by the plan billing cycle'
+ )
+ assert.ok(
++  routeSource.includes("throw apiError(ErrorCode.VALIDATION_ERROR, '年付套餐只能按年续费')"),
++  'mail renewal must reject non-year multiples for yearly plans with a clear validation error'
++)
++assert.ok(
++  routeSource.includes("billingCycle === 'monthly' && months > 12"),
++  'monthly mail renewal must retain the existing 1-12 month limit'
++)
++assert.ok(
+   routeRenewSection.includes('Body: { months: unknown }'),
+   'mail renewal request body must not trust compile-time number typing at runtime'
+ )
+@@ -64,6 +78,11 @@
+   'mail renewal route must normalize the request body before billing'
+ )
+ assert.ok(
++  routeRenewSection.includes('validateMailRenewMonthsForBillingCycle(renewMonths, plan.billingCycle)') &&
++    routeRenewSection.includes('validateMailRenewMonthsForBillingCycle(renewMonths, currentSubscription.plan.billingCycle)'),
++  'mail renewal route must enforce plan-cycle multiples before quoting and again before transactional settlement'
++)
++assert.ok(
+   routeRenewSection.includes('monthlyPrice * renewMonths'),
+   'mail renewal price must use normalized renewal months'
+ )
+diff --git a/server/src/routes/mail.ts b/server/src/routes/mail.ts
+index 0caaaf6e78eae2f45ced3610dcd6c56ab5f2a5ab..a02157ec72e37230daef7d2e96a0db26c2d33760
+--- a/server/src/routes/mail.ts
++++ b/server/src/routes/mail.ts
+@@ -290,10 +290,20 @@
+ 
+ function normalizeMailRenewMonths(value: unknown): number {
+   const months = requireSafeInteger(value, '续费月数')
+-  if (months < 1 || months > 12) {
++  if (months < 1) {
++    throw apiError(ErrorCode.VALIDATION_ERROR, '续费月数需为正整数')
++  }
++  return months
++}
++
++function validateMailRenewMonthsForBillingCycle(months: number, billingCycle: 'monthly' | 'yearly'): void {
++  const billingCycleMonths = billingCycle === 'yearly' ? 12 : 1
++  if (months % billingCycleMonths !== 0) {
++    throw apiError(ErrorCode.VALIDATION_ERROR, '年付套餐只能按年续费')
++  }
++  if (billingCycle === 'monthly' && months > 12) {
+     throw apiError(ErrorCode.VALIDATION_ERROR, '续费月数需为 1-12 的整数')
+   }
+-  return months
+ }
+ 
+ function normalizeMailSubscriptionPurchaseInput(input: unknown): MailSubscriptionPurchaseInput {
+@@ -1221,6 +1231,11 @@
+     }
+ 
+     const plan = subscription.plan
++    try {
++      validateMailRenewMonthsForBillingCycle(renewMonths, plan.billingCycle)
++    } catch (error) {
++      return reply.code(400).send(error)
++    }
+     const monthlyPrice = plan.billingCycle === 'monthly' 
+       ? Number(plan.price) 
+       : Number(plan.price) / 12
+@@ -1270,6 +1285,11 @@
+       if (currentSubscription.status === 'suspended') {
+         return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '订阅已被暂停，无法续费') }
+       }
++      try {
++        validateMailRenewMonthsForBillingCycle(renewMonths, currentSubscription.plan.billingCycle)
++      } catch (error) {
++        return { error }
++      }
+ 
+       const deductResult = await tx.user.updateMany({
+         where: {
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'pnpm --filter server test:mail-plan-financial-guards' in C:\Users\Administrator\Desktop\payinces
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'pnpm --filter server type-check' in C:\Users\Administrator\Desktop\payinces
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'pnpm --filter server test:mail-renewal-month-guards' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 1982ms:
+
+> server@1.3.7 test:mail-renewal-month-guards C:\Users\Administrator\Desktop\payinces\server
+> node --import tsx scripts/test-mail-renewal-month-guards.ts
+
+mail renewal month guard tests passed
+
+ succeeded in 2013ms:
+
+> server@1.3.7 test:mail-plan-financial-guards C:\Users\Administrator\Desktop\payinces\server
+> node --import tsx scripts/test-mail-plan-financial-guards.ts
+
+mail plan financial guard tests passed
+
+diff --git a/server/scripts/test-mail-renewal-month-guards.ts b/server/scripts/test-mail-renewal-month-guards.ts
+index 69b5fa40f6e58724344f5a7db24d5ad77ed020d5..c1c1d1a815d71ef5c83ba372ce24868209206e73
+--- a/server/scripts/test-mail-renewal-month-guards.ts
++++ b/server/scripts/test-mail-renewal-month-guards.ts
+@@ -52,10 +52,24 @@
+   'mail renewal months must not use loose numeric coercion'
+ )
+ assert.ok(
+-  routeSource.includes('if (months < 1 || months > 12)'),
+-  'mail renewal months must be an integer between 1 and 12'
++  routeSource.includes('if (months < 1)'),
++  'mail renewal months must be a positive integer before plan-cycle validation'
++)
++assert.ok(
++  routeSource.includes("function validateMailRenewMonthsForBillingCycle(months: number, billingCycle: 'monthly' | 'yearly'): void") &&
++    routeSource.includes("const billingCycleMonths = billingCycle === 'yearly' ? 12 : 1") &&
++    routeSource.includes('months % billingCycleMonths !== 0'),
++  'mail renewal months must be divisible by the plan billing cycle'
+ )
+ assert.ok(
++  routeSource.includes("throw apiError(ErrorCode.VALIDATION_ERROR, '年付套餐只能按年续费')"),
++  'mail renewal must reject non-year multiples for yearly plans with a clear validation error'
++)
++assert.ok(
++  routeSource.includes("billingCycle === 'monthly' && months > 12"),
++  'monthly mail renewal must retain the existing 1-12 month limit'
++)
++assert.ok(
+   routeRenewSection.includes('Body: { months: unknown }'),
+   'mail renewal request body must not trust compile-time number typing at runtime'
+ )
+@@ -64,6 +78,11 @@
+   'mail renewal route must normalize the request body before billing'
+ )
+ assert.ok(
++  routeRenewSection.includes('validateMailRenewMonthsForBillingCycle(renewMonths, plan.billingCycle)') &&
++    routeRenewSection.includes('validateMailRenewMonthsForBillingCycle(renewMonths, currentSubscription.plan.billingCycle)'),
++  'mail renewal route must enforce plan-cycle multiples before quoting and again before transactional settlement'
++)
++assert.ok(
+   routeRenewSection.includes('monthlyPrice * renewMonths'),
+   'mail renewal price must use normalized renewal months'
+ )
+diff --git a/server/src/routes/mail.ts b/server/src/routes/mail.ts
+index 0caaaf6e78eae2f45ced3610dcd6c56ab5f2a5ab..a02157ec72e37230daef7d2e96a0db26c2d33760
+--- a/server/src/routes/mail.ts
++++ b/server/src/routes/mail.ts
+@@ -290,10 +290,20 @@
+ 
+ function normalizeMailRenewMonths(value: unknown): number {
+   const months = requireSafeInteger(value, '续费月数')
+-  if (months < 1 || months > 12) {
++  if (months < 1) {
++    throw apiError(ErrorCode.VALIDATION_ERROR, '续费月数需为正整数')
++  }
++  return months
++}
++
++function validateMailRenewMonthsForBillingCycle(months: number, billingCycle: 'monthly' | 'yearly'): void {
++  const billingCycleMonths = billingCycle === 'yearly' ? 12 : 1
++  if (months % billingCycleMonths !== 0) {
++    throw apiError(ErrorCode.VALIDATION_ERROR, '年付套餐只能按年续费')
++  }
++  if (billingCycle === 'monthly' && months > 12) {
+     throw apiError(ErrorCode.VALIDATION_ERROR, '续费月数需为 1-12 的整数')
+   }
+-  return months
+ }
+ 
+ function normalizeMailSubscriptionPurchaseInput(input: unknown): MailSubscriptionPurchaseInput {
+@@ -1221,6 +1231,11 @@
+     }
+ 
+     const plan = subscription.plan
++    try {
++      validateMailRenewMonthsForBillingCycle(renewMonths, plan.billingCycle)
++    } catch (error) {
++      return reply.code(400).send(error)
++    }
+     const monthlyPrice = plan.billingCycle === 'monthly' 
+       ? Number(plan.price) 
+       : Number(plan.price) / 12
+@@ -1270,6 +1285,11 @@
+       if (currentSubscription.status === 'suspended') {
+         return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '订阅已被暂停，无法续费') }
+       }
++      try {
++        validateMailRenewMonthsForBillingCycle(renewMonths, currentSubscription.plan.billingCycle)
++      } catch (error) {
++        return { error }
++      }
+ 
+       const deductResult = await tx.user.updateMany({
+         where: {
+
+codex
+三项验收已并行启动；进程仍在运行，我会等它们全部结束后核对退出码，并再确认最终改动范围与未提交状态。
+diff --git a/server/scripts/test-mail-renewal-month-guards.ts b/server/scripts/test-mail-renewal-month-guards.ts
+index 69b5fa40f6e58724344f5a7db24d5ad77ed020d5..c1c1d1a815d71ef5c83ba372ce24868209206e73
+--- a/server/scripts/test-mail-renewal-month-guards.ts
++++ b/server/scripts/test-mail-renewal-month-guards.ts
+@@ -52,10 +52,24 @@
+   'mail renewal months must not use loose numeric coercion'
+ )
+ assert.ok(
+-  routeSource.includes('if (months < 1 || months > 12)'),
+-  'mail renewal months must be an integer between 1 and 12'
++  routeSource.includes('if (months < 1)'),
++  'mail renewal months must be a positive integer before plan-cycle validation'
++)
++assert.ok(
++  routeSource.includes("function validateMailRenewMonthsForBillingCycle(months: number, billingCycle: 'monthly' | 'yearly'): void") &&
++    routeSource.includes("const billingCycleMonths = billingCycle === 'yearly' ? 12 : 1") &&
++    routeSource.includes('months % billingCycleMonths !== 0'),
++  'mail renewal months must be divisible by the plan billing cycle'
+ )
+ assert.ok(
++  routeSource.includes("throw apiError(ErrorCode.VALIDATION_ERROR, '年付套餐只能按年续费')"),
++  'mail renewal must reject non-year multiples for yearly plans with a clear validation error'
++)
++assert.ok(
++  routeSource.includes("billingCycle === 'monthly' && months > 12"),
++  'monthly mail renewal must retain the existing 1-12 month limit'
++)
++assert.ok(
+   routeRenewSection.includes('Body: { months: unknown }'),
+   'mail renewal request body must not trust compile-time number typing at runtime'
+ )
+@@ -64,6 +78,11 @@
+   'mail renewal route must normalize the request body before billing'
+ )
+ assert.ok(
++  routeRenewSection.includes('validateMailRenewMonthsForBillingCycle(renewMonths, plan.billingCycle)') &&
++    routeRenewSection.includes('validateMailRenewMonthsForBillingCycle(renewMonths, currentSubscription.plan.billingCycle)'),
++  'mail renewal route must enforce plan-cycle multiples before quoting and again before transactional settlement'
++)
++assert.ok(
+   routeRenewSection.includes('monthlyPrice * renewMonths'),
+   'mail renewal price must use normalized renewal months'
+ )
+diff --git a/server/src/routes/mail.ts b/server/src/routes/mail.ts
+index 0caaaf6e78eae2f45ced3610dcd6c56ab5f2a5ab..a02157ec72e37230daef7d2e96a0db26c2d33760
+--- a/server/src/routes/mail.ts
++++ b/server/src/routes/mail.ts
+@@ -290,10 +290,20 @@
+ 
+ function normalizeMailRenewMonths(value: unknown): number {
+   const months = requireSafeInteger(value, '续费月数')
+-  if (months < 1 || months > 12) {
++  if (months < 1) {
++    throw apiError(ErrorCode.VALIDATION_ERROR, '续费月数需为正整数')
++  }
++  return months
++}
++
++function validateMailRenewMonthsForBillingCycle(months: number, billingCycle: 'monthly' | 'yearly'): void {
++  const billingCycleMonths = billingCycle === 'yearly' ? 12 : 1
++  if (months % billingCycleMonths !== 0) {
++    throw apiError(ErrorCode.VALIDATION_ERROR, '年付套餐只能按年续费')
++  }
++  if (billingCycle === 'monthly' && months > 12) {
+     throw apiError(ErrorCode.VALIDATION_ERROR, '续费月数需为 1-12 的整数')
+   }
+-  return months
+ }
+ 
+ function normalizeMailSubscriptionPurchaseInput(input: unknown): MailSubscriptionPurchaseInput {
+@@ -1221,6 +1231,11 @@
+     }
+ 
+     const plan = subscription.plan
++    try {
++      validateMailRenewMonthsForBillingCycle(renewMonths, plan.billingCycle)
++    } catch (error) {
++      return reply.code(400).send(error)
++    }
+     const monthlyPrice = plan.billingCycle === 'monthly' 
+       ? Number(plan.price) 
+       : Number(plan.price) / 12
+@@ -1270,6 +1285,11 @@
+       if (currentSubscription.status === 'suspended') {
+         return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '订阅已被暂停，无法续费') }
+       }
++      try {
++        validateMailRenewMonthsForBillingCycle(renewMonths, currentSubscription.plan.billingCycle)
++      } catch (error) {
++        return { error }
++      }
+ 
+       const deductResult = await tx.user.updateMany({
+         where: {
+
+diff --git a/server/scripts/test-mail-renewal-month-guards.ts b/server/scripts/test-mail-renewal-month-guards.ts
+index 69b5fa40f6e58724344f5a7db24d5ad77ed020d5..c1c1d1a815d71ef5c83ba372ce24868209206e73
+--- a/server/scripts/test-mail-renewal-month-guards.ts
++++ b/server/scripts/test-mail-renewal-month-guards.ts
+@@ -52,10 +52,24 @@
+   'mail renewal months must not use loose numeric coercion'
+ )
+ assert.ok(
+-  routeSource.includes('if (months < 1 || months > 12)'),
+-  'mail renewal months must be an integer between 1 and 12'
++  routeSource.includes('if (months < 1)'),
++  'mail renewal months must be a positive integer before plan-cycle validation'
++)
++assert.ok(
++  routeSource.includes("function validateMailRenewMonthsForBillingCycle(months: number, billingCycle: 'monthly' | 'yearly'): void") &&
++    routeSource.includes("const billingCycleMonths = billingCycle === 'yearly' ? 12 : 1") &&
++    routeSource.includes('months % billingCycleMonths !== 0'),
++  'mail renewal months must be divisible by the plan billing cycle'
+ )
+ assert.ok(
++  routeSource.includes("throw apiError(ErrorCode.VALIDATION_ERROR, '年付套餐只能按年续费')"),
++  'mail renewal must reject non-year multiples for yearly plans with a clear validation error'
++)
++assert.ok(
++  routeSource.includes("billingCycle === 'monthly' && months > 12"),
++  'monthly mail renewal must retain the existing 1-12 month limit'
++)
++assert.ok(
+   routeRenewSection.includes('Body: { months: unknown }'),
+   'mail renewal request body must not trust compile-time number typing at runtime'
+ )
+@@ -64,6 +78,11 @@
+   'mail renewal route must normalize the request body before billing'
+ )
+ assert.ok(
++  routeRenewSection.includes('validateMailRenewMonthsForBillingCycle(renewMonths, plan.billingCycle)') &&
++    routeRenewSection.includes('validateMailRenewMonthsForBillingCycle(renewMonths, currentSubscription.plan.billingCycle)'),
++  'mail renewal route must enforce plan-cycle multiples before quoting and again before transactional settlement'
++)
++assert.ok(
+   routeRenewSection.includes('monthlyPrice * renewMonths'),
+   'mail renewal price must use normalized renewal months'
+ )
+diff --git a/server/src/routes/mail.ts b/server/src/routes/mail.ts
+index 0caaaf6e78eae2f45ced3610dcd6c56ab5f2a5ab..a02157ec72e37230daef7d2e96a0db26c2d33760
+--- a/server/src/routes/mail.ts
++++ b/server/src/routes/mail.ts
+@@ -290,10 +290,20 @@
+ 
+ function normalizeMailRenewMonths(value: unknown): number {
+   const months = requireSafeInteger(value, '续费月数')
+-  if (months < 1 || months > 12) {
++  if (months < 1) {
++    throw apiError(ErrorCode.VALIDATION_ERROR, '续费月数需为正整数')
++  }
++  return months
++}
++
++function validateMailRenewMonthsForBillingCycle(months: number, billingCycle: 'monthly' | 'yearly'): void {
++  const billingCycleMonths = billingCycle === 'yearly' ? 12 : 1
++  if (months % billingCycleMonths !== 0) {
++    throw apiError(ErrorCode.VALIDATION_ERROR, '年付套餐只能按年续费')
++  }
++  if (billingCycle === 'monthly' && months > 12) {
+     throw apiError(ErrorCode.VALIDATION_ERROR, '续费月数需为 1-12 的整数')
+   }
+-  return months
+ }
+ 
+ function normalizeMailSubscriptionPurchaseInput(input: unknown): MailSubscriptionPurchaseInput {
+@@ -1221,6 +1231,11 @@
+     }
+ 
+     const plan = subscription.plan
++    try {
++      validateMailRenewMonthsForBillingCycle(renewMonths, plan.billingCycle)
++    } catch (error) {
++      return reply.code(400).send(error)
++    }
+     const monthlyPrice = plan.billingCycle === 'monthly' 
+       ? Number(plan.price) 
+       : Number(plan.price) / 12
+@@ -1270,6 +1285,11 @@
+       if (currentSubscription.status === 'suspended') {
+         return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '订阅已被暂停，无法续费') }
+       }
++      try {
++        validateMailRenewMonthsForBillingCycle(renewMonths, currentSubscription.plan.billingCycle)
++      } catch (error) {
++        return { error }
++      }
+ 
+       const deductResult = await tx.user.updateMany({
+         where: {
+
+diff --git a/server/scripts/test-mail-renewal-month-guards.ts b/server/scripts/test-mail-renewal-month-guards.ts
+index 69b5fa40f6e58724344f5a7db24d5ad77ed020d5..c1c1d1a815d71ef5c83ba372ce24868209206e73
+--- a/server/scripts/test-mail-renewal-month-guards.ts
++++ b/server/scripts/test-mail-renewal-month-guards.ts
+@@ -52,10 +52,24 @@
+   'mail renewal months must not use loose numeric coercion'
+ )
+ assert.ok(
+-  routeSource.includes('if (months < 1 || months > 12)'),
+-  'mail renewal months must be an integer between 1 and 12'
++  routeSource.includes('if (months < 1)'),
++  'mail renewal months must be a positive integer before plan-cycle validation'
++)
++assert.ok(
++  routeSource.includes("function validateMailRenewMonthsForBillingCycle(months: number, billingCycle: 'monthly' | 'yearly'): void") &&
++    routeSource.includes("const billingCycleMonths = billingCycle === 'yearly' ? 12 : 1") &&
++    routeSource.includes('months % billingCycleMonths !== 0'),
++  'mail renewal months must be divisible by the plan billing cycle'
+ )
+ assert.ok(
++  routeSource.includes("throw apiError(ErrorCode.VALIDATION_ERROR, '年付套餐只能按年续费')"),
++  'mail renewal must reject non-year multiples for yearly plans with a clear validation error'
++)
++assert.ok(
++  routeSource.includes("billingCycle === 'monthly' && months > 12"),
++  'monthly mail renewal must retain the existing 1-12 month limit'
++)
++assert.ok(
+   routeRenewSection.includes('Body: { months: unknown }'),
+   'mail renewal request body must not trust compile-time number typing at runtime'
+ )
+@@ -64,6 +78,11 @@
+   'mail renewal route must normalize the request body before billing'
+ )
+ assert.ok(
++  routeRenewSection.includes('validateMailRenewMonthsForBillingCycle(renewMonths, plan.billingCycle)') &&
++    routeRenewSection.includes('validateMailRenewMonthsForBillingCycle(renewMonths, currentSubscription.plan.billingCycle)'),
++  'mail renewal route must enforce plan-cycle multiples before quoting and again before transactional settlement'
++)
++assert.ok(
+   routeRenewSection.includes('monthlyPrice * renewMonths'),
+   'mail renewal price must use normalized renewal months'
+ )
+diff --git a/server/src/routes/mail.ts b/server/src/routes/mail.ts
+index 0caaaf6e78eae2f45ced3610dcd6c56ab5f2a5ab..a02157ec72e37230daef7d2e96a0db26c2d33760
+--- a/server/src/routes/mail.ts
++++ b/server/src/routes/mail.ts
+@@ -290,10 +290,20 @@
+ 
+ function normalizeMailRenewMonths(value: unknown): number {
+   const months = requireSafeInteger(value, '续费月数')
+-  if (months < 1 || months > 12) {
++  if (months < 1) {
++    throw apiError(ErrorCode.VALIDATION_ERROR, '续费月数需为正整数')
++  }
++  return months
++}
++
++function validateMailRenewMonthsForBillingCycle(months: number, billingCycle: 'monthly' | 'yearly'): void {
++  const billingCycleMonths = billingCycle === 'yearly' ? 12 : 1
++  if (months % billingCycleMonths !== 0) {
++    throw apiError(ErrorCode.VALIDATION_ERROR, '年付套餐只能按年续费')
++  }
++  if (billingCycle === 'monthly' && months > 12) {
+     throw apiError(ErrorCode.VALIDATION_ERROR, '续费月数需为 1-12 的整数')
+   }
+-  return months
+ }
+ 
+ function normalizeMailSubscriptionPurchaseInput(input: unknown): MailSubscriptionPurchaseInput {
+@@ -1221,6 +1231,11 @@
+     }
+ 
+     const plan = subscription.plan
++    try {
++      validateMailRenewMonthsForBillingCycle(renewMonths, plan.billingCycle)
++    } catch (error) {
++      return reply.code(400).send(error)
++    }
+     const monthlyPrice = plan.billingCycle === 'monthly' 
+       ? Number(plan.price) 
+       : Number(plan.price) / 12
+@@ -1270,6 +1285,11 @@
+       if (currentSubscription.status === 'suspended') {
+         return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '订阅已被暂停，无法续费') }
+       }
++      try {
++        validateMailRenewMonthsForBillingCycle(renewMonths, currentSubscription.plan.billingCycle)
++      } catch (error) {
++        return { error }
++      }
+ 
+       const deductResult = await tx.user.updateMany({
+         where: {
+
+diff --git a/server/scripts/test-mail-renewal-month-guards.ts b/server/scripts/test-mail-renewal-month-guards.ts
+index 69b5fa40f6e58724344f5a7db24d5ad77ed020d5..c1c1d1a815d71ef5c83ba372ce24868209206e73
+--- a/server/scripts/test-mail-renewal-month-guards.ts
++++ b/server/scripts/test-mail-renewal-month-guards.ts
+@@ -52,10 +52,24 @@
+   'mail renewal months must not use loose numeric coercion'
+ )
+ assert.ok(
+-  routeSource.includes('if (months < 1 || months > 12)'),
+-  'mail renewal months must be an integer between 1 and 12'
++  routeSource.includes('if (months < 1)'),
++  'mail renewal months must be a positive integer before plan-cycle validation'
++)
++assert.ok(
++  routeSource.includes("function validateMailRenewMonthsForBillingCycle(months: number, billingCycle: 'monthly' | 'yearly'): void") &&
++    routeSource.includes("const billingCycleMonths = billingCycle === 'yearly' ? 12 : 1") &&
++    routeSource.includes('months % billingCycleMonths !== 0'),
++  'mail renewal months must be divisible by the plan billing cycle'
+ )
+ assert.ok(
++  routeSource.includes("throw apiError(ErrorCode.VALIDATION_ERROR, '年付套餐只能按年续费')"),
++  'mail renewal must reject non-year multiples for yearly plans with a clear validation error'
++)
++assert.ok(
++  routeSource.includes("billingCycle === 'monthly' && months > 12"),
++  'monthly mail renewal must retain the existing 1-12 month limit'
++)
++assert.ok(
+   routeRenewSection.includes('Body: { months: unknown }'),
+   'mail renewal request body must not trust compile-time number typing at runtime'
+ )
+@@ -64,6 +78,11 @@
+   'mail renewal route must normalize the request body before billing'
+ )
+ assert.ok(
++  routeRenewSection.includes('validateMailRenewMonthsForBillingCycle(renewMonths, plan.billingCycle)') &&
++    routeRenewSection.includes('validateMailRenewMonthsForBillingCycle(renewMonths, currentSubscription.plan.billingCycle)'),
++  'mail renewal route must enforce plan-cycle multiples before quoting and again before transactional settlement'
++)
++assert.ok(
+   routeRenewSection.includes('monthlyPrice * renewMonths'),
+   'mail renewal price must use normalized renewal months'
+ )
+diff --git a/server/src/routes/mail.ts b/server/src/routes/mail.ts
+index 0caaaf6e78eae2f45ced3610dcd6c56ab5f2a5ab..a02157ec72e37230daef7d2e96a0db26c2d33760
+--- a/server/src/routes/mail.ts
++++ b/server/src/routes/mail.ts
+@@ -290,10 +290,20 @@
+ 
+ function normalizeMailRenewMonths(value: unknown): number {
+   const months = requireSafeInteger(value, '续费月数')
+-  if (months < 1 || months > 12) {
++  if (months < 1) {
++    throw apiError(ErrorCode.VALIDATION_ERROR, '续费月数需为正整数')
++  }
++  return months
++}
++
++function validateMailRenewMonthsForBillingCycle(months: number, billingCycle: 'monthly' | 'yearly'): void {
++  const billingCycleMonths = billingCycle === 'yearly' ? 12 : 1
++  if (months % billingCycleMonths !== 0) {
++    throw apiError(ErrorCode.VALIDATION_ERROR, '年付套餐只能按年续费')
++  }
++  if (billingCycle === 'monthly' && months > 12) {
+     throw apiError(ErrorCode.VALIDATION_ERROR, '续费月数需为 1-12 的整数')
+   }
+-  return months
+ }
+ 
+ function normalizeMailSubscriptionPurchaseInput(input: unknown): MailSubscriptionPurchaseInput {
+@@ -1221,6 +1231,11 @@
+     }
+ 
+     const plan = subscription.plan
++    try {
++      validateMailRenewMonthsForBillingCycle(renewMonths, plan.billingCycle)
++    } catch (error) {
++      return reply.code(400).send(error)
++    }
+     const monthlyPrice = plan.billingCycle === 'monthly' 
+       ? Number(plan.price) 
+       : Number(plan.price) / 12
+@@ -1270,6 +1285,11 @@
+       if (currentSubscription.status === 'suspended') {
+         return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '订阅已被暂停，无法续费') }
+       }
++      try {
++        validateMailRenewMonthsForBillingCycle(renewMonths, currentSubscription.plan.billingCycle)
++      } catch (error) {
++        return { error }
++      }
+ 
+       const deductResult = await tx.user.updateMany({
+         where: {
+
+diff --git a/server/scripts/test-mail-renewal-month-guards.ts b/server/scripts/test-mail-renewal-month-guards.ts
+index 69b5fa40f6e58724344f5a7db24d5ad77ed020d5..c1c1d1a815d71ef5c83ba372ce24868209206e73
+--- a/server/scripts/test-mail-renewal-month-guards.ts
++++ b/server/scripts/test-mail-renewal-month-guards.ts
+@@ -52,10 +52,24 @@
+   'mail renewal months must not use loose numeric coercion'
+ )
+ assert.ok(
+-  routeSource.includes('if (months < 1 || months > 12)'),
+-  'mail renewal months must be an integer between 1 and 12'
++  routeSource.includes('if (months < 1)'),
++  'mail renewal months must be a positive integer before plan-cycle validation'
++)
++assert.ok(
++  routeSource.includes("function validateMailRenewMonthsForBillingCycle(months: number, billingCycle: 'monthly' | 'yearly'): void") &&
++    routeSource.includes("const billingCycleMonths = billingCycle === 'yearly' ? 12 : 1") &&
++    routeSource.includes('months % billingCycleMonths !== 0'),
++  'mail renewal months must be divisible by the plan billing cycle'
+ )
+ assert.ok(
++  routeSource.includes("throw apiError(ErrorCode.VALIDATION_ERROR, '年付套餐只能按年续费')"),
++  'mail renewal must reject non-year multiples for yearly plans with a clear validation error'
++)
++assert.ok(
++  routeSource.includes("billingCycle === 'monthly' && months > 12"),
++  'monthly mail renewal must retain the existing 1-12 month limit'
++)
++assert.ok(
+   routeRenewSection.includes('Body: { months: unknown }'),
+   'mail renewal request body must not trust compile-time number typing at runtime'
+ )
+@@ -64,6 +78,11 @@
+   'mail renewal route must normalize the request body before billing'
+ )
+ assert.ok(
++  routeRenewSection.includes('validateMailRenewMonthsForBillingCycle(renewMonths, plan.billingCycle)') &&
++    routeRenewSection.includes('validateMailRenewMonthsForBillingCycle(renewMonths, currentSubscription.plan.billingCycle)'),
++  'mail renewal route must enforce plan-cycle multiples before quoting and again before transactional settlement'
++)
++assert.ok(
+   routeRenewSection.includes('monthlyPrice * renewMonths'),
+   'mail renewal price must use normalized renewal months'
+ )
+diff --git a/server/src/routes/mail.ts b/server/src/routes/mail.ts
+index 0caaaf6e78eae2f45ced3610dcd6c56ab5f2a5ab..a02157ec72e37230daef7d2e96a0db26c2d33760
+--- a/server/src/routes/mail.ts
++++ b/server/src/routes/mail.ts
+@@ -290,10 +290,20 @@
+ 
+ function normalizeMailRenewMonths(value: unknown): number {
+   const months = requireSafeInteger(value, '续费月数')
+-  if (months < 1 || months > 12) {
++  if (months < 1) {
++    throw apiError(ErrorCode.VALIDATION_ERROR, '续费月数需为正整数')
++  }
++  return months
++}
++
++function validateMailRenewMonthsForBillingCycle(months: number, billingCycle: 'monthly' | 'yearly'): void {
++  const billingCycleMonths = billingCycle === 'yearly' ? 12 : 1
++  if (months % billingCycleMonths !== 0) {
++    throw apiError(ErrorCode.VALIDATION_ERROR, '年付套餐只能按年续费')
++  }
++  if (billingCycle === 'monthly' && months > 12) {
+     throw apiError(ErrorCode.VALIDATION_ERROR, '续费月数需为 1-12 的整数')
+   }
+-  return months
+ }
+ 
+ function normalizeMailSubscriptionPurchaseInput(input: unknown): MailSubscriptionPurchaseInput {
+@@ -1221,6 +1231,11 @@
+     }
+ 
+     const plan = subscription.plan
++    try {
++      validateMailRenewMonthsForBillingCycle(renewMonths, plan.billingCycle)
++    } catch (error) {
++      return reply.code(400).send(error)
++    }
+     const monthlyPrice = plan.billingCycle === 'monthly' 
+       ? Number(plan.price) 
+       : Number(plan.price) / 12
+@@ -1270,6 +1285,11 @@
+       if (currentSubscription.status === 'suspended') {
+         return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '订阅已被暂停，无法续费') }
+       }
++      try {
++        validateMailRenewMonthsForBillingCycle(renewMonths, currentSubscription.plan.billingCycle)
++      } catch (error) {
++        return { error }
++      }
+ 
+       const deductResult = await tx.user.updateMany({
+         where: {
+
+diff --git a/server/scripts/test-mail-renewal-month-guards.ts b/server/scripts/test-mail-renewal-month-guards.ts
+index 69b5fa40f6e58724344f5a7db24d5ad77ed020d5..c1c1d1a815d71ef5c83ba372ce24868209206e73
+--- a/server/scripts/test-mail-renewal-month-guards.ts
++++ b/server/scripts/test-mail-renewal-month-guards.ts
+@@ -52,10 +52,24 @@
+   'mail renewal months must not use loose numeric coercion'
+ )
+ assert.ok(
+-  routeSource.includes('if (months < 1 || months > 12)'),
+-  'mail renewal months must be an integer between 1 and 12'
++  routeSource.includes('if (months < 1)'),
++  'mail renewal months must be a positive integer before plan-cycle validation'
++)
++assert.ok(
++  routeSource.includes("function validateMailRenewMonthsForBillingCycle(months: number, billingCycle: 'monthly' | 'yearly'): void") &&
++    routeSource.includes("const billingCycleMonths = billingCycle === 'yearly' ? 12 : 1") &&
++    routeSource.includes('months % billingCycleMonths !== 0'),
++  'mail renewal months must be divisible by the plan billing cycle'
+ )
+ assert.ok(
++  routeSource.includes("throw apiError(ErrorCode.VALIDATION_ERROR, '年付套餐只能按年续费')"),
++  'mail renewal must reject non-year multiples for yearly plans with a clear validation error'
++)
++assert.ok(
++  routeSource.includes("billingCycle === 'monthly' && months > 12"),
++  'monthly mail renewal must retain the existing 1-12 month limit'
++)
++assert.ok(
+   routeRenewSection.includes('Body: { months: unknown }'),
+   'mail renewal request body must not trust compile-time number typing at runtime'
+ )
+@@ -64,6 +78,11 @@
+   'mail renewal route must normalize the request body before billing'
+ )
+ assert.ok(
++  routeRenewSection.includes('validateMailRenewMonthsForBillingCycle(renewMonths, plan.billingCycle)') &&
++    routeRenewSection.includes('validateMailRenewMonthsForBillingCycle(renewMonths, currentSubscription.plan.billingCycle)'),
++  'mail renewal route must enforce plan-cycle multiples before quoting and again before transactional settlement'
++)
++assert.ok(
+   routeRenewSection.includes('monthlyPrice * renewMonths'),
+   'mail renewal price must use normalized renewal months'
+ )
+diff --git a/server/src/routes/mail.ts b/server/src/routes/mail.ts
+index 0caaaf6e78eae2f45ced3610dcd6c56ab5f2a5ab..a02157ec72e37230daef7d2e96a0db26c2d33760
+--- a/server/src/routes/mail.ts
++++ b/server/src/routes/mail.ts
+@@ -290,10 +290,20 @@
+ 
+ function normalizeMailRenewMonths(value: unknown): number {
+   const months = requireSafeInteger(value, '续费月数')
+-  if (months < 1 || months > 12) {
++  if (months < 1) {
++    throw apiError(ErrorCode.VALIDATION_ERROR, '续费月数需为正整数')
++  }
++  return months
++}
++
++function validateMailRenewMonthsForBillingCycle(months: number, billingCycle: 'monthly' | 'yearly'): void {
++  const billingCycleMonths = billingCycle === 'yearly' ? 12 : 1
++  if (months % billingCycleMonths !== 0) {
++    throw apiError(ErrorCode.VALIDATION_ERROR, '年付套餐只能按年续费')
++  }
++  if (billingCycle === 'monthly' && months > 12) {
+     throw apiError(ErrorCode.VALIDATION_ERROR, '续费月数需为 1-12 的整数')
+   }
+-  return months
+ }
+ 
+ function normalizeMailSubscriptionPurchaseInput(input: unknown): MailSubscriptionPurchaseInput {
+@@ -1221,6 +1231,11 @@
+     }
+ 
+     const plan = subscription.plan
++    try {
++      validateMailRenewMonthsForBillingCycle(renewMonths, plan.billingCycle)
++    } catch (error) {
++      return reply.code(400).send(error)
++    }
+     const monthlyPrice = plan.billingCycle === 'monthly' 
+       ? Number(plan.price) 
+       : Number(plan.price) / 12
+@@ -1270,6 +1285,11 @@
+       if (currentSubscription.status === 'suspended') {
+         return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '订阅已被暂停，无法续费') }
+       }
++      try {
++        validateMailRenewMonthsForBillingCycle(renewMonths, currentSubscription.plan.billingCycle)
++      } catch (error) {
++        return { error }
++      }
+ 
+       const deductResult = await tx.user.updateMany({
+         where: {
+
+ succeeded in 42619ms:
+
+> server@1.3.7 type-check C:\Users\Administrator\Desktop\payinces\server
+> tsc --noEmit
+
+
+diff --git a/server/scripts/test-mail-renewal-month-guards.ts b/server/scripts/test-mail-renewal-month-guards.ts
+index 69b5fa40f6e58724344f5a7db24d5ad77ed020d5..c1c1d1a815d71ef5c83ba372ce24868209206e73
+--- a/server/scripts/test-mail-renewal-month-guards.ts
++++ b/server/scripts/test-mail-renewal-month-guards.ts
+@@ -52,10 +52,24 @@
+   'mail renewal months must not use loose numeric coercion'
+ )
+ assert.ok(
+-  routeSource.includes('if (months < 1 || months > 12)'),
+-  'mail renewal months must be an integer between 1 and 12'
++  routeSource.includes('if (months < 1)'),
++  'mail renewal months must be a positive integer before plan-cycle validation'
++)
++assert.ok(
++  routeSource.includes("function validateMailRenewMonthsForBillingCycle(months: number, billingCycle: 'monthly' | 'yearly'): void") &&
++    routeSource.includes("const billingCycleMonths = billingCycle === 'yearly' ? 12 : 1") &&
++    routeSource.includes('months % billingCycleMonths !== 0'),
++  'mail renewal months must be divisible by the plan billing cycle'
+ )
+ assert.ok(
++  routeSource.includes("throw apiError(ErrorCode.VALIDATION_ERROR, '年付套餐只能按年续费')"),
++  'mail renewal must reject non-year multiples for yearly plans with a clear validation error'
++)
++assert.ok(
++  routeSource.includes("billingCycle === 'monthly' && months > 12"),
++  'monthly mail renewal must retain the existing 1-12 month limit'
++)
++assert.ok(
+   routeRenewSection.includes('Body: { months: unknown }'),
+   'mail renewal request body must not trust compile-time number typing at runtime'
+ )
+@@ -64,6 +78,11 @@
+   'mail renewal route must normalize the request body before billing'
+ )
+ assert.ok(
++  routeRenewSection.includes('validateMailRenewMonthsForBillingCycle(renewMonths, plan.billingCycle)') &&
++    routeRenewSection.includes('validateMailRenewMonthsForBillingCycle(renewMonths, currentSubscription.plan.billingCycle)'),
++  'mail renewal route must enforce plan-cycle multiples before quoting and again before transactional settlement'
++)
++assert.ok(
+   routeRenewSection.includes('monthlyPrice * renewMonths'),
+   'mail renewal price must use normalized renewal months'
+ )
+diff --git a/server/src/routes/mail.ts b/server/src/routes/mail.ts
+index 0caaaf6e78eae2f45ced3610dcd6c56ab5f2a5ab..a02157ec72e37230daef7d2e96a0db26c2d33760
+--- a/server/src/routes/mail.ts
++++ b/server/src/routes/mail.ts
+@@ -290,10 +290,20 @@
+ 
+ function normalizeMailRenewMonths(value: unknown): number {
+   const months = requireSafeInteger(value, '续费月数')
+-  if (months < 1 || months > 12) {
++  if (months < 1) {
++    throw apiError(ErrorCode.VALIDATION_ERROR, '续费月数需为正整数')
++  }
++  return months
++}
++
++function validateMailRenewMonthsForBillingCycle(months: number, billingCycle: 'monthly' | 'yearly'): void {
++  const billingCycleMonths = billingCycle === 'yearly' ? 12 : 1
++  if (months % billingCycleMonths !== 0) {
++    throw apiError(ErrorCode.VALIDATION_ERROR, '年付套餐只能按年续费')
++  }
++  if (billingCycle === 'monthly' && months > 12) {
+     throw apiError(ErrorCode.VALIDATION_ERROR, '续费月数需为 1-12 的整数')
+   }
+-  return months
+ }
+ 
+ function normalizeMailSubscriptionPurchaseInput(input: unknown): MailSubscriptionPurchaseInput {
+@@ -1221,6 +1231,11 @@
+     }
+ 
+     const plan = subscription.plan
++    try {
++      validateMailRenewMonthsForBillingCycle(renewMonths, plan.billingCycle)
++    } catch (error) {
++      return reply.code(400).send(error)
++    }
+     const monthlyPrice = plan.billingCycle === 'monthly' 
+       ? Number(plan.price) 
+       : Number(plan.price) / 12
+@@ -1270,6 +1285,11 @@
+       if (currentSubscription.status === 'suspended') {
+         return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '订阅已被暂停，无法续费') }
+       }
++      try {
++        validateMailRenewMonthsForBillingCycle(renewMonths, currentSubscription.plan.billingCycle)
++      } catch (error) {
++        return { error }
++      }
+ 
+       const deductResult = await tx.user.updateMany({
+         where: {
+
+codex
+指定验收全部通过：server type-check、续费月数守卫、邮箱套餐财务守卫均为退出码 0。最后我只核对两个目标文件的工作区状态和 diff 统计，不执行 commit、push 或发布。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'git status --short -- server/src/routes/mail.ts server/scripts/test-mail-renewal-month-guards.ts; git diff --stat -- server/src/routes/mail.ts server/scripts/test-mail-renewal-month-guards.ts; git diff --check -- server/src/routes/mail.ts server/scripts/test-mail-renewal-month-guards.ts' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 2288ms:
+ M server/scripts/test-mail-renewal-month-guards.ts
+ M server/src/routes/mail.ts
+ server/scripts/test-mail-renewal-month-guards.ts | 23 +++++++++++++++++++++--
+ server/src/routes/mail.ts                        | 24 ++++++++++++++++++++++--
+ 2 files changed, 43 insertions(+), 4 deletions(-)
+warning: in the working copy of 'server/scripts/test-mail-renewal-month-guards.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/mail.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/scripts/test-mail-renewal-month-guards.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/mail.ts', LF will be replaced by CRLF the next time Git touches it
+
+diff --git a/server/scripts/test-mail-renewal-month-guards.ts b/server/scripts/test-mail-renewal-month-guards.ts
+index 69b5fa40f6e58724344f5a7db24d5ad77ed020d5..c1c1d1a815d71ef5c83ba372ce24868209206e73
+--- a/server/scripts/test-mail-renewal-month-guards.ts
++++ b/server/scripts/test-mail-renewal-month-guards.ts
+@@ -52,10 +52,24 @@
+   'mail renewal months must not use loose numeric coercion'
+ )
+ assert.ok(
+-  routeSource.includes('if (months < 1 || months > 12)'),
+-  'mail renewal months must be an integer between 1 and 12'
++  routeSource.includes('if (months < 1)'),
++  'mail renewal months must be a positive integer before plan-cycle validation'
++)
++assert.ok(
++  routeSource.includes("function validateMailRenewMonthsForBillingCycle(months: number, billingCycle: 'monthly' | 'yearly'): void") &&
++    routeSource.includes("const billingCycleMonths = billingCycle === 'yearly' ? 12 : 1") &&
++    routeSource.includes('months % billingCycleMonths !== 0'),
++  'mail renewal months must be divisible by the plan billing cycle'
+ )
+ assert.ok(
++  routeSource.includes("throw apiError(ErrorCode.VALIDATION_ERROR, '年付套餐只能按年续费')"),
++  'mail renewal must reject non-year multiples for yearly plans with a clear validation error'
++)
++assert.ok(
++  routeSource.includes("billingCycle === 'monthly' && months > 12"),
++  'monthly mail renewal must retain the existing 1-12 month limit'
++)
++assert.ok(
+   routeRenewSection.includes('Body: { months: unknown }'),
+   'mail renewal request body must not trust compile-time number typing at runtime'
+ )
+@@ -64,6 +78,11 @@
+   'mail renewal route must normalize the request body before billing'
+ )
+ assert.ok(
++  routeRenewSection.includes('validateMailRenewMonthsForBillingCycle(renewMonths, plan.billingCycle)') &&
++    routeRenewSection.includes('validateMailRenewMonthsForBillingCycle(renewMonths, currentSubscription.plan.billingCycle)'),
++  'mail renewal route must enforce plan-cycle multiples before quoting and again before transactional settlement'
++)
++assert.ok(
+   routeRenewSection.includes('monthlyPrice * renewMonths'),
+   'mail renewal price must use normalized renewal months'
+ )
+diff --git a/server/src/routes/mail.ts b/server/src/routes/mail.ts
+index 0caaaf6e78eae2f45ced3610dcd6c56ab5f2a5ab..a02157ec72e37230daef7d2e96a0db26c2d33760
+--- a/server/src/routes/mail.ts
++++ b/server/src/routes/mail.ts
+@@ -290,10 +290,20 @@
+ 
+ function normalizeMailRenewMonths(value: unknown): number {
+   const months = requireSafeInteger(value, '续费月数')
+-  if (months < 1 || months > 12) {
++  if (months < 1) {
++    throw apiError(ErrorCode.VALIDATION_ERROR, '续费月数需为正整数')
++  }
++  return months
++}
++
++function validateMailRenewMonthsForBillingCycle(months: number, billingCycle: 'monthly' | 'yearly'): void {
++  const billingCycleMonths = billingCycle === 'yearly' ? 12 : 1
++  if (months % billingCycleMonths !== 0) {
++    throw apiError(ErrorCode.VALIDATION_ERROR, '年付套餐只能按年续费')
++  }
++  if (billingCycle === 'monthly' && months > 12) {
+     throw apiError(ErrorCode.VALIDATION_ERROR, '续费月数需为 1-12 的整数')
+   }
+-  return months
+ }
+ 
+ function normalizeMailSubscriptionPurchaseInput(input: unknown): MailSubscriptionPurchaseInput {
+@@ -1221,6 +1231,11 @@
+     }
+ 
+     const plan = subscription.plan
++    try {
++      validateMailRenewMonthsForBillingCycle(renewMonths, plan.billingCycle)
++    } catch (error) {
++      return reply.code(400).send(error)
++    }
+     const monthlyPrice = plan.billingCycle === 'monthly' 
+       ? Number(plan.price) 
+       : Number(plan.price) / 12
+@@ -1270,6 +1285,11 @@
+       if (currentSubscription.status === 'suspended') {
+         return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '订阅已被暂停，无法续费') }
+       }
++      try {
++        validateMailRenewMonthsForBillingCycle(renewMonths, currentSubscription.plan.billingCycle)
++      } catch (error) {
++        return { error }
++      }
+ 
+       const deductResult = await tx.user.updateMany({
+         where: {
+
+codex
+已完成 FX-018，仅修改 `server/src/routes/mail.ts` 与对应守卫。年付判定使用 `MailPlan.billingCycle`（`yearly` = 12 个月）；续费报价前及事务扣款前均校验月份必须为套餐周期整数倍，年付非 12 倍数返回 400「年付套餐只能按年续费」，月付仍限制 1–12 月，价格公式未改。`server type-check`、`test:mail-renewal-month-guards`、`test:mail-plan-financial-guards` 均通过；未 commit、push 或发版。
+diff --git a/server/scripts/test-mail-renewal-month-guards.ts b/server/scripts/test-mail-renewal-month-guards.ts
+index 69b5fa40f6e58724344f5a7db24d5ad77ed020d5..c1c1d1a815d71ef5c83ba372ce24868209206e73
+--- a/server/scripts/test-mail-renewal-month-guards.ts
++++ b/server/scripts/test-mail-renewal-month-guards.ts
+@@ -52,10 +52,24 @@
+   'mail renewal months must not use loose numeric coercion'
+ )
+ assert.ok(
+-  routeSource.includes('if (months < 1 || months > 12)'),
+-  'mail renewal months must be an integer between 1 and 12'
++  routeSource.includes('if (months < 1)'),
++  'mail renewal months must be a positive integer before plan-cycle validation'
++)
++assert.ok(
++  routeSource.includes("function validateMailRenewMonthsForBillingCycle(months: number, billingCycle: 'monthly' | 'yearly'): void") &&
++    routeSource.includes("const billingCycleMonths = billingCycle === 'yearly' ? 12 : 1") &&
++    routeSource.includes('months % billingCycleMonths !== 0'),
++  'mail renewal months must be divisible by the plan billing cycle'
+ )
+ assert.ok(
++  routeSource.includes("throw apiError(ErrorCode.VALIDATION_ERROR, '年付套餐只能按年续费')"),
++  'mail renewal must reject non-year multiples for yearly plans with a clear validation error'
++)
++assert.ok(
++  routeSource.includes("billingCycle === 'monthly' && months > 12"),
++  'monthly mail renewal must retain the existing 1-12 month limit'
++)
++assert.ok(
+   routeRenewSection.includes('Body: { months: unknown }'),
+   'mail renewal request body must not trust compile-time number typing at runtime'
+ )
+@@ -64,6 +78,11 @@
+   'mail renewal route must normalize the request body before billing'
+ )
+ assert.ok(
++  routeRenewSection.includes('validateMailRenewMonthsForBillingCycle(renewMonths, plan.billingCycle)') &&
++    routeRenewSection.includes('validateMailRenewMonthsForBillingCycle(renewMonths, currentSubscription.plan.billingCycle)'),
++  'mail renewal route must enforce plan-cycle multiples before quoting and again before transactional settlement'
++)
++assert.ok(
+   routeRenewSection.includes('monthlyPrice * renewMonths'),
+   'mail renewal price must use normalized renewal months'
+ )
+diff --git a/server/src/routes/mail.ts b/server/src/routes/mail.ts
+index 0caaaf6e78eae2f45ced3610dcd6c56ab5f2a5ab..a02157ec72e37230daef7d2e96a0db26c2d33760
+--- a/server/src/routes/mail.ts
++++ b/server/src/routes/mail.ts
+@@ -290,10 +290,20 @@
+ 
+ function normalizeMailRenewMonths(value: unknown): number {
+   const months = requireSafeInteger(value, '续费月数')
+-  if (months < 1 || months > 12) {
++  if (months < 1) {
++    throw apiError(ErrorCode.VALIDATION_ERROR, '续费月数需为正整数')
++  }
++  return months
++}
++
++function validateMailRenewMonthsForBillingCycle(months: number, billingCycle: 'monthly' | 'yearly'): void {
++  const billingCycleMonths = billingCycle === 'yearly' ? 12 : 1
++  if (months % billingCycleMonths !== 0) {
++    throw apiError(ErrorCode.VALIDATION_ERROR, '年付套餐只能按年续费')
++  }
++  if (billingCycle === 'monthly' && months > 12) {
+     throw apiError(ErrorCode.VALIDATION_ERROR, '续费月数需为 1-12 的整数')
+   }
+-  return months
+ }
+ 
+ function normalizeMailSubscriptionPurchaseInput(input: unknown): MailSubscriptionPurchaseInput {
+@@ -1221,6 +1231,11 @@
+     }
+ 
+     const plan = subscription.plan
++    try {
++      validateMailRenewMonthsForBillingCycle(renewMonths, plan.billingCycle)
++    } catch (error) {
++      return reply.code(400).send(error)
++    }
+     const monthlyPrice = plan.billingCycle === 'monthly' 
+       ? Number(plan.price) 
+       : Number(plan.price) / 12
+@@ -1270,6 +1285,11 @@
+       if (currentSubscription.status === 'suspended') {
+         return { error: apiError(ErrorCode.OPERATION_NOT_ALLOWED, '订阅已被暂停，无法续费') }
+       }
++      try {
++        validateMailRenewMonthsForBillingCycle(renewMonths, currentSubscription.plan.billingCycle)
++      } catch (error) {
++        return { error }
++      }
+ 
+       const deductResult = await tx.user.updateMany({
+         where: {
+
+tokens used
+53,816

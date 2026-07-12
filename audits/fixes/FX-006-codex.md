@@ -1,0 +1,1 @@
+已完成 FX-006：`INTERNAL_ERROR_CODES` 仅纳入 `INTERNAL_ERROR`，响应只保留通用 `error` 与稳定 `code`；其他错误的 `details` 经 `sanitizeTokensInString()` 脱敏后截断至最多 256 字符。新增守卫并接入根 `test` 链。`pnpm --filter server type-check` 与 `pnpm --filter server test:error-response-guards` 均通过；未改路由，未 commit。

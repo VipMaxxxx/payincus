@@ -1,0 +1,3131 @@
+OpenAI Codex v0.144.0-alpha.4
+--------
+workdir: C:\Users\Administrator\Desktop\payinces
+model: gpt-5.6-sol
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: high
+reasoning summaries: none
+session id: 019f529d-62ea-7c70-98fd-55197e4408a4
+--------
+user
+你是 PayIncus 仓库的实现工程师。先读仓库根 AGENTS.md 了解硬规矩(尤其:不 commit/push/发版;不做大重构;表格布局守卫红线)。然后严格按下面规格修复,只改规格允许的文件。改完跑规格里要求的守卫并报告结果。不要 commit。
+---
+# FX-001 规格：插件 iframe 同源会话接管(P0 / D-001)
+
+## 根因
+client/src/components/plugins/PluginFrame.vue 的 <iframe> 同时设置 sandbox="allow-forms allow-scripts allow-same-origin",
+而插件内容经 /api/plugins/assets/ 从**主站同源**加载 → allow-scripts + allow-same-origin 组合使插件脚本获得主站同源权限,
+可读取主站 cookie/localStorage、以当前用户(含管理员)身份调用站点 API → 会话接管。
+
+## 修法(最小、自包含)
+1. PluginFrame.vue 的 iframe sandbox 去掉 allow-same-origin：改为 sandbox="allow-forms allow-scripts"。
+   → 插件运行在不透明(opaque)源,无法访问父窗口 cookie/DOM/会话。
+2. 因 iframe 变为 opaque 源,postPluginConfig 的 postMessage targetOrigin 从 window.location.origin 改为 '*'
+   (传的是非敏感插件配置;frame src 由我们控制)。仅改这一处 targetOrigin,不改消息结构。
+3. 若插件运行时/模板侧有监听 'payincus:plugin-config' 的代码按 event.origin 校验主站源,
+   需改为按 event.data.type + event.source===window.parent 校验(因父源不变、子源变 opaque)。
+   先在 plugin-templates/ 与 client 内 grep 该消息监听,若存在按此调整;若不存在则跳过。
+
+## 不许动
+- 不改插件资产鉴权(assetToken)逻辑;不改后端 /api/plugins/assets 路由。
+- 不动其它 iframe/组件。不做大重构。
+
+## 验收
+- client type-check 通过;client build(user+admin)通过。
+- 跑 server 守卫:pnpm --filter server test:plugin-client-boundary-guards;若该守卫断言了 sandbox 串,需同步更新守卫断言为新值(不含 allow-same-origin),并**新增/加强一条断言:PluginFrame.vue 必须不含 'allow-same-origin'**,把该修复钉死。
+- 同时跑 pnpm --filter server test:plugin-center-guards 与 test:frontend-route-guards,确保未破坏。
+
+## 交付
+改完用一段话说明:改了哪些文件、postMessage 与消息监听如何处理、跑了哪些守卫及结果。不要 commit。
+
+codex
+我先完整读取根目录 `AGENTS.md`，再检查 `PluginFrame.vue`、相关消息监听和插件边界守卫；只会修改规格允许的文件，不会 commit、push 或发版。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Content -Raw AGENTS.md' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 18690ms:
+# PayIncus / Incudal â€” é¡¹ç›®ç»Ÿä¸€è§„çŸ©ï¼ˆAGENTS.mdï¼‰
+
+> æœ¬æ–‡ä»¶æ˜¯æœ¬ä»“åº“**æ‰€æœ‰ AI agentï¼ˆClaude Codeã€codex ç­‰ï¼‰çš„ç»Ÿä¸€å·¥ä½œè§„èŒƒ**ã€‚
+> `CLAUDE.md` é€šè¿‡ `@AGENTS.md` å¼•ç”¨æœ¬æ–‡ä»¶ â€”â€” Claude Code ä¸Ž codex è¯»åˆ°çš„æ˜¯**åŒä¸€å¥—è§„çŸ©**ï¼Œæ”¹è¿™ä¸€ä¸ªæ–‡ä»¶å³å¯ã€‚
+> æƒå¨è¿ç»´/å‘ç‰ˆäº‹å®žä»¥ä»“åº“æ ¹çš„ `OPERATIONS_HANDOFF.md`ï¼ˆæ“ä½œæ‰‹å†Œï¼‰ä¸Ž `HANDOFF.md`ï¼ˆç‰ˆæœ¬è¯æ®å°è´¦ï¼‰ä¸ºå‡†ã€‚
+
+---
+
+## 0. æ²Ÿé€šè¯­è¨€
+- ä¸Ž owner é»˜è®¤ç”¨**ä¸­æ–‡**æ²Ÿé€šã€‚
+
+## 1. è¿™æ˜¯ä»€ä¹ˆé¡¹ç›®
+**PayIncus**ï¼ˆå†…éƒ¨ä»£å· `incudal`ï¼‰â€”â€”å•†ç”¨ Incusï¼ˆLXC/KVMï¼‰NAT VPS å”®å–ä¸Žäº¤ä»˜å¹³å°ï¼Œ**çº¿ä¸Šè¿è¥ä¸­**ã€‚å½“å‰ç”Ÿäº§ç‰ˆæœ¬ **v1.3.7**ã€‚pnpm monorepoï¼š
+
+| ç›®å½• | æŠ€æœ¯æ ˆ / ä½œç”¨ |
+|------|----------------|
+| `client/` | Vue 3 + Vite SPAã€‚åŒç«¯æž„å»ºï¼ˆ`VITE_APP_ENTRY`ï¼‰â†’ `dist/user`ï¼ˆpay.payincus.comï¼‰+ `dist/admin`ï¼ˆadmin.payincus.comï¼‰ã€‚ä¸¤ç«¯ç‹¬ç«‹æºã€**ä¸å…±äº« cookie åŸŸ**ã€‚ |
+| `server/` | Fastify 5 + Prisma 7 + PostgreSQLï¼Œ~300 TS æ–‡ä»¶ã€~70 è·¯ç”±ã€~15 è°ƒåº¦/workerã€‚æ—  Redisï¼ˆç”¨ PG advisory lockï¼‰ã€‚ä¸‰å¥—é‰´æƒé¢ï¼šWeb çš„ JWT+refresh cookieã€Public API çš„ `pat_`/`poa_` tokenã€host agent çš„ HMACã€‚ |
+| `agent/` | Go å®¿ä¸» agentï¼Œåªè¯»ç›‘æŽ§ï¼ˆå¿ƒè·³/èµ„æº/å®žä¾‹æ€/æµé‡ï¼‰ï¼ŒHMAC ç­¾åï¼Œè‡ªå‡çº§ã€‚ |
+| å…¶å®ƒ | `docs-site/`ï¼ˆVitePressï¼‰ã€`deploy/`ï¼ˆsystemd+Nginxï¼‰ã€`scripts/`ï¼ˆå®‰è£…/æ ¡éªŒ/OTAï¼‰ã€`plugin-templates/`ã€`theme-templates/`ã€‚ |
+
+éƒ¨ç½²ï¼šä¸‰å±‚æ‹†åˆ†ï¼ˆuser / admin / ç§æœ‰åŽç«¯ `127.0.0.1:3001`ï¼‰ï¼Œè£…æœºæ ¹ `/opt/incudal`ï¼ŒåŽŸå­ OTAï¼ˆ`releases/<ver-ts>` + `current` è½¯é“¾ï¼‰+ è‡ªåŠ¨å›žæ»šã€‚
+
+---
+
+## 2. ðŸ”´ ç¡¬è§„çŸ©ï¼ˆä¸å¯åå•†ï¼Œè¿åå³äº‹æ•…ï¼‰
+
+1. **ä¸ç¢°ç”Ÿäº§**ï¼šæœªç» owner æ˜Žç¡®è¦æ±‚ï¼Œ**ç»ä¸** OTAã€å‘å¸ƒã€pushã€æ‰“ tagã€æ”¹ç”Ÿäº§çŽ¯å¢ƒã€‚
+2. **ä¸åšç ´åæ€§ git**ï¼šæœªç» owner æ˜Žç¡®è¦æ±‚ï¼Œ**ç»ä¸** `git reset`ã€`git checkout --`ã€å¼ºåˆ¶åˆ é™¤ã€æ¸…ç†æœªè·Ÿè¸ªæ–‡ä»¶ã€`git commit`/`git push`ã€‚
+3. **é«˜å±è·¯å¾„å…ˆè¯»åŽå†™**ï¼šæ”¹åŠ¨ä»¥ä¸‹ä»»ä¸€é¢†åŸŸï¼Œ**å¿…é¡»å…ˆè¯»ç›¸å…³ä»£ç  + å¯¹åº”å®ˆå«æµ‹è¯•**å†åŠ¨æ‰‹ï¼š
+   > é‰´æƒ Â· æ”¯ä»˜ Â· æƒé™ Â· é£ŽæŽ§ Â· èµ„æºäº¤ä»˜ Â· å…‘æ¢æµç¨‹ Â· å®žä¾‹åˆ›å»º Â· OTA
+4. **æ”¹åŠ¨æœ€å°åŒ–**ï¼šä¿® bug / å‘ç‰ˆæœŸé—´**ä¸åšå¤§èŒƒå›´é‡æž„**ï¼Œåªæ”¹å¿…è¦çš„ã€‚
+5. **ç»ä¸æ³„å¯†**ï¼šä»»ä½• commitã€handoffã€æ€»ç»“ã€æˆªå›¾ä¸­éƒ½**ä¸å¾—**å‡ºçŽ°å‡­è¯ / token / cookie / å¯†é’¥ã€‚
+6. **æœ¬åœ°è¿‡ â‰  ç”Ÿäº§éªŒè¯**ï¼šæœ¬åœ°é€šè¿‡ã€GitHub Actionsã€Release èµ„äº§ã€OTAã€çº¿ä¸Šå®žè¯æ˜¯**åˆ†å¼€çš„è¯æ®**ï¼Œä¸å¯æ··ä¸ºä¸€è°ˆã€‚
+7. **æ¯æ¬¡æ”¹åŠ¨å¿…é¡»è¿‡å¯¹åº”å®ˆå«**ï¼ˆè§ Â§4ï¼‰ï¼Œå¦åˆ™è§†ä¸º**æœªå®Œæˆ**ã€‚
+8. `RUN_DB_CHECKS=0 bash scripts/apply-online-update.sh <ver>` ä¼š**è·³è¿‡ DB/æ”¯ä»˜å°±ç»ªæ ¡éªŒ**ï¼Œä»…åœ¨ owner æ˜Žç¡®æ‰¹å‡†æ—¶ä½¿ç”¨ã€‚
+
+---
+
+## 3. æœ¬åœ°æ€Žä¹ˆè·‘
+
+- **çŽ¯å¢ƒ**ï¼šNode â‰¥ 20ã€pnpm 9.14.2ã€æœ¬åœ° PostgreSQL 16ã€‚
+- **è£…ä¾èµ–**ï¼š`pnpm install`
+- **ä¸€æŠŠèµ·å…¨éƒ¨ï¼ˆserver + user + adminï¼‰**ï¼š`pnpm dev`
+- **åˆ†å¼€èµ·**ï¼š
+  - åŽç«¯ï¼š`NODE_ENV=development JWT_SECRET=dev-secret-12345678 HOST=127.0.0.1 PORT=3001 pnpm --filter server exec tsx watch src/app.ts`
+  - ç”¨æˆ·å‰ç«¯ï¼š`pnpm dev:user`
+  - ç®¡ç†å‰ç«¯ï¼š`pnpm dev:admin`
+- **ç«¯å£**ï¼šåŽç«¯ API **3001** Â· ç”¨æˆ·å‰ç«¯ **3000** Â· ç®¡ç†å‰ç«¯ **3002**ï¼ˆå‰ç«¯ dev ç» proxy æ‰“åˆ° 3001ï¼‰ã€‚
+
+---
+
+## 4. ðŸ›¡ï¸ å®ˆå«æµ‹è¯•çºªå¾‹ï¼ˆæœ¬ä»“åº“çš„å‘½é—¨ï¼‰
+
+`server/package.json` é‡Œæœ‰ **200+ ä¸ªç‹¬ç«‹ `test-*-guards.ts`**ã€‚å®ƒä»¬æŠŠå…³é”®ä¸šåŠ¡/å‰ç«¯ç»“æž„â€œé’‰æ­»â€ï¼Œ`pnpm test` ä¼šè·‘å…¨å¥—ï¼ˆclient+server type-check + å…¨éƒ¨å®ˆå«ï¼‰ã€‚**ä»»ä½•æ”¹åŠ¨å¿…é¡»è®©ç›¸å…³å®ˆå«é€šè¿‡ã€‚**
+
+- **å…¨é‡**ï¼ˆæ…¢ï¼Œå‘ç‰ˆå‰è·‘ï¼‰ï¼š`pnpm test`
+- **å•ä¸ª**ï¼š`pnpm --filter server test:<guard-name>`
+- **å‰ç«¯æœ€å¸¸ç”¨ä¸‰ä¸ª**ï¼š
+  - `test:frontend-route-guards` â€”â€” è·¯ç”± / **è¡¨æ ¼å¸ƒå±€** / `@click` è·¯å¾„æ–­è¨€
+  - `test:frontend-dist-boundary-guards` â€”â€” åŒç«¯ dist è¾¹ç•Œ
+  - `test:frontend-i18n-keys` â€”â€” i18n key å®Œæ•´æ€§
+- **Go agent**ï¼š`pnpm test:agent`
+
+### âš ï¸ è¡¨æ ¼å¸ƒå±€å®ˆå«ï¼ˆæœ€å®¹æ˜“è¸©é›·ï¼‰
+ä¸€æ‰¹è¡¨è¢«å®ˆå«**é”å®š**ä¸ºâ€œ**ç§»åŠ¨å¡ + PC å®šå®½è¡¨ï¼ˆ`table-fixed` / `overflow-hidden`ï¼‰ï¼Œç»ä¸æ¨ªå‘æ»šåŠ¨**â€ï¼Œå¹¶**åå‘ç¦æ­¢** `overflow-x-auto` / `min-w-[...]` / åŽ»æŽ‰ `table-fixed`ã€‚
+- æƒ³ä¿®â€œå®½è¡¨æŒ¤åŽ‹â€æ—¶ï¼š**å…ˆåˆ¤æ–­è¯¥è¡¨æ˜¯å¦åœ¨å®ˆå«æ¸…å•é‡Œ**ã€‚é”å®šè¡¨**åªèƒ½åœ¨ `table-fixed` å†…å¹³è¡¡åˆ—å®½**ï¼ˆåˆ—å®½ç™¾åˆ†æ¯”åˆè®¡ = 100%ï¼‰+ å…è®¸å•å…ƒæ ¼æ¢è¡Œ + é ç§»åŠ¨å¡åº”å¯¹çª„å±ï¼›**ä¸èƒ½**æ”¹æˆæ¨ªå‘æ»šåŠ¨ã€‚
+- å—é”å®šçš„è¡¨ï¼ˆç”¨æˆ·ç«¯ï¼‰ï¼š`MyPackagesView`ã€`MyHostsView`ã€`TransfersView`ã€`OrdersView`ã€`InvitesView`ã€`FlashSalesView`ã€`HostingWalletView`ã€`InstancesView`ã€`LogsView`ã€`EntertainmentView`ï¼›ï¼ˆç®¡ç†ç«¯ï¼‰`admin/BillingView`ã€`admin/ImagesView`ã€`admin/HelpManageView`ã€`admin/MailView`ã€`admin/PluginCenterView`ï¼›ï¼ˆç»„ä»¶ï¼‰`HostPublicIpv4Tab`ã€`InstanceLogsTab`ã€`ConfigEditModal`ã€‚
+- æ”¹ä»»ä¸€å‰ç«¯æ–‡ä»¶åŽ**å¿…è·‘** `test:frontend-route-guards`ã€‚
+
+---
+
+## 5. æž„å»º / æ ¡éªŒå‘½ä»¤
+
+| ç›®çš„ | å‘½ä»¤ |
+|------|------|
+| æž„å»ºï¼ˆå« dist è¾¹ç•Œå®ˆå«ï¼‰| `pnpm build` |
+| åªæž„å»ºå‰ç«¯ / åŽç«¯ | `pnpm build:client` / `pnpm build:server` |
+| Lintï¼ˆæ£€æŸ¥ / è‡ªåŠ¨ä¿®ï¼‰| `pnpm lint` / `pnpm lint:fix` |
+| ç±»åž‹æ£€æŸ¥ | `pnpm --filter client type-check` Â· `pnpm --filter server type-check` |
+| å…¨å¥—å®ˆå« | `pnpm test` |
+| æ–‡æ¡£ç«™å¼€å‘ / æž„å»º | `pnpm docs:dev` / `pnpm docs:build` |
+
+---
+
+## 6. UI æ”¹åŠ¨çº¦æŸï¼ˆå•è‰²é‡åšè¿›è¡Œä¸­ï¼‰
+
+- **æ–¹å‘**ï¼šè‹¹æžœå¼**çº¯é»‘ç™½å•è‰²**ï¼ˆæµ…è‰²=ç™½åº•é»‘å­—ï¼Œæ·±è‰²=é»‘åº•ç™½å­—ï¼‰ï¼ŒåŽ»äºŒæ¬¡å…ƒ/å‰ç¥¥ç‰©/ç«‹ç»˜ã€‚çŠ¶æ€è‰²**åªä¿ç•™ç»¿/ç¥ç€/çº¢**ä¸‰ç§ï¼ˆè¿è¡Œ/å¾…å¤„ç†/å¤±è´¥ï¼‰ã€‚
+- **çº¢çº¿**ï¼šåªæ”¹**æ ·å¼ / å¸ƒå±€ / æ–‡æ¡ˆå±‚çº§**ï¼Œ**ä¸ç¢°**åŽç«¯æŽ¥å£ã€æƒé™ã€æ”¯ä»˜/è®¢å•/å®žä¾‹åˆ›å»º/OTA ç­‰ä¸šåŠ¡é€»è¾‘ä¸Žè·¯ç”±è¡Œä¸ºâ€”â€”**åŠŸèƒ½ 100% ä¸å˜**ã€‚
+- **é…è‰²èµ° token å±‚**ï¼ˆ`client/tailwind.config.js`ï¼‰ï¼šä¸€å †å½©è‰² ramp å·²æ˜ å°„åˆ°ä¸­æ€§ç°ï¼›`rose â†’ çœŸçº¢`ï¼ˆå±é™©/äºæŸè¯­ä¹‰ï¼‰**ä¿ç•™ä¸å¯ç°åŒ–**ï¼›æ¸¸æˆåŒ–æ¨¡å—ï¼ˆæˆå°±/ç­¾åˆ°/æŠ½å¥–/ç¨€æœ‰åº¦ï¼‰å½©è‰²**åˆ»æ„ä¿ç•™**ã€‚
+- `kawaii-cloud.css` **æ¸è¿›æ”¹é€ ã€ä¸é‡å†™**ï¼›å•é¡µåŽ»è‰²ç”¨é¡µé¢ `<style scoped>`ã€‚
+- åŠ¨æ•ˆå¯ç”¨ **GSAP**ï¼ˆå·²è£… gsap-skillsï¼Œè§ `.claude/skills/`ï¼‰ï¼›å°Šé‡ `prefers-reduced-motion`ã€‚
+
+---
+
+## 7. åä½œæ¨¡åž‹ï¼ˆClaude Code â‡„ codexï¼‰
+
+- **Claude Code = æŠ€æœ¯è´Ÿè´£äºº / é›†æˆæ–¹**ï¼šå®šæ ¹å› ã€åˆ‡ä»»åŠ¡ã€å†™è§„æ ¼ã€å®ˆä¸å˜é‡ã€å®¡ diffã€è·‘å®ˆå«ã€çœŸæœºéªŒè¯ã€ç®¡ gitï¼ˆ**ä»…åœ¨ owner åŒæ„æ—¶** commit / pushï¼‰ã€‚
+- **codex = å®žçŽ°å·¥äºº**ï¼šæŒ‰ Claude ç»™çš„è§„æ ¼å®žçŽ°æ”¹åŠ¨ï¼Œå°¤å…¶**ä½Ž/ä¸­å±ã€è‡ªåŒ…å«ã€å¯å¹¶è¡Œ**çš„å—ã€‚
+- **é£Žé™©åˆ†æ¡£**ï¼šé«˜å±è·¯å¾„ç”± Claude å®šæ ¹å›  + æ”¶ç´§è§„æ ¼ï¼›ä½Ž/ä¸­å± codex å¯ç«¯åˆ°ç«¯ä¿®ã€‚**ä»»ä½•ä¸€æ–¹æ”¹å®Œéƒ½è¦è·‘ç›¸å…³å®ˆå«ï¼ŒClaude ç»Ÿä¸€å®¡æŸ¥åŽæ‰è¿›å…¥ä¸‹ä¸€æ­¥ã€‚**
+- **é¿å…å†²çª**ï¼šåŒä¸€æ‰¹æ–‡ä»¶ä¸€æ¬¡åªè®©ä¸€ä¸ª agent æ”¹ã€‚
+
+---
+
+## 8. ä¸€ä¸ªæ”¹åŠ¨çš„ã€Œå®Œæˆã€å®šä¹‰
+
+1. ç›¸å…³ **type-check** é€šè¿‡ï¼›
+2. ç›¸å…³ **å®ˆå«æµ‹è¯•** é€šè¿‡ï¼›
+3. è‹¥åŠ¨å‰ç«¯ â†’ **åŒç«¯ build** é€šè¿‡ï¼›
+4. **çœŸæœºè·‘è¿‡**å—å½±å“æµç¨‹ï¼ˆä¸æ˜¯åªçœ‹æµ‹è¯•ï¼‰ï¼›
+5. **æŠ¥å‘Š**ï¼šæ”¹äº†å“ªäº›æ–‡ä»¶ / ä¸ºä»€ä¹ˆ / é£Žé™© / æ€Žä¹ˆéªŒè¯çš„ã€‚
+
+ä»¥ä¸Šä»»ä¸€æœªæ»¡è¶³ = **æœªå®Œæˆ**ã€‚
+
+
+codex
+硬规矩已确认。现在做写入前检查：查看工作区是否已有用户改动，读取目标组件与对应守卫，并在 `plugin-templates/`、`client/` 中定位 `payincus:plugin-config` 的监听及 `event.origin` 校验。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Content -Raw client/src/components/plugins/PluginFrame.vue' in C:\Users\Administrator\Desktop\payinces
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'git status --short' in C:\Users\Administrator\Desktop\payinces
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'rg -n -C 4 "payincus:plugin-config|allow-same-origin|PluginFrame" plugin-templates client server/src server -g "!server/node_modules/**" -g "!client/node_modules/**"' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 362ms:
+ M server/src/db/balance.ts
+?? AGENTS.md
+?? BEHAVIOR.md
+?? CLAUDE.md
+?? DEFECTS.md
+?? EXECUTION.md
+?? FIX_PLAN.md
+?? MAINTENANCE_PLAN.md
+?? artifacts/
+?? audits/
+?? skills-lock.json
+
+ succeeded in 553ms:
+<script setup lang="ts">
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import api from '@/api'
+import { requestPluginAssetToken } from '@/utils/plugin-assets'
+
+interface Props {
+  title: string
+  url: string
+  frameClass?: string
+}
+
+const props = defineProps<Props>()
+const frameUrl = ref(props.url)
+const frameRef = ref<HTMLIFrameElement | null>(null)
+
+function parsePluginAssetUrl(url: string): { pluginId: string; assetPath: string } | null {
+  if (!url.startsWith('/api/plugins/assets/')) return null
+  const parsed = new URL(url, window.location.origin)
+  const prefix = '/api/plugins/assets/'
+  if (!parsed.pathname.startsWith(prefix)) return null
+
+  const rest = parsed.pathname.slice(prefix.length)
+  const slashIndex = rest.indexOf('/')
+  if (slashIndex <= 0) return null
+
+  return {
+    pluginId: decodeURIComponent(rest.slice(0, slashIndex)),
+    assetPath: rest.slice(slashIndex + 1)
+  }
+}
+
+function currentPluginAsset(): { pluginId: string; assetPath: string } | null {
+  return parsePluginAssetUrl(props.url)
+}
+
+function postPluginConfig(pluginId: string, config: Record<string, unknown>): void {
+  frameRef.value?.contentWindow?.postMessage({
+    type: 'payincus:plugin-config',
+    pluginId,
+    config,
+    updatedAt: new Date().toISOString()
+  }, window.location.origin)
+}
+
+async function refreshPluginConfig(): Promise<void> {
+  const asset = currentPluginAsset()
+  if (!asset) return
+  try {
+    const response = await api.plugins.getPublicConfig(asset.pluginId)
+    postPluginConfig(asset.pluginId, response.config)
+  } catch {
+    postPluginConfig(asset.pluginId, {})
+  }
+}
+
+function handlePluginConfigRefresh(event: Event): void {
+  const asset = currentPluginAsset()
+  if (!asset) return
+  const detail = (event as CustomEvent<{ pluginId?: string }>).detail
+  if (detail?.pluginId && detail.pluginId !== asset.pluginId) return
+  void refreshPluginConfig()
+}
+
+async function refreshFrameUrl(): Promise<void> {
+  frameUrl.value = props.url
+  const asset = parsePluginAssetUrl(props.url)
+  if (!asset) return
+
+  const data = await requestPluginAssetToken(asset)
+  if (!data?.assetToken) return
+
+  const separator = props.url.includes('?') ? '&' : '?'
+  frameUrl.value = `${props.url}${separator}assetToken=${encodeURIComponent(data.assetToken)}`
+}
+
+watch(() => props.url, () => {
+  void refreshFrameUrl()
+  void refreshPluginConfig()
+})
+
+onMounted(() => {
+  void refreshFrameUrl()
+  void refreshPluginConfig()
+  window.addEventListener('payincus:plugin-config-refresh', handlePluginConfigRefresh)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('payincus:plugin-config-refresh', handlePluginConfigRefresh)
+})
+</script>
+
+<template>
+  <iframe
+    ref="frameRef"
+    :class="['w-full rounded-lg border border-themed bg-themed-surface', frameClass || 'min-h-[560px]']"
+    :src="frameUrl"
+    :title="title"
+    sandbox="allow-forms allow-scripts allow-same-origin"
+    referrerpolicy="same-origin"
+    @load="refreshPluginConfig"
+  />
+</template>
+
+
+2026-07-11T19:18:26.171747Z ERROR codex_core::tools::router: error=Exit code: 1
+Wall time: 0.7 seconds
+Output:
+rg : The term 'rg' is not recognized as the name of a cmdlet, function, script file, or operable program. Check the 
+spelling of the name, or if a path was included, verify that the path is correct and try again.
+At line:2 char:1
++ rg -n -C 4 "payincus:plugin-config|allow-same-origin|PluginFrame" plu ...
++ ~~
+    + CategoryInfo          : ObjectNotFound: (rg:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+
+ exited 1 in 657ms:
+rg : The term 'rg' is not recognized as the name of a cmdlet, function, script file, or operable program. Check the 
+spelling of the name, or if a path was included, verify that the path is correct and try again.
+At line:2 char:1
++ rg -n -C 4 "payincus:plugin-config|allow-same-origin|PluginFrame" plu ...
++ ~~
+    + CategoryInfo          : ObjectNotFound: (rg:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+
+codex
+当前环境没有 `rg`，我会用 PowerShell 的只读检索替代；尚未修改任何文件。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'git status --short' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 277ms:
+ M server/src/db/balance.ts
+?? AGENTS.md
+?? BEHAVIOR.md
+?? CLAUDE.md
+?? DEFECTS.md
+?? EXECUTION.md
+?? FIX_PLAN.md
+?? MAINTENANCE_PLAN.md
+?? artifacts/
+?? audits/
+?? skills-lock.json
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Content -Raw client/src/components/plugins/PluginFrame.vue' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 476ms:
+<script setup lang="ts">
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import api from '@/api'
+import { requestPluginAssetToken } from '@/utils/plugin-assets'
+
+interface Props {
+  title: string
+  url: string
+  frameClass?: string
+}
+
+const props = defineProps<Props>()
+const frameUrl = ref(props.url)
+const frameRef = ref<HTMLIFrameElement | null>(null)
+
+function parsePluginAssetUrl(url: string): { pluginId: string; assetPath: string } | null {
+  if (!url.startsWith('/api/plugins/assets/')) return null
+  const parsed = new URL(url, window.location.origin)
+  const prefix = '/api/plugins/assets/'
+  if (!parsed.pathname.startsWith(prefix)) return null
+
+  const rest = parsed.pathname.slice(prefix.length)
+  const slashIndex = rest.indexOf('/')
+  if (slashIndex <= 0) return null
+
+  return {
+    pluginId: decodeURIComponent(rest.slice(0, slashIndex)),
+    assetPath: rest.slice(slashIndex + 1)
+  }
+}
+
+function currentPluginAsset(): { pluginId: string; assetPath: string } | null {
+  return parsePluginAssetUrl(props.url)
+}
+
+function postPluginConfig(pluginId: string, config: Record<string, unknown>): void {
+  frameRef.value?.contentWindow?.postMessage({
+    type: 'payincus:plugin-config',
+    pluginId,
+    config,
+    updatedAt: new Date().toISOString()
+  }, window.location.origin)
+}
+
+async function refreshPluginConfig(): Promise<void> {
+  const asset = currentPluginAsset()
+  if (!asset) return
+  try {
+    const response = await api.plugins.getPublicConfig(asset.pluginId)
+    postPluginConfig(asset.pluginId, response.config)
+  } catch {
+    postPluginConfig(asset.pluginId, {})
+  }
+}
+
+function handlePluginConfigRefresh(event: Event): void {
+  const asset = currentPluginAsset()
+  if (!asset) return
+  const detail = (event as CustomEvent<{ pluginId?: string }>).detail
+  if (detail?.pluginId && detail.pluginId !== asset.pluginId) return
+  void refreshPluginConfig()
+}
+
+async function refreshFrameUrl(): Promise<void> {
+  frameUrl.value = props.url
+  const asset = parsePluginAssetUrl(props.url)
+  if (!asset) return
+
+  const data = await requestPluginAssetToken(asset)
+  if (!data?.assetToken) return
+
+  const separator = props.url.includes('?') ? '&' : '?'
+  frameUrl.value = `${props.url}${separator}assetToken=${encodeURIComponent(data.assetToken)}`
+}
+
+watch(() => props.url, () => {
+  void refreshFrameUrl()
+  void refreshPluginConfig()
+})
+
+onMounted(() => {
+  void refreshFrameUrl()
+  void refreshPluginConfig()
+  window.addEventListener('payincus:plugin-config-refresh', handlePluginConfigRefresh)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('payincus:plugin-config-refresh', handlePluginConfigRefresh)
+})
+</script>
+
+<template>
+  <iframe
+    ref="frameRef"
+    :class="['w-full rounded-lg border border-themed bg-themed-surface', frameClass || 'min-h-[560px]']"
+    :src="frameUrl"
+    :title="title"
+    sandbox="allow-forms allow-scripts allow-same-origin"
+    referrerpolicy="same-origin"
+    @load="refreshPluginConfig"
+  />
+</template>
+
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$files = Get-ChildItem -Path plugin-templates,client,server -Recurse -File | Where-Object { $_.FullName -notmatch '"'\\\\node_modules\\\\|\\\\dist\\\\|\\\\coverage\\\\' }; "'$files | Select-String -Pattern '"'payincus:plugin-config|allow-same-origin|PluginFrame' -Context 4,4 | ForEach-Object { \"{0}:{1}: {2}\" -f "'$_.Path,$_.LineNumber,$_.Line.Trim() }' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 2560ms:
+C:\Users\Administrator\Desktop\payinces\client\src\components\plugins\PluginFrame.vue:38: type: 'payincus:plugin-config',
+C:\Users\Administrator\Desktop\payinces\client\src\components\plugins\PluginFrame.vue:84: window.addEventListener('payincus:plugin-config-refresh', handlePluginConfigRefresh)
+C:\Users\Administrator\Desktop\payinces\client\src\components\plugins\PluginFrame.vue:88: window.removeEventListener('payincus:plugin-config-refresh', handlePluginConfigRefresh)
+C:\Users\Administrator\Desktop\payinces\client\src\components\plugins\PluginFrame.vue:98: sandbox="allow-forms allow-scripts allow-same-origin"
+C:\Users\Administrator\Desktop\payinces\client\src\components\plugins\PluginFrameSlot.vue:4: import PluginFrame from '@/components/plugins/PluginFrame.vue'
+C:\Users\Administrator\Desktop\payinces\client\src\components\plugins\PluginFrameSlot.vue:46: <PluginFrame :title="extension.title" :url="extension.url" :frame-class="frameClass || 'min-h-[240px]'" />
+C:\Users\Administrator\Desktop\payinces\client\src\views\DashboardView.vue:15: import PluginFrameSlot from '@/components/plugins/PluginFrameSlot.vue'
+C:\Users\Administrator\Desktop\payinces\client\src\views\DashboardView.vue:673: <PluginFrameSlot slot-name="user.dashboard.cards" surface="user" frame-class="min-h-[220px]" />
+C:\Users\Administrator\Desktop\payinces\client\src\views\PluginPageView.vue:5: import PluginFrame from '@/components/plugins/PluginFrame.vue'
+C:\Users\Administrator\Desktop\payinces\client\src\views\PluginPageView.vue:39: <PluginFrame :title="currentExtension.title" :url="currentExtension.url" />
+C:\Users\Administrator\Desktop\payinces\client\src\views\admin\AdminPluginPageView.vue:5: import PluginFrame from '@/components/plugins/PluginFrame.vue'
+C:\Users\Administrator\Desktop\payinces\client\src\views\admin\AdminPluginPageView.vue:44: <PluginFrame :title="currentExtension.title" :url="currentExtension.url" />
+C:\Users\Administrator\Desktop\payinces\client\src\views\admin\PluginSettingsView.vue:6: import PluginFrame from '@/components/plugins/PluginFrame.vue'
+C:\Users\Administrator\Desktop\payinces\client\src\views\admin\PluginSettingsView.vue:239: window.dispatchEvent(new CustomEvent('payincus:plugin-config-refresh', {
+C:\Users\Administrator\Desktop\payinces\client\src\views\admin\PluginSettingsView.vue:692: <PluginFrame
+C:\Users\Administrator\Desktop\payinces\client\src\views\admin\StatisticsView.vue:5: import PluginFrameSlot from '@/components/plugins/PluginFrameSlot.vue'
+C:\Users\Administrator\Desktop\payinces\client\src\views\admin\StatisticsView.vue:469: <PluginFrameSlot slot-name="admin.dashboard.widgets" surface="admin" frame-class="min-h-[240px]" />
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-frontend-route-guards.ts:42: const pluginFrameSource = readRepoFile('client/src/components/plugins/PluginFrame.vue')
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-frontend-route-guards.ts:704: pluginFrameSource.includes('sandbox=') &&
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-plugin-center-guards.ts:159: !pluginCenterView.includes('<PluginFrame') &&
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-plugin-client-boundary-guards.ts:14: const pluginFrame = read('client/src/components/plugins/PluginFrame.vue')
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-plugin-client-boundary-guards.ts:15: const pluginFrameSlot = read('client/src/components/plugins/PluginFrameSlot.vue')
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-plugin-client-boundary-guards.ts:45: pluginFrame.includes('sandbox=') &&
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-plugin-client-boundary-guards.ts:46: pluginFrame.includes("url.startsWith('/api/plugins/assets/')") &&
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-plugin-client-boundary-guards.ts:47: pluginFrame.includes('requestPluginAssetToken(asset)') &&
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-plugin-client-boundary-guards.ts:48: pluginFrame.includes('assetToken') &&
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-plugin-client-boundary-guards.ts:49: pluginFrame.includes('encodeURIComponent(data.assetToken)') &&
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-plugin-client-boundary-guards.ts:50: pluginFrame.includes('api.plugins.getPublicConfig(asset.pluginId)') &&
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-plugin-client-boundary-guards.ts:51: pluginFrame.includes("type: 'payincus:plugin-config'") &&
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-plugin-client-boundary-guards.ts:52: pluginFrame.includes('postMessage') &&
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-plugin-client-boundary-guards.ts:53: pluginFrame.includes('window.location.origin') &&
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-plugin-client-boundary-guards.ts:54: pluginFrame.includes("window.addEventListener('payincus:plugin-config-refresh'") &&
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-plugin-client-boundary-guards.ts:55: pluginFrame.includes('frameClass?: string') &&
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-plugin-client-boundary-guards.ts:56: pluginFrame.includes("frameClass || 'min-h-[560px]'") &&
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-plugin-client-boundary-guards.ts:58: pluginSettingsView.includes("new CustomEvent('payincus:plugin-config-refresh'") &&
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-plugin-client-boundary-guards.ts:59: !pluginFrame.includes('token=${encodeURIComponent(token)}') &&
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-plugin-client-boundary-guards.ts:66: pluginFrameSlot.includes('getEnabledClientExtensions') &&
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-plugin-client-boundary-guards.ts:67: pluginFrameSlot.includes('getEnabledAdminClientExtensions') &&
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-plugin-client-boundary-guards.ts:68: pluginFrameSlot.includes("surface?: 'user' | 'admin'") &&
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-plugin-client-boundary-guards.ts:69: pluginFrameSlot.includes('extension.slot === props.slotName') &&
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-plugin-client-boundary-guards.ts:70: pluginFrameSlot.includes('<PluginFrame') &&
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-plugin-client-boundary-guards.ts:71: pluginFrameSlot.includes('frameClass ||') &&
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-plugin-client-boundary-guards.ts:74: adminPluginPage.includes('<PluginFrame') &&
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-plugin-client-boundary-guards.ts:79: dashboardView.includes('PluginFrameSlot') &&
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-plugin-client-boundary-guards.ts:82: statisticsView.includes('PluginFrameSlot') &&
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-plugin-client-boundary-guards.ts:125: developmentDocs.includes("type !== 'payincus:plugin-config'") &&
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Content -Raw server/scripts/test-plugin-client-boundary-guards.ts' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 491ms:
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+
+const repoRoot = resolve(import.meta.dirname, '../..')
+
+function read(path: string): string {
+  return readFileSync(resolve(repoRoot, path), 'utf8')
+}
+
+const userRouter = read('client/src/router/user.ts')
+const adminRouter = read('client/src/router/admin.ts')
+const pluginSlot = read('client/src/components/plugins/PluginSlot.vue')
+const pluginFrame = read('client/src/components/plugins/PluginFrame.vue')
+const pluginFrameSlot = read('client/src/components/plugins/PluginFrameSlot.vue')
+const pluginAssets = read('client/src/utils/plugin-assets.ts')
+const pluginPage = read('client/src/views/PluginPageView.vue')
+const dashboardView = read('client/src/views/DashboardView.vue')
+const adminPluginPage = read('client/src/views/admin/AdminPluginPageView.vue')
+const pluginSettingsView = read('client/src/views/admin/PluginSettingsView.vue')
+const statisticsView = read('client/src/views/admin/StatisticsView.vue')
+const pluginRoutes = read('server/src/routes/plugins.ts')
+const sideNav = read('client/src/components/layout/SideNav.vue')
+const userApi = read('client/src/api/index.ts')
+const adminApi = read('client/src/api/admin.ts')
+const manifest = read('server/src/lib/plugin-manifest.ts')
+const basicAdminTemplate = read('plugin-templates/basic-admin-plugin/payincus.plugin.json')
+const mixedTemplate = read('plugin-templates/admin-user-mixed-plugin/payincus.plugin.json')
+const updateTask = read('server/src/scripts/run-system-update-task.ts')
+const installPanel = read('scripts/install-panel.sh')
+const backendService = read('deploy/incudal-backend.service.example')
+const developmentDocs = read('docs-site/docs/plugins/development.md')
+const platformPlan = read('docs-site/docs/plugins/platform-plan.md')
+const clientExtensionDocs = read('docs-site/docs/plugins/client-extensions.md')
+const clientExtensionDocsEn = read('docs-site/docs/en/plugins/client-extensions.md')
+
+assert.ok(
+  userRouter.includes("path: '/plugins/:pathMatch(.*)*'") &&
+    userRouter.includes('requiresUser: true') &&
+    adminRouter.includes("path: '/admin/plugins'"),
+  'plugin pages must be split between user plugin routes and admin plugin center routes'
+)
+
+assert.ok(
+  pluginFrame.includes('sandbox=') &&
+    pluginFrame.includes("url.startsWith('/api/plugins/assets/')") &&
+    pluginFrame.includes('requestPluginAssetToken(asset)') &&
+    pluginFrame.includes('assetToken') &&
+    pluginFrame.includes('encodeURIComponent(data.assetToken)') &&
+    pluginFrame.includes('api.plugins.getPublicConfig(asset.pluginId)') &&
+    pluginFrame.includes("type: 'payincus:plugin-config'") &&
+    pluginFrame.includes('postMessage') &&
+    pluginFrame.includes('window.location.origin') &&
+    pluginFrame.includes("window.addEventListener('payincus:plugin-config-refresh'") &&
+    pluginFrame.includes('frameClass?: string') &&
+    pluginFrame.includes("frameClass || 'min-h-[560px]'") &&
+    pluginSettingsView.includes('notifyPluginConfigChanged') &&
+    pluginSettingsView.includes("new CustomEvent('payincus:plugin-config-refresh'") &&
+    !pluginFrame.includes('token=${encodeURIComponent(token)}') &&
+    pluginAssets.includes("window.localStorage.getItem('token')") &&
+    pluginAssets.includes("buildApiUrl('/plugins/asset-token')") &&
+    pluginAssets.includes('axios.post<PluginAssetTokenResponse>') &&
+    pluginSlot.includes('getEnabledClientExtensions') &&
+    pluginSlot.includes('getEnabledAdminClientExtensions') &&
+    pluginSlot.includes("surface?: 'user' | 'admin'") &&
+    pluginFrameSlot.includes('getEnabledClientExtensions') &&
+    pluginFrameSlot.includes('getEnabledAdminClientExtensions') &&
+    pluginFrameSlot.includes("surface?: 'user' | 'admin'") &&
+    pluginFrameSlot.includes('extension.slot === props.slotName') &&
+    pluginFrameSlot.includes('<PluginFrame') &&
+    pluginFrameSlot.includes('frameClass ||') &&
+    pluginPage.includes('currentExtension') &&
+    adminPluginPage.includes('getEnabledAdminClientExtensions') &&
+    adminPluginPage.includes('<PluginFrame') &&
+    sideNav.includes('slot-name="admin.sidebar.extra"') &&
+    sideNav.includes('surface="admin"') &&
+    sideNav.includes('slot-name="user.sidebar.extra"') &&
+    sideNav.includes('surface="user"') &&
+    dashboardView.includes('PluginFrameSlot') &&
+    dashboardView.includes('slot-name="user.dashboard.cards"') &&
+    dashboardView.includes('surface="user"') &&
+    statisticsView.includes('PluginFrameSlot') &&
+    statisticsView.includes('slot-name="admin.dashboard.widgets"') &&
+    statisticsView.includes('surface="admin"') &&
+    adminRouter.includes("path: '/admin/plugins/:pluginId/pages/:pathMatch(.*)*'") &&
+    adminRouter.includes('AdminPluginPageView.vue'),
+  'client plugin rendering must use sandbox frames and inject controlled user/admin sidebar entries into their matching entrypoints'
+)
+
+assert.ok(
+  pluginRoutes.includes('function getProtectedAssetPolicy') &&
+    pluginRoutes.includes("fastify.post<{ Body: AssetTokenBody }>('/asset-token'") &&
+    pluginRoutes.includes("kind: 'plugin_asset'") &&
+    pluginRoutes.includes("expiresIn: '60s'") &&
+    pluginRoutes.includes('manifest.entrypoints?.adminPages') &&
+    pluginRoutes.includes('return { requiresAuth: true, adminOnly: true }') &&
+    pluginRoutes.includes('page.requiresAuth === true') &&
+    pluginRoutes.includes('function authenticateProtectedAsset') &&
+    pluginRoutes.includes('request.query.assetToken') &&
+    pluginRoutes.includes('fastify.jwt.verify') &&
+    pluginRoutes.includes('isAccessTokenInvalidated') &&
+    pluginRoutes.includes("user.role !== 'admin'") &&
+    pluginRoutes.includes('assetPolicy.requiresAuth') &&
+    pluginRoutes.includes("'private, no-store'") &&
+    pluginRoutes.includes("'no-referrer'") &&
+    pluginRoutes.includes("'X-Robots-Tag', 'noindex'") &&
+    pluginRoutes.includes("fastify.get('/enabled-admin-client-extensions'") &&
+    pluginRoutes.includes('onRequest: [fastify.authenticateAdmin]') &&
+    pluginRoutes.includes("page.slot === 'admin.sidebar.extra'") &&
+    pluginRoutes.includes("`/admin/plugins/${encodeURIComponent(plugin.pluginId)}/pages/${encodeURIComponent(page.entry)}`"),
+  'plugin asset route must protect authenticated entry pages and enforce admin-only access for admin plugin pages'
+)
+
+assert.ok(
+  userApi.includes('/plugins/enabled-client-extensions') &&
+    userApi.includes('/plugins/enabled-admin-client-extensions') &&
+    userApi.includes('/plugins/${pluginId}/config/public') &&
+    userApi.includes('/plugins/${pluginId}/actions/${action}') &&
+    !userApi.includes('/admin/plugins') &&
+    adminApi.includes('/admin/plugins'),
+  'user API client must not expose admin plugin management endpoints'
+)
+
+assert.ok(
+  developmentDocs.includes("type !== 'payincus:plugin-config'") &&
+    developmentDocs.includes('event.data.pluginId') &&
+    developmentDocs.includes('event.data.config') &&
+    developmentDocs.includes('admin.sidebar.extra') &&
+    developmentDocs.includes('/api/plugins/enabled-admin-client-extensions') &&
+    developmentDocs.includes('/admin/plugins/:pluginId/pages/<entry>') &&
+    developmentDocs.includes('é¡µé¢å†…æ‰©å±•ç‚¹ä¼šç›´æŽ¥ä»¥ sandbox iframe æŒ‚è½½åˆ°å¯¹åº”é¡µé¢') &&
+    developmentDocs.includes('user.dashboard.cards') &&
+    developmentDocs.includes('admin.dashboard.widgets') &&
+    clientExtensionDocs.includes('`user.dashboard.cards` ä¼šæŒ‚è½½åˆ°ç”¨æˆ·ç«¯ä»ªè¡¨ç›˜') &&
+    clientExtensionDocs.includes('`admin.dashboard.widgets` ä¼šæŒ‚è½½åˆ°åŽå°ç»Ÿè®¡é¡µ') &&
+    clientExtensionDocsEn.includes('`user.dashboard.cards` mounts into the user dashboard') &&
+    clientExtensionDocsEn.includes('`admin.dashboard.widgets` mounts into the admin statistics dashboard') &&
+    platformPlan.includes('åŽå°ä¾§è¾¹æ æ‰©å±•å…¥å£') &&
+    platformPlan.includes('é€šç”¨åŽå°æ‰©å±•é¡µé¢è·¯ç”±') &&
+    platformPlan.includes('ç”¨æˆ·ä»ªè¡¨ç›˜å¡ç‰‡ slot å’ŒåŽå°ç»Ÿè®¡ widget slot é¦–ç‰ˆ') &&
+    platformPlan.includes('æ‰©å±• iframe å…¬æœ‰é…ç½®å®žæ—¶æ›´æ–°'),
+  'plugin development docs must describe iframe public config live updates'
+)
+
+assert.ok(
+  manifest.includes('user.sidebar.extra') &&
+    manifest.includes('user.dashboard.cards') &&
+    manifest.includes('user.instance.detail.panels') &&
+    manifest.includes('user.instance.renew.widgets') &&
+    manifest.includes('admin.plugins.settings') &&
+    manifest.includes('admin.user.detail.panels'),
+  'plugin slot whitelist must cover the requested admin and user extension points'
+)
+
+assert.ok(
+  basicAdminTemplate.includes('admin.plugins.settings') &&
+    basicAdminTemplate.includes('admin.sidebar.extra') &&
+    basicAdminTemplate.includes('admin.dashboard.widgets') &&
+    mixedTemplate.includes('user.sidebar.extra') &&
+    mixedTemplate.includes('user.dashboard.cards'),
+  'official templates must demonstrate sidebar and dashboard extension slots'
+)
+
+for (const path of ['plugins', 'plugin-data', 'plugin-logs', 'plugin-staging']) {
+  assert.ok(updateTask.includes(path), `online updater must preserve ${path}`)
+  assert.ok(installPanel.includes(path), `install panel must create and permit ${path}`)
+  assert.ok(backendService.includes(path), `systemd example must permit ${path}`)
+}
+
+console.log('plugin client boundary guard tests passed')
+
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$p='"'server/scripts/test-frontend-route-guards.ts'; "'$lines=Get-Content $p; $start=690; $end=715; for($i=$start;$i -le $end;$i++){ '"'{0}: {1}' -f ("'$i+1),$lines[$i] }' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 500ms:
+691: assert.ok(
+692:   sideNavSource.includes("from '@/config/side-nav-items'") &&
+693:     sideNavSource.includes("import { dashboardPath } from '@/utils/app-paths'") &&
+694:     sideNavSource.includes('const navDashboardPath = dashboardPath()') &&
+695:     sideNavSource.includes("if (item.name === 'dashboard') return route.path === navDashboardPath") &&
+696:     sideNavSource.includes(':to="navDashboardPath"') &&
+697:     !sideNavSource.includes("return route.path === '/dashboard'") &&
+698:     !sideNavSource.includes('RouterLink to="/"') &&
+699:     sideNavSource.includes('let baseItems = [...navMenuItems]') &&
+700:     sideNavSource.includes('PluginSlot') &&
+701:     sideNavSource.includes('v-if="!isAdminEntry"') &&
+702:     sideNavSource.includes('slot-name="user.sidebar.extra"') &&
+703:     pluginSlotSource.includes('getEnabledClientExtensions') &&
+704:     pluginFrameSource.includes('sandbox=') &&
+705:     sideNavUserItemsSource.includes("path: '/resources/hosts'") &&
+706:     sideNavUserItemsSource.includes("path: '/resources/packages'") &&
+707:     !sideNavUserItemsSource.includes('/admin/') &&
+708:     sideNavAdminItemsSource.includes("path: '/admin/tickets'") &&
+709:     sideNavAdminItemsSource.includes("path: '/admin/profile'") &&
+710:     sideNavAdminItemsSource.includes("path: '/admin/resources/hosts'"),
+711:   'shared SideNav menu tables must be build-time aliased so customer bundles do not keep admin navigation entries'
+712: )
+713: assert.ok(
+714:   viteConfigSource.includes("name: 'payincus-admin-locale-prune'") &&
+715:     viteConfigSource.includes('stripAdminOnlyLocaleMessages(code)') &&
+716:     viteConfigSource.includes('userOnlyTopLevelKeys') &&
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$files = Get-ChildItem -Path plugin-templates,client -Recurse -File | Where-Object { $_.FullName -notmatch '"'\\\\node_modules\\\\|\\\\dist\\\\|\\\\coverage\\\\' }; "'$matches=$files | Select-String -Pattern "addEventListener'"\\s*\\(\\s*['\\\"]message|event\\.origin|payincus:plugin-config\"; if("'$matches){$matches | ForEach-Object { "{0}:{1}: {2}" -f $_.Path,$_.LineNumber,$_.Line.Trim() }} else {'"'NO_MATCHES'}" in C:\Users\Administrator\Desktop\payinces
+2026-07-11T19:18:48.995975Z ERROR codex_core::tools::router: error=Exit code: 1
+Wall time: 0.6 seconds
+Output:
+The string is missing the terminator: ".
+    + CategoryInfo          : ParserError: (:) [], ParentContainsErrorRecordException
+    + FullyQualifiedErrorId : TerminatorExpectedAtEndOfString
+ 
+
+ exited 1 in 604ms:
+The string is missing the terminator: ".
+    + CategoryInfo          : ParserError: (:) [], ParentContainsErrorRecordException
+    + FullyQualifiedErrorId : TerminatorExpectedAtEndOfString
+ 
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Content -Raw server/scripts/test-plugin-client-boundary-guards.ts' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 515ms:
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+
+const repoRoot = resolve(import.meta.dirname, '../..')
+
+function read(path: string): string {
+  return readFileSync(resolve(repoRoot, path), 'utf8')
+}
+
+const userRouter = read('client/src/router/user.ts')
+const adminRouter = read('client/src/router/admin.ts')
+const pluginSlot = read('client/src/components/plugins/PluginSlot.vue')
+const pluginFrame = read('client/src/components/plugins/PluginFrame.vue')
+const pluginFrameSlot = read('client/src/components/plugins/PluginFrameSlot.vue')
+const pluginAssets = read('client/src/utils/plugin-assets.ts')
+const pluginPage = read('client/src/views/PluginPageView.vue')
+const dashboardView = read('client/src/views/DashboardView.vue')
+const adminPluginPage = read('client/src/views/admin/AdminPluginPageView.vue')
+const pluginSettingsView = read('client/src/views/admin/PluginSettingsView.vue')
+const statisticsView = read('client/src/views/admin/StatisticsView.vue')
+const pluginRoutes = read('server/src/routes/plugins.ts')
+const sideNav = read('client/src/components/layout/SideNav.vue')
+const userApi = read('client/src/api/index.ts')
+const adminApi = read('client/src/api/admin.ts')
+const manifest = read('server/src/lib/plugin-manifest.ts')
+const basicAdminTemplate = read('plugin-templates/basic-admin-plugin/payincus.plugin.json')
+const mixedTemplate = read('plugin-templates/admin-user-mixed-plugin/payincus.plugin.json')
+const updateTask = read('server/src/scripts/run-system-update-task.ts')
+const installPanel = read('scripts/install-panel.sh')
+const backendService = read('deploy/incudal-backend.service.example')
+const developmentDocs = read('docs-site/docs/plugins/development.md')
+const platformPlan = read('docs-site/docs/plugins/platform-plan.md')
+const clientExtensionDocs = read('docs-site/docs/plugins/client-extensions.md')
+const clientExtensionDocsEn = read('docs-site/docs/en/plugins/client-extensions.md')
+
+assert.ok(
+  userRouter.includes("path: '/plugins/:pathMatch(.*)*'") &&
+    userRouter.includes('requiresUser: true') &&
+    adminRouter.includes("path: '/admin/plugins'"),
+  'plugin pages must be split between user plugin routes and admin plugin center routes'
+)
+
+assert.ok(
+  pluginFrame.includes('sandbox=') &&
+    pluginFrame.includes("url.startsWith('/api/plugins/assets/')") &&
+    pluginFrame.includes('requestPluginAssetToken(asset)') &&
+    pluginFrame.includes('assetToken') &&
+    pluginFrame.includes('encodeURIComponent(data.assetToken)') &&
+    pluginFrame.includes('api.plugins.getPublicConfig(asset.pluginId)') &&
+    pluginFrame.includes("type: 'payincus:plugin-config'") &&
+    pluginFrame.includes('postMessage') &&
+    pluginFrame.includes('window.location.origin') &&
+    pluginFrame.includes("window.addEventListener('payincus:plugin-config-refresh'") &&
+    pluginFrame.includes('frameClass?: string') &&
+    pluginFrame.includes("frameClass || 'min-h-[560px]'") &&
+    pluginSettingsView.includes('notifyPluginConfigChanged') &&
+    pluginSettingsView.includes("new CustomEvent('payincus:plugin-config-refresh'") &&
+    !pluginFrame.includes('token=${encodeURIComponent(token)}') &&
+    pluginAssets.includes("window.localStorage.getItem('token')") &&
+    pluginAssets.includes("buildApiUrl('/plugins/asset-token')") &&
+    pluginAssets.includes('axios.post<PluginAssetTokenResponse>') &&
+    pluginSlot.includes('getEnabledClientExtensions') &&
+    pluginSlot.includes('getEnabledAdminClientExtensions') &&
+    pluginSlot.includes("surface?: 'user' | 'admin'") &&
+    pluginFrameSlot.includes('getEnabledClientExtensions') &&
+    pluginFrameSlot.includes('getEnabledAdminClientExtensions') &&
+    pluginFrameSlot.includes("surface?: 'user' | 'admin'") &&
+    pluginFrameSlot.includes('extension.slot === props.slotName') &&
+    pluginFrameSlot.includes('<PluginFrame') &&
+    pluginFrameSlot.includes('frameClass ||') &&
+    pluginPage.includes('currentExtension') &&
+    adminPluginPage.includes('getEnabledAdminClientExtensions') &&
+    adminPluginPage.includes('<PluginFrame') &&
+    sideNav.includes('slot-name="admin.sidebar.extra"') &&
+    sideNav.includes('surface="admin"') &&
+    sideNav.includes('slot-name="user.sidebar.extra"') &&
+    sideNav.includes('surface="user"') &&
+    dashboardView.includes('PluginFrameSlot') &&
+    dashboardView.includes('slot-name="user.dashboard.cards"') &&
+    dashboardView.includes('surface="user"') &&
+    statisticsView.includes('PluginFrameSlot') &&
+    statisticsView.includes('slot-name="admin.dashboard.widgets"') &&
+    statisticsView.includes('surface="admin"') &&
+    adminRouter.includes("path: '/admin/plugins/:pluginId/pages/:pathMatch(.*)*'") &&
+    adminRouter.includes('AdminPluginPageView.vue'),
+  'client plugin rendering must use sandbox frames and inject controlled user/admin sidebar entries into their matching entrypoints'
+)
+
+assert.ok(
+  pluginRoutes.includes('function getProtectedAssetPolicy') &&
+    pluginRoutes.includes("fastify.post<{ Body: AssetTokenBody }>('/asset-token'") &&
+    pluginRoutes.includes("kind: 'plugin_asset'") &&
+    pluginRoutes.includes("expiresIn: '60s'") &&
+    pluginRoutes.includes('manifest.entrypoints?.adminPages') &&
+    pluginRoutes.includes('return { requiresAuth: true, adminOnly: true }') &&
+    pluginRoutes.includes('page.requiresAuth === true') &&
+    pluginRoutes.includes('function authenticateProtectedAsset') &&
+    pluginRoutes.includes('request.query.assetToken') &&
+    pluginRoutes.includes('fastify.jwt.verify') &&
+    pluginRoutes.includes('isAccessTokenInvalidated') &&
+    pluginRoutes.includes("user.role !== 'admin'") &&
+    pluginRoutes.includes('assetPolicy.requiresAuth') &&
+    pluginRoutes.includes("'private, no-store'") &&
+    pluginRoutes.includes("'no-referrer'") &&
+    pluginRoutes.includes("'X-Robots-Tag', 'noindex'") &&
+    pluginRoutes.includes("fastify.get('/enabled-admin-client-extensions'") &&
+    pluginRoutes.includes('onRequest: [fastify.authenticateAdmin]') &&
+    pluginRoutes.includes("page.slot === 'admin.sidebar.extra'") &&
+    pluginRoutes.includes("`/admin/plugins/${encodeURIComponent(plugin.pluginId)}/pages/${encodeURIComponent(page.entry)}`"),
+  'plugin asset route must protect authenticated entry pages and enforce admin-only access for admin plugin pages'
+)
+
+assert.ok(
+  userApi.includes('/plugins/enabled-client-extensions') &&
+    userApi.includes('/plugins/enabled-admin-client-extensions') &&
+    userApi.includes('/plugins/${pluginId}/config/public') &&
+    userApi.includes('/plugins/${pluginId}/actions/${action}') &&
+    !userApi.includes('/admin/plugins') &&
+    adminApi.includes('/admin/plugins'),
+  'user API client must not expose admin plugin management endpoints'
+)
+
+assert.ok(
+  developmentDocs.includes("type !== 'payincus:plugin-config'") &&
+    developmentDocs.includes('event.data.pluginId') &&
+    developmentDocs.includes('event.data.config') &&
+    developmentDocs.includes('admin.sidebar.extra') &&
+    developmentDocs.includes('/api/plugins/enabled-admin-client-extensions') &&
+    developmentDocs.includes('/admin/plugins/:pluginId/pages/<entry>') &&
+    developmentDocs.includes('é¡µé¢å†…æ‰©å±•ç‚¹ä¼šç›´æŽ¥ä»¥ sandbox iframe æŒ‚è½½åˆ°å¯¹åº”é¡µé¢') &&
+    developmentDocs.includes('user.dashboard.cards') &&
+    developmentDocs.includes('admin.dashboard.widgets') &&
+    clientExtensionDocs.includes('`user.dashboard.cards` ä¼šæŒ‚è½½åˆ°ç”¨æˆ·ç«¯ä»ªè¡¨ç›˜') &&
+    clientExtensionDocs.includes('`admin.dashboard.widgets` ä¼šæŒ‚è½½åˆ°åŽå°ç»Ÿè®¡é¡µ') &&
+    clientExtensionDocsEn.includes('`user.dashboard.cards` mounts into the user dashboard') &&
+    clientExtensionDocsEn.includes('`admin.dashboard.widgets` mounts into the admin statistics dashboard') &&
+    platformPlan.includes('åŽå°ä¾§è¾¹æ æ‰©å±•å…¥å£') &&
+    platformPlan.includes('é€šç”¨åŽå°æ‰©å±•é¡µé¢è·¯ç”±') &&
+    platformPlan.includes('ç”¨æˆ·ä»ªè¡¨ç›˜å¡ç‰‡ slot å’ŒåŽå°ç»Ÿè®¡ widget slot é¦–ç‰ˆ') &&
+    platformPlan.includes('æ‰©å±• iframe å…¬æœ‰é…ç½®å®žæ—¶æ›´æ–°'),
+  'plugin development docs must describe iframe public config live updates'
+)
+
+assert.ok(
+  manifest.includes('user.sidebar.extra') &&
+    manifest.includes('user.dashboard.cards') &&
+    manifest.includes('user.instance.detail.panels') &&
+    manifest.includes('user.instance.renew.widgets') &&
+    manifest.includes('admin.plugins.settings') &&
+    manifest.includes('admin.user.detail.panels'),
+  'plugin slot whitelist must cover the requested admin and user extension points'
+)
+
+assert.ok(
+  basicAdminTemplate.includes('admin.plugins.settings') &&
+    basicAdminTemplate.includes('admin.sidebar.extra') &&
+    basicAdminTemplate.includes('admin.dashboard.widgets') &&
+    mixedTemplate.includes('user.sidebar.extra') &&
+    mixedTemplate.includes('user.dashboard.cards'),
+  'official templates must demonstrate sidebar and dashboard extension slots'
+)
+
+for (const path of ['plugins', 'plugin-data', 'plugin-logs', 'plugin-staging']) {
+  assert.ok(updateTask.includes(path), `online updater must preserve ${path}`)
+  assert.ok(installPanel.includes(path), `install panel must create and permit ${path}`)
+  assert.ok(backendService.includes(path), `systemd example must permit ${path}`)
+}
+
+console.log('plugin client boundary guard tests passed')
+
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$p='"'server/scripts/test-frontend-route-guards.ts'; "'$lines=Get-Content $p; for($i=690;$i -le 715;$i++){ '"'{0}: {1}' -f ("'$i+1),$lines[$i] }' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 541ms:
+691: assert.ok(
+692:   sideNavSource.includes("from '@/config/side-nav-items'") &&
+693:     sideNavSource.includes("import { dashboardPath } from '@/utils/app-paths'") &&
+694:     sideNavSource.includes('const navDashboardPath = dashboardPath()') &&
+695:     sideNavSource.includes("if (item.name === 'dashboard') return route.path === navDashboardPath") &&
+696:     sideNavSource.includes(':to="navDashboardPath"') &&
+697:     !sideNavSource.includes("return route.path === '/dashboard'") &&
+698:     !sideNavSource.includes('RouterLink to="/"') &&
+699:     sideNavSource.includes('let baseItems = [...navMenuItems]') &&
+700:     sideNavSource.includes('PluginSlot') &&
+701:     sideNavSource.includes('v-if="!isAdminEntry"') &&
+702:     sideNavSource.includes('slot-name="user.sidebar.extra"') &&
+703:     pluginSlotSource.includes('getEnabledClientExtensions') &&
+704:     pluginFrameSource.includes('sandbox=') &&
+705:     sideNavUserItemsSource.includes("path: '/resources/hosts'") &&
+706:     sideNavUserItemsSource.includes("path: '/resources/packages'") &&
+707:     !sideNavUserItemsSource.includes('/admin/') &&
+708:     sideNavAdminItemsSource.includes("path: '/admin/tickets'") &&
+709:     sideNavAdminItemsSource.includes("path: '/admin/profile'") &&
+710:     sideNavAdminItemsSource.includes("path: '/admin/resources/hosts'"),
+711:   'shared SideNav menu tables must be build-time aliased so customer bundles do not keep admin navigation entries'
+712: )
+713: assert.ok(
+714:   viteConfigSource.includes("name: 'payincus-admin-locale-prune'") &&
+715:     viteConfigSource.includes('stripAdminOnlyLocaleMessages(code)') &&
+716:     viteConfigSource.includes('userOnlyTopLevelKeys') &&
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$files = Get-ChildItem -Path plugin-templates,client -Recurse -File | Where-Object { $_.FullName -notmatch '"'\\\\node_modules\\\\|\\\\dist\\\\|\\\\coverage\\\\' }; "'$patterns = @('"'payincus:plugin-config','event.origin','addEventListener'); "'$matches = $files | Select-String -SimpleMatch -Pattern $patterns; if ($matches) { $matches | Where-Object { $_.Line -match '"'plugin-config|event\\.origin|addEventListener.*message' } | ForEach-Object { '{0}:{1}: {2}' -f "'$_.Path,$_.LineNumber,$_.Line.Trim() } } else { '"'NO_MATCHES' }" in C:\Users\Administrator\Desktop\payinces
+ succeeded in 1302ms:
+C:\Users\Administrator\Desktop\payinces\client\public\sw.js:119: self.addEventListener('message', (event) => {
+C:\Users\Administrator\Desktop\payinces\client\src\components\plugins\PluginFrame.vue:38: type: 'payincus:plugin-config',
+C:\Users\Administrator\Desktop\payinces\client\src\components\plugins\PluginFrame.vue:84: window.addEventListener('payincus:plugin-config-refresh', handlePluginConfigRefresh)
+C:\Users\Administrator\Desktop\payinces\client\src\components\plugins\PluginFrame.vue:88: window.removeEventListener('payincus:plugin-config-refresh', handlePluginConfigRefresh)
+C:\Users\Administrator\Desktop\payinces\client\src\views\admin\PluginSettingsView.vue:239: window.dispatchEvent(new CustomEvent('payincus:plugin-config-refresh', {
+
+codex
+检查结果：`plugin-templates/` 与 `client/` 中没有插件 iframe 对 `payincus:plugin-config` 的 `message` 监听，因此规格第 3 项无需改模板/运行时代码。现有工作区有与本任务无关的改动（如 `server/src/db/balance.ts`），我会完全保留；本次仅改 `PluginFrame.vue` 和插件客户端边界守卫。
+apply patch
+patch: completed
+C:\Users\Administrator\Desktop\payinces\client\src\components\plugins\PluginFrame.vue
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-plugin-client-boundary-guards.ts
+diff --git a/client/src/components/plugins/PluginFrame.vue b/client/src/components/plugins/PluginFrame.vue
+index d3ce0134d97304e8fff74e8fd7a0c3a1377bf00e..3ea35b066e957663350a599e45a0cc5c27685195
+--- a/client/src/components/plugins/PluginFrame.vue
++++ b/client/src/components/plugins/PluginFrame.vue
+@@ -39,7 +39,7 @@
+     pluginId,
+     config,
+     updatedAt: new Date().toISOString()
+-  }, window.location.origin)
++  }, '*')
+ }
+ 
+ async function refreshPluginConfig(): Promise<void> {
+@@ -95,7 +95,7 @@
+     :class="['w-full rounded-lg border border-themed bg-themed-surface', frameClass || 'min-h-[560px]']"
+     :src="frameUrl"
+     :title="title"
+-    sandbox="allow-forms allow-scripts allow-same-origin"
++    sandbox="allow-forms allow-scripts"
+     referrerpolicy="same-origin"
+     @load="refreshPluginConfig"
+   />
+diff --git a/server/scripts/test-plugin-client-boundary-guards.ts b/server/scripts/test-plugin-client-boundary-guards.ts
+index a678e73b644afbd0a00d3b71a262668048e0efd3..e5d84847be70fc45fd27e38ac465be3be6feac9b
+--- a/server/scripts/test-plugin-client-boundary-guards.ts
++++ b/server/scripts/test-plugin-client-boundary-guards.ts
+@@ -42,7 +42,8 @@
+ )
+ 
+ assert.ok(
+-  pluginFrame.includes('sandbox=') &&
++  pluginFrame.includes('sandbox="allow-forms allow-scripts"') &&
++    !pluginFrame.includes('allow-same-origin') &&
+     pluginFrame.includes("url.startsWith('/api/plugins/assets/')") &&
+     pluginFrame.includes('requestPluginAssetToken(asset)') &&
+     pluginFrame.includes('assetToken') &&
+@@ -50,7 +51,7 @@
+     pluginFrame.includes('api.plugins.getPublicConfig(asset.pluginId)') &&
+     pluginFrame.includes("type: 'payincus:plugin-config'") &&
+     pluginFrame.includes('postMessage') &&
+-    pluginFrame.includes('window.location.origin') &&
++    pluginFrame.includes("}, '*')") &&
+     pluginFrame.includes("window.addEventListener('payincus:plugin-config-refresh'") &&
+     pluginFrame.includes('frameClass?: string') &&
+     pluginFrame.includes("frameClass || 'min-h-[560px]'") &&
+
+diff --git a/client/src/components/plugins/PluginFrame.vue b/client/src/components/plugins/PluginFrame.vue
+index d3ce0134d97304e8fff74e8fd7a0c3a1377bf00e..3ea35b066e957663350a599e45a0cc5c27685195
+--- a/client/src/components/plugins/PluginFrame.vue
++++ b/client/src/components/plugins/PluginFrame.vue
+@@ -39,7 +39,7 @@
+     pluginId,
+     config,
+     updatedAt: new Date().toISOString()
+-  }, window.location.origin)
++  }, '*')
+ }
+ 
+ async function refreshPluginConfig(): Promise<void> {
+@@ -95,7 +95,7 @@
+     :class="['w-full rounded-lg border border-themed bg-themed-surface', frameClass || 'min-h-[560px]']"
+     :src="frameUrl"
+     :title="title"
+-    sandbox="allow-forms allow-scripts allow-same-origin"
++    sandbox="allow-forms allow-scripts"
+     referrerpolicy="same-origin"
+     @load="refreshPluginConfig"
+   />
+diff --git a/server/scripts/test-plugin-client-boundary-guards.ts b/server/scripts/test-plugin-client-boundary-guards.ts
+index a678e73b644afbd0a00d3b71a262668048e0efd3..e5d84847be70fc45fd27e38ac465be3be6feac9b
+--- a/server/scripts/test-plugin-client-boundary-guards.ts
++++ b/server/scripts/test-plugin-client-boundary-guards.ts
+@@ -42,7 +42,8 @@
+ )
+ 
+ assert.ok(
+-  pluginFrame.includes('sandbox=') &&
++  pluginFrame.includes('sandbox="allow-forms allow-scripts"') &&
++    !pluginFrame.includes('allow-same-origin') &&
+     pluginFrame.includes("url.startsWith('/api/plugins/assets/')") &&
+     pluginFrame.includes('requestPluginAssetToken(asset)') &&
+     pluginFrame.includes('assetToken') &&
+@@ -50,7 +51,7 @@
+     pluginFrame.includes('api.plugins.getPublicConfig(asset.pluginId)') &&
+     pluginFrame.includes("type: 'payincus:plugin-config'") &&
+     pluginFrame.includes('postMessage') &&
+-    pluginFrame.includes('window.location.origin') &&
++    pluginFrame.includes("}, '*')") &&
+     pluginFrame.includes("window.addEventListener('payincus:plugin-config-refresh'") &&
+     pluginFrame.includes('frameClass?: string') &&
+     pluginFrame.includes("frameClass || 'min-h-[560px]'") &&
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'git diff -- client/src/components/plugins/PluginFrame.vue server/scripts/test-plugin-client-boundary-guards.ts' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 493ms:
+diff --git a/client/src/components/plugins/PluginFrame.vue b/client/src/components/plugins/PluginFrame.vue
+index d3ce013..3ea35b0 100644
+--- a/client/src/components/plugins/PluginFrame.vue
++++ b/client/src/components/plugins/PluginFrame.vue
+@@ -39,7 +39,7 @@ function postPluginConfig(pluginId: string, config: Record<string, unknown>): vo
+     pluginId,
+     config,
+     updatedAt: new Date().toISOString()
+-  }, window.location.origin)
++  }, '*')
+ }
+ 
+ async function refreshPluginConfig(): Promise<void> {
+@@ -95,7 +95,7 @@ onBeforeUnmount(() => {
+     :class="['w-full rounded-lg border border-themed bg-themed-surface', frameClass || 'min-h-[560px]']"
+     :src="frameUrl"
+     :title="title"
+-    sandbox="allow-forms allow-scripts allow-same-origin"
++    sandbox="allow-forms allow-scripts"
+     referrerpolicy="same-origin"
+     @load="refreshPluginConfig"
+   />
+diff --git a/server/scripts/test-plugin-client-boundary-guards.ts b/server/scripts/test-plugin-client-boundary-guards.ts
+index a678e73..e5d8484 100644
+--- a/server/scripts/test-plugin-client-boundary-guards.ts
++++ b/server/scripts/test-plugin-client-boundary-guards.ts
+@@ -42,7 +42,8 @@ assert.ok(
+ )
+ 
+ assert.ok(
+-  pluginFrame.includes('sandbox=') &&
++  pluginFrame.includes('sandbox="allow-forms allow-scripts"') &&
++    !pluginFrame.includes('allow-same-origin') &&
+     pluginFrame.includes("url.startsWith('/api/plugins/assets/')") &&
+     pluginFrame.includes('requestPluginAssetToken(asset)') &&
+     pluginFrame.includes('assetToken') &&
+@@ -50,7 +51,7 @@ assert.ok(
+     pluginFrame.includes('api.plugins.getPublicConfig(asset.pluginId)') &&
+     pluginFrame.includes("type: 'payincus:plugin-config'") &&
+     pluginFrame.includes('postMessage') &&
+-    pluginFrame.includes('window.location.origin') &&
++    pluginFrame.includes("}, '*')") &&
+     pluginFrame.includes("window.addEventListener('payincus:plugin-config-refresh'") &&
+     pluginFrame.includes('frameClass?: string') &&
+     pluginFrame.includes("frameClass || 'min-h-[560px]'") &&
+warning: in the working copy of 'client/src/components/plugins/PluginFrame.vue', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/scripts/test-plugin-client-boundary-guards.ts', LF will be replaced by CRLF the next time Git touches it
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "Select-String -Path plugin-templates\\**\\*.*,client\\**\\*.* -SimpleMatch -Pattern 'payincus:plugin-config' -ErrorAction SilentlyContinue | ForEach-Object { '{0}:{1}: {2}' -f "'$_.Path,$_.LineNumber,$_.Line.Trim() }' in C:\Users\Administrator\Desktop\payinces
+2026-07-11T19:19:17.994609Z ERROR codex_core::tools::router: error=Exit code: 1
+Wall time: 0.5 seconds
+Output:
+
+ exited 1 in 544ms:
+diff --git a/client/src/components/plugins/PluginFrame.vue b/client/src/components/plugins/PluginFrame.vue
+index d3ce0134d97304e8fff74e8fd7a0c3a1377bf00e..3ea35b066e957663350a599e45a0cc5c27685195
+--- a/client/src/components/plugins/PluginFrame.vue
++++ b/client/src/components/plugins/PluginFrame.vue
+@@ -39,7 +39,7 @@
+     pluginId,
+     config,
+     updatedAt: new Date().toISOString()
+-  }, window.location.origin)
++  }, '*')
+ }
+ 
+ async function refreshPluginConfig(): Promise<void> {
+@@ -95,7 +95,7 @@
+     :class="['w-full rounded-lg border border-themed bg-themed-surface', frameClass || 'min-h-[560px]']"
+     :src="frameUrl"
+     :title="title"
+-    sandbox="allow-forms allow-scripts allow-same-origin"
++    sandbox="allow-forms allow-scripts"
+     referrerpolicy="same-origin"
+     @load="refreshPluginConfig"
+   />
+diff --git a/server/scripts/test-plugin-client-boundary-guards.ts b/server/scripts/test-plugin-client-boundary-guards.ts
+index a678e73b644afbd0a00d3b71a262668048e0efd3..e5d84847be70fc45fd27e38ac465be3be6feac9b
+--- a/server/scripts/test-plugin-client-boundary-guards.ts
++++ b/server/scripts/test-plugin-client-boundary-guards.ts
+@@ -42,7 +42,8 @@
+ )
+ 
+ assert.ok(
+-  pluginFrame.includes('sandbox=') &&
++  pluginFrame.includes('sandbox="allow-forms allow-scripts"') &&
++    !pluginFrame.includes('allow-same-origin') &&
+     pluginFrame.includes("url.startsWith('/api/plugins/assets/')") &&
+     pluginFrame.includes('requestPluginAssetToken(asset)') &&
+     pluginFrame.includes('assetToken') &&
+@@ -50,7 +51,7 @@
+     pluginFrame.includes('api.plugins.getPublicConfig(asset.pluginId)') &&
+     pluginFrame.includes("type: 'payincus:plugin-config'") &&
+     pluginFrame.includes('postMessage') &&
+-    pluginFrame.includes('window.location.origin') &&
++    pluginFrame.includes("}, '*')") &&
+     pluginFrame.includes("window.addEventListener('payincus:plugin-config-refresh'") &&
+     pluginFrame.includes('frameClass?: string') &&
+     pluginFrame.includes("frameClass || 'min-h-[560px]'") &&
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'git diff -- client/src/components/plugins/PluginFrame.vue server/scripts/test-plugin-client-boundary-guards.ts' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 539ms:
+diff --git a/client/src/components/plugins/PluginFrame.vue b/client/src/components/plugins/PluginFrame.vue
+index d3ce013..3ea35b0 100644
+--- a/client/src/components/plugins/PluginFrame.vue
++++ b/client/src/components/plugins/PluginFrame.vue
+@@ -39,7 +39,7 @@ function postPluginConfig(pluginId: string, config: Record<string, unknown>): vo
+     pluginId,
+     config,
+     updatedAt: new Date().toISOString()
+-  }, window.location.origin)
++  }, '*')
+ }
+ 
+ async function refreshPluginConfig(): Promise<void> {
+@@ -95,7 +95,7 @@ onBeforeUnmount(() => {
+     :class="['w-full rounded-lg border border-themed bg-themed-surface', frameClass || 'min-h-[560px]']"
+     :src="frameUrl"
+     :title="title"
+-    sandbox="allow-forms allow-scripts allow-same-origin"
++    sandbox="allow-forms allow-scripts"
+     referrerpolicy="same-origin"
+     @load="refreshPluginConfig"
+   />
+diff --git a/server/scripts/test-plugin-client-boundary-guards.ts b/server/scripts/test-plugin-client-boundary-guards.ts
+index a678e73..e5d8484 100644
+--- a/server/scripts/test-plugin-client-boundary-guards.ts
++++ b/server/scripts/test-plugin-client-boundary-guards.ts
+@@ -42,7 +42,8 @@ assert.ok(
+ )
+ 
+ assert.ok(
+-  pluginFrame.includes('sandbox=') &&
++  pluginFrame.includes('sandbox="allow-forms allow-scripts"') &&
++    !pluginFrame.includes('allow-same-origin') &&
+     pluginFrame.includes("url.startsWith('/api/plugins/assets/')") &&
+     pluginFrame.includes('requestPluginAssetToken(asset)') &&
+     pluginFrame.includes('assetToken') &&
+@@ -50,7 +51,7 @@ assert.ok(
+     pluginFrame.includes('api.plugins.getPublicConfig(asset.pluginId)') &&
+     pluginFrame.includes("type: 'payincus:plugin-config'") &&
+     pluginFrame.includes('postMessage') &&
+-    pluginFrame.includes('window.location.origin') &&
++    pluginFrame.includes("}, '*')") &&
+     pluginFrame.includes("window.addEventListener('payincus:plugin-config-refresh'") &&
+     pluginFrame.includes('frameClass?: string') &&
+     pluginFrame.includes("frameClass || 'min-h-[560px]'") &&
+warning: in the working copy of 'client/src/components/plugins/PluginFrame.vue', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/scripts/test-plugin-client-boundary-guards.ts', LF will be replaced by CRLF the next time Git touches it
+
+diff --git a/client/src/components/plugins/PluginFrame.vue b/client/src/components/plugins/PluginFrame.vue
+index d3ce0134d97304e8fff74e8fd7a0c3a1377bf00e..3ea35b066e957663350a599e45a0cc5c27685195
+--- a/client/src/components/plugins/PluginFrame.vue
++++ b/client/src/components/plugins/PluginFrame.vue
+@@ -39,7 +39,7 @@
+     pluginId,
+     config,
+     updatedAt: new Date().toISOString()
+-  }, window.location.origin)
++  }, '*')
+ }
+ 
+ async function refreshPluginConfig(): Promise<void> {
+@@ -95,7 +95,7 @@
+     :class="['w-full rounded-lg border border-themed bg-themed-surface', frameClass || 'min-h-[560px]']"
+     :src="frameUrl"
+     :title="title"
+-    sandbox="allow-forms allow-scripts allow-same-origin"
++    sandbox="allow-forms allow-scripts"
+     referrerpolicy="same-origin"
+     @load="refreshPluginConfig"
+   />
+diff --git a/server/scripts/test-plugin-client-boundary-guards.ts b/server/scripts/test-plugin-client-boundary-guards.ts
+index a678e73b644afbd0a00d3b71a262668048e0efd3..e5d84847be70fc45fd27e38ac465be3be6feac9b
+--- a/server/scripts/test-plugin-client-boundary-guards.ts
++++ b/server/scripts/test-plugin-client-boundary-guards.ts
+@@ -42,7 +42,8 @@
+ )
+ 
+ assert.ok(
+-  pluginFrame.includes('sandbox=') &&
++  pluginFrame.includes('sandbox="allow-forms allow-scripts"') &&
++    !pluginFrame.includes('allow-same-origin') &&
+     pluginFrame.includes("url.startsWith('/api/plugins/assets/')") &&
+     pluginFrame.includes('requestPluginAssetToken(asset)') &&
+     pluginFrame.includes('assetToken') &&
+@@ -50,7 +51,7 @@
+     pluginFrame.includes('api.plugins.getPublicConfig(asset.pluginId)') &&
+     pluginFrame.includes("type: 'payincus:plugin-config'") &&
+     pluginFrame.includes('postMessage') &&
+-    pluginFrame.includes('window.location.origin') &&
++    pluginFrame.includes("}, '*')") &&
+     pluginFrame.includes("window.addEventListener('payincus:plugin-config-refresh'") &&
+     pluginFrame.includes('frameClass?: string') &&
+     pluginFrame.includes("frameClass || 'min-h-[560px]'") &&
+
+codex
+修改已按最小范围完成，diff 只包含两处安全行为和守卫加固。接下来先并行跑 client type-check 与三个指定 server 守卫；通过后再跑双端 client build。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'pnpm --filter client type-check' in C:\Users\Administrator\Desktop\payinces
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'pnpm --filter server test:plugin-center-guards' in C:\Users\Administrator\Desktop\payinces
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'pnpm --filter server test:plugin-client-boundary-guards' in C:\Users\Administrator\Desktop\payinces
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'pnpm --filter server test:frontend-route-guards' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 1780ms:
+
+> server@1.3.7 test:plugin-center-guards C:\Users\Administrator\Desktop\payinces\server
+> node --import tsx scripts/test-plugin-center-guards.ts
+
+plugin center guard tests passed
+
+ succeeded in 1804ms:
+
+> server@1.3.7 test:plugin-client-boundary-guards C:\Users\Administrator\Desktop\payinces\server
+> node --import tsx scripts/test-plugin-client-boundary-guards.ts
+
+plugin client boundary guard tests passed
+
+ succeeded in 1803ms:
+
+> server@1.3.7 test:frontend-route-guards C:\Users\Administrator\Desktop\payinces\server
+> node --import tsx scripts/test-frontend-route-guards.ts
+
+frontend route guard tests passed
+
+diff --git a/client/src/components/plugins/PluginFrame.vue b/client/src/components/plugins/PluginFrame.vue
+index d3ce0134d97304e8fff74e8fd7a0c3a1377bf00e..3ea35b066e957663350a599e45a0cc5c27685195
+--- a/client/src/components/plugins/PluginFrame.vue
++++ b/client/src/components/plugins/PluginFrame.vue
+@@ -39,7 +39,7 @@
+     pluginId,
+     config,
+     updatedAt: new Date().toISOString()
+-  }, window.location.origin)
++  }, '*')
+ }
+ 
+ async function refreshPluginConfig(): Promise<void> {
+@@ -95,7 +95,7 @@
+     :class="['w-full rounded-lg border border-themed bg-themed-surface', frameClass || 'min-h-[560px]']"
+     :src="frameUrl"
+     :title="title"
+-    sandbox="allow-forms allow-scripts allow-same-origin"
++    sandbox="allow-forms allow-scripts"
+     referrerpolicy="same-origin"
+     @load="refreshPluginConfig"
+   />
+diff --git a/server/scripts/test-plugin-client-boundary-guards.ts b/server/scripts/test-plugin-client-boundary-guards.ts
+index a678e73b644afbd0a00d3b71a262668048e0efd3..e5d84847be70fc45fd27e38ac465be3be6feac9b
+--- a/server/scripts/test-plugin-client-boundary-guards.ts
++++ b/server/scripts/test-plugin-client-boundary-guards.ts
+@@ -42,7 +42,8 @@
+ )
+ 
+ assert.ok(
+-  pluginFrame.includes('sandbox=') &&
++  pluginFrame.includes('sandbox="allow-forms allow-scripts"') &&
++    !pluginFrame.includes('allow-same-origin') &&
+     pluginFrame.includes("url.startsWith('/api/plugins/assets/')") &&
+     pluginFrame.includes('requestPluginAssetToken(asset)') &&
+     pluginFrame.includes('assetToken') &&
+@@ -50,7 +51,7 @@
+     pluginFrame.includes('api.plugins.getPublicConfig(asset.pluginId)') &&
+     pluginFrame.includes("type: 'payincus:plugin-config'") &&
+     pluginFrame.includes('postMessage') &&
+-    pluginFrame.includes('window.location.origin') &&
++    pluginFrame.includes("}, '*')") &&
+     pluginFrame.includes("window.addEventListener('payincus:plugin-config-refresh'") &&
+     pluginFrame.includes('frameClass?: string') &&
+     pluginFrame.includes("frameClass || 'min-h-[560px]'") &&
+
+ succeeded in 26534ms:
+
+> client@1.3.7 type-check C:\Users\Administrator\Desktop\payinces\client
+> vue-tsc --noEmit
+
+
+diff --git a/client/src/components/plugins/PluginFrame.vue b/client/src/components/plugins/PluginFrame.vue
+index d3ce0134d97304e8fff74e8fd7a0c3a1377bf00e..3ea35b066e957663350a599e45a0cc5c27685195
+--- a/client/src/components/plugins/PluginFrame.vue
++++ b/client/src/components/plugins/PluginFrame.vue
+@@ -39,7 +39,7 @@
+     pluginId,
+     config,
+     updatedAt: new Date().toISOString()
+-  }, window.location.origin)
++  }, '*')
+ }
+ 
+ async function refreshPluginConfig(): Promise<void> {
+@@ -95,7 +95,7 @@
+     :class="['w-full rounded-lg border border-themed bg-themed-surface', frameClass || 'min-h-[560px]']"
+     :src="frameUrl"
+     :title="title"
+-    sandbox="allow-forms allow-scripts allow-same-origin"
++    sandbox="allow-forms allow-scripts"
+     referrerpolicy="same-origin"
+     @load="refreshPluginConfig"
+   />
+diff --git a/server/scripts/test-plugin-client-boundary-guards.ts b/server/scripts/test-plugin-client-boundary-guards.ts
+index a678e73b644afbd0a00d3b71a262668048e0efd3..e5d84847be70fc45fd27e38ac465be3be6feac9b
+--- a/server/scripts/test-plugin-client-boundary-guards.ts
++++ b/server/scripts/test-plugin-client-boundary-guards.ts
+@@ -42,7 +42,8 @@
+ )
+ 
+ assert.ok(
+-  pluginFrame.includes('sandbox=') &&
++  pluginFrame.includes('sandbox="allow-forms allow-scripts"') &&
++    !pluginFrame.includes('allow-same-origin') &&
+     pluginFrame.includes("url.startsWith('/api/plugins/assets/')") &&
+     pluginFrame.includes('requestPluginAssetToken(asset)') &&
+     pluginFrame.includes('assetToken') &&
+@@ -50,7 +51,7 @@
+     pluginFrame.includes('api.plugins.getPublicConfig(asset.pluginId)') &&
+     pluginFrame.includes("type: 'payincus:plugin-config'") &&
+     pluginFrame.includes('postMessage') &&
+-    pluginFrame.includes('window.location.origin') &&
++    pluginFrame.includes("}, '*')") &&
+     pluginFrame.includes("window.addEventListener('payincus:plugin-config-refresh'") &&
+     pluginFrame.includes('frameClass?: string') &&
+     pluginFrame.includes("frameClass || 'min-h-[560px]'") &&
+
+codex
+首轮验证全部通过：client type-check、插件边界守卫、插件中心守卫、前端路由守卫均为 exit 0。现在运行仓库定义的 `pnpm build:client`，验证 user/admin 双端构建。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'pnpm build:client' in C:\Users\Administrator\Desktop\payinces
+2026-07-11T19:20:02.409825Z ERROR codex_core::tools::router: error=Exit code: 1
+Wall time: 2.1 seconds
+Output:
+
+> payincus@1.3.7 build:client C:\Users\Administrator\Desktop\payinces
+> pnpm --filter client build
+
+
+> client@1.3.7 build C:\Users\Administrator\Desktop\payinces\client
+> pnpm build:user && pnpm build:admin
+
+
+> client@1.3.7 build:user C:\Users\Administrator\Desktop\payinces\client
+> VITE_APP_ENTRY=user vue-tsc && VITE_APP_ENTRY=user vite build
+
+ ELIFECYCLE  Command failed with exit code 1.
+C:\Users\Administrator\Desktop\payinces\client:
+ ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  client@1.3.7 build: `pnpm build:user && pnpm build:admin`
+Exit status 1
+ ELIFECYCLE  Command failed with exit code 1.
+'VITE_APP_ENTRY' is not recognized as an internal or external command,
+operable program or batch file.
+
+ exited 1 in 2114ms:
+
+> payincus@1.3.7 build:client C:\Users\Administrator\Desktop\payinces
+> pnpm --filter client build
+
+
+> client@1.3.7 build C:\Users\Administrator\Desktop\payinces\client
+> pnpm build:user && pnpm build:admin
+
+
+> client@1.3.7 build:user C:\Users\Administrator\Desktop\payinces\client
+> VITE_APP_ENTRY=user vue-tsc && VITE_APP_ENTRY=user vite build
+
+ ELIFECYCLE  Command failed with exit code 1.
+C:\Users\Administrator\Desktop\payinces\client:
+ ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  client@1.3.7 build: `pnpm build:user && pnpm build:admin`
+Exit status 1
+ ELIFECYCLE  Command failed with exit code 1.
+'VITE_APP_ENTRY' is not recognized as an internal or external command,
+operable program or batch file.
+
+diff --git a/client/src/components/plugins/PluginFrame.vue b/client/src/components/plugins/PluginFrame.vue
+index d3ce0134d97304e8fff74e8fd7a0c3a1377bf00e..3ea35b066e957663350a599e45a0cc5c27685195
+--- a/client/src/components/plugins/PluginFrame.vue
++++ b/client/src/components/plugins/PluginFrame.vue
+@@ -39,7 +39,7 @@
+     pluginId,
+     config,
+     updatedAt: new Date().toISOString()
+-  }, window.location.origin)
++  }, '*')
+ }
+ 
+ async function refreshPluginConfig(): Promise<void> {
+@@ -95,7 +95,7 @@
+     :class="['w-full rounded-lg border border-themed bg-themed-surface', frameClass || 'min-h-[560px]']"
+     :src="frameUrl"
+     :title="title"
+-    sandbox="allow-forms allow-scripts allow-same-origin"
++    sandbox="allow-forms allow-scripts"
+     referrerpolicy="same-origin"
+     @load="refreshPluginConfig"
+   />
+diff --git a/server/scripts/test-plugin-client-boundary-guards.ts b/server/scripts/test-plugin-client-boundary-guards.ts
+index a678e73b644afbd0a00d3b71a262668048e0efd3..e5d84847be70fc45fd27e38ac465be3be6feac9b
+--- a/server/scripts/test-plugin-client-boundary-guards.ts
++++ b/server/scripts/test-plugin-client-boundary-guards.ts
+@@ -42,7 +42,8 @@
+ )
+ 
+ assert.ok(
+-  pluginFrame.includes('sandbox=') &&
++  pluginFrame.includes('sandbox="allow-forms allow-scripts"') &&
++    !pluginFrame.includes('allow-same-origin') &&
+     pluginFrame.includes("url.startsWith('/api/plugins/assets/')") &&
+     pluginFrame.includes('requestPluginAssetToken(asset)') &&
+     pluginFrame.includes('assetToken') &&
+@@ -50,7 +51,7 @@
+     pluginFrame.includes('api.plugins.getPublicConfig(asset.pluginId)') &&
+     pluginFrame.includes("type: 'payincus:plugin-config'") &&
+     pluginFrame.includes('postMessage') &&
+-    pluginFrame.includes('window.location.origin') &&
++    pluginFrame.includes("}, '*')") &&
+     pluginFrame.includes("window.addEventListener('payincus:plugin-config-refresh'") &&
+     pluginFrame.includes('frameClass?: string') &&
+     pluginFrame.includes("frameClass || 'min-h-[560px]'") &&
+
+codex
+仓库的 `pnpm build:client` 在 Windows 上因脚本使用 POSIX 内联环境变量语法而立即失败（`'VITE_APP_ENTRY' is not recognized`），不是代码编译错误。我将用等价的 PowerShell 环境变量设置方式，按 user、admin 顺序各跑 `vue-tsc` 与 `vite build`，不修改构建脚本。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$env:VITE_APP_ENTRY='"'user'; pnpm --filter client exec vue-tsc; if ("'$LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; pnpm --filter client exec vite build; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; $env:VITE_APP_ENTRY='"'admin'; pnpm --filter client exec vue-tsc; if ("'$LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; pnpm --filter client exec vite build; exit $LASTEXITCODE' in C:\Users\Administrator\Desktop\payinces
+diff --git a/client/src/components/plugins/PluginFrame.vue b/client/src/components/plugins/PluginFrame.vue
+index d3ce0134d97304e8fff74e8fd7a0c3a1377bf00e..3ea35b066e957663350a599e45a0cc5c27685195
+--- a/client/src/components/plugins/PluginFrame.vue
++++ b/client/src/components/plugins/PluginFrame.vue
+@@ -39,7 +39,7 @@
+     pluginId,
+     config,
+     updatedAt: new Date().toISOString()
+-  }, window.location.origin)
++  }, '*')
+ }
+ 
+ async function refreshPluginConfig(): Promise<void> {
+@@ -95,7 +95,7 @@
+     :class="['w-full rounded-lg border border-themed bg-themed-surface', frameClass || 'min-h-[560px]']"
+     :src="frameUrl"
+     :title="title"
+-    sandbox="allow-forms allow-scripts allow-same-origin"
++    sandbox="allow-forms allow-scripts"
+     referrerpolicy="same-origin"
+     @load="refreshPluginConfig"
+   />
+diff --git a/server/scripts/test-plugin-client-boundary-guards.ts b/server/scripts/test-plugin-client-boundary-guards.ts
+index a678e73b644afbd0a00d3b71a262668048e0efd3..e5d84847be70fc45fd27e38ac465be3be6feac9b
+--- a/server/scripts/test-plugin-client-boundary-guards.ts
++++ b/server/scripts/test-plugin-client-boundary-guards.ts
+@@ -42,7 +42,8 @@
+ )
+ 
+ assert.ok(
+-  pluginFrame.includes('sandbox=') &&
++  pluginFrame.includes('sandbox="allow-forms allow-scripts"') &&
++    !pluginFrame.includes('allow-same-origin') &&
+     pluginFrame.includes("url.startsWith('/api/plugins/assets/')") &&
+     pluginFrame.includes('requestPluginAssetToken(asset)') &&
+     pluginFrame.includes('assetToken') &&
+@@ -50,7 +51,7 @@
+     pluginFrame.includes('api.plugins.getPublicConfig(asset.pluginId)') &&
+     pluginFrame.includes("type: 'payincus:plugin-config'") &&
+     pluginFrame.includes('postMessage') &&
+-    pluginFrame.includes('window.location.origin') &&
++    pluginFrame.includes("}, '*')") &&
+     pluginFrame.includes("window.addEventListener('payincus:plugin-config-refresh'") &&
+     pluginFrame.includes('frameClass?: string') &&
+     pluginFrame.includes("frameClass || 'min-h-[560px]'") &&
+
+2026-07-11T19:20:44.204275Z ERROR codex_core::tools::router: error=Exit code: 1
+Wall time: 30.6 seconds
+Output:
+undefined
+C:\Users\Administrator\Desktop\payinces\client:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command "vite" not found
+X [ERROR] Cannot read directory "../../..": Access is denied.
+
+X [ERROR] Could not resolve "C:\\Users\\Administrator\\Desktop\\payinces\\client\\vite.config.ts"
+
+[31mfailed to load config from C:\Users\Administrator\Desktop\payinces\client\vite.config.ts[39m
+[31merror during build:
+Error: Build failed with 2 errors:
+error: Cannot read directory "../../..": Access is denied.
+error: Could not resolve "C:\\Users\\Administrator\\Desktop\\payinces\\client\\vite.config.ts"
+    at failureErrorWithLog (C:\Users\Administrator\Desktop\payinces\node_modules\.pnpm\esbuild@0.25.12\node_modules\esbuild\lib\main.js:1467:15)
+    at C:\Users\Administrator\Desktop\payinces\node_modules\.pnpm\esbuild@0.25.12\node_modules\esbuild\lib\main.js:926:25
+    at runOnEndCallbacks (C:\Users\Administrator\Desktop\payinces\node_modules\.pnpm\esbuild@0.25.12\node_modules\esbuild\lib\main.js:1307:45)
+    at buildResponseToResult (C:\Users\Administrator\Desktop\payinces\node_modules\.pnpm\esbuild@0.25.12\node_modules\esbuild\lib\main.js:924:7)
+    at C:\Users\Administrator\Desktop\payinces\node_modules\.pnpm\esbuild@0.25.12\node_modules\esbuild\lib\main.js:951:16
+    at responseCallbacks.<computed> (C:\Users\Administrator\Desktop\payinces\node_modules\.pnpm\esbuild@0.25.12\node_modules\esbuild\lib\main.js:603:9)
+    at handleIncomingPacket (C:\Users\Administrator\Desktop\payinces\node_modules\.pnpm\esbuild@0.25.12\node_modules\esbuild\lib\main.js:658:12)
+    at Socket.readFromStdout (C:\Users\Administrator\Desktop\payinces\node_modules\.pnpm\esbuild@0.25.12\node_modules\esbuild\lib\main.js:581:7)
+    at Socket.emit (node:events:509:28)
+    at addChunk (node:internal/streams/readable:563:12)[39m
+
+ exited 1 in 30572ms:
+undefined
+C:\Users\Administrator\Desktop\payinces\client:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command "vite" not found
+X [ERROR] Cannot read directory "../../..": Access is denied.
+
+X [ERROR] Could not resolve "C:\\Users\\Administrator\\Desktop\\payinces\\client\\vite.config.ts"
+
+[31mfailed to load config from C:\Users\Administrator\Desktop\payinces\client\vite.config.ts[39m
+[31merror during build:
+Error: Build failed with 2 errors:
+error: Cannot read directory "../../..": Access is denied.
+error: Could not resolve "C:\\Users\\Administrator\\Desktop\\payinces\\client\\vite.config.ts"
+    at failureErrorWithLog (C:\Users\Administrator\Desktop\payinces\node_modules\.pnpm\esbuild@0.25.12\node_modules\esbuild\lib\main.js:1467:15)
+    at C:\Users\Administrator\Desktop\payinces\node_modules\.pnpm\esbuild@0.25.12\node_modules\esbuild\lib\main.js:926:25
+    at runOnEndCallbacks (C:\Users\Administrator\Desktop\payinces\node_modules\.pnpm\esbuild@0.25.12\node_modules\esbuild\lib\main.js:1307:45)
+    at buildResponseToResult (C:\Users\Administrator\Desktop\payinces\node_modules\.pnpm\esbuild@0.25.12\node_modules\esbuild\lib\main.js:924:7)
+    at C:\Users\Administrator\Desktop\payinces\node_modules\.pnpm\esbuild@0.25.12\node_modules\esbuild\lib\main.js:951:16
+    at responseCallbacks.<computed> (C:\Users\Administrator\Desktop\payinces\node_modules\.pnpm\esbuild@0.25.12\node_modules\esbuild\lib\main.js:603:9)
+    at handleIncomingPacket (C:\Users\Administrator\Desktop\payinces\node_modules\.pnpm\esbuild@0.25.12\node_modules\esbuild\lib\main.js:658:12)
+    at Socket.readFromStdout (C:\Users\Administrator\Desktop\payinces\node_modules\.pnpm\esbuild@0.25.12\node_modules\esbuild\lib\main.js:581:7)
+    at Socket.emit (node:events:509:28)
+    at addChunk (node:internal/streams/readable:563:12)[39m
+
+diff --git a/client/src/components/plugins/PluginFrame.vue b/client/src/components/plugins/PluginFrame.vue
+index d3ce0134d97304e8fff74e8fd7a0c3a1377bf00e..3ea35b066e957663350a599e45a0cc5c27685195
+--- a/client/src/components/plugins/PluginFrame.vue
++++ b/client/src/components/plugins/PluginFrame.vue
+@@ -39,7 +39,7 @@
+     pluginId,
+     config,
+     updatedAt: new Date().toISOString()
+-  }, window.location.origin)
++  }, '*')
+ }
+ 
+ async function refreshPluginConfig(): Promise<void> {
+@@ -95,7 +95,7 @@
+     :class="['w-full rounded-lg border border-themed bg-themed-surface', frameClass || 'min-h-[560px]']"
+     :src="frameUrl"
+     :title="title"
+-    sandbox="allow-forms allow-scripts allow-same-origin"
++    sandbox="allow-forms allow-scripts"
+     referrerpolicy="same-origin"
+     @load="refreshPluginConfig"
+   />
+diff --git a/server/scripts/test-plugin-client-boundary-guards.ts b/server/scripts/test-plugin-client-boundary-guards.ts
+index a678e73b644afbd0a00d3b71a262668048e0efd3..e5d84847be70fc45fd27e38ac465be3be6feac9b
+--- a/server/scripts/test-plugin-client-boundary-guards.ts
++++ b/server/scripts/test-plugin-client-boundary-guards.ts
+@@ -42,7 +42,8 @@
+ )
+ 
+ assert.ok(
+-  pluginFrame.includes('sandbox=') &&
++  pluginFrame.includes('sandbox="allow-forms allow-scripts"') &&
++    !pluginFrame.includes('allow-same-origin') &&
+     pluginFrame.includes("url.startsWith('/api/plugins/assets/')") &&
+     pluginFrame.includes('requestPluginAssetToken(asset)') &&
+     pluginFrame.includes('assetToken') &&
+@@ -50,7 +51,7 @@
+     pluginFrame.includes('api.plugins.getPublicConfig(asset.pluginId)') &&
+     pluginFrame.includes("type: 'payincus:plugin-config'") &&
+     pluginFrame.includes('postMessage') &&
+-    pluginFrame.includes('window.location.origin') &&
++    pluginFrame.includes("}, '*')") &&
+     pluginFrame.includes("window.addEventListener('payincus:plugin-config-refresh'") &&
+     pluginFrame.includes('frameClass?: string') &&
+     pluginFrame.includes("frameClass || 'min-h-[560px]'") &&
+
+codex
+等价构建已进入 Vite，但当前受限文件系统阻止 esbuild 读取配置解析涉及的上级目录，并同时出现 `pnpm --filter ... exec` 的命令解析异常。先只读检查 client 的构建脚本和 Vite 配置引用，确认是否能用仓库现有入口在工作区内规避该环境限制；不会扩大改动范围。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Content -Raw client/package.json' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 569ms:
+{
+  "name": "client",
+  "version": "1.3.7",
+  "description": "PayIncus frontend client",
+  "type": "module",
+  "scripts": {
+    "dev": "VITE_APP_ENTRY=user vite",
+    "dev:user": "VITE_APP_ENTRY=user vite",
+    "dev:admin": "VITE_APP_ENTRY=admin vite",
+    "build": "pnpm build:user && pnpm build:admin",
+    "build:user": "VITE_APP_ENTRY=user vue-tsc && VITE_APP_ENTRY=user vite build",
+    "build:admin": "VITE_APP_ENTRY=admin vue-tsc && VITE_APP_ENTRY=admin vite build",
+    "preview": "vite preview",
+    "lint": "eslint src --fix",
+    "lint:check": "eslint src",
+    "type-check": "vue-tsc --noEmit"
+  },
+  "dependencies": {
+    "@vueuse/core": "^12.0.0",
+    "@xterm/addon-clipboard": "^0.2.0",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/addon-image": "^0.9.0",
+    "@xterm/addon-search": "^0.16.0",
+    "@xterm/addon-serialize": "^0.14.0",
+    "@xterm/addon-unicode11": "^0.9.0",
+    "@xterm/addon-web-links": "^0.12.0",
+    "@xterm/addon-webgl": "^0.19.0",
+    "@xterm/xterm": "^6.0.0",
+    "axios": "^1.7.9",
+    "flag-icons": "^7.5.0",
+    "gsap": "^3.15.0",
+    "lucide-vue-next": "^0.468.0",
+    "marked": "^17.0.1",
+    "pinia": "^2.2.8",
+    "simple-icons": "^16.1.0",
+    "vue": "^3.5.13",
+    "vue-i18n": "^11.2.2",
+    "vue-router": "^4.5.0",
+    "vue-turnstile": "^1.0.11"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.16.0",
+    "@tailwindcss/forms": "^0.5.9",
+    "@types/node": "^24.10.1",
+    "@typescript-eslint/eslint-plugin": "^8.48.1",
+    "@typescript-eslint/parser": "^8.48.1",
+    "@vitejs/plugin-vue": "^5.2.1",
+    "autoprefixer": "^10.4.20",
+    "eslint": "^9.16.0",
+    "eslint-plugin-vue": "^9.32.0",
+    "javascript-obfuscator": "^5.0.1",
+    "postcss": "^8.4.49",
+    "rollup-plugin-obfuscator": "^1.1.0",
+    "tailwindcss": "^3.4.17",
+    "terser": "^5.44.1",
+    "typescript": "^5.9.3",
+    "vite": "^6.0.3",
+    "vue-eslint-parser": "^9.4.2",
+    "vue-tsc": "^3.1.6"
+  }
+}
+
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Content -Raw client/vite.config.ts' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 801ms:
+import { defineConfig } from 'vite'
+import vue from '@vitejs/plugin-vue'
+import obfuscator from 'rollup-plugin-obfuscator'
+import { fileURLToPath, URL } from 'node:url'
+
+function findMatchingBrace(source: string, openIndex: number): number {
+  let depth = 0
+  let quote: '"' | "'" | '`' | null = null
+  let escaped = false
+  let lineComment = false
+  let blockComment = false
+
+  for (let index = openIndex; index < source.length; index += 1) {
+    const char = source[index]
+    const next = source[index + 1]
+
+    if (lineComment) {
+      if (char === '\n') lineComment = false
+      continue
+    }
+    if (blockComment) {
+      if (char === '*' && next === '/') {
+        blockComment = false
+        index += 1
+      }
+      continue
+    }
+    if (quote) {
+      if (escaped) {
+        escaped = false
+        continue
+      }
+      if (char === '\\') {
+        escaped = true
+        continue
+      }
+      if (char === quote) quote = null
+      continue
+    }
+
+    if (char === '/' && next === '/') {
+      lineComment = true
+      index += 1
+      continue
+    }
+    if (char === '/' && next === '*') {
+      blockComment = true
+      index += 1
+      continue
+    }
+    if (char === '"' || char === "'" || char === '`') {
+      quote = char
+      continue
+    }
+    if (char === '{') depth += 1
+    if (char === '}') {
+      depth -= 1
+      if (depth === 0) return index
+    }
+  }
+
+  return -1
+}
+
+function removeLocaleObjectProperty(source: string, key: string, indent: number, start = 0, end = source.length): string {
+  const spaces = ' '.repeat(indent)
+  const propertyPattern = new RegExp(`^${spaces}${key}:\\s*`, 'm')
+  const segment = source.slice(start, end)
+  const match = propertyPattern.exec(segment)
+  if (!match || match.index === undefined) return source
+
+  const propertyStart = start + match.index
+  const valueStart = start + match.index + match[0].length
+  const lineEnd = source.indexOf('\n', valueStart)
+  const propertyLineEnd = lineEnd === -1 || lineEnd > end ? end : lineEnd
+  let firstValueChar = valueStart
+  while (firstValueChar < propertyLineEnd && /\s/.test(source[firstValueChar])) firstValueChar += 1
+
+  if (source[firstValueChar] !== '{') {
+    const removeEnd = propertyLineEnd < source.length ? propertyLineEnd + 1 : propertyLineEnd
+    return source.slice(0, propertyStart) + source.slice(removeEnd)
+  }
+
+  const objectStart = firstValueChar
+  const objectEnd = findMatchingBrace(source, objectStart)
+  if (objectEnd === -1 || objectEnd >= end) return source
+
+  let removeEnd = objectEnd + 1
+  if (source[removeEnd] === ',') removeEnd += 1
+  if (source[removeEnd] === '\r' && source[removeEnd + 1] === '\n') removeEnd += 2
+  else if (source[removeEnd] === '\n') removeEnd += 1
+
+  return source.slice(0, propertyStart) + source.slice(removeEnd)
+}
+
+function findLocaleObjectRange(source: string, key: string, indent: number, start = 0, end = source.length): [number, number] | null {
+  const spaces = ' '.repeat(indent)
+  const propertyPattern = new RegExp(`^${spaces}${key}:\\s*`, 'm')
+  const segment = source.slice(start, end)
+  const match = propertyPattern.exec(segment)
+  if (!match || match.index === undefined) return null
+
+  const valueStart = start + match.index + match[0].length
+  const objectStart = source.indexOf('{', valueStart)
+  if (objectStart === -1 || objectStart >= end) return null
+  const objectEnd = findMatchingBrace(source, objectStart)
+  if (objectEnd === -1 || objectEnd >= end) return null
+  return [objectStart, objectEnd + 1]
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function keepLocaleObjectProperties(source: string, key: string, indent: number, keepKeys: string[], start = 0, end = source.length): string {
+  const range = findLocaleObjectRange(source, key, indent, start, end)
+  if (!range) return source
+
+  const contentStart = range[0] + 1
+  const contentEnd = range[1] - 1
+  const content = source.slice(contentStart, contentEnd)
+  const spaces = ' '.repeat(indent + 4)
+  const keptProperties = keepKeys
+    .map(keepKey => {
+      const propertyPattern = new RegExp(`^${spaces}${escapeRegExp(keepKey)}:\\s*[^\\n]+\\n`, 'm')
+      return propertyPattern.exec(content)?.[0] ?? ''
+    })
+    .filter(Boolean)
+    .join('')
+
+  if (!keptProperties) return source
+  return `${source.slice(0, contentStart)}\n${keptProperties}${source.slice(contentEnd)}`
+}
+
+function stripAdminOnlyLocaleMessages(source: string): string {
+  let stripped = source
+  const userOnlyTopLevelKeys = [
+    'freeSite',
+    'publicSite',
+    'wallet',
+    'vipBenefits',
+    'hostingWallet',
+    'friends',
+    'transfers',
+    'transfer',
+    'checkin'
+  ]
+
+  for (const key of userOnlyTopLevelKeys) {
+    stripped = removeLocaleObjectProperty(stripped, key, 4)
+  }
+
+  const adminEntertainmentRemovedKeys = [
+    'title',
+    'description',
+    'currentPoints',
+    'convertPoints',
+    'noPointsToConvert',
+    'convertSuccess',
+    'convertFailed',
+    'pointsUnit',
+    'tabs',
+    'mainTabs',
+    'comingSoon',
+    'blindbox',
+    'checkinSection',
+    'spin',
+    'spinCost',
+    'spinFailed',
+    'selectLottery',
+    'notEnoughPoints',
+    'noActiveLotteries',
+    'prizeList',
+    'probability',
+    'remaining',
+    'multiDraw',
+    'multiDrawAgain',
+    'multiDrawFailed',
+    'multiDrawResults',
+    'multiDrawStopped',
+    'notEnoughPointsForMulti',
+    'totalDraws',
+    'totalPointsSpent',
+    'badgeUnit',
+    'instanceUnit',
+    'multiDrawBadgesTitle',
+    'multiDrawBadgesSubtitle',
+    'continueToMultiResults',
+    'congratulations',
+    'betterLuckNextTime',
+    'wonPoints',
+    'wonBalance',
+    'wonBadge',
+    'wonCpu',
+    'wonMemory',
+    'wonDisk',
+    'wonTraffic',
+    'lotteryName',
+    'prize',
+    'prizeType',
+    'value',
+    'noRecords',
+    'loadRecordsFailed',
+    'loadLotteriesFailed',
+    'pointsLogType',
+    'pointsChange',
+    'pointsAfter',
+    'remark',
+    'noPointsLogs',
+    'loadPointsLogsFailed',
+    'pointsLogTypes',
+    'badges'
+  ]
+
+  for (const key of adminEntertainmentRemovedKeys) {
+    const latestEntertainmentRange = findLocaleObjectRange(stripped, 'entertainment', 4)
+    if (!latestEntertainmentRange) break
+    stripped = removeLocaleObjectProperty(stripped, key, 8, latestEntertainmentRange[0], latestEntertainmentRange[1])
+  }
+
+  const resourcesRange = findLocaleObjectRange(stripped, 'resources', 4)
+  if (!resourcesRange) return stripped
+  const packagesRange = findLocaleObjectRange(stripped, 'packages', 8, resourcesRange[0], resourcesRange[1])
+  if (!packagesRange) return stripped
+
+  const disabledPackageShareKeys = [
+    'share',
+    'viewShares',
+    'selectFriend',
+    'selectFriendPlaceholder',
+    'noFriends',
+    'shareSuccess',
+    'shareFailed',
+    'confirmUnshare',
+    'unshareSuccess',
+    'unshareFailed',
+    'sharesList',
+    'sharesCount',
+    'noShares',
+    'noSharesHint',
+    'sharedAt',
+    'unshare',
+    'searchFriend',
+    'noAvailableFriends',
+    'selectToShare',
+    'quotaSettings',
+    'quotaMultiplier',
+    'quotaMultiplierHint',
+    'maxInstances',
+    'maxInstancesHint',
+    'noLimit',
+    'instanceUnit',
+    'quotaDisplay',
+    'usageDisplay',
+    'updateQuota',
+    'updateQuotaSuccess',
+    'updateQuotaFailed',
+    'shareToFriend',
+    'noFriendsHint',
+    'allFriendsShared',
+    'confirmShare',
+    'editQuota',
+    'editQuotaFor',
+    'quotaUpdated',
+    'quotaUpdateFailed',
+    'usageStatus',
+    'instanceCount',
+    'currentUsage',
+    'currentUsageInfo',
+    'addShare'
+  ]
+
+  for (const key of disabledPackageShareKeys) {
+    const latestResourcesRange = findLocaleObjectRange(stripped, 'resources', 4)
+    if (!latestResourcesRange) break
+    const latestPackagesRange = findLocaleObjectRange(stripped, 'packages', 8, latestResourcesRange[0], latestResourcesRange[1])
+    if (!latestPackagesRange) break
+    stripped = removeLocaleObjectProperty(stripped, key, 12, latestPackagesRange[0], latestPackagesRange[1])
+  }
+
+  return stripped
+}
+
+function stripUserOnlyLocaleMessages(source: string): string {
+  let stripped = source
+  const adminOnlyTopLevelKeys = [
+    'statistics',
+    'hosting',
+    'vipRules',
+    'vipBenefits',
+    'mail',
+    'broadcast',
+    'system',
+    'oauth',
+    'paymentProviders',
+    'billingManage',
+    'helpManage'
+  ]
+  const adminOnlyNavKeys = [
+    'admin',
+    'users',
+    'statistics',
+    'images',
+    'helpManage',
+    'oauth',
+    'broadcast',
+    'paymentProviders',
+    'billing',
+    'withdrawals',
+    'telegramSettings',
+    'adminCreateInstance',
+    'capacityCost',
+    'productionProof'
+  ]
+
+  for (const key of adminOnlyTopLevelKeys) {
+    const latestAdminRange = findLocaleObjectRange(stripped, 'admin', 4)
+    if (!latestAdminRange) return stripped
+    stripped = removeLocaleObjectProperty(stripped, key, 8, latestAdminRange[0], latestAdminRange[1])
+  }
+
+  for (const key of adminOnlyNavKeys) {
+    const latestNavRange = findLocaleObjectRange(stripped, 'nav', 4)
+    if (!latestNavRange) break
+    stripped = removeLocaleObjectProperty(stripped, key, 8, latestNavRange[0], latestNavRange[1])
+  }
+
+  const entertainmentRange = findLocaleObjectRange(stripped, 'entertainment', 4)
+  if (entertainmentRange) {
+    stripped = removeLocaleObjectProperty(stripped, 'admin', 8, entertainmentRange[0], entertainmentRange[1])
+  }
+
+  const adminRange = findLocaleObjectRange(stripped, 'admin', 4)
+  if (!adminRange) return stripped
+
+  const sharedUserKeys = [
+    'active',
+    'banned',
+    'totalRecords'
+  ]
+  stripped = keepLocaleObjectProperties(stripped, 'users', 8, sharedUserKeys, adminRange[0], adminRange[1])
+
+  return stripped
+}
+
+export default defineConfig(({ mode }) => {
+  const isProd = mode === 'production'
+  const devPort = Number(process.env.VITE_DEV_PORT || 3000)
+  const devProxyTarget = process.env.VITE_DEV_PROXY_TARGET || 'http://127.0.0.1:3001'
+  const appEntry = process.env.VITE_APP_ENTRY === 'admin' ? 'admin' : 'user'
+  const entryScript = appEntry === 'admin' ? '/src/admin/main.ts' : '/src/main.ts'
+  const apiClientEntry = appEntry === 'admin' ? './src/api/admin.ts' : './src/api/index.ts'
+  const appPathsEntry = appEntry === 'admin' ? './src/utils/app-paths-admin.ts' : './src/utils/app-paths-user.ts'
+  const sideNavItemsEntry = appEntry === 'admin'
+    ? './src/config/side-nav-items-admin.ts'
+    : './src/config/side-nav-items-user.ts'
+  const transferModalEntry = appEntry === 'admin'
+    ? './src/components/instance/modals/TransferModalAdminStub.vue'
+    : './src/components/instance/modals/TransferModal.vue'
+  const renewModalEntry = appEntry === 'admin'
+    ? './src/components/instance/modals/RenewModalAdminStub.vue'
+    : './src/components/instance/modals/RenewModal.vue'
+  const applyAffCodeModalEntry = appEntry === 'admin'
+    ? './src/components/instance/modals/ApplyAffCodeModalAdminStub.vue'
+    : './src/components/instance/modals/ApplyAffCodeModal.vue'
+  const changePlanModalEntry = appEntry === 'admin'
+    ? './src/components/instance/modals/ChangePlanModalAdminStub.vue'
+    : './src/components/instance/modals/ChangePlanModal.vue'
+  const destroyInstanceModalEntry = appEntry === 'admin'
+    ? './src/components/instance/modals/DestroyInstanceModalAdminStub.vue'
+    : './src/components/instance/modals/DestroyInstanceModal.vue'
+  const instanceBadgeModalEntry = appEntry === 'admin'
+    ? './src/components/instance/InstanceBadgeModalAdminStub.vue'
+    : './src/components/instance/InstanceBadgeModal.vue'
+
+  return {
+    envDir: '..',
+    // ä½¿ç”¨ç»å¯¹è·¯å¾„æ ¹è·¯å¾„ï¼Œåœ¨ç”Ÿäº§çŽ¯å¢ƒä¸­é™æ€èµ„æºéœ€è¦ä»Žæ ¹è·¯å¾„åŠ è½½
+    base: '/',
+    
+    plugins: [
+      vue(),
+      {
+        name: 'payincus-split-entry',
+        transformIndexHtml: {
+          order: 'pre',
+          handler(html) {
+            return html.replace('/src/main.ts', entryScript)
+          }
+        }
+      },
+      appEntry === 'admin' && {
+        name: 'payincus-admin-locale-prune',
+        enforce: 'pre',
+        transform(code, id) {
+          const normalizedId = id.replace(/\\/g, '/')
+          if (!normalizedId.match(/\/src\/locales\/(zh-CN|zh-TW|en)\.ts(?:\?|$)/)) return null
+          return {
+            code: stripAdminOnlyLocaleMessages(code),
+            map: null
+          }
+        }
+      },
+      appEntry === 'user' && {
+        name: 'payincus-user-locale-prune',
+        enforce: 'pre',
+        transform(code, id) {
+          const normalizedId = id.replace(/\\/g, '/')
+          if (!normalizedId.match(/\/src\/locales\/(zh-CN|zh-TW|en)\.ts(?:\?|$)/)) return null
+          return {
+            code: stripUserOnlyLocaleMessages(code),
+            map: null
+          }
+        }
+      },
+      // ä»£ç æ··æ·†å™¨ï¼ˆä»…ç”Ÿäº§çŽ¯å¢ƒï¼‰
+      // æ³¨æ„ï¼šå¦‚æžœé‡åˆ°ç™½å±é—®é¢˜ï¼Œå¯èƒ½æ˜¯æ··æ·†é…ç½®è¿‡äºŽä¸¥æ ¼
+      // ä¸´æ—¶ç¦ç”¨æ··æ·†ä»¥æŽ’æŸ¥é—®é¢˜ï¼Œç¡®è®¤é—®é¢˜åŽå†å¯ç”¨
+      // isProd && obfuscator({
+      //   include: ['src/**/*.{js,ts,vue}'],
+      //   exclude: [/node_modules/, /\.html$/],
+      //   options: {
+      //     compact: true,
+      //     controlFlowFlattening: true,
+      //     controlFlowFlatteningThreshold: 0.3,
+      //     identifierNamesGenerator: 'hexadecimal',
+      //     stringArray: true,
+      //     stringArrayEncoding: ['base64'],
+      //     stringArrayThreshold: 0.5,
+      //     debugProtection: false,
+      //     debugProtectionInterval: 0,
+      //     disableConsoleOutput: true,
+      //   }
+      // }),
+    ].filter(Boolean),
+    
+    resolve: {
+      alias: [
+        {
+          find: /^@\/api$/,
+          replacement: fileURLToPath(new URL(apiClientEntry, import.meta.url))
+        },
+        {
+          find: /^@\/utils\/app-paths$/,
+          replacement: fileURLToPath(new URL(appPathsEntry, import.meta.url))
+        },
+        {
+          find: /^@\/config\/side-nav-items$/,
+          replacement: fileURLToPath(new URL(sideNavItemsEntry, import.meta.url))
+        },
+        {
+          find: /^@\/components\/instance\/modals\/TransferModal\.vue$/,
+          replacement: fileURLToPath(new URL(transferModalEntry, import.meta.url))
+        },
+        {
+          find: /^@\/components\/instance\/modals\/RenewModal\.vue$/,
+          replacement: fileURLToPath(new URL(renewModalEntry, import.meta.url))
+        },
+        {
+          find: /^@\/components\/instance\/modals\/ApplyAffCodeModal\.vue$/,
+          replacement: fileURLToPath(new URL(applyAffCodeModalEntry, import.meta.url))
+        },
+        {
+          find: /^@\/components\/instance\/modals\/ChangePlanModal\.vue$/,
+          replacement: fileURLToPath(new URL(changePlanModalEntry, import.meta.url))
+        },
+        {
+          find: /^@\/components\/instance\/modals\/DestroyInstanceModal\.vue$/,
+          replacement: fileURLToPath(new URL(destroyInstanceModalEntry, import.meta.url))
+        },
+        {
+          find: /^@\/components\/instance\/InstanceBadgeModal\.vue$/,
+          replacement: fileURLToPath(new URL(instanceBadgeModalEntry, import.meta.url))
+        },
+        {
+          find: '@',
+          replacement: fileURLToPath(new URL('./src', import.meta.url))
+        }
+      ]
+    },
+    
+    server: {
+      port: devPort,
+      proxy: {
+        '/api': {
+          target: devProxyTarget,
+          changeOrigin: true,
+          ws: true,
+          timeout: 10000,
+          configure: (proxy, _options) => {
+            proxy.on('error', (err, _req, res) => {
+              // Handle proxy errors gracefully
+              if (res && !res.headersSent) {
+                res.writeHead(500, {
+                  'Content-Type': 'application/json'
+                })
+                res.end(JSON.stringify({ error: 'Proxy error: Backend server may not be ready yet' }))
+              }
+            })
+            proxy.on('proxyReq', (proxyReq, req, _res) => {
+              // Log proxy requests in development
+              if (process.env.NODE_ENV === 'development') {
+                console.log(`[Proxy] ${req.method} ${req.url} -> ${proxyReq.path}`)
+              }
+            })
+          }
+        }
+      }
+    },
+    
+    build: {
+      outDir: `dist/${appEntry}`,
+      sourcemap: false,
+      assetsDir: 'assets',
+      // ä¼˜åŒ–ä»£ç åˆ†å‰²ï¼Œæå‡åŠ è½½æ€§èƒ½
+      rollupOptions: {
+        output: {
+          // ä½¿ç”¨çº¯å“ˆå¸Œå‘½åï¼Œä¸åŒ…å«æ–‡ä»¶åï¼Œæé«˜å®‰å…¨æ€§
+          chunkFileNames: 'assets/[hash].js',
+          entryFileNames: 'assets/[hash].js',
+          assetFileNames: 'assets/[hash].[ext]',
+          // æ‰‹åŠ¨åˆ†å‰²ä»£ç å—ï¼Œä¼˜åŒ–ç¼“å­˜å’ŒåŠ è½½
+          manualChunks(id) {
+            const normalizedId = id.replace(/\\/g, '/')
+
+            if (normalizedId.includes('/node_modules/vue/') ||
+              normalizedId.includes('/node_modules/vue-router/') ||
+              normalizedId.includes('/node_modules/pinia/')) {
+              return 'vue-core'
+            }
+            if (normalizedId.includes('/node_modules/vue-i18n/')) {
+              return 'vue-i18n'
+            }
+            if (normalizedId.includes('/node_modules/axios/')) {
+              return 'axios'
+            }
+            if (normalizedId.includes('/node_modules/@xterm/xterm/')) {
+              return 'xterm-core'
+            }
+            if (normalizedId.includes('/node_modules/@xterm/addon-')) {
+              return 'xterm-addons'
+            }
+            if (normalizedId.includes('/src/api/index.ts') || normalizedId.includes('/src/api/admin.ts')) {
+              return 'api-client'
+            }
+            if (normalizedId.includes('/src/locales/zh-CN.ts')) {
+              return 'locale-zh-cn'
+            }
+            if (normalizedId.includes('/src/locales/zh-TW.ts')) {
+              return 'locale-zh-tw'
+            }
+            if (normalizedId.includes('/src/locales/en.ts')) {
+              return 'locale-en'
+            }
+          },
+        },
+        onwarn(warning, warn) {
+          // å¿½ç•¥ sourcemap ç›¸å…³è­¦å‘Š
+          if (warning.message?.includes('sourcemap')) return
+          warn(warning)
+        }
+      },
+      minify: 'terser',
+      terserOptions: {
+        compress: {
+          // ç”Ÿäº§çŽ¯å¢ƒç§»é™¤æ‰€æœ‰ console æ—¥å¿—ï¼Œä½†ä¿ç•™ error ç”¨äºŽé”™è¯¯è¿½è¸ª
+          drop_console: false,
+          pure_funcs: ['console.log', 'console.debug', 'console.info', 'console.warn'],
+          drop_debugger: true,
+        },
+      },
+    },
+  }
+})
+
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "Get-ChildItem client/node_modules/.bin -Name | Select-String -Pattern 'vite|vue-tsc'" in C:\Users\Administrator\Desktop\payinces
+ succeeded in 713ms:
+
+vite
+vite.CMD
+vite.ps1
+vue-tsc
+vue-tsc.CMD
+vue-tsc.ps1
+
+
+
+diff --git a/client/src/components/plugins/PluginFrame.vue b/client/src/components/plugins/PluginFrame.vue
+index d3ce0134d97304e8fff74e8fd7a0c3a1377bf00e..3ea35b066e957663350a599e45a0cc5c27685195
+--- a/client/src/components/plugins/PluginFrame.vue
++++ b/client/src/components/plugins/PluginFrame.vue
+@@ -39,7 +39,7 @@
+     pluginId,
+     config,
+     updatedAt: new Date().toISOString()
+-  }, window.location.origin)
++  }, '*')
+ }
+ 
+ async function refreshPluginConfig(): Promise<void> {
+@@ -95,7 +95,7 @@
+     :class="['w-full rounded-lg border border-themed bg-themed-surface', frameClass || 'min-h-[560px]']"
+     :src="frameUrl"
+     :title="title"
+-    sandbox="allow-forms allow-scripts allow-same-origin"
++    sandbox="allow-forms allow-scripts"
+     referrerpolicy="same-origin"
+     @load="refreshPluginConfig"
+   />
+diff --git a/server/scripts/test-plugin-client-boundary-guards.ts b/server/scripts/test-plugin-client-boundary-guards.ts
+index a678e73b644afbd0a00d3b71a262668048e0efd3..e5d84847be70fc45fd27e38ac465be3be6feac9b
+--- a/server/scripts/test-plugin-client-boundary-guards.ts
++++ b/server/scripts/test-plugin-client-boundary-guards.ts
+@@ -42,7 +42,8 @@
+ )
+ 
+ assert.ok(
+-  pluginFrame.includes('sandbox=') &&
++  pluginFrame.includes('sandbox="allow-forms allow-scripts"') &&
++    !pluginFrame.includes('allow-same-origin') &&
+     pluginFrame.includes("url.startsWith('/api/plugins/assets/')") &&
+     pluginFrame.includes('requestPluginAssetToken(asset)') &&
+     pluginFrame.includes('assetToken') &&
+@@ -50,7 +51,7 @@
+     pluginFrame.includes('api.plugins.getPublicConfig(asset.pluginId)') &&
+     pluginFrame.includes("type: 'payincus:plugin-config'") &&
+     pluginFrame.includes('postMessage') &&
+-    pluginFrame.includes('window.location.origin') &&
++    pluginFrame.includes("}, '*')") &&
+     pluginFrame.includes("window.addEventListener('payincus:plugin-config-refresh'") &&
+     pluginFrame.includes('frameClass?: string') &&
+     pluginFrame.includes("frameClass || 'min-h-[560px]'") &&
+
+codex
+原因已定位为 Vite 默认“bundle config”加载器在沙箱内解析配置时越过工作区读取上级目录。Vite 6 支持 `--configLoader runner`，可直接运行同一配置而不做该越界打包；我将用 client 本地二进制分别构建 user/admin。这只是验证命令调整，不改仓库文件。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$env:VITE_APP_ENTRY='"'user'; pnpm exec vue-tsc; if ("'$LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; pnpm exec vite build --configLoader runner; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; $env:VITE_APP_ENTRY='"'admin'; pnpm exec vue-tsc; if ("'$LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; pnpm exec vite build --configLoader runner; exit $LASTEXITCODE' in C:\Users\Administrator\Desktop\payinces\client
+diff --git a/client/src/components/plugins/PluginFrame.vue b/client/src/components/plugins/PluginFrame.vue
+index d3ce0134d97304e8fff74e8fd7a0c3a1377bf00e..3ea35b066e957663350a599e45a0cc5c27685195
+--- a/client/src/components/plugins/PluginFrame.vue
++++ b/client/src/components/plugins/PluginFrame.vue
+@@ -39,7 +39,7 @@
+     pluginId,
+     config,
+     updatedAt: new Date().toISOString()
+-  }, window.location.origin)
++  }, '*')
+ }
+ 
+ async function refreshPluginConfig(): Promise<void> {
+@@ -95,7 +95,7 @@
+     :class="['w-full rounded-lg border border-themed bg-themed-surface', frameClass || 'min-h-[560px]']"
+     :src="frameUrl"
+     :title="title"
+-    sandbox="allow-forms allow-scripts allow-same-origin"
++    sandbox="allow-forms allow-scripts"
+     referrerpolicy="same-origin"
+     @load="refreshPluginConfig"
+   />
+diff --git a/server/scripts/test-plugin-client-boundary-guards.ts b/server/scripts/test-plugin-client-boundary-guards.ts
+index a678e73b644afbd0a00d3b71a262668048e0efd3..e5d84847be70fc45fd27e38ac465be3be6feac9b
+--- a/server/scripts/test-plugin-client-boundary-guards.ts
++++ b/server/scripts/test-plugin-client-boundary-guards.ts
+@@ -42,7 +42,8 @@
+ )
+ 
+ assert.ok(
+-  pluginFrame.includes('sandbox=') &&
++  pluginFrame.includes('sandbox="allow-forms allow-scripts"') &&
++    !pluginFrame.includes('allow-same-origin') &&
+     pluginFrame.includes("url.startsWith('/api/plugins/assets/')") &&
+     pluginFrame.includes('requestPluginAssetToken(asset)') &&
+     pluginFrame.includes('assetToken') &&
+@@ -50,7 +51,7 @@
+     pluginFrame.includes('api.plugins.getPublicConfig(asset.pluginId)') &&
+     pluginFrame.includes("type: 'payincus:plugin-config'") &&
+     pluginFrame.includes('postMessage') &&
+-    pluginFrame.includes('window.location.origin') &&
++    pluginFrame.includes("}, '*')") &&
+     pluginFrame.includes("window.addEventListener('payincus:plugin-config-refresh'") &&
+     pluginFrame.includes('frameClass?: string') &&
+     pluginFrame.includes("frameClass || 'min-h-[560px]'") &&
+
+diff --git a/client/src/components/plugins/PluginFrame.vue b/client/src/components/plugins/PluginFrame.vue
+index d3ce0134d97304e8fff74e8fd7a0c3a1377bf00e..3ea35b066e957663350a599e45a0cc5c27685195
+--- a/client/src/components/plugins/PluginFrame.vue
++++ b/client/src/components/plugins/PluginFrame.vue
+@@ -39,7 +39,7 @@
+     pluginId,
+     config,
+     updatedAt: new Date().toISOString()
+-  }, window.location.origin)
++  }, '*')
+ }
+ 
+ async function refreshPluginConfig(): Promise<void> {
+@@ -95,7 +95,7 @@
+     :class="['w-full rounded-lg border border-themed bg-themed-surface', frameClass || 'min-h-[560px]']"
+     :src="frameUrl"
+     :title="title"
+-    sandbox="allow-forms allow-scripts allow-same-origin"
++    sandbox="allow-forms allow-scripts"
+     referrerpolicy="same-origin"
+     @load="refreshPluginConfig"
+   />
+diff --git a/server/scripts/test-plugin-client-boundary-guards.ts b/server/scripts/test-plugin-client-boundary-guards.ts
+index a678e73b644afbd0a00d3b71a262668048e0efd3..e5d84847be70fc45fd27e38ac465be3be6feac9b
+--- a/server/scripts/test-plugin-client-boundary-guards.ts
++++ b/server/scripts/test-plugin-client-boundary-guards.ts
+@@ -42,7 +42,8 @@
+ )
+ 
+ assert.ok(
+-  pluginFrame.includes('sandbox=') &&
++  pluginFrame.includes('sandbox="allow-forms allow-scripts"') &&
++    !pluginFrame.includes('allow-same-origin') &&
+     pluginFrame.includes("url.startsWith('/api/plugins/assets/')") &&
+     pluginFrame.includes('requestPluginAssetToken(asset)') &&
+     pluginFrame.includes('assetToken') &&
+@@ -50,7 +51,7 @@
+     pluginFrame.includes('api.plugins.getPublicConfig(asset.pluginId)') &&
+     pluginFrame.includes("type: 'payincus:plugin-config'") &&
+     pluginFrame.includes('postMessage') &&
+-    pluginFrame.includes('window.location.origin') &&
++    pluginFrame.includes("}, '*')") &&
+     pluginFrame.includes("window.addEventListener('payincus:plugin-config-refresh'") &&
+     pluginFrame.includes('frameClass?: string') &&
+     pluginFrame.includes("frameClass || 'min-h-[560px]'") &&
+
+codex
+双端构建仍在运行，目前没有报错输出；继续等待完成。
+diff --git a/client/src/components/plugins/PluginFrame.vue b/client/src/components/plugins/PluginFrame.vue
+index d3ce0134d97304e8fff74e8fd7a0c3a1377bf00e..3ea35b066e957663350a599e45a0cc5c27685195
+--- a/client/src/components/plugins/PluginFrame.vue
++++ b/client/src/components/plugins/PluginFrame.vue
+@@ -39,7 +39,7 @@
+     pluginId,
+     config,
+     updatedAt: new Date().toISOString()
+-  }, window.location.origin)
++  }, '*')
+ }
+ 
+ async function refreshPluginConfig(): Promise<void> {
+@@ -95,7 +95,7 @@
+     :class="['w-full rounded-lg border border-themed bg-themed-surface', frameClass || 'min-h-[560px]']"
+     :src="frameUrl"
+     :title="title"
+-    sandbox="allow-forms allow-scripts allow-same-origin"
++    sandbox="allow-forms allow-scripts"
+     referrerpolicy="same-origin"
+     @load="refreshPluginConfig"
+   />
+diff --git a/server/scripts/test-plugin-client-boundary-guards.ts b/server/scripts/test-plugin-client-boundary-guards.ts
+index a678e73b644afbd0a00d3b71a262668048e0efd3..e5d84847be70fc45fd27e38ac465be3be6feac9b
+--- a/server/scripts/test-plugin-client-boundary-guards.ts
++++ b/server/scripts/test-plugin-client-boundary-guards.ts
+@@ -42,7 +42,8 @@
+ )
+ 
+ assert.ok(
+-  pluginFrame.includes('sandbox=') &&
++  pluginFrame.includes('sandbox="allow-forms allow-scripts"') &&
++    !pluginFrame.includes('allow-same-origin') &&
+     pluginFrame.includes("url.startsWith('/api/plugins/assets/')") &&
+     pluginFrame.includes('requestPluginAssetToken(asset)') &&
+     pluginFrame.includes('assetToken') &&
+@@ -50,7 +51,7 @@
+     pluginFrame.includes('api.plugins.getPublicConfig(asset.pluginId)') &&
+     pluginFrame.includes("type: 'payincus:plugin-config'") &&
+     pluginFrame.includes('postMessage') &&
+-    pluginFrame.includes('window.location.origin') &&
++    pluginFrame.includes("}, '*')") &&
+     pluginFrame.includes("window.addEventListener('payincus:plugin-config-refresh'") &&
+     pluginFrame.includes('frameClass?: string') &&
+     pluginFrame.includes("frameClass || 'min-h-[560px]'") &&
+
+diff --git a/client/src/components/plugins/PluginFrame.vue b/client/src/components/plugins/PluginFrame.vue
+index d3ce0134d97304e8fff74e8fd7a0c3a1377bf00e..3ea35b066e957663350a599e45a0cc5c27685195
+--- a/client/src/components/plugins/PluginFrame.vue
++++ b/client/src/components/plugins/PluginFrame.vue
+@@ -39,7 +39,7 @@
+     pluginId,
+     config,
+     updatedAt: new Date().toISOString()
+-  }, window.location.origin)
++  }, '*')
+ }
+ 
+ async function refreshPluginConfig(): Promise<void> {
+@@ -95,7 +95,7 @@
+     :class="['w-full rounded-lg border border-themed bg-themed-surface', frameClass || 'min-h-[560px]']"
+     :src="frameUrl"
+     :title="title"
+-    sandbox="allow-forms allow-scripts allow-same-origin"
++    sandbox="allow-forms allow-scripts"
+     referrerpolicy="same-origin"
+     @load="refreshPluginConfig"
+   />
+diff --git a/server/scripts/test-plugin-client-boundary-guards.ts b/server/scripts/test-plugin-client-boundary-guards.ts
+index a678e73b644afbd0a00d3b71a262668048e0efd3..e5d84847be70fc45fd27e38ac465be3be6feac9b
+--- a/server/scripts/test-plugin-client-boundary-guards.ts
++++ b/server/scripts/test-plugin-client-boundary-guards.ts
+@@ -42,7 +42,8 @@
+ )
+ 
+ assert.ok(
+-  pluginFrame.includes('sandbox=') &&
++  pluginFrame.includes('sandbox="allow-forms allow-scripts"') &&
++    !pluginFrame.includes('allow-same-origin') &&
+     pluginFrame.includes("url.startsWith('/api/plugins/assets/')") &&
+     pluginFrame.includes('requestPluginAssetToken(asset)') &&
+     pluginFrame.includes('assetToken') &&
+@@ -50,7 +51,7 @@
+     pluginFrame.includes('api.plugins.getPublicConfig(asset.pluginId)') &&
+     pluginFrame.includes("type: 'payincus:plugin-config'") &&
+     pluginFrame.includes('postMessage') &&
+-    pluginFrame.includes('window.location.origin') &&
++    pluginFrame.includes("}, '*')") &&
+     pluginFrame.includes("window.addEventListener('payincus:plugin-config-refresh'") &&
+     pluginFrame.includes('frameClass?: string') &&
+     pluginFrame.includes("frameClass || 'min-h-[560px]'") &&
+
+codex
+构建已运行约 90 秒且未产生错误输出，可能正处于生产压缩阶段；我会继续短周期等待，不中断验证。
+ succeeded in 132623ms:
+[36mvite v6.4.1 [32mbuilding for production...[36m[39m
+transforming...
+[32m✓[39m 1968 modules transformed.
+rendering chunks...
+computing gzip size...
+[2mdist/user/[22m[32mindex.html           [39m[1m[2m  2.92 kB[22m[1m[22m[2m │ gzip:   1.13 kB[22m
+[2mdist/user/[22m[32massets/SbvrH0uZ.svg  [39m[1m[2m  4.19 kB[22m[1m[22m[2m │ gzip:   1.76 kB[22m
+[2mdist/user/[22m[32massets/Di1JYREk.svg  [39m[1m[2m  4.33 kB[22m[1m[22m[2m │ gzip:   1.84 kB[22m
+[2mdist/user/[22m[32massets/D39eIL5d.svg  [39m[1m[2m  4.63 kB[22m[1m[22m[2m │ gzip:   1.92 kB[22m
+[2mdist/user/[22m[32massets/qxMwa2gs.svg  [39m[1m[2m  4.66 kB[22m[1m[22m[2m │ gzip:   1.92 kB[22m
+[2mdist/user/[22m[32massets/B0FsxZiL.svg  [39m[1m[2m  4.74 kB[22m[1m[22m[2m │ gzip:   1.92 kB[22m
+[2mdist/user/[22m[32massets/CjfitMyT.svg  [39m[1m[2m  4.79 kB[22m[1m[22m[2m │ gzip:   1.95 kB[22m
+[2mdist/user/[22m[32massets/Cag8QTk2.svg  [39m[1m[2m  4.94 kB[22m[1m[22m[2m │ gzip:   2.02 kB[22m
+[2mdist/user/[22m[32massets/CPnMO1hT.svg  [39m[1m[2m  5.07 kB[22m[1m[22m[2m │ gzip:   2.12 kB[22m
+[2mdist/user/[22m[32massets/D8B-0kdx.svg  [39m[1m[2m  5.31 kB[22m[1m[22m[2m │ gzip:   2.25 kB[22m
+[2mdist/user/[22m[32massets/DGrQb42O.svg  [39m[1m[2m  5.37 kB[22m[1m[22m[2m │ gzip:   2.37 kB[22m
+[2mdist/user/[22m[32massets/BmsW91ne.svg  [39m[1m[2m  5.42 kB[22m[1m[22m[2m │ gzip:   2.27 kB[22m
+[2mdist/user/[22m[32massets/bZuP8hmf.svg  [39m[1m[2m  5.47 kB[22m[1m[22m[2m │ gzip:   2.37 kB[22m
+[2mdist/user/[22m[32massets/DJKnEFYW.svg  [39m[1m[2m  5.51 kB[22m[1m[22m[2m │ gzip:   2.42 kB[22m
+[2mdist/user/[22m[32massets/Dl00mlk2.svg  [39m[1m[2m  5.56 kB[22m[1m[22m[2m │ gzip:   2.46 kB[22m
+[2mdist/user/[22m[32massets/p_fAQGbS.svg  [39m[1m[2m  5.63 kB[22m[1m[22m[2m │ gzip:   1.64 kB[22m
+[2mdist/user/[22m[32massets/fuIMkEYQ.svg  [39m[1m[2m  5.81 kB[22m[1m[22m[2m │ gzip:   1.70 kB[22m
+[2mdist/user/[22m[32massets/DxciGbUu.svg  [39m[1m[2m  5.83 kB[22m[1m[22m[2m │ gzip:   2.55 kB[22m
+[2mdist/user/[22m[32massets/B-w7hFKu.svg  [39m[1m[2m  5.91 kB[22m[1m[22m[2m │ gzip:   2.50 kB[22m
+[2mdist/user/[22m[32massets/CSuuaw9K.svg  [39m[1m[2m  6.17 kB[22m[1m[22m[2m │ gzip:   2.46 kB[22m
+[2mdist/user/[22m[32massets/U0m7oJ5e.svg  [39m[1m[2m  6.19 kB[22m[1m[22m[2m │ gzip:   2.49 kB[22m
+[2mdist/user/[22m[32massets/Dr5rMAMb.svg  [39m[1m[2m  6.75 kB[22m[1m[22m[2m │ gzip:   2.21 kB[22m
+[2mdist/user/[22m[32massets/CJHJmJj1.svg  [39m[1m[2m  7.09 kB[22m[1m[22m[2m │ gzip:   2.99 kB[22m
+[2mdist/user/[22m[32massets/CwKXYZ8s.svg  [39m[1m[2m  7.09 kB[22m[1m[22m[2m │ gzip:   2.92 kB[22m
+[2mdist/user/[22m[32massets/Dkyx6q-p.svg  [39m[1m[2m  7.10 kB[22m[1m[22m[2m │ gzip:   2.91 kB[22m
+[2mdist/user/[22m[32massets/dtelpZmc.svg  [39m[1m[2m  7.12 kB[22m[1m[22m[2m │ gzip:   2.99 kB[22m
+[2mdist/user/[22m[32massets/BeWfuE30.svg  [39m[1m[2m  7.12 kB[22m[1m[22m[2m │ gzip:   2.72 kB[22m
+[2mdist/user/[22m[32massets/BBvObpUS.svg  [39m[1m[2m  7.12 kB[22m[1m[22m[2m │ gzip:   2.74 kB[22m
+[2mdist/user/[22m[32massets/Cu5YU29T.svg  [39m[1m[2m  7.14 kB[22m[1m[22m[2m │ gzip:   2.41 kB[22m
+[2mdist/user/[22m[32massets/CHdhvNcr.svg  [39m[1m[2m  7.32 kB[22m[1m[22m[2m │ gzip:   2.96 kB[22m
+[2mdist/user/[22m[32massets/CMlf0YU8.svg  [39m[1m[2m  7.34 kB[22m[1m[22m[2m │ gzip:   2.97 kB[22m
+[2mdist/user/[22m[32massets/Cdz2uTvR.svg  [39m[1m[2m  7.74 kB[22m[1m[22m[2m │ gzip:   3.05 kB[22m
+[2mdist/user/[22m[32massets/DZ2ADgIR.svg  [39m[1m[2m  8.00 kB[22m[1m[22m[2m │ gzip:   3.25 kB[22m
+[2mdist/user/[22m[32massets/Bj15g7cp.svg  [39m[1m[2m  8.27 kB[22m[1m[22m[2m │ gzip:   3.26 kB[22m
+[2mdist/user/[22m[32massets/BTevY6N2.svg  [39m[1m[2m  8.37 kB[22m[1m[22m[2m │ gzip:   3.27 kB[22m
+[2mdist/user/[22m[32massets/BSdsyIxY.svg  [39m[1m[2m  8.45 kB[22m[1m[22m[2m │ gzip:   3.55 kB[22m
+[2mdist/user/[22m[32massets/BC_zcciE.svg  [39m[1m[2m  8.52 kB[22m[1m[22m[2m │ gzip:   3.59 kB[22m
+[2mdist/user/[22m[32massets/YC70hswZ.svg  [39m[1m[2m  8.73 kB[22m[1m[22m[2m │ gzip:   3.55 kB[22m
+[2mdist/user/[22m[32massets/DwOkwyQ0.svg  [39m[1m[2m  8.74 kB[22m[1m[22m[2m │ gzip:   3.57 kB[22m
+[2mdist/user/[22m[32massets/W0PWLK5p.svg  [39m[1m[2m  9.00 kB[22m[1m[22m[2m │ gzip:   1.67 kB[22m
+[2mdist/user/[22m[32massets/CK0XlKT-.svg  [39m[1m[2m  9.01 kB[22m[1m[22m[2m │ gzip:   4.03 kB[22m
+[2mdist/user/[22m[32massets/Bxz9hxvX.svg  [39m[1m[2m  9.10 kB[22m[1m[22m[2m │ gzip:   4.14 kB[22m
+[2mdist/user/[22m[32massets/-VPIqfkF.svg  [39m[1m[2m  9.13 kB[22m[1m[22m[2m │ gzip:   3.51 kB[22m
+[2mdist/user/[22m[32massets/Dd9p-0-T.svg  [39m[1m[2m  9.70 kB[22m[1m[22m[2m │ gzip:   3.81 kB[22m
+[2mdist/user/[22m[32massets/DnlyVVKx.svg  [39m[1m[2m  9.85 kB[22m[1m[22m[2m │ gzip:   4.19 kB[22m
+[2mdist/user/[22m[32massets/Dh79zbT9.svg  [39m[1m[2m  9.97 kB[22m[1m[22m[2m │ gzip:   4.25 kB[22m
+[2mdist/user/[22m[32massets/ClZ-0KpG.svg  [39m[1m[2m 10.00 kB[22m[1m[22m[2m │ gzip:   4.14 kB[22m
+[2mdist/user/[22m[32massets/C7xY6pic.svg  [39m[1m[2m 10.02 kB[22m[1m[22m[2m │ gzip:   4.14 kB[22m
+[2mdist/user/[22m[32massets/CLCX8uk5.svg  [39m[1m[2m 10.36 kB[22m[1m[22m[2m │ gzip:   1.79 kB[22m
+[2mdist/user/[22m[32massets/DUkgV9Tq.svg  [39m[1m[2m 10.72 kB[22m[1m[22m[2m │ gzip:   4.46 kB[22m
+[2mdist/user/[22m[32massets/DSQoDxn_.svg  [39m[1m[2m 10.74 kB[22m[1m[22m[2m │ gzip:   4.46 kB[22m
+[2mdist/user/[22m[32massets/DRlxvNwm.svg  [39m[1m[2m 11.13 kB[22m[1m[22m[2m │ gzip:   2.84 kB[22m
+[2mdist/user/[22m[32massets/DTi94M3M.svg  [39m[1m[2m 11.24 kB[22m[1m[22m[2m │ gzip:   2.71 kB[22m
+[2mdist/user/[22m[32massets/RKKs0ph6.svg  [39m[1m[2m 12.16 kB[22m[1m[22m[2m │ gzip:   4.12 kB[22m
+[2mdist/user/[22m[32massets/nDhIaDNb.svg  [39m[1m[2m 12.21 kB[22m[1m[22m[2m │ gzip:   4.30 kB[22m
+[2mdist/user/[22m[32massets/YDa8zgzO.svg  [39m[1m[2m 12.71 kB[22m[1m[22m[2m │ gzip:   5.37 kB[22m
+[2mdist/user/[22m[32massets/DIMg4gti.svg  [39m[1m[2m 13.30 kB[22m[1m[22m[2m │ gzip:   4.75 kB[22m
+[2mdist/user/[22m[32massets/B6T3O78g.svg  [39m[1m[2m 13.34 kB[22m[1m[22m[2m │ gzip:   5.64 kB[22m
+[2mdist/user/[22m[32massets/BPAlH32D.svg  [39m[1m[2m 13.44 kB[22m[1m[22m[2m │ gzip:   4.93 kB[22m
+[2mdist/user/[22m[32massets/pweRl6ZP.svg  [39m[1m[2m 13.46 kB[22m[1m[22m[2m │ gzip:   4.82 kB[22m
+[2mdist/user/[22m[32massets/CPQcA8Ol.svg  [39m[1m[2m 13.47 kB[22m[1m[22m[2m │ gzip:   5.68 kB[22m
+[2mdist/user/[22m[32massets/DgxdtieE.svg  [39m[1m[2m 13.47 kB[22m[1m[22m[2m │ gzip:   4.98 kB[22m
+[2mdist/user/[22m[32massets/CwGQsyAM.svg  [39m[1m[2m 13.63 kB[22m[1m[22m[2m │ gzip:   4.81 kB[22m
+[2mdist/user/[22m[32massets/h4QKADRE.svg  [39m[1m[2m 13.64 kB[22m[1m[22m[2m │ gzip:   4.81 kB[22m
+[2mdist/user/[22m[32massets/YqzKx9xl.svg  [39m[1m[2m 13.93 kB[22m[1m[22m[2m │ gzip:   5.86 kB[22m
+[2mdist/user/[22m[32massets/Q03Mij62.svg  [39m[1m[2m 15.30 kB[22m[1m[22m[2m │ gzip:   2.28 kB[22m
+[2mdist/user/[22m[32massets/cCIgaNf6.svg  [39m[1m[2m 15.40 kB[22m[1m[22m[2m │ gzip:   2.24 kB[22m
+[2mdist/user/[22m[32massets/BKrUHzrq.svg  [39m[1m[2m 15.54 kB[22m[1m[22m[2m │ gzip:   5.35 kB[22m
+[2mdist/user/[22m[32massets/DGBIRFB_.svg  [39m[1m[2m 15.68 kB[22m[1m[22m[2m │ gzip:   5.27 kB[22m
+[2mdist/user/[22m[32massets/Cbhezfe1.svg  [39m[1m[2m 15.79 kB[22m[1m[22m[2m │ gzip:   3.08 kB[22m
+[2mdist/user/[22m[32massets/mNzh0mZC.svg  [39m[1m[2m 16.18 kB[22m[1m[22m[2m │ gzip:   5.77 kB[22m
+[2mdist/user/[22m[32massets/DPPHwW2M.svg  [39m[1m[2m 16.27 kB[22m[1m[22m[2m │ gzip:   3.23 kB[22m
+[2mdist/user/[22m[32massets/BKi5dxWt.svg  [39m[1m[2m 16.36 kB[22m[1m[22m[2m │ gzip:   5.84 kB[22m
+[2mdist/user/[22m[32massets/CcFCSQxm.svg  [39m[1m[2m 17.25 kB[22m[1m[22m[2m │ gzip:   5.36 kB[22m
+[2mdist/user/[22m[32massets/BX2WCaNt.svg  [39m[1m[2m 17.29 kB[22m[1m[22m[2m │ gzip:   5.43 kB[22m
+[2mdist/user/[22m[32massets/Bqg4Cbbh.svg  [39m[1m[2m 18.70 kB[22m[1m[22m[2m │ gzip:   7.44 kB[22m
+[2mdist/user/[22m[32massets/Bc2fqp73.svg  [39m[1m[2m 18.98 kB[22m[1m[22m[2m │ gzip:   7.68 kB[22m
+[2mdist/user/[22m[32massets/DabL4p35.svg  [39m[1m[2m 19.00 kB[22m[1m[22m[2m │ gzip:   7.58 kB[22m
+[2mdist/user/[22m[32massets/C77Rf6cE.svg  [39m[1m[2m 19.19 kB[22m[1m[22m[2m │ gzip:   7.76 kB[22m
+[2mdist/user/[22m[32massets/nN8zP2Bu.svg  [39m[1m[2m 22.21 kB[22m[1m[22m[2m │ gzip:   4.38 kB[22m
+[2mdist/user/[22m[32massets/DcqxRdQL.svg  [39m[1m[2m 22.22 kB[22m[1m[22m[2m │ gzip:   4.37 kB[22m
+[2mdist/user/[22m[32massets/D4gikpNq.svg  [39m[1m[2m 22.28 kB[22m[1m[22m[2m │ gzip:   5.97 kB[22m
+[2mdist/user/[22m[32massets/DvNWWcPM.svg  [39m[1m[2m 22.39 kB[22m[1m[22m[2m │ gzip:   7.17 kB[22m
+[2mdist/user/[22m[32massets/BeYgB2z9.svg  [39m[1m[2m 22.46 kB[22m[1m[22m[2m │ gzip:   7.18 kB[22m
+[2mdist/user/[22m[32massets/CrOApEqW.svg  [39m[1m[2m 22.57 kB[22m[1m[22m[2m │ gzip:   6.98 kB[22m
+[2mdist/user/[22m[32massets/BImhNBcd.svg  [39m[1m[2m 22.72 kB[22m[1m[22m[2m │ gzip:   4.11 kB[22m
+[2mdist/user/[22m[32massets/DqkWLbnk.svg  [39m[1m[2m 22.72 kB[22m[1m[22m[2m │ gzip:   4.11 kB[22m
+[2mdist/user/[22m[32massets/CuaQmCLf.svg  [39m[1m[2m 22.80 kB[22m[1m[22m[2m │ gzip:   7.02 kB[22m
+[2mdist/user/[22m[32massets/13HOfeJD.svg  [39m[1m[2m 23.02 kB[22m[1m[22m[2m │ gzip:   4.11 kB[22m
+[2mdist/user/[22m[32massets/CJPJrjiZ.svg  [39m[1m[2m 23.02 kB[22m[1m[22m[2m │ gzip:   4.11 kB[22m
+[2mdist/user/[22m[32massets/BqaZHuhf.svg  [39m[1m[2m 23.37 kB[22m[1m[22m[2m │ gzip:   8.57 kB[22m
+[2mdist/user/[22m[32massets/Dpsu1myA.svg  [39m[1m[2m 23.39 kB[22m[1m[22m[2m │ gzip:   8.56 kB[22m
+[2mdist/user/[22m[32massets/vEp1ZXy6.svg  [39m[1m[2m 23.92 kB[22m[1m[22m[2m │ gzip:   5.49 kB[22m
+[2mdist/user/[22m[32massets/DEAVMg38.svg  [39m[1m[2m 24.10 kB[22m[1m[22m[2m │ gzip:   9.09 kB[22m
+[2mdist/user/[22m[32massets/u3dAPoew.svg  [39m[1m[2m 24.14 kB[22m[1m[22m[2m │ gzip:   9.13 kB[22m
+[2mdist/user/[22m[32massets/C4CYPgyC.svg  [39m[1m[2m 24.43 kB[22m[1m[22m[2m │ gzip:   8.53 kB[22m
+[2mdist/user/[22m[32massets/SxWnbWW0.svg  [39m[1m[2m 24.50 kB[22m[1m[22m[2m │ gzip:   9.95 kB[22m
+[2mdist/user/[22m[32massets/C-KgnQEz.svg  [39m[1m[2m 24.59 kB[22m[1m[22m[2m │ gzip:   8.58 kB[22m
+[2mdist/user/[22m[32massets/BTo4qm10.svg  [39m[1m[2m 24.78 kB[22m[1m[22m[2m │ gzip:  10.09 kB[22m
+[2mdist/user/[22m[32massets/D9xG2hYr.svg  [39m[1m[2m 28.21 kB[22m[1m[22m[2m │ gzip:   6.26 kB[22m
+[2mdist/user/[22m[32massets/BFo5zkKU.svg  [39m[1m[2m 28.29 kB[22m[1m[22m[2m │ gzip:  10.82 kB[22m
+[2mdist/user/[22m[32massets/DXhVZ333.svg  [39m[1m[2m 28.34 kB[22m[1m[22m[2m │ gzip:   6.26 kB[22m
+[2mdist/user/[22m[32massets/B-RvQ4Hz.svg  [39m[1m[2m 28.49 kB[22m[1m[22m[2m │ gzip:   8.83 kB[22m
+[2mdist/user/[22m[32massets/s7kyhqIM.svg  [39m[1m[2m 28.66 kB[22m[1m[22m[2m │ gzip:   9.67 kB[22m
+[2mdist/user/[22m[32massets/B9-hqIE-.svg  [39m[1m[2m 28.72 kB[22m[1m[22m[2m │ gzip:   9.68 kB[22m
+[2mdist/user/[22m[32massets/nuUF_Ak3.svg  [39m[1m[2m 28.74 kB[22m[1m[22m[2m │ gzip:   9.20 kB[22m
+[2mdist/user/[22m[32massets/CPJublpi.svg  [39m[1m[2m 28.78 kB[22m[1m[22m[2m │ gzip:  11.03 kB[22m
+[2mdist/user/[22m[32massets/CaVOFQ3t.svg  [39m[1m[2m 28.78 kB[22m[1m[22m[2m │ gzip:   6.83 kB[22m
+[2mdist/user/[22m[32massets/Blhdm5jl.svg  [39m[1m[2m 29.14 kB[22m[1m[22m[2m │ gzip:  10.60 kB[22m
+[2mdist/user/[22m[32massets/cwfBJlvF.svg  [39m[1m[2m 29.35 kB[22m[1m[22m[2m │ gzip:   6.72 kB[22m
+[2mdist/user/[22m[32massets/Dekqy8Of.svg  [39m[1m[2m 30.45 kB[22m[1m[22m[2m │ gzip:  11.46 kB[22m
+[2mdist/user/[22m[32massets/B18i8NGa.svg  [39m[1m[2m 30.51 kB[22m[1m[22m[2m │ gzip:  11.15 kB[22m
+[2mdist/user/[22m[32massets/fzLfaANM.svg  [39m[1m[2m 30.73 kB[22m[1m[22m[2m │ gzip:  13.14 kB[22m
+[2mdist/user/[22m[32massets/BTEVCXG-.svg  [39m[1m[2m 30.98 kB[22m[1m[22m[2m │ gzip:  11.62 kB[22m
+[2mdist/user/[22m[32massets/BpiVVBoV.svg  [39m[1m[2m 31.28 kB[22m[1m[22m[2m │ gzip:  13.31 kB[22m
+[2mdist/user/[22m[32massets/BLpn5qMn.svg  [39m[1m[2m 31.35 kB[22m[1m[22m[2m │ gzip:  11.30 kB[22m
+[2mdist/user/[22m[32massets/CJo5DI-7.svg  [39m[1m[2m 31.35 kB[22m[1m[22m[2m │ gzip:  11.30 kB[22m
+[2mdist/user/[22m[32massets/DiiNa0F5.svg  [39m[1m[2m 31.50 kB[22m[1m[22m[2m │ gzip:  11.41 kB[22m
+[2mdist/user/[22m[32massets/DOgYbHsY.svg  [39m[1m[2m 31.92 kB[22m[1m[22m[2m │ gzip:  11.09 kB[22m
+[2mdist/user/[22m[32massets/DyWbhIiC.svg  [39m[1m[2m 34.19 kB[22m[1m[22m[2m │ gzip:   9.81 kB[22m
+[2mdist/user/[22m[32massets/CgxUDvtv.svg  [39m[1m[2m 34.78 kB[22m[1m[22m[2m │ gzip:  12.58 kB[22m
+[2mdist/user/[22m[32massets/vXe0Dr49.svg  [39m[1m[2m 35.03 kB[22m[1m[22m[2m │ gzip:  10.03 kB[22m
+[2mdist/user/[22m[32massets/CqtQPzWZ.svg  [39m[1m[2m 35.43 kB[22m[1m[22m[2m │ gzip:  12.88 kB[22m
+[2mdist/user/[22m[32massets/DGBJvQay.svg  [39m[1m[2m 38.22 kB[22m[1m[22m[2m │ gzip:  11.99 kB[22m
+[2mdist/user/[22m[32massets/C_WSgUcv.svg  [39m[1m[2m 38.35 kB[22m[1m[22m[2m │ gzip:  12.09 kB[22m
+[2mdist/user/[22m[32massets/B86d445t.svg  [39m[1m[2m 40.35 kB[22m[1m[22m[2m │ gzip:  14.40 kB[22m
+[2mdist/user/[22m[32massets/DeRnbj4d.svg  [39m[1m[2m 41.34 kB[22m[1m[22m[2m │ gzip:  14.76 kB[22m
+[2mdist/user/[22m[32massets/BCKHR4_q.svg  [39m[1m[2m 42.51 kB[22m[1m[22m[2m │ gzip:  15.61 kB[22m
+[2mdist/user/[22m[32massets/CoBdB-p8.svg  [39m[1m[2m 42.68 kB[22m[1m[22m[2m │ gzip:  15.60 kB[22m
+[2mdist/user/[22m[32massets/Cv4Gwqah.svg  [39m[1m[2m 56.37 kB[22m[1m[22m[2m │ gzip:  21.28 kB[22m
+[2mdist/user/[22m[32massets/CfGorN3b.svg  [39m[1m[2m 56.95 kB[22m[1m[22m[2m │ gzip:  21.57 kB[22m
+[2mdist/user/[22m[32massets/CJIHhYwF.svg  [39m[1m[2m 77.27 kB[22m[1m[22m[2m │ gzip:  21.83 kB[22m
+[2mdist/user/[22m[32massets/RZ39q5hO.svg  [39m[1m[2m 77.72 kB[22m[1m[22m[2m │ gzip:  22.08 kB[22m
+[2mdist/user/[22m[32massets/CvCwYHGF.svg  [39m[1m[2m 80.21 kB[22m[1m[22m[2m │ gzip:  27.77 kB[22m
+[2mdist/user/[22m[32massets/d5m8M5h8.svg  [39m[1m[2m 80.96 kB[22m[1m[22m[2m │ gzip:  14.80 kB[22m
+[2mdist/user/[22m[32massets/BuSGTZm_.svg  [39m[1m[2m 82.15 kB[22m[1m[22m[2m │ gzip:  15.47 kB[22m
+[2mdist/user/[22m[32massets/Cc8Ccfe8.svg  [39m[1m[2m 84.75 kB[22m[1m[22m[2m │ gzip:  29.50 kB[22m
+[2mdist/user/[22m[32massets/CcUiMqkJ.svg  [39m[1m[2m102.88 kB[22m[1m[22m[2m │ gzip:  24.83 kB[22m
+[2mdist/user/[22m[32massets/Dry0C6UA.svg  [39m[1m[2m104.73 kB[22m[1m[22m[2m │ gzip:  25.14 kB[22m
+[2mdist/user/[22m[32massets/D-aE2xRW.svg  [39m[1m[2m140.52 kB[22m[1m[22m[2m │ gzip:  47.08 kB[22m
+[2mdist/user/[22m[32massets/FjwY7RYr.svg  [39m[1m[2m143.37 kB[22m[1m[22m[2m │ gzip:  47.70 kB[22m
+[2mdist/user/[22m[32massets/CnTO3ehk.svg  [39m[1m[2m181.48 kB[22m[1m[22m[2m │ gzip:  49.93 kB[22m
+[2mdist/user/[22m[32massets/BfwKwXtn.svg  [39m[1m[2m181.63 kB[22m[1m[22m[2m │ gzip:  50.19 kB[22m
+[2mdist/user/[22m[35massets/HALAC3TX.css  [39m[1m[2m  0.18 kB[22m[1m[22m[2m │ gzip:   0.12 kB[22m
+[2mdist/user/[22m[35massets/B76TsvoU.css  [39m[1m[2m  0.22 kB[22m[1m[22m[2m │ gzip:   0.15 kB[22m
+[2mdist/user/[22m[35massets/DQVB8-1J.css  [39m[1m[2m  0.47 kB[22m[1m[22m[2m │ gzip:   0.21 kB[22m
+[2mdist/user/[22m[35massets/Day5hM6X.css  [39m[1m[2m  0.56 kB[22m[1m[22m[2m │ gzip:   0.28 kB[22m
+[2mdist/user/[22m[35massets/Bx_raz5z.css  [39m[1m[2m  0.93 kB[22m[1m[22m[2m │ gzip:   0.39 kB[22m
+[2mdist/user/[22m[35massets/CgopggJP.css  [39m[1m[2m  1.15 kB[22m[1m[22m[2m │ gzip:   0.45 kB[22m
+[2mdist/user/[22m[35massets/Dgvmxbz5.css  [39m[1m[2m  1.16 kB[22m[1m[22m[2m │ gzip:   0.50 kB[22m
+[2mdist/user/[22m[35massets/Cdpekzvy.css  [39m[1m[2m  1.19 kB[22m[1m[22m[2m │ gzip:   0.46 kB[22m
+[2mdist/user/[22m[35massets/Bom54MRx.css  [39m[1m[2m  1.25 kB[22m[1m[22m[2m │ gzip:   0.48 kB[22m
+[2mdist/user/[22m[35massets/BMPauYuW.css  [39m[1m[2m  1.60 kB[22m[1m[22m[2m │ gzip:   0.48 kB[22m
+[2mdist/user/[22m[35massets/Cxr1LgaW.css  [39m[1m[2m  2.13 kB[22m[1m[22m[2m │ gzip:   0.57 kB[22m
+[2mdist/user/[22m[35massets/B4J6W-ei.css  [39m[1m[2m  2.19 kB[22m[1m[22m[2m │ gzip:   0.67 kB[22m
+[2mdist/user/[22m[35massets/B1_QaVXV.css  [39m[1m[2m  2.92 kB[22m[1m[22m[2m │ gzip:   0.47 kB[22m
+[2mdist/user/[22m[35massets/wO2qFXua.css  [39m[1m[2m  5.21 kB[22m[1m[22m[2m │ gzip:   1.18 kB[22m
+[2mdist/user/[22m[35massets/9CEnUXvW.css  [39m[1m[2m  5.75 kB[22m[1m[22m[2m │ gzip:   1.98 kB[22m
+[2mdist/user/[22m[35massets/C80TR6P-.css  [39m[1m[2m  6.32 kB[22m[1m[22m[2m │ gzip:   1.58 kB[22m
+[2mdist/user/[22m[35massets/BJxZ6Njr.css  [39m[1m[2m  8.04 kB[22m[1m[22m[2m │ gzip:   1.28 kB[22m
+[2mdist/user/[22m[35massets/4ij2F6MC.css  [39m[1m[2m732.13 kB[22m[1m[22m[2m │ gzip: 128.37 kB[22m
+[2mdist/user/[22m[36massets/D-M4jYEA.js   [39m[1m[2m  0.50 kB[22m[1m[22m[2m │ gzip:   0.35 kB[22m
+[2mdist/user/[22m[36massets/Cj0s0kTV.js   [39m[1m[2m  1.00 kB[22m[1m[22m[2m │ gzip:   0.59 kB[22m
+[2mdist/user/[22m[36massets/CKA6T-ww.js   [39m[1m[2m  1.02 kB[22m[1m[22m[2m │ gzip:   0.45 kB[22m
+[2mdist/user/[22m[36massets/CQddBA8A.js   [39m[1m[2m  1.03 kB[22m[1m[22m[2m │ gzip:   0.50 kB[22m
+[2mdist/user/[22m[36massets/D0IfwBku.js   [39m[1m[2m  1.14 kB[22m[1m[22m[2m │ gzip:   0.71 kB[22m
+[2mdist/user/[22m[36massets/COzL9Aay.js   [39m[1m[2m  1.20 kB[22m[1m[22m[2m │ gzip:   0.58 kB[22m
+[2mdist/user/[22m[36massets/CYSDGpuq.js   [39m[1m[2m  2.00 kB[22m[1m[22m[2m │ gzip:   1.16 kB[22m
+[2mdist/user/[22m[36massets/BwsUF5on.js   [39m[1m[2m  2.06 kB[22m[1m[22m[2m │ gzip:   0.77 kB[22m
+[2mdist/user/[22m[36massets/BNdOZyvs.js   [39m[1m[2m  2.54 kB[22m[1m[22m[2m │ gzip:   0.88 kB[22m
+[2mdist/user/[22m[36massets/D7u2k286.js   [39m[1m[2m  2.54 kB[22m[1m[22m[2m │ gzip:   1.28 kB[22m
+[2mdist/user/[22m[36massets/9n4WfLUL.js   [39m[1m[2m  2.87 kB[22m[1m[22m[2m │ gzip:   1.34 kB[22m
+[2mdist/user/[22m[36massets/CXPvGHcA.js   [39m[1m[2m  3.13 kB[22m[1m[22m[2m │ gzip:   1.08 kB[22m
+[2mdist/user/[22m[36massets/Bppegj-D.js   [39m[1m[2m  3.59 kB[22m[1m[22m[2m │ gzip:   1.73 kB[22m
+[2mdist/user/[22m[36massets/BGZtbG6m.js   [39m[1m[2m  4.78 kB[22m[1m[22m[2m │ gzip:   1.98 kB[22m
+[2mdist/user/[22m[36massets/BU8GUCU5.js   [39m[1m[2m  5.44 kB[22m[1m[22m[2m │ gzip:   2.02 kB[22m
+[2mdist/user/[22m[36massets/CTdl1-ub.js   [39m[1m[2m  5.56 kB[22m[1m[22m[2m │ gzip:   1.30 kB[22m
+[2mdist/user/[22m[36massets/C5ojY77F.js   [39m[1m[2m  5.63 kB[22m[1m[22m[2m │ gzip:   2.57 kB[22m
+[2mdist/user/[22m[36massets/B-axR3sD.js   [39m[1m[2m  6.94 kB[22m[1m[22m[2m │ gzip:   2.61 kB[22m
+[2mdist/user/[22m[36massets/Bv2AL74U.js   [39m[1m[2m  6.95 kB[22m[1m[22m[2m │ gzip:   2.58 kB[22m
+[2mdist/user/[22m[36massets/DygX-9J9.js   [39m[1m[2m  8.07 kB[22m[1m[22m[2m │ gzip:   2.69 kB[22m
+[2mdist/user/[22m[36massets/L6pNOK2w.js   [39m[1m[2m  8.93 kB[22m[1m[22m[2m │ gzip:   3.32 kB[22m
+[2mdist/user/[22m[36massets/BrfzKoi0.js   [39m[1m[2m  9.07 kB[22m[1m[22m[2m │ gzip:   3.14 kB[22m
+[2mdist/user/[22m[36massets/B13o2nhp.js   [39m[1m[2m 11.05 kB[22m[1m[22m[2m │ gzip:   3.60 kB[22m
+[2mdist/user/[22m[36massets/BhEsRbsw.js   [39m[1m[2m 11.30 kB[22m[1m[22m[2m │ gzip:   3.91 kB[22m
+[2mdist/user/[22m[36massets/DO799Zhq.js   [39m[1m[2m 11.52 kB[22m[1m[22m[2m │ gzip:   3.86 kB[22m
+[2mdist/user/[22m[36massets/Dv3rOX-f.js   [39m[1m[2m 13.22 kB[22m[1m[22m[2m │ gzip:   4.33 kB[22m
+[2mdist/user/[22m[36massets/BYA1Dn4_.js   [39m[1m[2m 13.95 kB[22m[1m[22m[2m │ gzip:   4.57 kB[22m
+[2mdist/user/[22m[36massets/BIZ5FsF2.js   [39m[1m[2m 14.39 kB[22m[1m[22m[2m │ gzip:   5.57 kB[22m
+[2mdist/user/[22m[36massets/FTBQdOGU.js   [39m[1m[2m 15.11 kB[22m[1m[22m[2m │ gzip:   4.84 kB[22m
+[2mdist/user/[22m[36massets/BiZ3LzLL.js   [39m[1m[2m 15.74 kB[22m[1m[22m[2m │ gzip:   5.19 kB[22m
+[2mdist/user/[22m[36massets/CUvgQan2.js   [39m[1m[2m 20.44 kB[22m[1m[22m[2m │ gzip:   5.16 kB[22m
+[2mdist/user/[22m[36massets/9ukuOu93.js   [39m[1m[2m 22.82 kB[22m[1m[22m[2m │ gzip:   6.70 kB[22m
+[2mdist/user/[22m[36massets/BpS-M5ZO.js   [39m[1m[2m 22.82 kB[22m[1m[22m[2m │ gzip:   6.67 kB[22m
+[2mdist/user/[22m[36massets/DYWEYEHm.js   [39m[1m[2m 23.12 kB[22m[1m[22m[2m │ gzip:   6.26 kB[22m
+[2mdist/user/[22m[36massets/CE8S2Z8n.js   [39m[1m[2m 25.36 kB[22m[1m[22m[2m │ gzip:  11.80 kB[22m
+[2mdist/user/[22m[36massets/D1yqUhzm.js   [39m[1m[2m 26.26 kB[22m[1m[22m[2m │ gzip:   6.19 kB[22m
+[2mdist/user/[22m[36massets/BFhXk5NY.js   [39m[1m[2m 30.91 kB[22m[1m[22m[2m │ gzip:   8.60 kB[22m
+[2mdist/user/[22m[36massets/DitiIQ1H.js   [39m[1m[2m 31.10 kB[22m[1m[22m[2m │ gzip:   7.69 kB[22m
+[2mdist/user/[22m[36massets/BlsgO9-B.js   [39m[1m[2m 31.10 kB[22m[1m[22m[2m │ gzip:   8.83 kB[22m
+[2mdist/user/[22m[36massets/CxXzg1gm.js   [39m[1m[2m 33.82 kB[22m[1m[22m[2m │ gzip:   8.73 kB[22m
+[2mdist/user/[22m[36massets/BB2AnRMJ.js   [39m[1m[2m 35.88 kB[22m[1m[22m[2m │ gzip:  14.07 kB[22m
+[2mdist/user/[22m[36massets/DG9jNLhS.js   [39m[1m[2m 36.24 kB[22m[1m[22m[2m │ gzip:   9.24 kB[22m
+[2mdist/user/[22m[36massets/mQVUROZ8.js   [39m[1m[2m 41.83 kB[22m[1m[22m[2m │ gzip:  11.15 kB[22m
+[2mdist/user/[22m[36massets/BpPIu-py.js   [39m[1m[2m 41.98 kB[22m[1m[22m[2m │ gzip:   8.05 kB[22m
+[2mdist/user/[22m[36massets/CueHtr95.js   [39m[1m[2m 46.10 kB[22m[1m[22m[2m │ gzip:  10.41 kB[22m
+[2mdist/user/[22m[36massets/CyOR3GPa.js   [39m[1m[2m 46.83 kB[22m[1m[22m[2m │ gzip:  14.34 kB[22m
+[2mdist/user/[22m[36massets/DltsEkST.js   [39m[1m[2m 48.82 kB[22m[1m[22m[2m │ gzip:  12.21 kB[22m
+[2mdist/user/[22m[36massets/DzzF1K6_.js   [39m[1m[2m 51.04 kB[22m[1m[22m[2m │ gzip:  11.36 kB[22m
+[2mdist/user/[22m[36massets/CM_lEvzE.js   [39m[1m[2m 58.63 kB[22m[1m[22m[2m │ gzip:  14.34 kB[22m
+[2mdist/user/[22m[36massets/em8rPQyQ.js   [39m[1m[2m 62.20 kB[22m[1m[22m[2m │ gzip:  14.19 kB[22m
+[2mdist/user/[22m[36massets/Bw5LNend.js   [39m[1m[2m 63.28 kB[22m[1m[22m[2m │ gzip:  20.95 kB[22m
+[2mdist/user/[22m[36massets/BIgfUgH_.js   [39m[1m[2m 64.16 kB[22m[1m[22m[2m │ gzip:  24.31 kB[22m
+[2mdist/user/[22m[36massets/DGtq0UQS.js   [39m[1m[2m 70.87 kB[22m[1m[22m[2m │ gzip:  27.76 kB[22m
+[2mdist/user/[22m[36massets/CBQ2nkWw.js   [39m[1m[2m 72.90 kB[22m[1m[22m[2m │ gzip:  18.82 kB[22m
+[2mdist/user/[22m[36massets/BZc-RyAu.js   [39m[1m[2m 79.47 kB[22m[1m[22m[2m │ gzip:  17.44 kB[22m
+[2mdist/user/[22m[36massets/D7XRpgJr.js   [39m[1m[2m 79.81 kB[22m[1m[22m[2m │ gzip:  19.59 kB[22m
+[2mdist/user/[22m[36massets/s1DAryKy.js   [39m[1m[2m 80.98 kB[22m[1m[22m[2m │ gzip:  19.82 kB[22m
+[2mdist/user/[22m[36massets/CduHDTym.js   [39m[1m[2m 93.63 kB[22m[1m[22m[2m │ gzip:  22.59 kB[22m
+[2mdist/user/[22m[36massets/D13czI5f.js   [39m[1m[2m 99.24 kB[22m[1m[22m[2m │ gzip:  22.25 kB[22m
+[2mdist/user/[22m[36massets/D8Xz7cUj.js   [39m[1m[2m105.73 kB[22m[1m[22m[2m │ gzip:  30.94 kB[22m
+[2mdist/user/[22m[36massets/CJ6NWoBD.js   [39m[1m[2m106.02 kB[22m[1m[22m[2m │ gzip:  25.07 kB[22m
+[2mdist/user/[22m[36massets/CpRxhL4W.js   [39m[1m[2m171.00 kB[22m[1m[22m[2m │ gzip:  63.71 kB[22m
+[2mdist/user/[22m[36massets/Cr5Ich_C.js   [39m[1m[2m190.80 kB[22m[1m[22m[2m │ gzip:  53.31 kB[22m
+[2mdist/user/[22m[36massets/DFGMB9Ks.js   [39m[1m[2m209.11 kB[22m[1m[22m[2m │ gzip:  71.76 kB[22m
+[2mdist/user/[22m[36massets/CAqRkHg-.js   [39m[1m[2m219.46 kB[22m[1m[22m[2m │ gzip:  67.43 kB[22m
+[2mdist/user/[22m[36massets/Co2G8tD9.js   [39m[1m[2m227.32 kB[22m[1m[22m[2m │ gzip:  76.66 kB[22m
+[2mdist/user/[22m[36massets/BDHjfqN8.js   [39m[1m[2m330.38 kB[22m[1m[22m[2m │ gzip:  82.22 kB[22m
+[2mdist/user/[22m[36massets/BJzCrjf6.js   [39m[1m[2m361.31 kB[22m[1m[22m[2m │ gzip:  75.40 kB[22m
+[2mdist/user/[22m[36massets/ClxV7DCD.js   [39m[1m[2m369.10 kB[22m[1m[22m[2m │ gzip:  79.69 kB[22m
+[32m✓ built in 24.44s[39m
+[36mvite v6.4.1 [32mbuilding for production...[36m[39m
+transforming...
+[32m✓[39m 399 modules transformed.
+rendering chunks...
+computing gzip size...
+[2mdist/admin/[22m[32mindex.html           [39m[1m[2m  2.92 kB[22m[1m[22m[2m │ gzip:   1.12 kB[22m
+[2mdist/admin/[22m[32massets/SbvrH0uZ.svg  [39m[1m[2m  4.19 kB[22m[1m[22m[2m │ gzip:   1.76 kB[22m
+[2mdist/admin/[22m[32massets/Di1JYREk.svg  [39m[1m[2m  4.33 kB[22m[1m[22m[2m │ gzip:   1.84 kB[22m
+[2mdist/admin/[22m[32massets/D39eIL5d.svg  [39m[1m[2m  4.63 kB[22m[1m[22m[2m │ gzip:   1.92 kB[22m
+[2mdist/admin/[22m[32massets/qxMwa2gs.svg  [39m[1m[2m  4.66 kB[22m[1m[22m[2m │ gzip:   1.92 kB[22m
+[2mdist/admin/[22m[32massets/B0FsxZiL.svg  [39m[1m[2m  4.74 kB[22m[1m[22m[2m │ gzip:   1.92 kB[22m
+[2mdist/admin/[22m[32massets/CjfitMyT.svg  [39m[1m[2m  4.79 kB[22m[1m[22m[2m │ gzip:   1.95 kB[22m
+[2mdist/admin/[22m[32massets/Cag8QTk2.svg  [39m[1m[2m  4.94 kB[22m[1m[22m[2m │ gzip:   2.02 kB[22m
+[2mdist/admin/[22m[32massets/CPnMO1hT.svg  [39m[1m[2m  5.07 kB[22m[1m[22m[2m │ gzip:   2.12 kB[22m
+[2mdist/admin/[22m[32massets/D8B-0kdx.svg  [39m[1m[2m  5.31 kB[22m[1m[22m[2m │ gzip:   2.25 kB[22m
+[2mdist/admin/[22m[32massets/DGrQb42O.svg  [39m[1m[2m  5.37 kB[22m[1m[22m[2m │ gzip:   2.37 kB[22m
+[2mdist/admin/[22m[32massets/BmsW91ne.svg  [39m[1m[2m  5.42 kB[22m[1m[22m[2m │ gzip:   2.27 kB[22m
+[2mdist/admin/[22m[32massets/bZuP8hmf.svg  [39m[1m[2m  5.47 kB[22m[1m[22m[2m │ gzip:   2.37 kB[22m
+[2mdist/admin/[22m[32massets/DJKnEFYW.svg  [39m[1m[2m  5.51 kB[22m[1m[22m[2m │ gzip:   2.42 kB[22m
+[2mdist/admin/[22m[32massets/Dl00mlk2.svg  [39m[1m[2m  5.56 kB[22m[1m[22m[2m │ gzip:   2.46 kB[22m
+[2mdist/admin/[22m[32massets/p_fAQGbS.svg  [39m[1m[2m  5.63 kB[22m[1m[22m[2m │ gzip:   1.64 kB[22m
+[2mdist/admin/[22m[32massets/fuIMkEYQ.svg  [39m[1m[2m  5.81 kB[22m[1m[22m[2m │ gzip:   1.70 kB[22m
+[2mdist/admin/[22m[32massets/DxciGbUu.svg  [39m[1m[2m  5.83 kB[22m[1m[22m[2m │ gzip:   2.55 kB[22m
+[2mdist/admin/[22m[32massets/B-w7hFKu.svg  [39m[1m[2m  5.91 kB[22m[1m[22m[2m │ gzip:   2.50 kB[22m
+[2mdist/admin/[22m[32massets/CSuuaw9K.svg  [39m[1m[2m  6.17 kB[22m[1m[22m[2m │ gzip:   2.46 kB[22m
+[2mdist/admin/[22m[32massets/U0m7oJ5e.svg  [39m[1m[2m  6.19 kB[22m[1m[22m[2m │ gzip:   2.49 kB[22m
+[2mdist/admin/[22m[32massets/Dr5rMAMb.svg  [39m[1m[2m  6.75 kB[22m[1m[22m[2m │ gzip:   2.21 kB[22m
+[2mdist/admin/[22m[32massets/CJHJmJj1.svg  [39m[1m[2m  7.09 kB[22m[1m[22m[2m │ gzip:   2.99 kB[22m
+[2mdist/admin/[22m[32massets/CwKXYZ8s.svg  [39m[1m[2m  7.09 kB[22m[1m[22m[2m │ gzip:   2.92 kB[22m
+[2mdist/admin/[22m[32massets/Dkyx6q-p.svg  [39m[1m[2m  7.10 kB[22m[1m[22m[2m │ gzip:   2.91 kB[22m
+[2mdist/admin/[22m[32massets/dtelpZmc.svg  [39m[1m[2m  7.12 kB[22m[1m[22m[2m │ gzip:   2.99 kB[22m
+[2mdist/admin/[22m[32massets/BeWfuE30.svg  [39m[1m[2m  7.12 kB[22m[1m[22m[2m │ gzip:   2.72 kB[22m
+[2mdist/admin/[22m[32massets/BBvObpUS.svg  [39m[1m[2m  7.12 kB[22m[1m[22m[2m │ gzip:   2.74 kB[22m
+[2mdist/admin/[22m[32massets/Cu5YU29T.svg  [39m[1m[2m  7.14 kB[22m[1m[22m[2m │ gzip:   2.41 kB[22m
+[2mdist/admin/[22m[32massets/CHdhvNcr.svg  [39m[1m[2m  7.32 kB[22m[1m[22m[2m │ gzip:   2.96 kB[22m
+[2mdist/admin/[22m[32massets/CMlf0YU8.svg  [39m[1m[2m  7.34 kB[22m[1m[22m[2m │ gzip:   2.97 kB[22m
+[2mdist/admin/[22m[32massets/Cdz2uTvR.svg  [39m[1m[2m  7.74 kB[22m[1m[22m[2m │ gzip:   3.05 kB[22m
+[2mdist/admin/[22m[32massets/DZ2ADgIR.svg  [39m[1m[2m  8.00 kB[22m[1m[22m[2m │ gzip:   3.25 kB[22m
+[2mdist/admin/[22m[32massets/Bj15g7cp.svg  [39m[1m[2m  8.27 kB[22m[1m[22m[2m │ gzip:   3.26 kB[22m
+[2mdist/admin/[22m[32massets/BTevY6N2.svg  [39m[1m[2m  8.37 kB[22m[1m[22m[2m │ gzip:   3.27 kB[22m
+[2mdist/admin/[22m[32massets/BSdsyIxY.svg  [39m[1m[2m  8.45 kB[22m[1m[22m[2m │ gzip:   3.55 kB[22m
+[2mdist/admin/[22m[32massets/BC_zcciE.svg  [39m[1m[2m  8.52 kB[22m[1m[22m[2m │ gzip:   3.59 kB[22m
+[2mdist/admin/[22m[32massets/YC70hswZ.svg  [39m[1m[2m  8.73 kB[22m[1m[22m[2m │ gzip:   3.55 kB[22m
+[2mdist/admin/[22m[32massets/DwOkwyQ0.svg  [39m[1m[2m  8.74 kB[22m[1m[22m[2m │ gzip:   3.57 kB[22m
+[2mdist/admin/[22m[32massets/W0PWLK5p.svg  [39m[1m[2m  9.00 kB[22m[1m[22m[2m │ gzip:   1.67 kB[22m
+[2mdist/admin/[22m[32massets/CK0XlKT-.svg  [39m[1m[2m  9.01 kB[22m[1m[22m[2m │ gzip:   4.03 kB[22m
+[2mdist/admin/[22m[32massets/Bxz9hxvX.svg  [39m[1m[2m  9.10 kB[22m[1m[22m[2m │ gzip:   4.14 kB[22m
+[2mdist/admin/[22m[32massets/-VPIqfkF.svg  [39m[1m[2m  9.13 kB[22m[1m[22m[2m │ gzip:   3.51 kB[22m
+[2mdist/admin/[22m[32massets/Dd9p-0-T.svg  [39m[1m[2m  9.70 kB[22m[1m[22m[2m │ gzip:   3.81 kB[22m
+[2mdist/admin/[22m[32massets/DnlyVVKx.svg  [39m[1m[2m  9.85 kB[22m[1m[22m[2m │ gzip:   4.19 kB[22m
+[2mdist/admin/[22m[32massets/Dh79zbT9.svg  [39m[1m[2m  9.97 kB[22m[1m[22m[2m │ gzip:   4.25 kB[22m
+[2mdist/admin/[22m[32massets/ClZ-0KpG.svg  [39m[1m[2m 10.00 kB[22m[1m[22m[2m │ gzip:   4.14 kB[22m
+[2mdist/admin/[22m[32massets/C7xY6pic.svg  [39m[1m[2m 10.02 kB[22m[1m[22m[2m │ gzip:   4.14 kB[22m
+[2mdist/admin/[22m[32massets/CLCX8uk5.svg  [39m[1m[2m 10.36 kB[22m[1m[22m[2m │ gzip:   1.79 kB[22m
+[2mdist/admin/[22m[32massets/DUkgV9Tq.svg  [39m[1m[2m 10.72 kB[22m[1m[22m[2m │ gzip:   4.46 kB[22m
+[2mdist/admin/[22m[32massets/DSQoDxn_.svg  [39m[1m[2m 10.74 kB[22m[1m[22m[2m │ gzip:   4.46 kB[22m
+[2mdist/admin/[22m[32massets/DRlxvNwm.svg  [39m[1m[2m 11.13 kB[22m[1m[22m[2m │ gzip:   2.84 kB[22m
+[2mdist/admin/[22m[32massets/DTi94M3M.svg  [39m[1m[2m 11.24 kB[22m[1m[22m[2m │ gzip:   2.71 kB[22m
+[2mdist/admin/[22m[32massets/RKKs0ph6.svg  [39m[1m[2m 12.16 kB[22m[1m[22m[2m │ gzip:   4.12 kB[22m
+[2mdist/admin/[22m[32massets/nDhIaDNb.svg  [39m[1m[2m 12.21 kB[22m[1m[22m[2m │ gzip:   4.30 kB[22m
+[2mdist/admin/[22m[32massets/YDa8zgzO.svg  [39m[1m[2m 12.71 kB[22m[1m[22m[2m │ gzip:   5.37 kB[22m
+[2mdist/admin/[22m[32massets/DIMg4gti.svg  [39m[1m[2m 13.30 kB[22m[1m[22m[2m │ gzip:   4.75 kB[22m
+[2mdist/admin/[22m[32massets/B6T3O78g.svg  [39m[1m[2m 13.34 kB[22m[1m[22m[2m │ gzip:   5.64 kB[22m
+[2mdist/admin/[22m[32massets/BPAlH32D.svg  [39m[1m[2m 13.44 kB[22m[1m[22m[2m │ gzip:   4.93 kB[22m
+[2mdist/admin/[22m[32massets/pweRl6ZP.svg  [39m[1m[2m 13.46 kB[22m[1m[22m[2m │ gzip:   4.82 kB[22m
+[2mdist/admin/[22m[32massets/CPQcA8Ol.svg  [39m[1m[2m 13.47 kB[22m[1m[22m[2m │ gzip:   5.68 kB[22m
+[2mdist/admin/[22m[32massets/DgxdtieE.svg  [39m[1m[2m 13.47 kB[22m[1m[22m[2m │ gzip:   4.98 kB[22m
+[2mdist/admin/[22m[32massets/CwGQsyAM.svg  [39m[1m[2m 13.63 kB[22m[1m[22m[2m │ gzip:   4.81 kB[22m
+[2mdist/admin/[22m[32massets/h4QKADRE.svg  [39m[1m[2m 13.64 kB[22m[1m[22m[2m │ gzip:   4.81 kB[22m
+[2mdist/admin/[22m[32massets/YqzKx9xl.svg  [39m[1m[2m 13.93 kB[22m[1m[22m[2m │ gzip:   5.86 kB[22m
+[2mdist/admin/[22m[32massets/Q03Mij62.svg  [39m[1m[2m 15.30 kB[22m[1m[22m[2m │ gzip:   2.28 kB[22m
+[2mdist/admin/[22m[32massets/cCIgaNf6.svg  [39m[1m[2m 15.40 kB[22m[1m[22m[2m │ gzip:   2.24 kB[22m
+[2mdist/admin/[22m[32massets/BKrUHzrq.svg  [39m[1m[2m 15.54 kB[22m[1m[22m[2m │ gzip:   5.35 kB[22m
+[2mdist/admin/[22m[32massets/DGBIRFB_.svg  [39m[1m[2m 15.68 kB[22m[1m[22m[2m │ gzip:   5.27 kB[22m
+[2mdist/admin/[22m[32massets/Cbhezfe1.svg  [39m[1m[2m 15.79 kB[22m[1m[22m[2m │ gzip:   3.08 kB[22m
+[2mdist/admin/[22m[32massets/mNzh0mZC.svg  [39m[1m[2m 16.18 kB[22m[1m[22m[2m │ gzip:   5.77 kB[22m
+[2mdist/admin/[22m[32massets/DPPHwW2M.svg  [39m[1m[2m 16.27 kB[22m[1m[22m[2m │ gzip:   3.23 kB[22m
+[2mdist/admin/[22m[32massets/BKi5dxWt.svg  [39m[1m[2m 16.36 kB[22m[1m[22m[2m │ gzip:   5.84 kB[22m
+[2mdist/admin/[22m[32massets/CcFCSQxm.svg  [39m[1m[2m 17.25 kB[22m[1m[22m[2m │ gzip:   5.36 kB[22m
+[2mdist/admin/[22m[32massets/BX2WCaNt.svg  [39m[1m[2m 17.29 kB[22m[1m[22m[2m │ gzip:   5.43 kB[22m
+[2mdist/admin/[22m[32massets/Bqg4Cbbh.svg  [39m[1m[2m 18.70 kB[22m[1m[22m[2m │ gzip:   7.44 kB[22m
+[2mdist/admin/[22m[32massets/Bc2fqp73.svg  [39m[1m[2m 18.98 kB[22m[1m[22m[2m │ gzip:   7.68 kB[22m
+[2mdist/admin/[22m[32massets/DabL4p35.svg  [39m[1m[2m 19.00 kB[22m[1m[22m[2m │ gzip:   7.58 kB[22m
+[2mdist/admin/[22m[32massets/C77Rf6cE.svg  [39m[1m[2m 19.19 kB[22m[1m[22m[2m │ gzip:   7.76 kB[22m
+[2mdist/admin/[22m[32massets/nN8zP2Bu.svg  [39m[1m[2m 22.21 kB[22m[1m[22m[2m │ gzip:   4.38 kB[22m
+[2mdist/admin/[22m[32massets/DcqxRdQL.svg  [39m[1m[2m 22.22 kB[22m[1m[22m[2m │ gzip:   4.37 kB[22m
+[2mdist/admin/[22m[32massets/D4gikpNq.svg  [39m[1m[2m 22.28 kB[22m[1m[22m[2m │ gzip:   5.97 kB[22m
+[2mdist/admin/[22m[32massets/DvNWWcPM.svg  [39m[1m[2m 22.39 kB[22m[1m[22m[2m │ gzip:   7.17 kB[22m
+[2mdist/admin/[22m[32massets/BeYgB2z9.svg  [39m[1m[2m 22.46 kB[22m[1m[22m[2m │ gzip:   7.18 kB[22m
+[2mdist/admin/[22m[32massets/CrOApEqW.svg  [39m[1m[2m 22.57 kB[22m[1m[22m[2m │ gzip:   6.98 kB[22m
+[2mdist/admin/[22m[32massets/BImhNBcd.svg  [39m[1m[2m 22.72 kB[22m[1m[22m[2m │ gzip:   4.11 kB[22m
+[2mdist/admin/[22m[32massets/DqkWLbnk.svg  [39m[1m[2m 22.72 kB[22m[1m[22m[2m │ gzip:   4.11 kB[22m
+[2mdist/admin/[22m[32massets/CuaQmCLf.svg  [39m[1m[2m 22.80 kB[22m[1m[22m[2m │ gzip:   7.02 kB[22m
+[2mdist/admin/[22m[32massets/13HOfeJD.svg  [39m[1m[2m 23.02 kB[22m[1m[22m[2m │ gzip:   4.11 kB[22m
+[2mdist/admin/[22m[32massets/CJPJrjiZ.svg  [39m[1m[2m 23.02 kB[22m[1m[22m[2m │ gzip:   4.11 kB[22m
+[2mdist/admin/[22m[32massets/BqaZHuhf.svg  [39m[1m[2m 23.37 kB[22m[1m[22m[2m │ gzip:   8.57 kB[22m
+[2mdist/admin/[22m[32massets/Dpsu1myA.svg  [39m[1m[2m 23.39 kB[22m[1m[22m[2m │ gzip:   8.56 kB[22m
+[2mdist/admin/[22m[32massets/vEp1ZXy6.svg  [39m[1m[2m 23.92 kB[22m[1m[22m[2m │ gzip:   5.49 kB[22m
+[2mdist/admin/[22m[32massets/DEAVMg38.svg  [39m[1m[2m 24.10 kB[22m[1m[22m[2m │ gzip:   9.09 kB[22m
+[2mdist/admin/[22m[32massets/u3dAPoew.svg  [39m[1m[2m 24.14 kB[22m[1m[22m[2m │ gzip:   9.13 kB[22m
+[2mdist/admin/[22m[32massets/C4CYPgyC.svg  [39m[1m[2m 24.43 kB[22m[1m[22m[2m │ gzip:   8.53 kB[22m
+[2mdist/admin/[22m[32massets/SxWnbWW0.svg  [39m[1m[2m 24.50 kB[22m[1m[22m[2m │ gzip:   9.95 kB[22m
+[2mdist/admin/[22m[32massets/C-KgnQEz.svg  [39m[1m[2m 24.59 kB[22m[1m[22m[2m │ gzip:   8.58 kB[22m
+[2mdist/admin/[22m[32massets/BTo4qm10.svg  [39m[1m[2m 24.78 kB[22m[1m[22m[2m │ gzip:  10.09 kB[22m
+[2mdist/admin/[22m[32massets/D9xG2hYr.svg  [39m[1m[2m 28.21 kB[22m[1m[22m[2m │ gzip:   6.26 kB[22m
+[2mdist/admin/[22m[32massets/BFo5zkKU.svg  [39m[1m[2m 28.29 kB[22m[1m[22m[2m │ gzip:  10.82 kB[22m
+[2mdist/admin/[22m[32massets/DXhVZ333.svg  [39m[1m[2m 28.34 kB[22m[1m[22m[2m │ gzip:   6.26 kB[22m
+[2mdist/admin/[22m[32massets/B-RvQ4Hz.svg  [39m[1m[2m 28.49 kB[22m[1m[22m[2m │ gzip:   8.83 kB[22m
+[2mdist/admin/[22m[32massets/s7kyhqIM.svg  [39m[1m[2m 28.66 kB[22m[1m[22m[2m │ gzip:   9.67 kB[22m
+[2mdist/admin/[22m[32massets/B9-hqIE-.svg  [39m[1m[2m 28.72 kB[22m[1m[22m[2m │ gzip:   9.68 kB[22m
+[2mdist/admin/[22m[32massets/nuUF_Ak3.svg  [39m[1m[2m 28.74 kB[22m[1m[22m[2m │ gzip:   9.20 kB[22m
+[2mdist/admin/[22m[32massets/CPJublpi.svg  [39m[1m[2m 28.78 kB[22m[1m[22m[2m │ gzip:  11.03 kB[22m
+[2mdist/admin/[22m[32massets/CaVOFQ3t.svg  [39m[1m[2m 28.78 kB[22m[1m[22m[2m │ gzip:   6.83 kB[22m
+[2mdist/admin/[22m[32massets/Blhdm5jl.svg  [39m[1m[2m 29.14 kB[22m[1m[22m[2m │ gzip:  10.60 kB[22m
+[2mdist/admin/[22m[32massets/cwfBJlvF.svg  [39m[1m[2m 29.35 kB[22m[1m[22m[2m │ gzip:   6.72 kB[22m
+[2mdist/admin/[22m[32massets/Dekqy8Of.svg  [39m[1m[2m 30.45 kB[22m[1m[22m[2m │ gzip:  11.46 kB[22m
+[2mdist/admin/[22m[32massets/B18i8NGa.svg  [39m[1m[2m 30.51 kB[22m[1m[22m[2m │ gzip:  11.15 kB[22m
+[2mdist/admin/[22m[32massets/fzLfaANM.svg  [39m[1m[2m 30.73 kB[22m[1m[22m[2m │ gzip:  13.14 kB[22m
+[2mdist/admin/[22m[32massets/BTEVCXG-.svg  [39m[1m[2m 30.98 kB[22m[1m[22m[2m │ gzip:  11.62 kB[22m
+[2mdist/admin/[22m[32massets/BpiVVBoV.svg  [39m[1m[2m 31.28 kB[22m[1m[22m[2m │ gzip:  13.31 kB[22m
+[2mdist/admin/[22m[32massets/CJo5DI-7.svg  [39m[1m[2m 31.35 kB[22m[1m[22m[2m │ gzip:  11.30 kB[22m
+[2mdist/admin/[22m[32massets/BLpn5qMn.svg  [39m[1m[2m 31.35 kB[22m[1m[22m[2m │ gzip:  11.30 kB[22m
+[2mdist/admin/[22m[32massets/DiiNa0F5.svg  [39m[1m[2m 31.50 kB[22m[1m[22m[2m │ gzip:  11.41 kB[22m
+[2mdist/admin/[22m[32massets/DOgYbHsY.svg  [39m[1m[2m 31.92 kB[22m[1m[22m[2m │ gzip:  11.09 kB[22m
+[2mdist/admin/[22m[32massets/DyWbhIiC.svg  [39m[1m[2m 34.19 kB[22m[1m[22m[2m │ gzip:   9.81 kB[22m
+[2mdist/admin/[22m[32massets/CgxUDvtv.svg  [39m[1m[2m 34.78 kB[22m[1m[22m[2m │ gzip:  12.58 kB[22m
+[2mdist/admin/[22m[32massets/vXe0Dr49.svg  [39m[1m[2m 35.03 kB[22m[1m[22m[2m │ gzip:  10.03 kB[22m
+[2mdist/admin/[22m[32massets/CqtQPzWZ.svg  [39m[1m[2m 35.43 kB[22m[1m[22m[2m │ gzip:  12.88 kB[22m
+[2mdist/admin/[22m[32massets/DGBJvQay.svg  [39m[1m[2m 38.22 kB[22m[1m[22m[2m │ gzip:  11.99 kB[22m
+[2mdist/admin/[22m[32massets/C_WSgUcv.svg  [39m[1m[2m 38.35 kB[22m[1m[22m[2m │ gzip:  12.09 kB[22m
+[2mdist/admin/[22m[32massets/B86d445t.svg  [39m[1m[2m 40.35 kB[22m[1m[22m[2m │ gzip:  14.40 kB[22m
+[2mdist/admin/[22m[32massets/DeRnbj4d.svg  [39m[1m[2m 41.34 kB[22m[1m[22m[2m │ gzip:  14.76 kB[22m
+[2mdist/admin/[22m[32massets/BCKHR4_q.svg  [39m[1m[2m 42.51 kB[22m[1m[22m[2m │ gzip:  15.61 kB[22m
+[2mdist/admin/[22m[32massets/CoBdB-p8.svg  [39m[1m[2m 42.68 kB[22m[1m[22m[2m │ gzip:  15.60 kB[22m
+[2mdist/admin/[22m[32massets/Cv4Gwqah.svg  [39m[1m[2m 56.37 kB[22m[1m[22m[2m │ gzip:  21.28 kB[22m
+[2mdist/admin/[22m[32massets/CfGorN3b.svg  [39m[1m[2m 56.95 kB[22m[1m[22m[2m │ gzip:  21.57 kB[22m
+[2mdist/admin/[22m[32massets/CJIHhYwF.svg  [39m[1m[2m 77.27 kB[22m[1m[22m[2m │ gzip:  21.83 kB[22m
+[2mdist/admin/[22m[32massets/RZ39q5hO.svg  [39m[1m[2m 77.72 kB[22m[1m[22m[2m │ gzip:  22.08 kB[22m
+[2mdist/admin/[22m[32massets/CvCwYHGF.svg  [39m[1m[2m 80.21 kB[22m[1m[22m[2m │ gzip:  27.77 kB[22m
+[2mdist/admin/[22m[32massets/d5m8M5h8.svg  [39m[1m[2m 80.96 kB[22m[1m[22m[2m │ gzip:  14.80 kB[22m
+[2mdist/admin/[22m[32massets/BuSGTZm_.svg  [39m[1m[2m 82.15 kB[22m[1m[22m[2m │ gzip:  15.47 kB[22m
+[2mdist/admin/[22m[32massets/Cc8Ccfe8.svg  [39m[1m[2m 84.75 kB[22m[1m[22m[2m │ gzip:  29.50 kB[22m
+[2mdist/admin/[22m[32massets/CcUiMqkJ.svg  [39m[1m[2m102.88 kB[22m[1m[22m[2m │ gzip:  24.83 kB[22m
+[2mdist/admin/[22m[32massets/Dry0C6UA.svg  [39m[1m[2m104.73 kB[22m[1m[22m[2m │ gzip:  25.14 kB[22m
+[2mdist/admin/[22m[32massets/D-aE2xRW.svg  [39m[1m[2m140.52 kB[22m[1m[22m[2m │ gzip:  47.08 kB[22m
+[2mdist/admin/[22m[32massets/FjwY7RYr.svg  [39m[1m[2m143.37 kB[22m[1m[22m[2m │ gzip:  47.70 kB[22m
+[2mdist/admin/[22m[32massets/CnTO3ehk.svg  [39m[1m[2m181.48 kB[22m[1m[22m[2m │ gzip:  49.93 kB[22m
+[2mdist/admin/[22m[32massets/BfwKwXtn.svg  [39m[1m[2m181.63 kB[22m[1m[22m[2m │ gzip:  50.19 kB[22m
+[2mdist/admin/[22m[35massets/HALAC3TX.css  [39m[1m[2m  0.18 kB[22m[1m[22m[2m │ gzip:   0.12 kB[22m
+[2mdist/admin/[22m[35massets/B76TsvoU.css  [39m[1m[2m  0.22 kB[22m[1m[22m[2m │ gzip:   0.15 kB[22m
+[2mdist/admin/[22m[35massets/DQVB8-1J.css  [39m[1m[2m  0.47 kB[22m[1m[22m[2m │ gzip:   0.21 kB[22m
+[2mdist/admin/[22m[35massets/G2rQTk2w.css  [39m[1m[2m  0.68 kB[22m[1m[22m[2m │ gzip:   0.20 kB[22m
+[2mdist/admin/[22m[35massets/DQJoV0US.css  [39m[1m[2m  0.77 kB[22m[1m[22m[2m │ gzip:   0.35 kB[22m
+[2mdist/admin/[22m[35massets/CgopggJP.css  [39m[1m[2m  1.15 kB[22m[1m[22m[2m │ gzip:   0.45 kB[22m
+[2mdist/admin/[22m[35massets/B2MTTrDO.css  [39m[1m[2m  1.66 kB[22m[1m[22m[2m │ gzip:   0.67 kB[22m
+[2mdist/admin/[22m[35massets/S5M2N5lf.css  [39m[1m[2m  2.09 kB[22m[1m[22m[2m │ gzip:   0.77 kB[22m
+[2mdist/admin/[22m[35massets/CZQ3d-sL.css  [39m[1m[2m  4.15 kB[22m[1m[22m[2m │ gzip:   1.08 kB[22m
+[2mdist/admin/[22m[35massets/e97ungwh.css  [39m[1m[2m  4.90 kB[22m[1m[22m[2m │ gzip:   1.27 kB[22m
+[2mdist/admin/[22m[35massets/wO2qFXua.css  [39m[1m[2m  5.21 kB[22m[1m[22m[2m │ gzip:   1.18 kB[22m
+[2mdist/admin/[22m[35massets/9CEnUXvW.css  [39m[1m[2m  5.75 kB[22m[1m[22m[2m │ gzip:   1.98 kB[22m
+[2mdist/admin/[22m[35massets/4ij2F6MC.css  [39m[1m[2m732.13 kB[22m[1m[22m[2m │ gzip: 128.37 kB[22m
+[2mdist/admin/[22m[36massets/BTUjZQXg.js   [39m[1m[2m  0.82 kB[22m[1m[22m[2m │ gzip:   0.55 kB[22m
+[2mdist/admin/[22m[36massets/9FCrnFbz.js   [39m[1m[2m  1.00 kB[22m[1m[22m[2m │ gzip:   0.58 kB[22m
+[2mdist/admin/[22m[36massets/DwDVBiWE.js   [39m[1m[2m  1.03 kB[22m[1m[22m[2m │ gzip:   0.50 kB[22m
+[2mdist/admin/[22m[36massets/BtiqWeEW.js   [39m[1m[2m  1.03 kB[22m[1m[22m[2m │ gzip:   0.45 kB[22m
+[2mdist/admin/[22m[36massets/B7BcQaEM.js   [39m[1m[2m  1.14 kB[22m[1m[22m[2m │ gzip:   0.71 kB[22m
+[2mdist/admin/[22m[36massets/CJ46nNRk.js   [39m[1m[2m  1.36 kB[22m[1m[22m[2m │ gzip:   0.30 kB[22m
+[2mdist/admin/[22m[36massets/Dou3jbwX.js   [39m[1m[2m  2.03 kB[22m[1m[22m[2m │ gzip:   1.16 kB[22m
+[2mdist/admin/[22m[36massets/aPWxRF4i.js   [39m[1m[2m  2.06 kB[22m[1m[22m[2m │ gzip:   0.76 kB[22m
+[2mdist/admin/[22m[36massets/A9xcaJcj.js   [39m[1m[2m  2.54 kB[22m[1m[22m[2m │ gzip:   1.28 kB[22m
+[2mdist/admin/[22m[36massets/BsCg12c8.js   [39m[1m[2m  2.87 kB[22m[1m[22m[2m │ gzip:   1.34 kB[22m
+[2mdist/admin/[22m[36massets/Xdd9oP46.js   [39m[1m[2m  3.11 kB[22m[1m[22m[2m │ gzip:   1.09 kB[22m
+[2mdist/admin/[22m[36massets/DXB-RMCv.js   [39m[1m[2m  5.56 kB[22m[1m[22m[2m │ gzip:   1.30 kB[22m
+[2mdist/admin/[22m[36massets/DQvJz5_X.js   [39m[1m[2m 10.49 kB[22m[1m[22m[2m │ gzip:   3.48 kB[22m
+[2mdist/admin/[22m[36massets/DuCwoSND.js   [39m[1m[2m 10.61 kB[22m[1m[22m[2m │ gzip:   3.33 kB[22m
+[2mdist/admin/[22m[36massets/Cg0HCRoU.js   [39m[1m[2m 11.05 kB[22m[1m[22m[2m │ gzip:   3.59 kB[22m
+[2mdist/admin/[22m[36massets/B66PftPW.js   [39m[1m[2m 14.94 kB[22m[1m[22m[2m │ gzip:   4.13 kB[22m
+[2mdist/admin/[22m[36massets/oMW0eXj5.js   [39m[1m[2m 15.51 kB[22m[1m[22m[2m │ gzip:   3.71 kB[22m
+[2mdist/admin/[22m[36massets/dpQVoJJj.js   [39m[1m[2m 15.60 kB[22m[1m[22m[2m │ gzip:   5.08 kB[22m
+[2mdist/admin/[22m[36massets/FZUaGdeh.js   [39m[1m[2m 15.72 kB[22m[1m[22m[2m │ gzip:   5.35 kB[22m
+[2mdist/admin/[22m[36massets/GA_9C4bj.js   [39m[1m[2m 15.79 kB[22m[1m[22m[2m │ gzip:   4.89 kB[22m
+[2mdist/admin/[22m[36massets/J9VRnaqF.js   [39m[1m[2m 15.84 kB[22m[1m[22m[2m │ gzip:   6.39 kB[22m
+[2mdist/admin/[22m[36massets/o80-LSym.js   [39m[1m[2m 16.29 kB[22m[1m[22m[2m │ gzip:   4.55 kB[22m
+[2mdist/admin/[22m[36massets/CiEdCeDj.js   [39m[1m[2m 17.20 kB[22m[1m[22m[2m │ gzip:   5.61 kB[22m
+[2mdist/admin/[22m[36massets/DR7ifLev.js   [39m[1m[2m 18.63 kB[22m[1m[22m[2m │ gzip:   5.81 kB[22m
+[2mdist/admin/[22m[36massets/Bio3GBX1.js   [39m[1m[2m 18.98 kB[22m[1m[22m[2m │ gzip:   6.71 kB[22m
+[2mdist/admin/[22m[36massets/C4Q38bc7.js   [39m[1m[2m 19.52 kB[22m[1m[22m[2m │ gzip:   4.85 kB[22m
+[2mdist/admin/[22m[36massets/DnW_07zk.js   [39m[1m[2m 22.67 kB[22m[1m[22m[2m │ gzip:   6.66 kB[22m
+[2mdist/admin/[22m[36massets/CznSFWHC.js   [39m[1m[2m 22.82 kB[22m[1m[22m[2m │ gzip:   6.67 kB[22m
+[2mdist/admin/[22m[36massets/D9aC34la.js   [39m[1m[2m 23.14 kB[22m[1m[22m[2m │ gzip:   6.26 kB[22m
+[2mdist/admin/[22m[36massets/C4vkpVdx.js   [39m[1m[2m 25.36 kB[22m[1m[22m[2m │ gzip:  11.80 kB[22m
+[2mdist/admin/[22m[36massets/DH0stQ4y.js   [39m[1m[2m 25.78 kB[22m[1m[22m[2m │ gzip:   8.08 kB[22m
+[2mdist/admin/[22m[36massets/Dyo0Tc2L.js   [39m[1m[2m 26.01 kB[22m[1m[22m[2m │ gzip:   8.03 kB[22m
+[2mdist/admin/[22m[36massets/DV3DvrCN.js   [39m[1m[2m 26.42 kB[22m[1m[22m[2m │ gzip:   6.67 kB[22m
+[2mdist/admin/[22m[36massets/hkGzPnPq.js   [39m[1m[2m 27.50 kB[22m[1m[22m[2m │ gzip:   6.52 kB[22m
+[2mdist/admin/[22m[36massets/lvRUHfHI.js   [39m[1m[2m 29.06 kB[22m[1m[22m[2m │ gzip:   8.68 kB[22m
+[2mdist/admin/[22m[36massets/Br36l7uV.js   [39m[1m[2m 29.27 kB[22m[1m[22m[2m │ gzip:   7.51 kB[22m
+[2mdist/admin/[22m[36massets/BfZYMex9.js   [39m[1m[2m 29.46 kB[22m[1m[22m[2m │ gzip:   7.93 kB[22m
+[2mdist/admin/[22m[36massets/CTb60zoo.js   [39m[1m[2m 33.20 kB[22m[1m[22m[2m │ gzip:   8.29 kB[22m
+[2mdist/admin/[22m[36massets/DmV6iPMg.js   [39m[1m[2m 33.43 kB[22m[1m[22m[2m │ gzip:   7.74 kB[22m
+[2mdist/admin/[22m[36massets/BB2AnRMJ.js   [39m[1m[2m 35.88 kB[22m[1m[22m[2m │ gzip:  14.07 kB[22m
+[2mdist/admin/[22m[36massets/C_3i4txW.js   [39m[1m[2m 37.03 kB[22m[1m[22m[2m │ gzip:   9.21 kB[22m
+[2mdist/admin/[22m[36massets/Djgh-Dk6.js   [39m[1m[2m 37.94 kB[22m[1m[22m[2m │ gzip:   7.86 kB[22m
+[2mdist/admin/[22m[36massets/DFdxBnRM.js   [39m[1m[2m 38.83 kB[22m[1m[22m[2m │ gzip:  10.50 kB[22m
+[2mdist/admin/[22m[36massets/BGMtL3r3.js   [39m[1m[2m 41.23 kB[22m[1m[22m[2m │ gzip:   7.56 kB[22m
+[2mdist/admin/[22m[36massets/BId71lb1.js   [39m[1m[2m 45.48 kB[22m[1m[22m[2m │ gzip:  10.64 kB[22m
+[2mdist/admin/[22m[36massets/Bj9CRpcI.js   [39m[1m[2m 48.33 kB[22m[1m[22m[2m │ gzip:  12.50 kB[22m
+[2mdist/admin/[22m[36massets/pnB2oU9b.js   [39m[1m[2m 51.06 kB[22m[1m[22m[2m │ gzip:  11.36 kB[22m
+[2mdist/admin/[22m[36massets/Ckritt5b.js   [39m[1m[2m 61.92 kB[22m[1m[22m[2m │ gzip:  14.05 kB[22m
+[2mdist/admin/[22m[36massets/DqduiHLC.js   [39m[1m[2m 63.28 kB[22m[1m[22m[2m │ gzip:  20.96 kB[22m
+[2mdist/admin/[22m[36massets/GF6M2NNH.js   [39m[1m[2m 68.97 kB[22m[1m[22m[2m │ gzip:  15.22 kB[22m
+[2mdist/admin/[22m[36massets/C_r2U21y.js   [39m[1m[2m 70.87 kB[22m[1m[22m[2m │ gzip:  27.76 kB[22m
+[2mdist/admin/[22m[36massets/D_g_tbVD.js   [39m[1m[2m 72.25 kB[22m[1m[22m[2m │ gzip:  18.55 kB[22m
+[2mdist/admin/[22m[36massets/BwIK01IE.js   [39m[1m[2m 73.57 kB[22m[1m[22m[2m │ gzip:  21.10 kB[22m
+[2mdist/admin/[22m[36massets/Cep2q1u_.js   [39m[1m[2m 74.16 kB[22m[1m[22m[2m │ gzip:  14.95 kB[22m
+[2mdist/admin/[22m[36massets/EWEZ5oFD.js   [39m[1m[2m 74.40 kB[22m[1m[22m[2m │ gzip:  14.12 kB[22m
+[2mdist/admin/[22m[36massets/DrqO6ro5.js   [39m[1m[2m 85.22 kB[22m[1m[22m[2m │ gzip:  25.68 kB[22m
+[2mdist/admin/[22m[36massets/BjDXx0Qs.js   [39m[1m[2m 87.68 kB[22m[1m[22m[2m │ gzip:  21.13 kB[22m
+[2mdist/admin/[22m[36massets/dNCu3k2r.js   [39m[1m[2m 98.12 kB[22m[1m[22m[2m │ gzip:  23.72 kB[22m
+[2mdist/admin/[22m[36massets/CG-xshNO.js   [39m[1m[2m 99.14 kB[22m[1m[22m[2m │ gzip:  22.24 kB[22m
+[2mdist/admin/[22m[36massets/gHFLbAFg.js   [39m[1m[2m107.49 kB[22m[1m[22m[2m │ gzip:  25.95 kB[22m
+[2mdist/admin/[22m[36massets/BER_gJXc.js   [39m[1m[2m110.00 kB[22m[1m[22m[2m │ gzip:  29.95 kB[22m
+[2mdist/admin/[22m[36massets/BLOpLYCJ.js   [39m[1m[2m124.22 kB[22m[1m[22m[2m │ gzip:  24.27 kB[22m
+[2mdist/admin/[22m[36massets/qHIdJrjQ.js   [39m[1m[2m129.87 kB[22m[1m[22m[2m │ gzip:  27.77 kB[22m
+[2mdist/admin/[22m[36massets/DXFq5M_y.js   [39m[1m[2m172.99 kB[22m[1m[22m[2m │ gzip:  64.48 kB[22m
+[2mdist/admin/[22m[36massets/DG0wj7yk.js   [39m[1m[2m223.94 kB[22m[1m[22m[2m │ gzip:  76.66 kB[22m
+[2mdist/admin/[22m[36massets/mMUMFg9F.js   [39m[1m[2m231.78 kB[22m[1m[22m[2m │ gzip:  78.20 kB[22m
+[2mdist/admin/[22m[36massets/Cae5-Xh5.js   [39m[1m[2m234.86 kB[22m[1m[22m[2m │ gzip:  71.74 kB[22m
+[2mdist/admin/[22m[36massets/2t16sScK.js   [39m[1m[2m295.45 kB[22m[1m[22m[2m │ gzip:  62.70 kB[22m
+[2mdist/admin/[22m[36massets/BDHjfqN8.js   [39m[1m[2m330.38 kB[22m[1m[22m[2m │ gzip:  82.22 kB[22m
+[2mdist/admin/[22m[36massets/DEUtSPP0.js   [39m[1m[2m373.45 kB[22m[1m[22m[2m │ gzip:  80.79 kB[22m
+[32m✓ built in 20.76s[39m
+
+diff --git a/client/src/components/plugins/PluginFrame.vue b/client/src/components/plugins/PluginFrame.vue
+index d3ce0134d97304e8fff74e8fd7a0c3a1377bf00e..3ea35b066e957663350a599e45a0cc5c27685195
+--- a/client/src/components/plugins/PluginFrame.vue
++++ b/client/src/components/plugins/PluginFrame.vue
+@@ -39,7 +39,7 @@
+     pluginId,
+     config,
+     updatedAt: new Date().toISOString()
+-  }, window.location.origin)
++  }, '*')
+ }
+ 
+ async function refreshPluginConfig(): Promise<void> {
+@@ -95,7 +95,7 @@
+     :class="['w-full rounded-lg border border-themed bg-themed-surface', frameClass || 'min-h-[560px]']"
+     :src="frameUrl"
+     :title="title"
+-    sandbox="allow-forms allow-scripts allow-same-origin"
++    sandbox="allow-forms allow-scripts"
+     referrerpolicy="same-origin"
+     @load="refreshPluginConfig"
+   />
+diff --git a/server/scripts/test-plugin-client-boundary-guards.ts b/server/scripts/test-plugin-client-boundary-guards.ts
+index a678e73b644afbd0a00d3b71a262668048e0efd3..e5d84847be70fc45fd27e38ac465be3be6feac9b
+--- a/server/scripts/test-plugin-client-boundary-guards.ts
++++ b/server/scripts/test-plugin-client-boundary-guards.ts
+@@ -42,7 +42,8 @@
+ )
+ 
+ assert.ok(
+-  pluginFrame.includes('sandbox=') &&
++  pluginFrame.includes('sandbox="allow-forms allow-scripts"') &&
++    !pluginFrame.includes('allow-same-origin') &&
+     pluginFrame.includes("url.startsWith('/api/plugins/assets/')") &&
+     pluginFrame.includes('requestPluginAssetToken(asset)') &&
+     pluginFrame.includes('assetToken') &&
+@@ -50,7 +51,7 @@
+     pluginFrame.includes('api.plugins.getPublicConfig(asset.pluginId)') &&
+     pluginFrame.includes("type: 'payincus:plugin-config'") &&
+     pluginFrame.includes('postMessage') &&
+-    pluginFrame.includes('window.location.origin') &&
++    pluginFrame.includes("}, '*')") &&
+     pluginFrame.includes("window.addEventListener('payincus:plugin-config-refresh'") &&
+     pluginFrame.includes('frameClass?: string') &&
+     pluginFrame.includes("frameClass || 'min-h-[560px]'") &&
+
+codex
+user/admin 两端生产构建均已通过（exit 0）。最后做只读收尾检查：`git diff --check`、限定文件 diff 和工作区状态，确认没有越界修改，也没有触碰既有用户改动。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'git diff --check -- client/src/components/plugins/PluginFrame.vue server/scripts/test-plugin-client-boundary-guards.ts' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 529ms:
+warning: in the working copy of 'client/src/components/plugins/PluginFrame.vue', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/scripts/test-plugin-client-boundary-guards.ts', LF will be replaced by CRLF the next time Git touches it
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'git status --short' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 291ms:
+ M client/src/components/plugins/PluginFrame.vue
+ M server/scripts/test-plugin-client-boundary-guards.ts
+ M server/src/db/balance.ts
+?? AGENTS.md
+?? BEHAVIOR.md
+?? CLAUDE.md
+?? DEFECTS.md
+?? EXECUTION.md
+?? FIX_PLAN.md
+?? MAINTENANCE_PLAN.md
+?? artifacts/
+?? audits/
+?? skills-lock.json
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'git diff --stat -- client/src/components/plugins/PluginFrame.vue server/scripts/test-plugin-client-boundary-guards.ts' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 519ms:
+ client/src/components/plugins/PluginFrame.vue        | 4 ++--
+ server/scripts/test-plugin-client-boundary-guards.ts | 5 +++--
+ 2 files changed, 5 insertions(+), 4 deletions(-)
+warning: in the working copy of 'client/src/components/plugins/PluginFrame.vue', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/scripts/test-plugin-client-boundary-guards.ts', LF will be replaced by CRLF the next time Git touches it
+
+diff --git a/client/src/components/plugins/PluginFrame.vue b/client/src/components/plugins/PluginFrame.vue
+index d3ce0134d97304e8fff74e8fd7a0c3a1377bf00e..3ea35b066e957663350a599e45a0cc5c27685195
+--- a/client/src/components/plugins/PluginFrame.vue
++++ b/client/src/components/plugins/PluginFrame.vue
+@@ -39,7 +39,7 @@
+     pluginId,
+     config,
+     updatedAt: new Date().toISOString()
+-  }, window.location.origin)
++  }, '*')
+ }
+ 
+ async function refreshPluginConfig(): Promise<void> {
+@@ -95,7 +95,7 @@
+     :class="['w-full rounded-lg border border-themed bg-themed-surface', frameClass || 'min-h-[560px]']"
+     :src="frameUrl"
+     :title="title"
+-    sandbox="allow-forms allow-scripts allow-same-origin"
++    sandbox="allow-forms allow-scripts"
+     referrerpolicy="same-origin"
+     @load="refreshPluginConfig"
+   />
+diff --git a/server/scripts/test-plugin-client-boundary-guards.ts b/server/scripts/test-plugin-client-boundary-guards.ts
+index a678e73b644afbd0a00d3b71a262668048e0efd3..e5d84847be70fc45fd27e38ac465be3be6feac9b
+--- a/server/scripts/test-plugin-client-boundary-guards.ts
++++ b/server/scripts/test-plugin-client-boundary-guards.ts
+@@ -42,7 +42,8 @@
+ )
+ 
+ assert.ok(
+-  pluginFrame.includes('sandbox=') &&
++  pluginFrame.includes('sandbox="allow-forms allow-scripts"') &&
++    !pluginFrame.includes('allow-same-origin') &&
+     pluginFrame.includes("url.startsWith('/api/plugins/assets/')") &&
+     pluginFrame.includes('requestPluginAssetToken(asset)') &&
+     pluginFrame.includes('assetToken') &&
+@@ -50,7 +51,7 @@
+     pluginFrame.includes('api.plugins.getPublicConfig(asset.pluginId)') &&
+     pluginFrame.includes("type: 'payincus:plugin-config'") &&
+     pluginFrame.includes('postMessage') &&
+-    pluginFrame.includes('window.location.origin') &&
++    pluginFrame.includes("}, '*')") &&
+     pluginFrame.includes("window.addEventListener('payincus:plugin-config-refresh'") &&
+     pluginFrame.includes('frameClass?: string') &&
+     pluginFrame.includes("frameClass || 'min-h-[560px]'") &&
+
+codex
+已完成 FX-001，仅修改 [PluginFrame.vue](C:/Users/Administrator/Desktop/payinces/client/src/components/plugins/PluginFrame.vue) 与 [边界守卫](C:/Users/Administrator/Desktop/payinces/server/scripts/test-plugin-client-boundary-guards.ts)：iframe sandbox 移除 `allow-same-origin`，配置消息的 `targetOrigin` 改为 `'*'`；`plugin-templates/` 与 `client/` 未发现对应消息监听，因此无需调整监听校验。守卫已加强，明确要求新 sandbox 且禁止出现 `allow-same-origin`。client type-check、user/admin 双端生产构建、`test:plugin-client-boundary-guards`、`test:plugin-center-guards`、`test:frontend-route-guards` 和 `git diff --check` 均通过。由于 Windows 不支持仓库脚本的 POSIX 环境变量语法，双端构建使用等价 PowerShell 命令及 Vite runner 完成。未修改既有无关改动，未 commit。
+diff --git a/client/src/components/plugins/PluginFrame.vue b/client/src/components/plugins/PluginFrame.vue
+index d3ce0134d97304e8fff74e8fd7a0c3a1377bf00e..3ea35b066e957663350a599e45a0cc5c27685195
+--- a/client/src/components/plugins/PluginFrame.vue
++++ b/client/src/components/plugins/PluginFrame.vue
+@@ -39,7 +39,7 @@
+     pluginId,
+     config,
+     updatedAt: new Date().toISOString()
+-  }, window.location.origin)
++  }, '*')
+ }
+ 
+ async function refreshPluginConfig(): Promise<void> {
+@@ -95,7 +95,7 @@
+     :class="['w-full rounded-lg border border-themed bg-themed-surface', frameClass || 'min-h-[560px]']"
+     :src="frameUrl"
+     :title="title"
+-    sandbox="allow-forms allow-scripts allow-same-origin"
++    sandbox="allow-forms allow-scripts"
+     referrerpolicy="same-origin"
+     @load="refreshPluginConfig"
+   />
+diff --git a/server/scripts/test-plugin-client-boundary-guards.ts b/server/scripts/test-plugin-client-boundary-guards.ts
+index a678e73b644afbd0a00d3b71a262668048e0efd3..e5d84847be70fc45fd27e38ac465be3be6feac9b
+--- a/server/scripts/test-plugin-client-boundary-guards.ts
++++ b/server/scripts/test-plugin-client-boundary-guards.ts
+@@ -42,7 +42,8 @@
+ )
+ 
+ assert.ok(
+-  pluginFrame.includes('sandbox=') &&
++  pluginFrame.includes('sandbox="allow-forms allow-scripts"') &&
++    !pluginFrame.includes('allow-same-origin') &&
+     pluginFrame.includes("url.startsWith('/api/plugins/assets/')") &&
+     pluginFrame.includes('requestPluginAssetToken(asset)') &&
+     pluginFrame.includes('assetToken') &&
+@@ -50,7 +51,7 @@
+     pluginFrame.includes('api.plugins.getPublicConfig(asset.pluginId)') &&
+     pluginFrame.includes("type: 'payincus:plugin-config'") &&
+     pluginFrame.includes('postMessage') &&
+-    pluginFrame.includes('window.location.origin') &&
++    pluginFrame.includes("}, '*')") &&
+     pluginFrame.includes("window.addEventListener('payincus:plugin-config-refresh'") &&
+     pluginFrame.includes('frameClass?: string') &&
+     pluginFrame.includes("frameClass || 'min-h-[560px]'") &&
+
+tokens used
+80,898

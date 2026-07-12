@@ -1,0 +1,1 @@
+已完成，未 commit。邮箱无独立逐期计费表，因此以 `BalanceLog` 中购买/续费事务写入的折后实扣流水为准：full 退款为累计实付减累计已退；remaining 按各期实付金额及未使用时间比例逐期计算，并以“累计实付−累计已退”统一封顶，完全不使用当前 `plan.price` 作为退款基数。仅修改 `server/src/routes/mail.ts` 和 `server/scripts/test-mail-plan-financial-guards.ts`，未触碰续费月数校验。`server type-check`、`mail-plan-financial-guards`、`mail-subscription-cancel-guards` 均通过。

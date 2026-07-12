@@ -1,0 +1,1 @@
+采用“有中奖记录则阻断硬删”方案：因奖品无 `enabled/status` 字段，删除接口检测到关联记录时返回 409，可将概率设为 0 停用，从而保留中奖/发放记录；仅无记录奖品允许删除，FX-029 校验保持不变。已修改 `lottery.ts`、`admin-entertainment.ts` 及对应守卫；server type-check、两项 entertainment 守卫及 `git diff --check` 全部通过。未碰 `recharge.ts`、schema，未 commit。

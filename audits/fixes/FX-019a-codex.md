@@ -1,0 +1,1 @@
+已在 [admin-billing.ts](C:/Users/Administrator/Desktop/payinces/server/src/routes/admin-billing.ts:65) 复用公共 `calculateDailyPrice`（31 天基），移除本地 `/30` 及日价中间舍入，仅对 `dailyPrice × days` 的最终金额执行一次两位小数舍入；延期仍保持 `days × 24h`，未改续费、升级、退款逻辑。已在既有守卫追加公共函数与舍入断言。`server type-check`、`test:admin-billing-route-id-guards`、`test:financial-reconciliation-guards` 均通过；未 commit、push 或发版，目标文件原有未提交改动已保留。

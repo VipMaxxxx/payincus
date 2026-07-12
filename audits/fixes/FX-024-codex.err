@@ -1,0 +1,1371 @@
+OpenAI Codex v0.144.0-alpha.4
+--------
+workdir: C:\Users\Administrator\Desktop\payinces
+model: gpt-5.6-sol
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: high
+reasoning summaries: none
+session id: 019f52c3-fcf7-7de0-9d49-34060a859a6b
+--------
+user
+你是 PayIncus 仓库实现工程师。先读仓库根 AGENTS.md(不 commit/push/发版、不大重构)。严格按规格修,只改规格允许文件,注意别双重换算、别误改其它以分为单位的用途,改完跑守卫报告。不要 commit。
+---
+# FX-024 规格：套餐收入单位放大 100 倍(P1 / D-048 / M24-01)
+
+## 根因
+server/src/routes/admin-capacity-cost.ts:415 附近的容量/成本模型把套餐价格当"元"算月收入/毛利,
+但套餐价格 plan.price 实际以"分"存储(与全站一致:plan.price=分、instance.billingPrice=元)→ 收入放大 100 倍,
+低毛利/亏损套餐被显示成高毛利、亏损预警失效。相关取数在 db/package-plans.ts:359。
+
+## 修法（改 server/src/routes/admin-capacity-cost.ts,必要时 db/package-plans.ts;不碰 package.json）
+1. 先只读通读 admin-capacity-cost.ts:415 附近 + db/package-plans.ts:359,确认价格字段进入收入/毛利计算时的单位。
+2. 在进入容量成本/收入模型**之前**,把套餐价从"分"统一转"元"(/100)。**务必只转一次**——若数据流中某处已 /100,不要再除;以"最终参与收入/毛利的数值是元"为准。用清晰的中间变量(如 priceYuan)避免混淆。
+3. 若 db/package-plans.ts:359 是收入聚合的取数点且更适合在那里统一口径,可在此转换,但保证全链只转一次、且不影响其它以"分"为单位的正确用途(如展示价格、下单扣费——这些若也用同一函数,勿误改)。优先在 capacity-cost 模型入口转换,风险最小。
+
+## 加守卫
+在现有 server/scripts/test-capacity-cost-guards.ts 追加断言:收入/毛利计算路径包含"分转元"(/100 或等价)的换算,钉死跨单位口径。不改 package.json。
+
+## 不许动
+- 不改下单扣费、账单、展示价格等其它用途的单位。不做大重构。
+
+## 验收
+- pnpm --filter server type-check 通过;pnpm --filter server test:capacity-cost-guards 通过;
+- pnpm --filter server test:commercial-operations-overview-guards 通过(确认未误伤运营台其它口径)。
+
+## 交付
+一段话:换算加在哪一步、如何确保只转一次、守卫结果。不要 commit。
+
+codex
+我会先按规格只读核对容量成本计算的数据流和现有守卫，确认 `plan.price` 从“分”进入模型的位置；随后仅改允许的路由文件与守卫文件，并跑三项指定验收，不会 commit/push/发版。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$files = @('"'AGENTS.md','server/src/routes/admin-capacity-cost.ts','server/src/db/package-plans.ts','server/scripts/test-capacity-cost-guards.ts'); foreach ("'$f in $files) { Write-Output "===== $f ====="; if ($f -eq '"'server/src/routes/admin-capacity-cost.ts') { Get-Content "'$f | Select-Object -Skip 340 -First 180 } elseif ($f -eq '"'server/src/db/package-plans.ts') { Get-Content "'$f | Select-Object -Skip 320 -First 90 } elseif ($f -eq '"'server/scripts/test-capacity-cost-guards.ts') { Get-Content "'$f } else { Get-Content $f } }' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 726ms:
+===== AGENTS.md =====
+# PayIncus / Incudal â€” é¡¹ç›®ç»Ÿä¸€è§„çŸ©ï¼ˆAGENTS.mdï¼‰
+
+> æœ¬æ–‡ä»¶æ˜¯æœ¬ä»“åº“**æ‰€æœ‰ AI agentï¼ˆClaude Codeã€codex ç­‰ï¼‰çš„ç»Ÿä¸€å·¥ä½œè§„èŒƒ**ã€‚
+> `CLAUDE.md` é€šè¿‡ `@AGENTS.md` å¼•ç”¨æœ¬æ–‡ä»¶ â€”â€” Claude Code ä¸Ž codex è¯»åˆ°çš„æ˜¯**åŒä¸€å¥—è§„çŸ©**ï¼Œæ”¹è¿™ä¸€ä¸ªæ–‡ä»¶å³å¯ã€‚
+> æƒå¨è¿ç»´/å‘ç‰ˆäº‹å®žä»¥ä»“åº“æ ¹çš„ `OPERATIONS_HANDOFF.md`ï¼ˆæ“ä½œæ‰‹å†Œï¼‰ä¸Ž `HANDOFF.md`ï¼ˆç‰ˆæœ¬è¯æ®å°è´¦ï¼‰ä¸ºå‡†ã€‚
+
+---
+
+## 0. æ²Ÿé€šè¯­è¨€
+- ä¸Ž owner é»˜è®¤ç”¨**ä¸­æ–‡**æ²Ÿé€šã€‚
+
+## 1. è¿™æ˜¯ä»€ä¹ˆé¡¹ç›®
+**PayIncus**ï¼ˆå†…éƒ¨ä»£å· `incudal`ï¼‰â€”â€”å•†ç”¨ Incusï¼ˆLXC/KVMï¼‰NAT VPS å”®å–ä¸Žäº¤ä»˜å¹³å°ï¼Œ**çº¿ä¸Šè¿è¥ä¸­**ã€‚å½“å‰ç”Ÿäº§ç‰ˆæœ¬ **v1.3.7**ã€‚pnpm monorepoï¼š
+
+| ç›®å½• | æŠ€æœ¯æ ˆ / ä½œç”¨ |
+|------|----------------|
+| `client/` | Vue 3 + Vite SPAã€‚åŒç«¯æž„å»ºï¼ˆ`VITE_APP_ENTRY`ï¼‰â†’ `dist/user`ï¼ˆpay.payincus.comï¼‰+ `dist/admin`ï¼ˆadmin.payincus.comï¼‰ã€‚ä¸¤ç«¯ç‹¬ç«‹æºã€**ä¸å…±äº« cookie åŸŸ**ã€‚ |
+| `server/` | Fastify 5 + Prisma 7 + PostgreSQLï¼Œ~300 TS æ–‡ä»¶ã€~70 è·¯ç”±ã€~15 è°ƒåº¦/workerã€‚æ—  Redisï¼ˆç”¨ PG advisory lockï¼‰ã€‚ä¸‰å¥—é‰´æƒé¢ï¼šWeb çš„ JWT+refresh cookieã€Public API çš„ `pat_`/`poa_` tokenã€host agent çš„ HMACã€‚ |
+| `agent/` | Go å®¿ä¸» agentï¼Œåªè¯»ç›‘æŽ§ï¼ˆå¿ƒè·³/èµ„æº/å®žä¾‹æ€/æµé‡ï¼‰ï¼ŒHMAC ç­¾åï¼Œè‡ªå‡çº§ã€‚ |
+| å…¶å®ƒ | `docs-site/`ï¼ˆVitePressï¼‰ã€`deploy/`ï¼ˆsystemd+Nginxï¼‰ã€`scripts/`ï¼ˆå®‰è£…/æ ¡éªŒ/OTAï¼‰ã€`plugin-templates/`ã€`theme-templates/`ã€‚ |
+
+éƒ¨ç½²ï¼šä¸‰å±‚æ‹†åˆ†ï¼ˆuser / admin / ç§æœ‰åŽç«¯ `127.0.0.1:3001`ï¼‰ï¼Œè£…æœºæ ¹ `/opt/incudal`ï¼ŒåŽŸå­ OTAï¼ˆ`releases/<ver-ts>` + `current` è½¯é“¾ï¼‰+ è‡ªåŠ¨å›žæ»šã€‚
+
+---
+
+## 2. ðŸ”´ ç¡¬è§„çŸ©ï¼ˆä¸å¯åå•†ï¼Œè¿åå³äº‹æ•…ï¼‰
+
+1. **ä¸ç¢°ç”Ÿäº§**ï¼šæœªç» owner æ˜Žç¡®è¦æ±‚ï¼Œ**ç»ä¸** OTAã€å‘å¸ƒã€pushã€æ‰“ tagã€æ”¹ç”Ÿäº§çŽ¯å¢ƒã€‚
+2. **ä¸åšç ´åæ€§ git**ï¼šæœªç» owner æ˜Žç¡®è¦æ±‚ï¼Œ**ç»ä¸** `git reset`ã€`git checkout --`ã€å¼ºåˆ¶åˆ é™¤ã€æ¸…ç†æœªè·Ÿè¸ªæ–‡ä»¶ã€`git commit`/`git push`ã€‚
+3. **é«˜å±è·¯å¾„å…ˆè¯»åŽå†™**ï¼šæ”¹åŠ¨ä»¥ä¸‹ä»»ä¸€é¢†åŸŸï¼Œ**å¿…é¡»å…ˆè¯»ç›¸å…³ä»£ç  + å¯¹åº”å®ˆå«æµ‹è¯•**å†åŠ¨æ‰‹ï¼š
+   > é‰´æƒ Â· æ”¯ä»˜ Â· æƒé™ Â· é£ŽæŽ§ Â· èµ„æºäº¤ä»˜ Â· å…‘æ¢æµç¨‹ Â· å®žä¾‹åˆ›å»º Â· OTA
+4. **æ”¹åŠ¨æœ€å°åŒ–**ï¼šä¿® bug / å‘ç‰ˆæœŸé—´**ä¸åšå¤§èŒƒå›´é‡æž„**ï¼Œåªæ”¹å¿…è¦çš„ã€‚
+5. **ç»ä¸æ³„å¯†**ï¼šä»»ä½• commitã€handoffã€æ€»ç»“ã€æˆªå›¾ä¸­éƒ½**ä¸å¾—**å‡ºçŽ°å‡­è¯ / token / cookie / å¯†é’¥ã€‚
+6. **æœ¬åœ°è¿‡ â‰  ç”Ÿäº§éªŒè¯**ï¼šæœ¬åœ°é€šè¿‡ã€GitHub Actionsã€Release èµ„äº§ã€OTAã€çº¿ä¸Šå®žè¯æ˜¯**åˆ†å¼€çš„è¯æ®**ï¼Œä¸å¯æ··ä¸ºä¸€è°ˆã€‚
+7. **æ¯æ¬¡æ”¹åŠ¨å¿…é¡»è¿‡å¯¹åº”å®ˆå«**ï¼ˆè§ Â§4ï¼‰ï¼Œå¦åˆ™è§†ä¸º**æœªå®Œæˆ**ã€‚
+8. `RUN_DB_CHECKS=0 bash scripts/apply-online-update.sh <ver>` ä¼š**è·³è¿‡ DB/æ”¯ä»˜å°±ç»ªæ ¡éªŒ**ï¼Œä»…åœ¨ owner æ˜Žç¡®æ‰¹å‡†æ—¶ä½¿ç”¨ã€‚
+
+---
+
+## 3. æœ¬åœ°æ€Žä¹ˆè·‘
+
+- **çŽ¯å¢ƒ**ï¼šNode â‰¥ 20ã€pnpm 9.14.2ã€æœ¬åœ° PostgreSQL 16ã€‚
+- **è£…ä¾èµ–**ï¼š`pnpm install`
+- **ä¸€æŠŠèµ·å…¨éƒ¨ï¼ˆserver + user + adminï¼‰**ï¼š`pnpm dev`
+- **åˆ†å¼€èµ·**ï¼š
+  - åŽç«¯ï¼š`NODE_ENV=development JWT_SECRET=dev-secret-12345678 HOST=127.0.0.1 PORT=3001 pnpm --filter server exec tsx watch src/app.ts`
+  - ç”¨æˆ·å‰ç«¯ï¼š`pnpm dev:user`
+  - ç®¡ç†å‰ç«¯ï¼š`pnpm dev:admin`
+- **ç«¯å£**ï¼šåŽç«¯ API **3001** Â· ç”¨æˆ·å‰ç«¯ **3000** Â· ç®¡ç†å‰ç«¯ **3002**ï¼ˆå‰ç«¯ dev ç» proxy æ‰“åˆ° 3001ï¼‰ã€‚
+
+---
+
+## 4. ðŸ›¡ï¸ å®ˆå«æµ‹è¯•çºªå¾‹ï¼ˆæœ¬ä»“åº“çš„å‘½é—¨ï¼‰
+
+`server/package.json` é‡Œæœ‰ **200+ ä¸ªç‹¬ç«‹ `test-*-guards.ts`**ã€‚å®ƒä»¬æŠŠå…³é”®ä¸šåŠ¡/å‰ç«¯ç»“æž„â€œé’‰æ­»â€ï¼Œ`pnpm test` ä¼šè·‘å…¨å¥—ï¼ˆclient+server type-check + å…¨éƒ¨å®ˆå«ï¼‰ã€‚**ä»»ä½•æ”¹åŠ¨å¿…é¡»è®©ç›¸å…³å®ˆå«é€šè¿‡ã€‚**
+
+- **å…¨é‡**ï¼ˆæ…¢ï¼Œå‘ç‰ˆå‰è·‘ï¼‰ï¼š`pnpm test`
+- **å•ä¸ª**ï¼š`pnpm --filter server test:<guard-name>`
+- **å‰ç«¯æœ€å¸¸ç”¨ä¸‰ä¸ª**ï¼š
+  - `test:frontend-route-guards` â€”â€” è·¯ç”± / **è¡¨æ ¼å¸ƒå±€** / `@click` è·¯å¾„æ–­è¨€
+  - `test:frontend-dist-boundary-guards` â€”â€” åŒç«¯ dist è¾¹ç•Œ
+  - `test:frontend-i18n-keys` â€”â€” i18n key å®Œæ•´æ€§
+- **Go agent**ï¼š`pnpm test:agent`
+
+### âš ï¸ è¡¨æ ¼å¸ƒå±€å®ˆå«ï¼ˆæœ€å®¹æ˜“è¸©é›·ï¼‰
+ä¸€æ‰¹è¡¨è¢«å®ˆå«**é”å®š**ä¸ºâ€œ**ç§»åŠ¨å¡ + PC å®šå®½è¡¨ï¼ˆ`table-fixed` / `overflow-hidden`ï¼‰ï¼Œç»ä¸æ¨ªå‘æ»šåŠ¨**â€ï¼Œå¹¶**åå‘ç¦æ­¢** `overflow-x-auto` / `min-w-[...]` / åŽ»æŽ‰ `table-fixed`ã€‚
+- æƒ³ä¿®â€œå®½è¡¨æŒ¤åŽ‹â€æ—¶ï¼š**å…ˆåˆ¤æ–­è¯¥è¡¨æ˜¯å¦åœ¨å®ˆå«æ¸…å•é‡Œ**ã€‚é”å®šè¡¨**åªèƒ½åœ¨ `table-fixed` å†…å¹³è¡¡åˆ—å®½**ï¼ˆåˆ—å®½ç™¾åˆ†æ¯”åˆè®¡ = 100%ï¼‰+ å…è®¸å•å…ƒæ ¼æ¢è¡Œ + é ç§»åŠ¨å¡åº”å¯¹çª„å±ï¼›**ä¸èƒ½**æ”¹æˆæ¨ªå‘æ»šåŠ¨ã€‚
+- å—é”å®šçš„è¡¨ï¼ˆç”¨æˆ·ç«¯ï¼‰ï¼š`MyPackagesView`ã€`MyHostsView`ã€`TransfersView`ã€`OrdersView`ã€`InvitesView`ã€`FlashSalesView`ã€`HostingWalletView`ã€`InstancesView`ã€`LogsView`ã€`EntertainmentView`ï¼›ï¼ˆç®¡ç†ç«¯ï¼‰`admin/BillingView`ã€`admin/ImagesView`ã€`admin/HelpManageView`ã€`admin/MailView`ã€`admin/PluginCenterView`ï¼›ï¼ˆç»„ä»¶ï¼‰`HostPublicIpv4Tab`ã€`InstanceLogsTab`ã€`ConfigEditModal`ã€‚
+- æ”¹ä»»ä¸€å‰ç«¯æ–‡ä»¶åŽ**å¿…è·‘** `test:frontend-route-guards`ã€‚
+
+---
+
+## 5. æž„å»º / æ ¡éªŒå‘½ä»¤
+
+| ç›®çš„ | å‘½ä»¤ |
+|------|------|
+| æž„å»ºï¼ˆå« dist è¾¹ç•Œå®ˆå«ï¼‰| `pnpm build` |
+| åªæž„å»ºå‰ç«¯ / åŽç«¯ | `pnpm build:client` / `pnpm build:server` |
+| Lintï¼ˆæ£€æŸ¥ / è‡ªåŠ¨ä¿®ï¼‰| `pnpm lint` / `pnpm lint:fix` |
+| ç±»åž‹æ£€æŸ¥ | `pnpm --filter client type-check` Â· `pnpm --filter server type-check` |
+| å…¨å¥—å®ˆå« | `pnpm test` |
+| æ–‡æ¡£ç«™å¼€å‘ / æž„å»º | `pnpm docs:dev` / `pnpm docs:build` |
+
+---
+
+## 6. UI æ”¹åŠ¨çº¦æŸï¼ˆå•è‰²é‡åšè¿›è¡Œä¸­ï¼‰
+
+- **æ–¹å‘**ï¼šè‹¹æžœå¼**çº¯é»‘ç™½å•è‰²**ï¼ˆæµ…è‰²=ç™½åº•é»‘å­—ï¼Œæ·±è‰²=é»‘åº•ç™½å­—ï¼‰ï¼ŒåŽ»äºŒæ¬¡å…ƒ/å‰ç¥¥ç‰©/ç«‹ç»˜ã€‚çŠ¶æ€è‰²**åªä¿ç•™ç»¿/ç¥ç€/çº¢**ä¸‰ç§ï¼ˆè¿è¡Œ/å¾…å¤„ç†/å¤±è´¥ï¼‰ã€‚
+- **çº¢çº¿**ï¼šåªæ”¹**æ ·å¼ / å¸ƒå±€ / æ–‡æ¡ˆå±‚çº§**ï¼Œ**ä¸ç¢°**åŽç«¯æŽ¥å£ã€æƒé™ã€æ”¯ä»˜/è®¢å•/å®žä¾‹åˆ›å»º/OTA ç­‰ä¸šåŠ¡é€»è¾‘ä¸Žè·¯ç”±è¡Œä¸ºâ€”â€”**åŠŸèƒ½ 100% ä¸å˜**ã€‚
+- **é…è‰²èµ° token å±‚**ï¼ˆ`client/tailwind.config.js`ï¼‰ï¼šä¸€å †å½©è‰² ramp å·²æ˜ å°„åˆ°ä¸­æ€§ç°ï¼›`rose â†’ çœŸçº¢`ï¼ˆå±é™©/äºæŸè¯­ä¹‰ï¼‰**ä¿ç•™ä¸å¯ç°åŒ–**ï¼›æ¸¸æˆåŒ–æ¨¡å—ï¼ˆæˆå°±/ç­¾åˆ°/æŠ½å¥–/ç¨€æœ‰åº¦ï¼‰å½©è‰²**åˆ»æ„ä¿ç•™**ã€‚
+- `kawaii-cloud.css` **æ¸è¿›æ”¹é€ ã€ä¸é‡å†™**ï¼›å•é¡µåŽ»è‰²ç”¨é¡µé¢ `<style scoped>`ã€‚
+- åŠ¨æ•ˆå¯ç”¨ **GSAP**ï¼ˆå·²è£… gsap-skillsï¼Œè§ `.claude/skills/`ï¼‰ï¼›å°Šé‡ `prefers-reduced-motion`ã€‚
+
+---
+
+## 7. åä½œæ¨¡åž‹ï¼ˆClaude Code â‡„ codexï¼‰
+
+- **Claude Code = æŠ€æœ¯è´Ÿè´£äºº / é›†æˆæ–¹**ï¼šå®šæ ¹å› ã€åˆ‡ä»»åŠ¡ã€å†™è§„æ ¼ã€å®ˆä¸å˜é‡ã€å®¡ diffã€è·‘å®ˆå«ã€çœŸæœºéªŒè¯ã€ç®¡ gitï¼ˆ**ä»…åœ¨ owner åŒæ„æ—¶** commit / pushï¼‰ã€‚
+- **codex = å®žçŽ°å·¥äºº**ï¼šæŒ‰ Claude ç»™çš„è§„æ ¼å®žçŽ°æ”¹åŠ¨ï¼Œå°¤å…¶**ä½Ž/ä¸­å±ã€è‡ªåŒ…å«ã€å¯å¹¶è¡Œ**çš„å—ã€‚
+- **é£Žé™©åˆ†æ¡£**ï¼šé«˜å±è·¯å¾„ç”± Claude å®šæ ¹å›  + æ”¶ç´§è§„æ ¼ï¼›ä½Ž/ä¸­å± codex å¯ç«¯åˆ°ç«¯ä¿®ã€‚**ä»»ä½•ä¸€æ–¹æ”¹å®Œéƒ½è¦è·‘ç›¸å…³å®ˆå«ï¼ŒClaude ç»Ÿä¸€å®¡æŸ¥åŽæ‰è¿›å…¥ä¸‹ä¸€æ­¥ã€‚**
+- **é¿å…å†²çª**ï¼šåŒä¸€æ‰¹æ–‡ä»¶ä¸€æ¬¡åªè®©ä¸€ä¸ª agent æ”¹ã€‚
+
+---
+
+## 8. ä¸€ä¸ªæ”¹åŠ¨çš„ã€Œå®Œæˆã€å®šä¹‰
+
+1. ç›¸å…³ **type-check** é€šè¿‡ï¼›
+2. ç›¸å…³ **å®ˆå«æµ‹è¯•** é€šè¿‡ï¼›
+3. è‹¥åŠ¨å‰ç«¯ â†’ **åŒç«¯ build** é€šè¿‡ï¼›
+4. **çœŸæœºè·‘è¿‡**å—å½±å“æµç¨‹ï¼ˆä¸æ˜¯åªçœ‹æµ‹è¯•ï¼‰ï¼›
+5. **æŠ¥å‘Š**ï¼šæ”¹äº†å“ªäº›æ–‡ä»¶ / ä¸ºä»€ä¹ˆ / é£Žé™© / æ€Žä¹ˆéªŒè¯çš„ã€‚
+
+ä»¥ä¸Šä»»ä¸€æœªæ»¡è¶³ = **æœªå®Œæˆ**ã€‚
+===== server/src/routes/admin-capacity-cost.ts =====
+              monthlyCost: 0,
+              ipv4MonthlyCost: 0,
+              trafficTbCost: 0,
+              currency: 'CNY',
+              notes: null,
+              updatedAt: null
+            }
+      }
+    })
+
+    await Promise.all(hostViews.map(host =>
+      prisma.capacitySnapshot.upsert({
+        where: {
+          hostId_capturedDate: {
+            hostId: host.id,
+            capturedDate: today
+          }
+        },
+        create: {
+          hostId: host.id,
+          capturedDate: today,
+          cpuTotal: host.capacity.cpuTotal,
+          cpuUsed: host.capacity.cpuUsed,
+          memoryTotal: host.capacity.memoryTotal,
+          memoryUsed: host.capacity.memoryUsed,
+          diskTotal: host.capacity.diskTotal,
+          diskUsed: host.capacity.diskUsed,
+          natPortTotal: host.capacity.natPortTotal,
+          natPortUsed: host.capacity.natPortUsed,
+          instanceCount: host.capacity.instanceCount,
+          trafficUsedBytes: BigInt(host.capacity.trafficUsedBytes)
+        },
+        update: {
+          cpuTotal: host.capacity.cpuTotal,
+          cpuUsed: host.capacity.cpuUsed,
+          memoryTotal: host.capacity.memoryTotal,
+          memoryUsed: host.capacity.memoryUsed,
+          diskTotal: host.capacity.diskTotal,
+          diskUsed: host.capacity.diskUsed,
+          natPortTotal: host.capacity.natPortTotal,
+          natPortUsed: host.capacity.natPortUsed,
+          instanceCount: host.capacity.instanceCount,
+          trafficUsedBytes: BigInt(host.capacity.trafficUsedBytes)
+        }
+      })
+    ))
+
+    const packagePlanMap = new Map<number, {
+      packageId: number
+      packageName: string
+      planId: number
+      planName: string
+      price: number
+      billingCycle: number
+      revenueMonthly: number
+      estimatedCostMonthlyValues: number[]
+      availableSlots: number
+      soldCount: number
+    }>()
+
+    const alerts: CapacityAlert[] = []
+    const hostCapacityMap = new Map(hostViews.map(host => [host.id, host.capacity]))
+
+    for (const host of hosts) {
+      const capacity = hostCapacityMap.get(host.id)
+      if (!capacity) continue
+      pushUsageAlert(alerts, `host:${host.id}:cpu`, capacity.cpuUsageRatio, 'host', host.id, `${host.name} CPU ä½™é‡ä¸è¶³`, `CPU ä½¿ç”¨çŽ‡ ${(capacity.cpuUsageRatio * 100).toFixed(1)}%`)
+      pushUsageAlert(alerts, `host:${host.id}:memory`, capacity.memoryUsageRatio, 'host', host.id, `${host.name} å†…å­˜ä½™é‡ä¸è¶³`, `å†…å­˜ä½¿ç”¨çŽ‡ ${(capacity.memoryUsageRatio * 100).toFixed(1)}%`)
+      pushUsageAlert(alerts, `host:${host.id}:disk`, capacity.diskUsageRatio, 'host', host.id, `${host.name} ç£ç›˜ä½™é‡ä¸è¶³`, `ç£ç›˜ä½¿ç”¨çŽ‡ ${(capacity.diskUsageRatio * 100).toFixed(1)}%`)
+      pushUsageAlert(alerts, `host:${host.id}:ports`, capacity.natPortUsageRatio, 'host', host.id, `${host.name} NAT ç«¯å£ä½™é‡ä¸è¶³`, `ç«¯å£ä½¿ç”¨çŽ‡ ${(capacity.natPortUsageRatio * 100).toFixed(1)}%`)
+
+      for (const binding of host.packageHosts) {
+        for (const plan of binding.package.plans) {
+          const existing = packagePlanMap.get(plan.id)
+          const monthlyRevenue = toMoney(plan.price) / Math.max(plan.billingCycle || 1, 1)
+          const slots = estimatePlanSlots(plan, capacity)
+          const cost = estimatePlanMonthlyCost(plan, host)
+          if (existing) {
+            existing.estimatedCostMonthlyValues.push(cost)
+            existing.availableSlots += slots
+          } else {
+            packagePlanMap.set(plan.id, {
+              packageId: binding.package.id,
+              packageName: binding.package.name,
+              planId: plan.id,
+              planName: plan.name,
+              price: toMoney(plan.price),
+              billingCycle: plan.billingCycle,
+              revenueMonthly: toMoney(monthlyRevenue),
+              estimatedCostMonthlyValues: [cost],
+              availableSlots: slots,
+              soldCount: plan._count.instances
+            })
+          }
+        }
+      }
+    }
+
+    const plans = Array.from(packagePlanMap.values()).map(plan => {
+      const estimatedCostMonthly = plan.estimatedCostMonthlyValues.length > 0
+        ? toMoney(plan.estimatedCostMonthlyValues.reduce((sum, value) => sum + value, 0) / plan.estimatedCostMonthlyValues.length)
+        : 0
+      const estimatedMarginMonthly = toMoney(plan.revenueMonthly - estimatedCostMonthly)
+      const marginRatio = plan.revenueMonthly > 0 ? Math.round((estimatedMarginMonthly / plan.revenueMonthly) * 10000) / 10000 : 0
+      if (estimatedMarginMonthly < 0) {
+        alerts.push({
+          key: `plan:${plan.planId}:negative-margin`,
+          severity: 'warning',
+          objectType: 'package_plan',
+          objectId: plan.planId,
+          title: `${plan.packageName} / ${plan.planName} é¢„è®¡äºæŸ`,
+          message: `æœˆæ”¶å…¥ Â¥${plan.revenueMonthly.toFixed(2)}ï¼Œé¢„è®¡æˆæœ¬ Â¥${estimatedCostMonthly.toFixed(2)}`
+        })
+      }
+      if (plan.availableSlots <= 0) {
+        alerts.push({
+          key: `plan:${plan.planId}:sold-out-risk`,
+          severity: 'critical',
+          objectType: 'package_plan',
+          objectId: plan.planId,
+          title: `${plan.packageName} / ${plan.planName} å¯å”®ä½™é‡ä¸º 0`,
+          message: 'æ‰€æœ‰ç»‘å®š Host çš„å½“å‰ä½™é‡éƒ½ä¸è¶³ä»¥æ‰¿è½½æ­¤æ–¹æ¡ˆ'
+        })
+      }
+      return {
+        ...plan,
+        estimatedCostMonthly,
+        estimatedMarginMonthly,
+        marginRatio
+      }
+    }).sort((a, b) => a.estimatedMarginMonthly - b.estimatedMarginMonthly)
+
+    await syncHostCapacityAlertsToSla(alerts)
+
+    const snapshotStart = new Date(today.getTime() - 29 * 24 * 60 * 60 * 1000)
+    const snapshots = await prisma.capacitySnapshot.findMany({
+      where: { capturedDate: { gte: snapshotStart } },
+      orderBy: [{ capturedDate: 'asc' }, { hostId: 'asc' }]
+    })
+    const trendMap = new Map<string, { label: string; instanceCount: number; cpuUsed: number; memoryUsed: number; diskUsed: number; trafficUsedBytes: bigint }>()
+    for (const snapshot of snapshots) {
+      const label = snapshot.capturedDate.toISOString().slice(0, 10)
+      const row = trendMap.get(label) || { label, instanceCount: 0, cpuUsed: 0, memoryUsed: 0, diskUsed: 0, trafficUsedBytes: 0n }
+      row.instanceCount += snapshot.instanceCount
+      row.cpuUsed += snapshot.cpuUsed
+      row.memoryUsed += snapshot.memoryUsed
+      row.diskUsed += snapshot.diskUsed
+      row.trafficUsedBytes += snapshot.trafficUsedBytes
+      trendMap.set(label, row)
+    }
+
+    const totals = hostViews.reduce((acc, host) => {
+      acc.cpuTotal += host.capacity.cpuTotal
+      acc.cpuUsed += host.capacity.cpuUsed
+      acc.memoryTotal += host.capacity.memoryTotal
+      acc.memoryUsed += host.capacity.memoryUsed
+      acc.diskTotal += host.capacity.diskTotal
+      acc.diskUsed += host.capacity.diskUsed
+      acc.natPortTotal += host.capacity.natPortTotal
+      acc.natPortUsed += host.capacity.natPortUsed
+      acc.instanceCount += host.capacity.instanceCount
+      acc.monthlyCost += host.costProfile.monthlyCost
+      return acc
+    }, {
+      cpuTotal: 0,
+      cpuUsed: 0,
+      memoryTotal: 0,
+      memoryUsed: 0,
+      diskTotal: 0,
+      diskUsed: 0,
+      natPortTotal: 0,
+      natPortUsed: 0,
+      instanceCount: 0,
+      monthlyCost: 0
+    })
+
+    return {
+      totals: {
+        ...totals,
+        cpuAvailable: positiveAvailable(totals.cpuTotal, totals.cpuUsed),
+===== server/src/db/package-plans.ts =====
+ */
+export async function canDeletePlan(id: number): Promise<{
+  canDelete: boolean
+  reason?: string
+  instanceCount?: number
+}> {
+  const instanceCount = await prisma.instance.count({
+    where: { packagePlanId: id }
+  })
+  
+  if (instanceCount > 0) {
+    return {
+      canDelete: false,
+      reason: `è¯¥æ–¹æ¡ˆä¸‹è¿˜æœ‰ ${instanceCount} ä¸ªå®žä¾‹ï¼Œæ— æ³•åˆ é™¤`,
+      instanceCount
+    }
+  }
+  
+  return { canDelete: true }
+}
+
+/**
+ * åˆ é™¤å¥—é¤æ–¹æ¡ˆ
+ */
+export async function deletePlan(id: number): Promise<void> {
+  await prisma.packagePlan.delete({
+    where: { id }
+  })
+}
+
+// ==================== è¾…åŠ©å‡½æ•° ====================
+
+/**
+ * è®¡ç®—æ–¹æ¡ˆæœˆä»·
+ * æ³¨æ„ï¼šPackagePlan.price å­˜å‚¨çš„æ˜¯åˆ†ï¼ˆcentsï¼‰ï¼Œæ­¤å‡½æ•°è¿”å›žçš„ä¹Ÿæ˜¯åˆ†
+ * å¦‚éœ€æ˜¾ç¤ºä¸ºå…ƒï¼Œè°ƒç”¨æ–¹éœ€è¦ / 100
+ */
+export function calculateMonthlyPrice(plan: PackagePlan): number {
+  const price = Number(plan.price) || 0  // åˆ†
+  const cycle = Math.max(plan.billingCycle || 1, 1) // é˜²æ­¢é™¤é›¶
+  return price / cycle  // è¿”å›žåˆ†/æœˆ
+}
+
+/**
+ * èŽ·å–æ–¹æ¡ˆåŒ…å«çš„èµ„æºé…ç½®ï¼ˆç”¨äºŽå‰ç«¯å±•ç¤ºï¼‰
+ */
+export function getPlanResources(plan: PackagePlan) {
+  return {
+    cpu: plan.cpu,
+    memory: plan.memory,
+    disk: plan.disk,
+    portLimit: plan.portLimit,
+    snapshotLimit: plan.snapshotLimit,
+    backupLimit: plan.backupLimit,
+    siteLimit: plan.siteLimit,
+    swapSize: plan.swapSize,
+    trafficLimit: plan.trafficLimit.toString(),
+    trafficLimitSpeed: plan.trafficLimitSpeed
+  }
+}
+
+/**
+ * èŽ·å–æ–¹æ¡ˆè®¡è´¹ä¿¡æ¯ï¼ˆç”¨äºŽå‰ç«¯å±•ç¤ºï¼‰
+ */
+export function getPlanBilling(plan: PackagePlan) {
+  return {
+    price: Number(plan.price),
+    trafficResetPrice: plan.trafficResetPrice === null ? null : Number(plan.trafficResetPrice),
+    billingCycle: plan.billingCycle,
+    setupFee: Number(plan.setupFee),
+    monthlyPrice: calculateMonthlyPrice(plan)
+  }
+}
+===== server/scripts/test-capacity-cost-guards.ts =====
+import { readFileSync } from 'fs'
+import { resolve } from 'path'
+import assert from 'node:assert/strict'
+
+const root = resolve(process.cwd(), '..')
+const schema = readFileSync(resolve(root, 'server/prisma/schema.prisma'), 'utf8')
+const route = readFileSync(resolve(root, 'server/src/routes/admin-capacity-cost.ts'), 'utf8')
+const app = readFileSync(resolve(root, 'server/src/app.ts'), 'utf8')
+const adminApi = readFileSync(resolve(root, 'client/src/api/admin.ts'), 'utf8')
+const userApi = readFileSync(resolve(root, 'client/src/api/index.ts'), 'utf8')
+const adminRouter = readFileSync(resolve(root, 'client/src/router/admin.ts'), 'utf8')
+const adminNav = readFileSync(resolve(root, 'client/src/config/side-nav-items-admin.ts'), 'utf8')
+const view = readFileSync(resolve(root, 'client/src/views/admin/CapacityCostView.vue'), 'utf8')
+const viteConfig = readFileSync(resolve(root, 'client/vite.config.ts'), 'utf8')
+const packagesRoute = readFileSync(resolve(root, 'server/src/routes/packages.ts'), 'utf8')
+const instanceWorker = readFileSync(resolve(root, 'server/src/workers/instanceTaskWorker.ts'), 'utf8')
+
+assert.ok(
+  schema.includes('model HostCostProfile') &&
+    schema.includes('monthlyCost') &&
+    schema.includes('ipv4MonthlyCost') &&
+    schema.includes('trafficTbCost') &&
+    schema.includes('model CapacitySnapshot') &&
+    schema.includes('@@unique([hostId, capturedDate])'),
+  'capacity cost feature must persist host cost profiles and idempotent daily capacity snapshots'
+)
+
+assert.ok(
+  app.includes("import adminCapacityCostRoutes from './routes/admin-capacity-cost.js'") &&
+    app.includes("fastify.register(adminCapacityCostRoutes, { prefix: '/api/admin/capacity-cost' })"),
+  'capacity cost routes must be registered under the admin API prefix'
+)
+
+assert.ok(
+  route.includes("onRequest: [app.authenticate, app.requireAdmin]") &&
+    route.includes("app.get('/overview'") &&
+    route.includes("('/hosts/:id/cost-profile'") &&
+    route.includes('prisma.hostCostProfile.upsert') &&
+    route.includes('capacity.cost_profile.update'),
+  'capacity cost overview and cost updates must be admin-only and log cost changes'
+)
+
+assert.ok(
+  route.includes('estimatePlanSlots') &&
+    route.includes('estimatePlanMonthlyCost') &&
+    route.includes('cpuAvailable') &&
+    route.includes('memoryAvailable') &&
+    route.includes('diskAvailable') &&
+    route.includes('natPortAvailable') &&
+    route.includes('estimatedMarginMonthly') &&
+    route.includes('availableSlots'),
+  'capacity cost overview must compute sellable inventory and plan margin estimates'
+)
+
+assert.ok(
+  route.includes('prisma.capacitySnapshot.upsert') &&
+    route.includes('hostId_capturedDate') &&
+    route.includes('capturedDate: today'),
+  'capacity snapshots must be written idempotently per host and day'
+)
+
+assert.ok(
+  route.includes("CAPACITY_SLA_RULE_CODE = 'capacity.host_pressure'") &&
+    route.includes('syncHostCapacityAlertsToSla') &&
+    route.includes('prisma.slaAlertRule.upsert') &&
+    route.includes('prisma.slaAlertEvent.findUnique') &&
+    route.includes('ruleCode_fingerprint') &&
+    route.includes("objectType: 'host' as const") &&
+    route.includes("source: 'capacity-cost-overview'") &&
+    route.includes('prisma.slaAlertAction.create'),
+  'host capacity alerts must be integrated with SLA alert events without introducing user-visible fields'
+)
+
+assert.ok(
+  adminApi.includes('/admin/capacity-cost/overview') &&
+    adminApi.includes('/admin/capacity-cost/hosts/${hostId}/cost-profile') &&
+    adminRouter.includes("path: '/admin/capacity-cost'") &&
+    adminNav.includes("path: '/admin/capacity-cost'") &&
+    view.includes('å®¹é‡ä¸Žæˆæœ¬') &&
+    view.includes('å¥—é¤æ¯›åˆ©ä¼°ç®—') &&
+    view.includes('åªåšè¿è¥æç¤ºï¼Œä¸è‡ªåŠ¨åœå”®æˆ–ä¿®æ”¹å¥—é¤'),
+  'admin UI must expose a dedicated capacity and cost page'
+)
+
+assert.ok(
+  !userApi.includes('/admin/capacity-cost') &&
+    !userApi.includes('estimatedMarginMonthly') &&
+    !userApi.includes('monthlyCost') &&
+    viteConfig.includes("'capacityCost'") &&
+    !packagesRoute.includes('costProfile') &&
+    !packagesRoute.includes('estimatedMarginMonthly'),
+  'user APIs and public package routes must not expose capacity cost or margin fields'
+)
+
+assert.ok(
+  !instanceWorker.includes('hostCostProfile') &&
+    !instanceWorker.includes('capacitySnapshot') &&
+    !packagesRoute.includes('hostCostProfile.upsert') &&
+    !packagesRoute.includes('capacitySnapshot.upsert'),
+  'capacity cost feature must not alter instance provisioning or package selling paths'
+)
+
+assert.ok(
+  (view.match(/class="space-y-3 p-4 lg:hidden"/g)?.length ?? 0) >= 2 &&
+    (view.match(/class="hidden overflow-hidden lg:block"/g)?.length ?? 0) >= 2 &&
+    view.includes('table class="w-full table-fixed divide-y divide-themed text-sm"') &&
+    view.includes('table class="w-full table-fixed divide-y divide-themed text-sm"') &&
+    view.includes('@click="saveCostProfile(host)"') &&
+    !view.includes('class="overflow-x-auto"') &&
+    !view.includes('table class="min-w-full'),
+  'capacity cost view must keep mobile cards, fixed desktop tables, and host cost save actions'
+)
+
+console.log('capacity cost guard tests passed')
+
+codex
+已确认取数辅助函数明确返回“分/月”，而容量模型当前直接用 `toMoney(plan.price)` 参与月收入，确实尚未换算。下一步我会定位该路由的 `toMoney` 定义和 Prisma 查询边界，确保只在容量模型入口新增一次 `/100`，不改共享取数函数。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'rg -n -C 8 "function toMoney|const toMoney|packageHosts|monthlyRevenue|price:" server/src/routes/admin-capacity-cost.ts; git status --short -- server/src/routes/admin-capacity-cost.ts server/src/db/package-plans.ts server/scripts/test-capacity-cost-guards.ts' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 792ms:
+rg : The term 'rg' is not recognized as the name of a cmdlet, function, script file, or operable program. Check the 
+spelling of the name, or if a path was included, verify that the path is correct and try again.
+At line:2 char:1
++ rg -n -C 8 "function toMoney|const toMoney|packageHosts|monthlyRevenu ...
++ ~~
+    + CategoryInfo          : ObjectNotFound: (rg:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "Select-String -Path 'server/src/routes/admin-capacity-cost.ts' -Pattern 'function toMoney|const toMoney|packageHosts|monthlyRevenue|price:' -Context 8,8; git status --short -- server/src/routes/admin-capacity-cost.ts server/src/db/package-plans.ts server/scripts/test-capacity-cost-guards.ts" in C:\Users\Administrator\Desktop\payinces
+ succeeded in 689ms:
+
+  server\src\routes\admin-capacity-cost.ts:47:function toNumber(value: unknown): number {
+  server\src\routes\admin-capacity-cost.ts:48:  if (value === null || value === undefined) return 0
+  server\src\routes\admin-capacity-cost.ts:49:  if (typeof value === 'number') return Number.isFinite(value) ? value : 
+0
+  server\src\routes\admin-capacity-cost.ts:50:  if (typeof value === 'bigint') return Number(value)
+  server\src\routes\admin-capacity-cost.ts:51:  if (value instanceof Prisma.Decimal) return value.toNumber()
+  server\src\routes\admin-capacity-cost.ts:52:  return Number.parseFloat(String(value)) || 0
+  server\src\routes\admin-capacity-cost.ts:53:}
+  server\src\routes\admin-capacity-cost.ts:54:
+> server\src\routes\admin-capacity-cost.ts:55:function toMoney(value: unknown): number {
+  server\src\routes\admin-capacity-cost.ts:56:  return Math.round(toNumber(value) * 100) / 100
+  server\src\routes\admin-capacity-cost.ts:57:}
+  server\src\routes\admin-capacity-cost.ts:58:
+  server\src\routes\admin-capacity-cost.ts:59:function usageRatio(used: number, total: number): number {
+  server\src\routes\admin-capacity-cost.ts:60:  if (total <= 0) return used > 0 ? 1 : 0
+  server\src\routes\admin-capacity-cost.ts:61:  return Math.min(Math.max(used / total, 0), 1)
+  server\src\routes\admin-capacity-cost.ts:62:}
+  server\src\routes\admin-capacity-cost.ts:63:
+  server\src\routes\admin-capacity-cost.ts:291:    const hosts = await prisma.host.findMany({
+  server\src\routes\admin-capacity-cost.ts:292:      orderBy: { id: 'asc' },
+  server\src\routes\admin-capacity-cost.ts:293:      include: {
+  server\src\routes\admin-capacity-cost.ts:294:        costProfile: true,
+  server\src\routes\admin-capacity-cost.ts:295:        instances: {
+  server\src\routes\admin-capacity-cost.ts:296:          where: { status: { not: 'deleted' } },
+  server\src\routes\admin-capacity-cost.ts:297:          select: { id: true, packagePlanId: true, monthlyTrafficUsed: 
+true }
+  server\src\routes\admin-capacity-cost.ts:298:        },
+> server\src\routes\admin-capacity-cost.ts:299:        packageHosts: {
+  server\src\routes\admin-capacity-cost.ts:300:          include: {
+  server\src\routes\admin-capacity-cost.ts:301:            package: {
+  server\src\routes\admin-capacity-cost.ts:302:              include: {
+  server\src\routes\admin-capacity-cost.ts:303:                plans: {
+  server\src\routes\admin-capacity-cost.ts:304:                  where: { isActive: true },
+  server\src\routes\admin-capacity-cost.ts:305:                  orderBy: { sortOrder: 'asc' },
+  server\src\routes\admin-capacity-cost.ts:306:                  include: {
+  server\src\routes\admin-capacity-cost.ts:307:                    _count: {
+  server\src\routes\admin-capacity-cost.ts:385:      })
+  server\src\routes\admin-capacity-cost.ts:386:    ))
+  server\src\routes\admin-capacity-cost.ts:387:
+  server\src\routes\admin-capacity-cost.ts:388:    const packagePlanMap = new Map<number, {
+  server\src\routes\admin-capacity-cost.ts:389:      packageId: number
+  server\src\routes\admin-capacity-cost.ts:390:      packageName: string
+  server\src\routes\admin-capacity-cost.ts:391:      planId: number
+  server\src\routes\admin-capacity-cost.ts:392:      planName: string
+> server\src\routes\admin-capacity-cost.ts:393:      price: number
+  server\src\routes\admin-capacity-cost.ts:394:      billingCycle: number
+  server\src\routes\admin-capacity-cost.ts:395:      revenueMonthly: number
+  server\src\routes\admin-capacity-cost.ts:396:      estimatedCostMonthlyValues: number[]
+  server\src\routes\admin-capacity-cost.ts:397:      availableSlots: number
+  server\src\routes\admin-capacity-cost.ts:398:      soldCount: number
+  server\src\routes\admin-capacity-cost.ts:399:    }>()
+  server\src\routes\admin-capacity-cost.ts:400:
+  server\src\routes\admin-capacity-cost.ts:401:    const alerts: CapacityAlert[] = []
+  server\src\routes\admin-capacity-cost.ts:404:    for (const host of hosts) {
+  server\src\routes\admin-capacity-cost.ts:405:      const capacity = hostCapacityMap.get(host.id)
+  server\src\routes\admin-capacity-cost.ts:406:      if (!capacity) continue
+  server\src\routes\admin-capacity-cost.ts:407:      pushUsageAlert(alerts, `host:${host.id}:cpu`, 
+capacity.cpuUsageRatio, 'host', host.id, `${host.name} CPU 余量不足`, `CPU 使用率 ${(capacity.cpuUsageRatio * 
+100).toFixed(1)}%`)
+  server\src\routes\admin-capacity-cost.ts:408:      pushUsageAlert(alerts, `host:${host.id}:memory`, 
+capacity.memoryUsageRatio, 'host', host.id, `${host.name} 内存余量不足`, `内存使用率 ${(capacity.memoryUsageRatio * 
+100).toFixed(1)}%`)
+  server\src\routes\admin-capacity-cost.ts:409:      pushUsageAlert(alerts, `host:${host.id}:disk`, 
+capacity.diskUsageRatio, 'host', host.id, `${host.name} 磁盘余量不足`, `磁盘使用率 ${(capacity.diskUsageRatio * 
+100).toFixed(1)}%`)
+  server\src\routes\admin-capacity-cost.ts:410:      pushUsageAlert(alerts, `host:${host.id}:ports`, 
+capacity.natPortUsageRatio, 'host', host.id, `${host.name} NAT 端口余量不足`, `端口使用率 ${(capacity.natPortUsageRatio * 
+100).toFixed(1)}%`)
+  server\src\routes\admin-capacity-cost.ts:411:
+> server\src\routes\admin-capacity-cost.ts:412:      for (const binding of host.packageHosts) {
+  server\src\routes\admin-capacity-cost.ts:413:        for (const plan of binding.package.plans) {
+  server\src\routes\admin-capacity-cost.ts:414:          const existing = packagePlanMap.get(plan.id)
+> server\src\routes\admin-capacity-cost.ts:415:          const monthlyRevenue = toMoney(plan.price) / 
+Math.max(plan.billingCycle || 1, 1)
+  server\src\routes\admin-capacity-cost.ts:416:          const slots = estimatePlanSlots(plan, capacity)
+  server\src\routes\admin-capacity-cost.ts:417:          const cost = estimatePlanMonthlyCost(plan, host)
+  server\src\routes\admin-capacity-cost.ts:418:          if (existing) {
+  server\src\routes\admin-capacity-cost.ts:419:            existing.estimatedCostMonthlyValues.push(cost)
+  server\src\routes\admin-capacity-cost.ts:420:            existing.availableSlots += slots
+  server\src\routes\admin-capacity-cost.ts:421:          } else {
+  server\src\routes\admin-capacity-cost.ts:422:            packagePlanMap.set(plan.id, {
+  server\src\routes\admin-capacity-cost.ts:423:              packageId: binding.package.id,
+  server\src\routes\admin-capacity-cost.ts:424:              packageName: binding.package.name,
+  server\src\routes\admin-capacity-cost.ts:425:              planId: plan.id,
+  server\src\routes\admin-capacity-cost.ts:426:              planName: plan.name,
+> server\src\routes\admin-capacity-cost.ts:427:              price: toMoney(plan.price),
+  server\src\routes\admin-capacity-cost.ts:428:              billingCycle: plan.billingCycle,
+> server\src\routes\admin-capacity-cost.ts:429:              revenueMonthly: toMoney(monthlyRevenue),
+  server\src\routes\admin-capacity-cost.ts:430:              estimatedCostMonthlyValues: [cost],
+  server\src\routes\admin-capacity-cost.ts:431:              availableSlots: slots,
+  server\src\routes\admin-capacity-cost.ts:432:              soldCount: plan._count.instances
+  server\src\routes\admin-capacity-cost.ts:433:            })
+  server\src\routes\admin-capacity-cost.ts:434:          }
+  server\src\routes\admin-capacity-cost.ts:435:        }
+  server\src\routes\admin-capacity-cost.ts:436:      }
+  server\src\routes\admin-capacity-cost.ts:437:    }
+
+
+
+codex
+数据链已厘清：`toMoney` 仅做两位小数取整，不做单位转换；路由直接从 Prisma 读取 `PackagePlan.price`，没有经过 `calculateMonthlyPrice`，因此不存在既有 `/100`。我会在循环入口生成 `priceYuan`，让返回的 `price` 和 `revenueMonthly` 都统一使用元，并用守卫同时约束换算与下游引用，避免未来重复或绕过。
+apply patch
+patch: completed
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-capacity-cost-guards.ts
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-capacity-cost.ts
+diff --git a/server/scripts/test-capacity-cost-guards.ts b/server/scripts/test-capacity-cost-guards.ts
+index 893ebce05f765021541d8cbd47efab33044a57ef..816ec47fa4c1f3f57997b0c83897f5b34d806d60
+--- a/server/scripts/test-capacity-cost-guards.ts
++++ b/server/scripts/test-capacity-cost-guards.ts
+@@ -53,6 +53,14 @@
+ )
+ 
+ assert.ok(
++  route.includes('const priceYuan = toMoney(plan.price) / 100') &&
++    route.includes('const monthlyRevenue = priceYuan / Math.max(plan.billingCycle || 1, 1)') &&
++    route.includes('price: priceYuan') &&
++    route.includes('revenueMonthly: toMoney(monthlyRevenue)'),
++  'capacity cost revenue and margin calculations must convert package plan prices from cents to yuan exactly once at the model boundary'
++)
++
++assert.ok(
+   route.includes('prisma.capacitySnapshot.upsert') &&
+     route.includes('hostId_capturedDate') &&
+     route.includes('capturedDate: today'),
+diff --git a/server/src/routes/admin-capacity-cost.ts b/server/src/routes/admin-capacity-cost.ts
+index f361a2547ca80ecb445d7f56ca6fe09cb2fc9e3b..650961dc76c1fdbc469a6149f88b7d0159882a64
+--- a/server/src/routes/admin-capacity-cost.ts
++++ b/server/src/routes/admin-capacity-cost.ts
+@@ -412,7 +412,8 @@
+       for (const binding of host.packageHosts) {
+         for (const plan of binding.package.plans) {
+           const existing = packagePlanMap.get(plan.id)
+-          const monthlyRevenue = toMoney(plan.price) / Math.max(plan.billingCycle || 1, 1)
++          const priceYuan = toMoney(plan.price) / 100
++          const monthlyRevenue = priceYuan / Math.max(plan.billingCycle || 1, 1)
+           const slots = estimatePlanSlots(plan, capacity)
+           const cost = estimatePlanMonthlyCost(plan, host)
+           if (existing) {
+@@ -424,7 +425,7 @@
+               packageName: binding.package.name,
+               planId: plan.id,
+               planName: plan.name,
+-              price: toMoney(plan.price),
++              price: priceYuan,
+               billingCycle: plan.billingCycle,
+               revenueMonthly: toMoney(monthlyRevenue),
+               estimatedCostMonthlyValues: [cost],
+
+diff --git a/server/scripts/test-capacity-cost-guards.ts b/server/scripts/test-capacity-cost-guards.ts
+index 893ebce05f765021541d8cbd47efab33044a57ef..816ec47fa4c1f3f57997b0c83897f5b34d806d60
+--- a/server/scripts/test-capacity-cost-guards.ts
++++ b/server/scripts/test-capacity-cost-guards.ts
+@@ -53,6 +53,14 @@
+ )
+ 
+ assert.ok(
++  route.includes('const priceYuan = toMoney(plan.price) / 100') &&
++    route.includes('const monthlyRevenue = priceYuan / Math.max(plan.billingCycle || 1, 1)') &&
++    route.includes('price: priceYuan') &&
++    route.includes('revenueMonthly: toMoney(monthlyRevenue)'),
++  'capacity cost revenue and margin calculations must convert package plan prices from cents to yuan exactly once at the model boundary'
++)
++
++assert.ok(
+   route.includes('prisma.capacitySnapshot.upsert') &&
+     route.includes('hostId_capturedDate') &&
+     route.includes('capturedDate: today'),
+diff --git a/server/src/routes/admin-capacity-cost.ts b/server/src/routes/admin-capacity-cost.ts
+index f361a2547ca80ecb445d7f56ca6fe09cb2fc9e3b..650961dc76c1fdbc469a6149f88b7d0159882a64
+--- a/server/src/routes/admin-capacity-cost.ts
++++ b/server/src/routes/admin-capacity-cost.ts
+@@ -412,7 +412,8 @@
+       for (const binding of host.packageHosts) {
+         for (const plan of binding.package.plans) {
+           const existing = packagePlanMap.get(plan.id)
+-          const monthlyRevenue = toMoney(plan.price) / Math.max(plan.billingCycle || 1, 1)
++          const priceYuan = toMoney(plan.price) / 100
++          const monthlyRevenue = priceYuan / Math.max(plan.billingCycle || 1, 1)
+           const slots = estimatePlanSlots(plan, capacity)
+           const cost = estimatePlanMonthlyCost(plan, host)
+           if (existing) {
+@@ -424,7 +425,7 @@
+               packageName: binding.package.name,
+               planId: plan.id,
+               planName: plan.name,
+-              price: toMoney(plan.price),
++              price: priceYuan,
+               billingCycle: plan.billingCycle,
+               revenueMonthly: toMoney(monthlyRevenue),
+               estimatedCostMonthlyValues: [cost],
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'git diff --check -- server/src/routes/admin-capacity-cost.ts server/scripts/test-capacity-cost-guards.ts; git diff -- server/src/routes/admin-capacity-cost.ts server/scripts/test-capacity-cost-guards.ts' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 616ms:
+diff --git a/server/scripts/test-capacity-cost-guards.ts b/server/scripts/test-capacity-cost-guards.ts
+index 893ebce..816ec47 100644
+--- a/server/scripts/test-capacity-cost-guards.ts
++++ b/server/scripts/test-capacity-cost-guards.ts
+@@ -52,6 +52,14 @@ assert.ok(
+   'capacity cost overview must compute sellable inventory and plan margin estimates'
+ )
+ 
++assert.ok(
++  route.includes('const priceYuan = toMoney(plan.price) / 100') &&
++    route.includes('const monthlyRevenue = priceYuan / Math.max(plan.billingCycle || 1, 1)') &&
++    route.includes('price: priceYuan') &&
++    route.includes('revenueMonthly: toMoney(monthlyRevenue)'),
++  'capacity cost revenue and margin calculations must convert package plan prices from cents to yuan exactly once at the model boundary'
++)
++
+ assert.ok(
+   route.includes('prisma.capacitySnapshot.upsert') &&
+     route.includes('hostId_capturedDate') &&
+diff --git a/server/src/routes/admin-capacity-cost.ts b/server/src/routes/admin-capacity-cost.ts
+index f361a25..650961d 100644
+--- a/server/src/routes/admin-capacity-cost.ts
++++ b/server/src/routes/admin-capacity-cost.ts
+@@ -412,7 +412,8 @@ export default async function adminCapacityCostRoutes(app: FastifyInstance): Pro
+       for (const binding of host.packageHosts) {
+         for (const plan of binding.package.plans) {
+           const existing = packagePlanMap.get(plan.id)
+-          const monthlyRevenue = toMoney(plan.price) / Math.max(plan.billingCycle || 1, 1)
++          const priceYuan = toMoney(plan.price) / 100
++          const monthlyRevenue = priceYuan / Math.max(plan.billingCycle || 1, 1)
+           const slots = estimatePlanSlots(plan, capacity)
+           const cost = estimatePlanMonthlyCost(plan, host)
+           if (existing) {
+@@ -424,7 +425,7 @@ export default async function adminCapacityCostRoutes(app: FastifyInstance): Pro
+               packageName: binding.package.name,
+               planId: plan.id,
+               planName: plan.name,
+-              price: toMoney(plan.price),
++              price: priceYuan,
+               billingCycle: plan.billingCycle,
+               revenueMonthly: toMoney(monthlyRevenue),
+               estimatedCostMonthlyValues: [cost],
+warning: in the working copy of 'server/scripts/test-capacity-cost-guards.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/admin-capacity-cost.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/scripts/test-capacity-cost-guards.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/admin-capacity-cost.ts', LF will be replaced by CRLF the next time Git touches it
+
+diff --git a/server/scripts/test-capacity-cost-guards.ts b/server/scripts/test-capacity-cost-guards.ts
+index 893ebce05f765021541d8cbd47efab33044a57ef..816ec47fa4c1f3f57997b0c83897f5b34d806d60
+--- a/server/scripts/test-capacity-cost-guards.ts
++++ b/server/scripts/test-capacity-cost-guards.ts
+@@ -53,6 +53,14 @@
+ )
+ 
+ assert.ok(
++  route.includes('const priceYuan = toMoney(plan.price) / 100') &&
++    route.includes('const monthlyRevenue = priceYuan / Math.max(plan.billingCycle || 1, 1)') &&
++    route.includes('price: priceYuan') &&
++    route.includes('revenueMonthly: toMoney(monthlyRevenue)'),
++  'capacity cost revenue and margin calculations must convert package plan prices from cents to yuan exactly once at the model boundary'
++)
++
++assert.ok(
+   route.includes('prisma.capacitySnapshot.upsert') &&
+     route.includes('hostId_capturedDate') &&
+     route.includes('capturedDate: today'),
+diff --git a/server/src/routes/admin-capacity-cost.ts b/server/src/routes/admin-capacity-cost.ts
+index f361a2547ca80ecb445d7f56ca6fe09cb2fc9e3b..650961dc76c1fdbc469a6149f88b7d0159882a64
+--- a/server/src/routes/admin-capacity-cost.ts
++++ b/server/src/routes/admin-capacity-cost.ts
+@@ -412,7 +412,8 @@
+       for (const binding of host.packageHosts) {
+         for (const plan of binding.package.plans) {
+           const existing = packagePlanMap.get(plan.id)
+-          const monthlyRevenue = toMoney(plan.price) / Math.max(plan.billingCycle || 1, 1)
++          const priceYuan = toMoney(plan.price) / 100
++          const monthlyRevenue = priceYuan / Math.max(plan.billingCycle || 1, 1)
+           const slots = estimatePlanSlots(plan, capacity)
+           const cost = estimatePlanMonthlyCost(plan, host)
+           if (existing) {
+@@ -424,7 +425,7 @@
+               packageName: binding.package.name,
+               planId: plan.id,
+               planName: plan.name,
+-              price: toMoney(plan.price),
++              price: priceYuan,
+               billingCycle: plan.billingCycle,
+               revenueMonthly: toMoney(monthlyRevenue),
+               estimatedCostMonthlyValues: [cost],
+
+codex
+改动已限定为路由模型与现有守卫两处，`db/package-plans.ts` 保持不变，避免影响展示、下单或其他仍以分为单位的调用方。当前 diff 也通过了空白/补丁格式检查；现在执行类型检查及两项指定守卫。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'pnpm --filter server type-check; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; pnpm --filter server test:capacity-cost-guards; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; pnpm --filter server test:commercial-operations-overview-guards' in C:\Users\Administrator\Desktop\payinces
+diff --git a/server/scripts/test-capacity-cost-guards.ts b/server/scripts/test-capacity-cost-guards.ts
+index 893ebce05f765021541d8cbd47efab33044a57ef..816ec47fa4c1f3f57997b0c83897f5b34d806d60
+--- a/server/scripts/test-capacity-cost-guards.ts
++++ b/server/scripts/test-capacity-cost-guards.ts
+@@ -53,6 +53,14 @@
+ )
+ 
+ assert.ok(
++  route.includes('const priceYuan = toMoney(plan.price) / 100') &&
++    route.includes('const monthlyRevenue = priceYuan / Math.max(plan.billingCycle || 1, 1)') &&
++    route.includes('price: priceYuan') &&
++    route.includes('revenueMonthly: toMoney(monthlyRevenue)'),
++  'capacity cost revenue and margin calculations must convert package plan prices from cents to yuan exactly once at the model boundary'
++)
++
++assert.ok(
+   route.includes('prisma.capacitySnapshot.upsert') &&
+     route.includes('hostId_capturedDate') &&
+     route.includes('capturedDate: today'),
+diff --git a/server/src/routes/admin-capacity-cost.ts b/server/src/routes/admin-capacity-cost.ts
+index f361a2547ca80ecb445d7f56ca6fe09cb2fc9e3b..650961dc76c1fdbc469a6149f88b7d0159882a64
+--- a/server/src/routes/admin-capacity-cost.ts
++++ b/server/src/routes/admin-capacity-cost.ts
+@@ -412,7 +412,8 @@
+       for (const binding of host.packageHosts) {
+         for (const plan of binding.package.plans) {
+           const existing = packagePlanMap.get(plan.id)
+-          const monthlyRevenue = toMoney(plan.price) / Math.max(plan.billingCycle || 1, 1)
++          const priceYuan = toMoney(plan.price) / 100
++          const monthlyRevenue = priceYuan / Math.max(plan.billingCycle || 1, 1)
+           const slots = estimatePlanSlots(plan, capacity)
+           const cost = estimatePlanMonthlyCost(plan, host)
+           if (existing) {
+@@ -424,7 +425,7 @@
+               packageName: binding.package.name,
+               planId: plan.id,
+               planName: plan.name,
+-              price: toMoney(plan.price),
++              price: priceYuan,
+               billingCycle: plan.billingCycle,
+               revenueMonthly: toMoney(monthlyRevenue),
+               estimatedCostMonthlyValues: [cost],
+
+diff --git a/server/scripts/test-capacity-cost-guards.ts b/server/scripts/test-capacity-cost-guards.ts
+index 893ebce05f765021541d8cbd47efab33044a57ef..816ec47fa4c1f3f57997b0c83897f5b34d806d60
+--- a/server/scripts/test-capacity-cost-guards.ts
++++ b/server/scripts/test-capacity-cost-guards.ts
+@@ -53,6 +53,14 @@
+ )
+ 
+ assert.ok(
++  route.includes('const priceYuan = toMoney(plan.price) / 100') &&
++    route.includes('const monthlyRevenue = priceYuan / Math.max(plan.billingCycle || 1, 1)') &&
++    route.includes('price: priceYuan') &&
++    route.includes('revenueMonthly: toMoney(monthlyRevenue)'),
++  'capacity cost revenue and margin calculations must convert package plan prices from cents to yuan exactly once at the model boundary'
++)
++
++assert.ok(
+   route.includes('prisma.capacitySnapshot.upsert') &&
+     route.includes('hostId_capturedDate') &&
+     route.includes('capturedDate: today'),
+diff --git a/server/src/routes/admin-capacity-cost.ts b/server/src/routes/admin-capacity-cost.ts
+index f361a2547ca80ecb445d7f56ca6fe09cb2fc9e3b..650961dc76c1fdbc469a6149f88b7d0159882a64
+--- a/server/src/routes/admin-capacity-cost.ts
++++ b/server/src/routes/admin-capacity-cost.ts
+@@ -412,7 +412,8 @@
+       for (const binding of host.packageHosts) {
+         for (const plan of binding.package.plans) {
+           const existing = packagePlanMap.get(plan.id)
+-          const monthlyRevenue = toMoney(plan.price) / Math.max(plan.billingCycle || 1, 1)
++          const priceYuan = toMoney(plan.price) / 100
++          const monthlyRevenue = priceYuan / Math.max(plan.billingCycle || 1, 1)
+           const slots = estimatePlanSlots(plan, capacity)
+           const cost = estimatePlanMonthlyCost(plan, host)
+           if (existing) {
+@@ -424,7 +425,7 @@
+               packageName: binding.package.name,
+               planId: plan.id,
+               planName: plan.name,
+-              price: toMoney(plan.price),
++              price: priceYuan,
+               billingCycle: plan.billingCycle,
+               revenueMonthly: toMoney(monthlyRevenue),
+               estimatedCostMonthlyValues: [cost],
+
+diff --git a/server/scripts/test-capacity-cost-guards.ts b/server/scripts/test-capacity-cost-guards.ts
+index 893ebce05f765021541d8cbd47efab33044a57ef..816ec47fa4c1f3f57997b0c83897f5b34d806d60
+--- a/server/scripts/test-capacity-cost-guards.ts
++++ b/server/scripts/test-capacity-cost-guards.ts
+@@ -53,6 +53,14 @@
+ )
+ 
+ assert.ok(
++  route.includes('const priceYuan = toMoney(plan.price) / 100') &&
++    route.includes('const monthlyRevenue = priceYuan / Math.max(plan.billingCycle || 1, 1)') &&
++    route.includes('price: priceYuan') &&
++    route.includes('revenueMonthly: toMoney(monthlyRevenue)'),
++  'capacity cost revenue and margin calculations must convert package plan prices from cents to yuan exactly once at the model boundary'
++)
++
++assert.ok(
+   route.includes('prisma.capacitySnapshot.upsert') &&
+     route.includes('hostId_capturedDate') &&
+     route.includes('capturedDate: today'),
+diff --git a/server/src/routes/admin-capacity-cost.ts b/server/src/routes/admin-capacity-cost.ts
+index f361a2547ca80ecb445d7f56ca6fe09cb2fc9e3b..650961dc76c1fdbc469a6149f88b7d0159882a64
+--- a/server/src/routes/admin-capacity-cost.ts
++++ b/server/src/routes/admin-capacity-cost.ts
+@@ -412,7 +412,8 @@
+       for (const binding of host.packageHosts) {
+         for (const plan of binding.package.plans) {
+           const existing = packagePlanMap.get(plan.id)
+-          const monthlyRevenue = toMoney(plan.price) / Math.max(plan.billingCycle || 1, 1)
++          const priceYuan = toMoney(plan.price) / 100
++          const monthlyRevenue = priceYuan / Math.max(plan.billingCycle || 1, 1)
+           const slots = estimatePlanSlots(plan, capacity)
+           const cost = estimatePlanMonthlyCost(plan, host)
+           if (existing) {
+@@ -424,7 +425,7 @@
+               packageName: binding.package.name,
+               planId: plan.id,
+               planName: plan.name,
+-              price: toMoney(plan.price),
++              price: priceYuan,
+               billingCycle: plan.billingCycle,
+               revenueMonthly: toMoney(monthlyRevenue),
+               estimatedCostMonthlyValues: [cost],
+
+diff --git a/server/scripts/test-capacity-cost-guards.ts b/server/scripts/test-capacity-cost-guards.ts
+index 893ebce05f765021541d8cbd47efab33044a57ef..816ec47fa4c1f3f57997b0c83897f5b34d806d60
+--- a/server/scripts/test-capacity-cost-guards.ts
++++ b/server/scripts/test-capacity-cost-guards.ts
+@@ -53,6 +53,14 @@
+ )
+ 
+ assert.ok(
++  route.includes('const priceYuan = toMoney(plan.price) / 100') &&
++    route.includes('const monthlyRevenue = priceYuan / Math.max(plan.billingCycle || 1, 1)') &&
++    route.includes('price: priceYuan') &&
++    route.includes('revenueMonthly: toMoney(monthlyRevenue)'),
++  'capacity cost revenue and margin calculations must convert package plan prices from cents to yuan exactly once at the model boundary'
++)
++
++assert.ok(
+   route.includes('prisma.capacitySnapshot.upsert') &&
+     route.includes('hostId_capturedDate') &&
+     route.includes('capturedDate: today'),
+diff --git a/server/src/routes/admin-capacity-cost.ts b/server/src/routes/admin-capacity-cost.ts
+index f361a2547ca80ecb445d7f56ca6fe09cb2fc9e3b..650961dc76c1fdbc469a6149f88b7d0159882a64
+--- a/server/src/routes/admin-capacity-cost.ts
++++ b/server/src/routes/admin-capacity-cost.ts
+@@ -412,7 +412,8 @@
+       for (const binding of host.packageHosts) {
+         for (const plan of binding.package.plans) {
+           const existing = packagePlanMap.get(plan.id)
+-          const monthlyRevenue = toMoney(plan.price) / Math.max(plan.billingCycle || 1, 1)
++          const priceYuan = toMoney(plan.price) / 100
++          const monthlyRevenue = priceYuan / Math.max(plan.billingCycle || 1, 1)
+           const slots = estimatePlanSlots(plan, capacity)
+           const cost = estimatePlanMonthlyCost(plan, host)
+           if (existing) {
+@@ -424,7 +425,7 @@
+               packageName: binding.package.name,
+               planId: plan.id,
+               planName: plan.name,
+-              price: toMoney(plan.price),
++              price: priceYuan,
+               billingCycle: plan.billingCycle,
+               revenueMonthly: toMoney(monthlyRevenue),
+               estimatedCostMonthlyValues: [cost],
+
+diff --git a/server/scripts/test-capacity-cost-guards.ts b/server/scripts/test-capacity-cost-guards.ts
+index 893ebce05f765021541d8cbd47efab33044a57ef..816ec47fa4c1f3f57997b0c83897f5b34d806d60
+--- a/server/scripts/test-capacity-cost-guards.ts
++++ b/server/scripts/test-capacity-cost-guards.ts
+@@ -53,6 +53,14 @@
+ )
+ 
+ assert.ok(
++  route.includes('const priceYuan = toMoney(plan.price) / 100') &&
++    route.includes('const monthlyRevenue = priceYuan / Math.max(plan.billingCycle || 1, 1)') &&
++    route.includes('price: priceYuan') &&
++    route.includes('revenueMonthly: toMoney(monthlyRevenue)'),
++  'capacity cost revenue and margin calculations must convert package plan prices from cents to yuan exactly once at the model boundary'
++)
++
++assert.ok(
+   route.includes('prisma.capacitySnapshot.upsert') &&
+     route.includes('hostId_capturedDate') &&
+     route.includes('capturedDate: today'),
+diff --git a/server/src/routes/admin-capacity-cost.ts b/server/src/routes/admin-capacity-cost.ts
+index f361a2547ca80ecb445d7f56ca6fe09cb2fc9e3b..650961dc76c1fdbc469a6149f88b7d0159882a64
+--- a/server/src/routes/admin-capacity-cost.ts
++++ b/server/src/routes/admin-capacity-cost.ts
+@@ -412,7 +412,8 @@
+       for (const binding of host.packageHosts) {
+         for (const plan of binding.package.plans) {
+           const existing = packagePlanMap.get(plan.id)
+-          const monthlyRevenue = toMoney(plan.price) / Math.max(plan.billingCycle || 1, 1)
++          const priceYuan = toMoney(plan.price) / 100
++          const monthlyRevenue = priceYuan / Math.max(plan.billingCycle || 1, 1)
+           const slots = estimatePlanSlots(plan, capacity)
+           const cost = estimatePlanMonthlyCost(plan, host)
+           if (existing) {
+@@ -424,7 +425,7 @@
+               packageName: binding.package.name,
+               planId: plan.id,
+               planName: plan.name,
+-              price: toMoney(plan.price),
++              price: priceYuan,
+               billingCycle: plan.billingCycle,
+               revenueMonthly: toMoney(monthlyRevenue),
+               estimatedCostMonthlyValues: [cost],
+
+diff --git a/server/scripts/test-capacity-cost-guards.ts b/server/scripts/test-capacity-cost-guards.ts
+index 893ebce05f765021541d8cbd47efab33044a57ef..816ec47fa4c1f3f57997b0c83897f5b34d806d60
+--- a/server/scripts/test-capacity-cost-guards.ts
++++ b/server/scripts/test-capacity-cost-guards.ts
+@@ -53,6 +53,14 @@
+ )
+ 
+ assert.ok(
++  route.includes('const priceYuan = toMoney(plan.price) / 100') &&
++    route.includes('const monthlyRevenue = priceYuan / Math.max(plan.billingCycle || 1, 1)') &&
++    route.includes('price: priceYuan') &&
++    route.includes('revenueMonthly: toMoney(monthlyRevenue)'),
++  'capacity cost revenue and margin calculations must convert package plan prices from cents to yuan exactly once at the model boundary'
++)
++
++assert.ok(
+   route.includes('prisma.capacitySnapshot.upsert') &&
+     route.includes('hostId_capturedDate') &&
+     route.includes('capturedDate: today'),
+diff --git a/server/src/routes/admin-capacity-cost.ts b/server/src/routes/admin-capacity-cost.ts
+index f361a2547ca80ecb445d7f56ca6fe09cb2fc9e3b..650961dc76c1fdbc469a6149f88b7d0159882a64
+--- a/server/src/routes/admin-capacity-cost.ts
++++ b/server/src/routes/admin-capacity-cost.ts
+@@ -412,7 +412,8 @@
+       for (const binding of host.packageHosts) {
+         for (const plan of binding.package.plans) {
+           const existing = packagePlanMap.get(plan.id)
+-          const monthlyRevenue = toMoney(plan.price) / Math.max(plan.billingCycle || 1, 1)
++          const priceYuan = toMoney(plan.price) / 100
++          const monthlyRevenue = priceYuan / Math.max(plan.billingCycle || 1, 1)
+           const slots = estimatePlanSlots(plan, capacity)
+           const cost = estimatePlanMonthlyCost(plan, host)
+           if (existing) {
+@@ -424,7 +425,7 @@
+               packageName: binding.package.name,
+               planId: plan.id,
+               planName: plan.name,
+-              price: toMoney(plan.price),
++              price: priceYuan,
+               billingCycle: plan.billingCycle,
+               revenueMonthly: toMoney(monthlyRevenue),
+               estimatedCostMonthlyValues: [cost],
+
+diff --git a/server/scripts/test-capacity-cost-guards.ts b/server/scripts/test-capacity-cost-guards.ts
+index 893ebce05f765021541d8cbd47efab33044a57ef..816ec47fa4c1f3f57997b0c83897f5b34d806d60
+--- a/server/scripts/test-capacity-cost-guards.ts
++++ b/server/scripts/test-capacity-cost-guards.ts
+@@ -53,6 +53,14 @@
+ )
+ 
+ assert.ok(
++  route.includes('const priceYuan = toMoney(plan.price) / 100') &&
++    route.includes('const monthlyRevenue = priceYuan / Math.max(plan.billingCycle || 1, 1)') &&
++    route.includes('price: priceYuan') &&
++    route.includes('revenueMonthly: toMoney(monthlyRevenue)'),
++  'capacity cost revenue and margin calculations must convert package plan prices from cents to yuan exactly once at the model boundary'
++)
++
++assert.ok(
+   route.includes('prisma.capacitySnapshot.upsert') &&
+     route.includes('hostId_capturedDate') &&
+     route.includes('capturedDate: today'),
+diff --git a/server/src/routes/admin-capacity-cost.ts b/server/src/routes/admin-capacity-cost.ts
+index f361a2547ca80ecb445d7f56ca6fe09cb2fc9e3b..650961dc76c1fdbc469a6149f88b7d0159882a64
+--- a/server/src/routes/admin-capacity-cost.ts
++++ b/server/src/routes/admin-capacity-cost.ts
+@@ -412,7 +412,8 @@
+       for (const binding of host.packageHosts) {
+         for (const plan of binding.package.plans) {
+           const existing = packagePlanMap.get(plan.id)
+-          const monthlyRevenue = toMoney(plan.price) / Math.max(plan.billingCycle || 1, 1)
++          const priceYuan = toMoney(plan.price) / 100
++          const monthlyRevenue = priceYuan / Math.max(plan.billingCycle || 1, 1)
+           const slots = estimatePlanSlots(plan, capacity)
+           const cost = estimatePlanMonthlyCost(plan, host)
+           if (existing) {
+@@ -424,7 +425,7 @@
+               packageName: binding.package.name,
+               planId: plan.id,
+               planName: plan.name,
+-              price: toMoney(plan.price),
++              price: priceYuan,
+               billingCycle: plan.billingCycle,
+               revenueMonthly: toMoney(monthlyRevenue),
+               estimatedCostMonthlyValues: [cost],
+
+diff --git a/server/scripts/test-capacity-cost-guards.ts b/server/scripts/test-capacity-cost-guards.ts
+index 893ebce05f765021541d8cbd47efab33044a57ef..816ec47fa4c1f3f57997b0c83897f5b34d806d60
+--- a/server/scripts/test-capacity-cost-guards.ts
++++ b/server/scripts/test-capacity-cost-guards.ts
+@@ -53,6 +53,14 @@
+ )
+ 
+ assert.ok(
++  route.includes('const priceYuan = toMoney(plan.price) / 100') &&
++    route.includes('const monthlyRevenue = priceYuan / Math.max(plan.billingCycle || 1, 1)') &&
++    route.includes('price: priceYuan') &&
++    route.includes('revenueMonthly: toMoney(monthlyRevenue)'),
++  'capacity cost revenue and margin calculations must convert package plan prices from cents to yuan exactly once at the model boundary'
++)
++
++assert.ok(
+   route.includes('prisma.capacitySnapshot.upsert') &&
+     route.includes('hostId_capturedDate') &&
+     route.includes('capturedDate: today'),
+diff --git a/server/src/routes/admin-capacity-cost.ts b/server/src/routes/admin-capacity-cost.ts
+index f361a2547ca80ecb445d7f56ca6fe09cb2fc9e3b..650961dc76c1fdbc469a6149f88b7d0159882a64
+--- a/server/src/routes/admin-capacity-cost.ts
++++ b/server/src/routes/admin-capacity-cost.ts
+@@ -412,7 +412,8 @@
+       for (const binding of host.packageHosts) {
+         for (const plan of binding.package.plans) {
+           const existing = packagePlanMap.get(plan.id)
+-          const monthlyRevenue = toMoney(plan.price) / Math.max(plan.billingCycle || 1, 1)
++          const priceYuan = toMoney(plan.price) / 100
++          const monthlyRevenue = priceYuan / Math.max(plan.billingCycle || 1, 1)
+           const slots = estimatePlanSlots(plan, capacity)
+           const cost = estimatePlanMonthlyCost(plan, host)
+           if (existing) {
+@@ -424,7 +425,7 @@
+               packageName: binding.package.name,
+               planId: plan.id,
+               planName: plan.name,
+-              price: toMoney(plan.price),
++              price: priceYuan,
+               billingCycle: plan.billingCycle,
+               revenueMonthly: toMoney(monthlyRevenue),
+               estimatedCostMonthlyValues: [cost],
+
+diff --git a/server/scripts/test-capacity-cost-guards.ts b/server/scripts/test-capacity-cost-guards.ts
+index 893ebce05f765021541d8cbd47efab33044a57ef..816ec47fa4c1f3f57997b0c83897f5b34d806d60
+--- a/server/scripts/test-capacity-cost-guards.ts
++++ b/server/scripts/test-capacity-cost-guards.ts
+@@ -53,6 +53,14 @@
+ )
+ 
+ assert.ok(
++  route.includes('const priceYuan = toMoney(plan.price) / 100') &&
++    route.includes('const monthlyRevenue = priceYuan / Math.max(plan.billingCycle || 1, 1)') &&
++    route.includes('price: priceYuan') &&
++    route.includes('revenueMonthly: toMoney(monthlyRevenue)'),
++  'capacity cost revenue and margin calculations must convert package plan prices from cents to yuan exactly once at the model boundary'
++)
++
++assert.ok(
+   route.includes('prisma.capacitySnapshot.upsert') &&
+     route.includes('hostId_capturedDate') &&
+     route.includes('capturedDate: today'),
+diff --git a/server/src/routes/admin-capacity-cost.ts b/server/src/routes/admin-capacity-cost.ts
+index f361a2547ca80ecb445d7f56ca6fe09cb2fc9e3b..650961dc76c1fdbc469a6149f88b7d0159882a64
+--- a/server/src/routes/admin-capacity-cost.ts
++++ b/server/src/routes/admin-capacity-cost.ts
+@@ -412,7 +412,8 @@
+       for (const binding of host.packageHosts) {
+         for (const plan of binding.package.plans) {
+           const existing = packagePlanMap.get(plan.id)
+-          const monthlyRevenue = toMoney(plan.price) / Math.max(plan.billingCycle || 1, 1)
++          const priceYuan = toMoney(plan.price) / 100
++          const monthlyRevenue = priceYuan / Math.max(plan.billingCycle || 1, 1)
+           const slots = estimatePlanSlots(plan, capacity)
+           const cost = estimatePlanMonthlyCost(plan, host)
+           if (existing) {
+@@ -424,7 +425,7 @@
+               packageName: binding.package.name,
+               planId: plan.id,
+               planName: plan.name,
+-              price: toMoney(plan.price),
++              price: priceYuan,
+               billingCycle: plan.billingCycle,
+               revenueMonthly: toMoney(monthlyRevenue),
+               estimatedCostMonthlyValues: [cost],
+
+diff --git a/server/scripts/test-capacity-cost-guards.ts b/server/scripts/test-capacity-cost-guards.ts
+index 893ebce05f765021541d8cbd47efab33044a57ef..816ec47fa4c1f3f57997b0c83897f5b34d806d60
+--- a/server/scripts/test-capacity-cost-guards.ts
++++ b/server/scripts/test-capacity-cost-guards.ts
+@@ -53,6 +53,14 @@
+ )
+ 
+ assert.ok(
++  route.includes('const priceYuan = toMoney(plan.price) / 100') &&
++    route.includes('const monthlyRevenue = priceYuan / Math.max(plan.billingCycle || 1, 1)') &&
++    route.includes('price: priceYuan') &&
++    route.includes('revenueMonthly: toMoney(monthlyRevenue)'),
++  'capacity cost revenue and margin calculations must convert package plan prices from cents to yuan exactly once at the model boundary'
++)
++
++assert.ok(
+   route.includes('prisma.capacitySnapshot.upsert') &&
+     route.includes('hostId_capturedDate') &&
+     route.includes('capturedDate: today'),
+diff --git a/server/src/routes/admin-capacity-cost.ts b/server/src/routes/admin-capacity-cost.ts
+index f361a2547ca80ecb445d7f56ca6fe09cb2fc9e3b..650961dc76c1fdbc469a6149f88b7d0159882a64
+--- a/server/src/routes/admin-capacity-cost.ts
++++ b/server/src/routes/admin-capacity-cost.ts
+@@ -412,7 +412,8 @@
+       for (const binding of host.packageHosts) {
+         for (const plan of binding.package.plans) {
+           const existing = packagePlanMap.get(plan.id)
+-          const monthlyRevenue = toMoney(plan.price) / Math.max(plan.billingCycle || 1, 1)
++          const priceYuan = toMoney(plan.price) / 100
++          const monthlyRevenue = priceYuan / Math.max(plan.billingCycle || 1, 1)
+           const slots = estimatePlanSlots(plan, capacity)
+           const cost = estimatePlanMonthlyCost(plan, host)
+           if (existing) {
+@@ -424,7 +425,7 @@
+               packageName: binding.package.name,
+               planId: plan.id,
+               planName: plan.name,
+-              price: toMoney(plan.price),
++              price: priceYuan,
+               billingCycle: plan.billingCycle,
+               revenueMonthly: toMoney(monthlyRevenue),
+               estimatedCostMonthlyValues: [cost],
+
+ succeeded in 41099ms:
+
+> server@1.3.7 type-check C:\Users\Administrator\Desktop\payinces\server
+> tsc --noEmit
+
+
+> server@1.3.7 test:capacity-cost-guards C:\Users\Administrator\Desktop\payinces\server
+> node --import tsx scripts/test-capacity-cost-guards.ts
+
+capacity cost guard tests passed
+
+> server@1.3.7 test:commercial-operations-overview-guards C:\Users\Administrator\Desktop\payinces\server
+> node --import tsx scripts/test-commercial-operations-overview-guards.ts
+
+commercial operations overview guard tests passed
+
+diff --git a/server/scripts/test-capacity-cost-guards.ts b/server/scripts/test-capacity-cost-guards.ts
+index 893ebce05f765021541d8cbd47efab33044a57ef..816ec47fa4c1f3f57997b0c83897f5b34d806d60
+--- a/server/scripts/test-capacity-cost-guards.ts
++++ b/server/scripts/test-capacity-cost-guards.ts
+@@ -53,6 +53,14 @@
+ )
+ 
+ assert.ok(
++  route.includes('const priceYuan = toMoney(plan.price) / 100') &&
++    route.includes('const monthlyRevenue = priceYuan / Math.max(plan.billingCycle || 1, 1)') &&
++    route.includes('price: priceYuan') &&
++    route.includes('revenueMonthly: toMoney(monthlyRevenue)'),
++  'capacity cost revenue and margin calculations must convert package plan prices from cents to yuan exactly once at the model boundary'
++)
++
++assert.ok(
+   route.includes('prisma.capacitySnapshot.upsert') &&
+     route.includes('hostId_capturedDate') &&
+     route.includes('capturedDate: today'),
+diff --git a/server/src/routes/admin-capacity-cost.ts b/server/src/routes/admin-capacity-cost.ts
+index f361a2547ca80ecb445d7f56ca6fe09cb2fc9e3b..650961dc76c1fdbc469a6149f88b7d0159882a64
+--- a/server/src/routes/admin-capacity-cost.ts
++++ b/server/src/routes/admin-capacity-cost.ts
+@@ -412,7 +412,8 @@
+       for (const binding of host.packageHosts) {
+         for (const plan of binding.package.plans) {
+           const existing = packagePlanMap.get(plan.id)
+-          const monthlyRevenue = toMoney(plan.price) / Math.max(plan.billingCycle || 1, 1)
++          const priceYuan = toMoney(plan.price) / 100
++          const monthlyRevenue = priceYuan / Math.max(plan.billingCycle || 1, 1)
+           const slots = estimatePlanSlots(plan, capacity)
+           const cost = estimatePlanMonthlyCost(plan, host)
+           if (existing) {
+@@ -424,7 +425,7 @@
+               packageName: binding.package.name,
+               planId: plan.id,
+               planName: plan.name,
+-              price: toMoney(plan.price),
++              price: priceYuan,
+               billingCycle: plan.billingCycle,
+               revenueMonthly: toMoney(monthlyRevenue),
+               estimatedCostMonthlyValues: [cost],
+
+codex
+已在 `admin-capacity-cost.ts` 的容量模型入口新增 `priceYuan = toMoney(plan.price) / 100`，月收入及返回价格统一使用“元”，全链仅换算一次；未改共享取数、下单、账单或展示逻辑。已在容量成本守卫中钉死该换算路径。服务端 type-check、capacity-cost 守卫、commercial-operations-overview 守卫均通过。未 commit。
+diff --git a/server/scripts/test-capacity-cost-guards.ts b/server/scripts/test-capacity-cost-guards.ts
+index 893ebce05f765021541d8cbd47efab33044a57ef..816ec47fa4c1f3f57997b0c83897f5b34d806d60
+--- a/server/scripts/test-capacity-cost-guards.ts
++++ b/server/scripts/test-capacity-cost-guards.ts
+@@ -53,6 +53,14 @@
+ )
+ 
+ assert.ok(
++  route.includes('const priceYuan = toMoney(plan.price) / 100') &&
++    route.includes('const monthlyRevenue = priceYuan / Math.max(plan.billingCycle || 1, 1)') &&
++    route.includes('price: priceYuan') &&
++    route.includes('revenueMonthly: toMoney(monthlyRevenue)'),
++  'capacity cost revenue and margin calculations must convert package plan prices from cents to yuan exactly once at the model boundary'
++)
++
++assert.ok(
+   route.includes('prisma.capacitySnapshot.upsert') &&
+     route.includes('hostId_capturedDate') &&
+     route.includes('capturedDate: today'),
+diff --git a/server/src/routes/admin-capacity-cost.ts b/server/src/routes/admin-capacity-cost.ts
+index f361a2547ca80ecb445d7f56ca6fe09cb2fc9e3b..650961dc76c1fdbc469a6149f88b7d0159882a64
+--- a/server/src/routes/admin-capacity-cost.ts
++++ b/server/src/routes/admin-capacity-cost.ts
+@@ -412,7 +412,8 @@
+       for (const binding of host.packageHosts) {
+         for (const plan of binding.package.plans) {
+           const existing = packagePlanMap.get(plan.id)
+-          const monthlyRevenue = toMoney(plan.price) / Math.max(plan.billingCycle || 1, 1)
++          const priceYuan = toMoney(plan.price) / 100
++          const monthlyRevenue = priceYuan / Math.max(plan.billingCycle || 1, 1)
+           const slots = estimatePlanSlots(plan, capacity)
+           const cost = estimatePlanMonthlyCost(plan, host)
+           if (existing) {
+@@ -424,7 +425,7 @@
+               packageName: binding.package.name,
+               planId: plan.id,
+               planName: plan.name,
+-              price: toMoney(plan.price),
++              price: priceYuan,
+               billingCycle: plan.billingCycle,
+               revenueMonthly: toMoney(monthlyRevenue),
+               estimatedCostMonthlyValues: [cost],
+
+tokens used
+38,155

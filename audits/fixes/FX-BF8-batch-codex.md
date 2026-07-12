@@ -1,0 +1,1 @@
+已完成：BF-8-01 将 scheduled 活动按时间惰性归一，到达 `startAt` 即可成交；BF-8-02 分别保留商品限购，并按 `campaignId` 汇总活动内全部商品购买数，事务内增加活动级锁防止并发绕过；BF-8-03 AFF 仅依赖 `allowAff`，实例创建侧同步校验。已追加三项守卫并保留 FX-041 补偿逻辑。server type-check、`test:flash-sale-guards`、`test:instance-create-turnstile-guards`、`test:instance-route-id-guards`、`test:instance-create-failure-compensation` 全部通过。未改 schema/package/礼品卡，未 commit。

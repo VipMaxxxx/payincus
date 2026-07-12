@@ -1,0 +1,2682 @@
+OpenAI Codex v0.144.0-alpha.4
+--------
+workdir: C:\Users\Administrator\Desktop\payinces
+model: gpt-5.6-sol
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: high
+reasoning summaries: none
+session id: 019f52f0-ec17-7b72-8790-22615348b677
+--------
+user
+你是 PayIncus 实现工程师。先读 AGENTS.md(托管余额/退款高危,先读代码+守卫;不 commit/push/发版、不大重构;尽量不改 schema)。严格按规格只改 deductHostingBalance 与守卫。不要碰 gift-cards.ts / instance-billing.ts(并行/已改)。改完跑守卫报告。不要 commit。
+---
+# FX-014 规格：Hosting 回扣不足时平台默默兜底(E18 / BF-10-04)
+
+## owner 裁决(BEHAVIOR.md E18)
+回扣不足(节点主人提现花光后遇买家退款)时,不让平台默默吃差额,应把节点主人余额扣成负数记欠款。
+
+## 根因
+deductHostingBalance(server/src/db/billing-operations.ts:1399-1567)三级回扣(冻结→托管余额→面板余额)每级 Math.min(可用,待扣),
+扣不满也不报错,totalDeducted 可能 < 应扣 → 平台默默吃差额。
+
+## 修法（只改 server/src/db/billing-operations.ts 的 deductHostingBalance;不碰 package.json、尽量不改 schema)
+1. 先只读通读 deductHostingBalance 三级回扣逻辑与 hostingBalance 字段。
+2. 三级(冻结/已解冻托管余额/面板余额)按现有优先级尽量扣;若扣完仍有**缺口 shortfall = 应扣 − totalDeducted > 0**:
+   把该 shortfall **记为节点主人的欠款**——即把节点主人的**托管可用余额(hostingBalance)扣成负数**(记一条 type:'deduction'/或调整 的 hostingBalanceLog,金额为负,remark 注明"回扣缺口记欠款"),使 totalDeducted = 应扣全额、平台不吃差额。
+   - 允许 hostingBalance 转负(这是 owner E18 明确要的"记欠款");若现有代码/约束禁止负 hostingBalance,放开该路径的非负限制(仅对本欠款场景),并在交付说明。
+   - 欠款为负余额后,后续该节点主人有新收入解冻/入账时会自然抵扣欠款(确认现有入账是 increment,不会因负余额异常)。
+3. 不改其它调用方(FX-011/FX-015 调 deductHostingBalance 的口径不变,只是它内部现在会把缺口记欠款)。
+
+## 加守卫
+在现有 server/scripts/test-hosting-balance-guards.ts 追加断言:deductHostingBalance 扣不满时把缺口记为节点主人负余额欠款(不静默吞差额)。不改 package.json。
+
+## 验收
+- pnpm --filter server type-check 通过;pnpm --filter server test:hosting-balance-guards、test:financial-reconciliation-guards 通过。
+
+## 交付
+一段话:缺口如何记欠款、是否放开负余额限制及范围、后续入账抵扣是否正常、守卫结果。不要 commit。
+
+codex
+我会严格限定在 `deductHostingBalance` 和 `test-hosting-balance-guards.ts`：先通读实现、字段写入方式及两组相关守卫，确认负余额约束和后续入账的 increment 行为，再做最小补丁；不碰指定并行文件、不改 schema/package.json、不 commit。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Content -Raw AGENTS.md; rg -n "deductHostingBalance|hostingBalance|hostingBalanceLog" server/src/db/billing-operations.ts server/scripts/test-hosting-balance-guards.ts server/scripts/test-financial-reconciliation-guards.ts server/prisma -g "*.prisma" -g "*.ts"' in C:\Users\Administrator\Desktop\payinces
+2026-07-11T20:49:17.144568Z ERROR codex_core::tools::router: error=Exit code: 1
+Wall time: 0.5 seconds
+Output:
+# PayIncus / Incudal â€” é¡¹ç›®ç»Ÿä¸€è§„çŸ©ï¼ˆAGENTS.mdï¼‰
+
+> æœ¬æ–‡ä»¶æ˜¯æœ¬ä»“åº“**æ‰€æœ‰ AI agentï¼ˆClaude Codeã€codex ç­‰ï¼‰çš„ç»Ÿä¸€å·¥ä½œè§„èŒƒ**ã€‚
+> `CLAUDE.md` é€šè¿‡ `@AGENTS.md` å¼•ç”¨æœ¬æ–‡ä»¶ â€”â€” Claude Code ä¸Ž codex è¯»åˆ°çš„æ˜¯**åŒä¸€å¥—è§„çŸ©**ï¼Œæ”¹è¿™ä¸€ä¸ªæ–‡ä»¶å³å¯ã€‚
+> æƒå¨è¿ç»´/å‘ç‰ˆäº‹å®žä»¥ä»“åº“æ ¹çš„ `OPERATIONS_HANDOFF.md`ï¼ˆæ“ä½œæ‰‹å†Œï¼‰ä¸Ž `HANDOFF.md`ï¼ˆç‰ˆæœ¬è¯æ®å°è´¦ï¼‰ä¸ºå‡†ã€‚
+
+---
+
+## 0. æ²Ÿé€šè¯­è¨€
+- ä¸Ž owner é»˜è®¤ç”¨**ä¸­æ–‡**æ²Ÿé€šã€‚
+
+## 1. è¿™æ˜¯ä»€ä¹ˆé¡¹ç›®
+**PayIncus**ï¼ˆå†…éƒ¨ä»£å· `incudal`ï¼‰â€”â€”å•†ç”¨ Incusï¼ˆLXC/KVMï¼‰NAT VPS å”®å–ä¸Žäº¤ä»˜å¹³å°ï¼Œ**çº¿ä¸Šè¿è¥ä¸­**ã€‚å½“å‰ç”Ÿäº§ç‰ˆæœ¬ **v1.3.7**ã€‚pnpm monorepoï¼š
+
+| ç›®å½• | æŠ€æœ¯æ ˆ / ä½œç”¨ |
+|------|----------------|
+| `client/` | Vue 3 + Vite SPAã€‚åŒç«¯æž„å»ºï¼ˆ`VITE_APP_ENTRY`ï¼‰â†’ `dist/user`ï¼ˆpay.payincus.comï¼‰+ `dist/admin`ï¼ˆadmin.payincus.comï¼‰ã€‚ä¸¤ç«¯ç‹¬ç«‹æºã€**ä¸å…±äº« cookie åŸŸ**ã€‚ |
+| `server/` | Fastify 5 + Prisma 7 + PostgreSQLï¼Œ~300 TS æ–‡ä»¶ã€~70 è·¯ç”±ã€~15 è°ƒåº¦/workerã€‚æ—  Redisï¼ˆç”¨ PG advisory lockï¼‰ã€‚ä¸‰å¥—é‰´æƒé¢ï¼šWeb çš„ JWT+refresh cookieã€Public API çš„ `pat_`/`poa_` tokenã€host agent çš„ HMACã€‚ |
+| `agent/` | Go å®¿ä¸» agentï¼Œåªè¯»ç›‘æŽ§ï¼ˆå¿ƒè·³/èµ„æº/å®žä¾‹æ€/æµé‡ï¼‰ï¼ŒHMAC ç­¾åï¼Œè‡ªå‡çº§ã€‚ |
+| å…¶å®ƒ | `docs-site/`ï¼ˆVitePressï¼‰ã€`deploy/`ï¼ˆsystemd+Nginxï¼‰ã€`scripts/`ï¼ˆå®‰è£…/æ ¡éªŒ/OTAï¼‰ã€`plugin-templates/`ã€`theme-templates/`ã€‚ |
+
+éƒ¨ç½²ï¼šä¸‰å±‚æ‹†åˆ†ï¼ˆuser / admin / ç§æœ‰åŽç«¯ `127.0.0.1:3001`ï¼‰ï¼Œè£…æœºæ ¹ `/opt/incudal`ï¼ŒåŽŸå­ OTAï¼ˆ`releases/<ver-ts>` + `current` è½¯é“¾ï¼‰+ è‡ªåŠ¨å›žæ»šã€‚
+
+---
+
+## 2. ðŸ”´ ç¡¬è§„çŸ©ï¼ˆä¸å¯åå•†ï¼Œè¿åå³äº‹æ•…ï¼‰
+
+1. **ä¸ç¢°ç”Ÿäº§**ï¼šæœªç» owner æ˜Žç¡®è¦æ±‚ï¼Œ**ç»ä¸** OTAã€å‘å¸ƒã€pushã€æ‰“ tagã€æ”¹ç”Ÿäº§çŽ¯å¢ƒã€‚
+2. **ä¸åšç ´åæ€§ git**ï¼šæœªç» owner æ˜Žç¡®è¦æ±‚ï¼Œ**ç»ä¸** `git reset`ã€`git checkout --`ã€å¼ºåˆ¶åˆ é™¤ã€æ¸…ç†æœªè·Ÿè¸ªæ–‡ä»¶ã€`git commit`/`git push`ã€‚
+3. **é«˜å±è·¯å¾„å…ˆè¯»åŽå†™**ï¼šæ”¹åŠ¨ä»¥ä¸‹ä»»ä¸€é¢†åŸŸï¼Œ**å¿…é¡»å…ˆè¯»ç›¸å…³ä»£ç  + å¯¹åº”å®ˆå«æµ‹è¯•**å†åŠ¨æ‰‹ï¼š
+   > é‰´æƒ Â· æ”¯ä»˜ Â· æƒé™ Â· é£ŽæŽ§ Â· èµ„æºäº¤ä»˜ Â· å…‘æ¢æµç¨‹ Â· å®žä¾‹åˆ›å»º Â· OTA
+4. **æ”¹åŠ¨æœ€å°åŒ–**ï¼šä¿® bug / å‘ç‰ˆæœŸé—´**ä¸åšå¤§èŒƒå›´é‡æž„**ï¼Œåªæ”¹å¿…è¦çš„ã€‚
+5. **ç»ä¸æ³„å¯†**ï¼šä»»ä½• commitã€handoffã€æ€»ç»“ã€æˆªå›¾ä¸­éƒ½**ä¸å¾—**å‡ºçŽ°å‡­è¯ / token / cookie / å¯†é’¥ã€‚
+6. **æœ¬åœ°è¿‡ â‰  ç”Ÿäº§éªŒè¯**ï¼šæœ¬åœ°é€šè¿‡ã€GitHub Actionsã€Release èµ„äº§ã€OTAã€çº¿ä¸Šå®žè¯æ˜¯**åˆ†å¼€çš„è¯æ®**ï¼Œä¸å¯æ··ä¸ºä¸€è°ˆã€‚
+7. **æ¯æ¬¡æ”¹åŠ¨å¿…é¡»è¿‡å¯¹åº”å®ˆå«**ï¼ˆè§ Â§4ï¼‰ï¼Œå¦åˆ™è§†ä¸º**æœªå®Œæˆ**ã€‚
+8. `RUN_DB_CHECKS=0 bash scripts/apply-online-update.sh <ver>` ä¼š**è·³è¿‡ DB/æ”¯ä»˜å°±ç»ªæ ¡éªŒ**ï¼Œä»…åœ¨ owner æ˜Žç¡®æ‰¹å‡†æ—¶ä½¿ç”¨ã€‚
+
+---
+
+## 3. æœ¬åœ°æ€Žä¹ˆè·‘
+
+- **çŽ¯å¢ƒ**ï¼šNode â‰¥ 20ã€pnpm 9.14.2ã€æœ¬åœ° PostgreSQL 16ã€‚
+- **è£…ä¾èµ–**ï¼š`pnpm install`
+- **ä¸€æŠŠèµ·å…¨éƒ¨ï¼ˆserver + user + adminï¼‰**ï¼š`pnpm dev`
+- **åˆ†å¼€èµ·**ï¼š
+  - åŽç«¯ï¼š`NODE_ENV=development JWT_SECRET=dev-secret-12345678 HOST=127.0.0.1 PORT=3001 pnpm --filter server exec tsx watch src/app.ts`
+  - ç”¨æˆ·å‰ç«¯ï¼š`pnpm dev:user`
+  - ç®¡ç†å‰ç«¯ï¼š`pnpm dev:admin`
+- **ç«¯å£**ï¼šåŽç«¯ API **3001** Â· ç”¨æˆ·å‰ç«¯ **3000** Â· ç®¡ç†å‰ç«¯ **3002**ï¼ˆå‰ç«¯ dev ç» proxy æ‰“åˆ° 3001ï¼‰ã€‚
+
+---
+
+## 4. ðŸ›¡ï¸ å®ˆå«æµ‹è¯•çºªå¾‹ï¼ˆæœ¬ä»“åº“çš„å‘½é—¨ï¼‰
+
+`server/package.json` é‡Œæœ‰ **200+ ä¸ªç‹¬ç«‹ `test-*-guards.ts`**ã€‚å®ƒä»¬æŠŠå…³é”®ä¸šåŠ¡/å‰ç«¯ç»“æž„â€œé’‰æ­»â€ï¼Œ`pnpm test` ä¼šè·‘å…¨å¥—ï¼ˆclient+server type-check + å…¨éƒ¨å®ˆå«ï¼‰ã€‚**ä»»ä½•æ”¹åŠ¨å¿…é¡»è®©ç›¸å…³å®ˆå«é€šè¿‡ã€‚**
+
+- **å…¨é‡**ï¼ˆæ…¢ï¼Œå‘ç‰ˆå‰è·‘ï¼‰ï¼š`pnpm test`
+- **å•ä¸ª**ï¼š`pnpm --filter server test:<guard-name>`
+- **å‰ç«¯æœ€å¸¸ç”¨ä¸‰ä¸ª**ï¼š
+  - `test:frontend-route-guards` â€”â€” è·¯ç”± / **è¡¨æ ¼å¸ƒå±€** / `@click` è·¯å¾„æ–­è¨€
+  - `test:frontend-dist-boundary-guards` â€”â€” åŒç«¯ dist è¾¹ç•Œ
+  - `test:frontend-i18n-keys` â€”â€” i18n key å®Œæ•´æ€§
+- **Go agent**ï¼š`pnpm test:agent`
+
+### âš ï¸ è¡¨æ ¼å¸ƒå±€å®ˆå«ï¼ˆæœ€å®¹æ˜“è¸©é›·ï¼‰
+ä¸€æ‰¹è¡¨è¢«å®ˆå«**é”å®š**ä¸ºâ€œ**ç§»åŠ¨å¡ + PC å®šå®½è¡¨ï¼ˆ`table-fixed` / `overflow-hidden`ï¼‰ï¼Œç»ä¸æ¨ªå‘æ»šåŠ¨**â€ï¼Œå¹¶**åå‘ç¦æ­¢** `overflow-x-auto` / `min-w-[...]` / åŽ»æŽ‰ `table-fixed`ã€‚
+- æƒ³ä¿®â€œå®½è¡¨æŒ¤åŽ‹â€æ—¶ï¼š**å…ˆåˆ¤æ–­è¯¥è¡¨æ˜¯å¦åœ¨å®ˆå«æ¸…å•é‡Œ**ã€‚é”å®šè¡¨**åªèƒ½åœ¨ `table-fixed` å†…å¹³è¡¡åˆ—å®½**ï¼ˆåˆ—å®½ç™¾åˆ†æ¯”åˆè®¡ = 100%ï¼‰+ å…è®¸å•å…ƒæ ¼æ¢è¡Œ + é ç§»åŠ¨å¡åº”å¯¹çª„å±ï¼›**ä¸èƒ½**æ”¹æˆæ¨ªå‘æ»šåŠ¨ã€‚
+- å—é”å®šçš„è¡¨ï¼ˆç”¨æˆ·ç«¯ï¼‰ï¼š`MyPackagesView`ã€`MyHostsView`ã€`TransfersView`ã€`OrdersView`ã€`InvitesView`ã€`FlashSalesView`ã€`HostingWalletView`ã€`InstancesView`ã€`LogsView`ã€`EntertainmentView`ï¼›ï¼ˆç®¡ç†ç«¯ï¼‰`admin/BillingView`ã€`admin/ImagesView`ã€`admin/HelpManageView`ã€`admin/MailView`ã€`admin/PluginCenterView`ï¼›ï¼ˆç»„ä»¶ï¼‰`HostPublicIpv4Tab`ã€`InstanceLogsTab`ã€`ConfigEditModal`ã€‚
+- æ”¹ä»»ä¸€å‰ç«¯æ–‡ä»¶åŽ**å¿…è·‘** `test:frontend-route-guards`ã€‚
+
+---
+
+## 5. æž„å»º / æ ¡éªŒå‘½ä»¤
+
+| ç›®çš„ | å‘½ä»¤ |
+|------|------|
+| æž„å»ºï¼ˆå« dist è¾¹ç•Œå®ˆå«ï¼‰| `pnpm build` |
+| åªæž„å»ºå‰ç«¯ / åŽç«¯ | `pnpm build:client` / `pnpm build:server` |
+| Lintï¼ˆæ£€æŸ¥ / è‡ªåŠ¨ä¿®ï¼‰| `pnpm lint` / `pnpm lint:fix` |
+| ç±»åž‹æ£€æŸ¥ | `pnpm --filter client type-check` Â· `pnpm --filter server type-check` |
+| å…¨å¥—å®ˆå« | `pnpm test` |
+| æ–‡æ¡£ç«™å¼€å‘ / æž„å»º | `pnpm docs:dev` / `pnpm docs:build` |
+
+---
+
+## 6. UI æ”¹åŠ¨çº¦æŸï¼ˆå•è‰²é‡åšè¿›è¡Œä¸­ï¼‰
+
+- **æ–¹å‘**ï¼šè‹¹æžœå¼**çº¯é»‘ç™½å•è‰²**ï¼ˆæµ…è‰²=ç™½åº•é»‘å­—ï¼Œæ·±è‰²=é»‘åº•ç™½å­—ï¼‰ï¼ŒåŽ»äºŒæ¬¡å…ƒ/å‰ç¥¥ç‰©/ç«‹ç»˜ã€‚çŠ¶æ€è‰²**åªä¿ç•™ç»¿/ç¥ç€/çº¢**ä¸‰ç§ï¼ˆè¿è¡Œ/å¾…å¤„ç†/å¤±è´¥ï¼‰ã€‚
+- **çº¢çº¿**ï¼šåªæ”¹**æ ·å¼ / å¸ƒå±€ / æ–‡æ¡ˆå±‚çº§**ï¼Œ**ä¸ç¢°**åŽç«¯æŽ¥å£ã€æƒé™ã€æ”¯ä»˜/è®¢å•/å®žä¾‹åˆ›å»º/OTA ç­‰ä¸šåŠ¡é€»è¾‘ä¸Žè·¯ç”±è¡Œä¸ºâ€”â€”**åŠŸèƒ½ 100% ä¸å˜**ã€‚
+- **é…è‰²èµ° token å±‚**ï¼ˆ`client/tailwind.config.js`ï¼‰ï¼šä¸€å †å½©è‰² ramp å·²æ˜ å°„åˆ°ä¸­æ€§ç°ï¼›`rose â†’ çœŸçº¢`ï¼ˆå±é™©/äºæŸè¯­ä¹‰ï¼‰**ä¿ç•™ä¸å¯ç°åŒ–**ï¼›æ¸¸æˆåŒ–æ¨¡å—ï¼ˆæˆå°±/ç­¾åˆ°/æŠ½å¥–/ç¨€æœ‰åº¦ï¼‰å½©è‰²**åˆ»æ„ä¿ç•™**ã€‚
+- `kawaii-cloud.css` **æ¸è¿›æ”¹é€ ã€ä¸é‡å†™**ï¼›å•é¡µåŽ»è‰²ç”¨é¡µé¢ `<style scoped>`ã€‚
+- åŠ¨æ•ˆå¯ç”¨ **GSAP**ï¼ˆå·²è£… gsap-skillsï¼Œè§ `.claude/skills/`ï¼‰ï¼›å°Šé‡ `prefers-reduced-motion`ã€‚
+
+---
+
+## 7. åä½œæ¨¡åž‹ï¼ˆClaude Code â‡„ codexï¼‰
+
+- **Claude Code = æŠ€æœ¯è´Ÿè´£äºº / é›†æˆæ–¹**ï¼šå®šæ ¹å› ã€åˆ‡ä»»åŠ¡ã€å†™è§„æ ¼ã€å®ˆä¸å˜é‡ã€å®¡ diffã€è·‘å®ˆå«ã€çœŸæœºéªŒè¯ã€ç®¡ gitï¼ˆ**ä»…åœ¨ owner åŒæ„æ—¶** commit / pushï¼‰ã€‚
+- **codex = å®žçŽ°å·¥äºº**ï¼šæŒ‰ Claude ç»™çš„è§„æ ¼å®žçŽ°æ”¹åŠ¨ï¼Œå°¤å…¶**ä½Ž/ä¸­å±ã€è‡ªåŒ…å«ã€å¯å¹¶è¡Œ**çš„å—ã€‚
+- **é£Žé™©åˆ†æ¡£**ï¼šé«˜å±è·¯å¾„ç”± Claude å®šæ ¹å›  + æ”¶ç´§è§„æ ¼ï¼›ä½Ž/ä¸­å± codex å¯ç«¯åˆ°ç«¯ä¿®ã€‚**ä»»ä½•ä¸€æ–¹æ”¹å®Œéƒ½è¦è·‘ç›¸å…³å®ˆå«ï¼ŒClaude ç»Ÿä¸€å®¡æŸ¥åŽæ‰è¿›å…¥ä¸‹ä¸€æ­¥ã€‚**
+- **é¿å…å†²çª**ï¼šåŒä¸€æ‰¹æ–‡ä»¶ä¸€æ¬¡åªè®©ä¸€ä¸ª agent æ”¹ã€‚
+
+---
+
+## 8. ä¸€ä¸ªæ”¹åŠ¨çš„ã€Œå®Œæˆã€å®šä¹‰
+
+1. ç›¸å…³ **type-check** é€šè¿‡ï¼›
+2. ç›¸å…³ **å®ˆå«æµ‹è¯•** é€šè¿‡ï¼›
+3. è‹¥åŠ¨å‰ç«¯ â†’ **åŒç«¯ build** é€šè¿‡ï¼›
+4. **çœŸæœºè·‘è¿‡**å—å½±å“æµç¨‹ï¼ˆä¸æ˜¯åªçœ‹æµ‹è¯•ï¼‰ï¼›
+5. **æŠ¥å‘Š**ï¼šæ”¹äº†å“ªäº›æ–‡ä»¶ / ä¸ºä»€ä¹ˆ / é£Žé™© / æ€Žä¹ˆéªŒè¯çš„ã€‚
+
+ä»¥ä¸Šä»»ä¸€æœªæ»¡è¶³ = **æœªå®Œæˆ**ã€‚
+
+rg : The term 'rg' is not recognized as the name of a cmdlet, function, script file, or operable program. Check the 
+spelling of the name, or if a path was included, verify that the path is correct and try again.
+At line:2 char:29
++ Get-Content -Raw AGENTS.md; rg -n "deductHostingBalance|hostingBalanc ...
++                             ~~
+    + CategoryInfo          : ObjectNotFound: (rg:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+
+ exited 1 in 546ms:
+# PayIncus / Incudal â€” é¡¹ç›®ç»Ÿä¸€è§„çŸ©ï¼ˆAGENTS.mdï¼‰
+
+> æœ¬æ–‡ä»¶æ˜¯æœ¬ä»“åº“**æ‰€æœ‰ AI agentï¼ˆClaude Codeã€codex ç­‰ï¼‰çš„ç»Ÿä¸€å·¥ä½œè§„èŒƒ**ã€‚
+> `CLAUDE.md` é€šè¿‡ `@AGENTS.md` å¼•ç”¨æœ¬æ–‡ä»¶ â€”â€” Claude Code ä¸Ž codex è¯»åˆ°çš„æ˜¯**åŒä¸€å¥—è§„çŸ©**ï¼Œæ”¹è¿™ä¸€ä¸ªæ–‡ä»¶å³å¯ã€‚
+> æƒå¨è¿ç»´/å‘ç‰ˆäº‹å®žä»¥ä»“åº“æ ¹çš„ `OPERATIONS_HANDOFF.md`ï¼ˆæ“ä½œæ‰‹å†Œï¼‰ä¸Ž `HANDOFF.md`ï¼ˆç‰ˆæœ¬è¯æ®å°è´¦ï¼‰ä¸ºå‡†ã€‚
+
+---
+
+## 0. æ²Ÿé€šè¯­è¨€
+- ä¸Ž owner é»˜è®¤ç”¨**ä¸­æ–‡**æ²Ÿé€šã€‚
+
+## 1. è¿™æ˜¯ä»€ä¹ˆé¡¹ç›®
+**PayIncus**ï¼ˆå†…éƒ¨ä»£å· `incudal`ï¼‰â€”â€”å•†ç”¨ Incusï¼ˆLXC/KVMï¼‰NAT VPS å”®å–ä¸Žäº¤ä»˜å¹³å°ï¼Œ**çº¿ä¸Šè¿è¥ä¸­**ã€‚å½“å‰ç”Ÿäº§ç‰ˆæœ¬ **v1.3.7**ã€‚pnpm monorepoï¼š
+
+| ç›®å½• | æŠ€æœ¯æ ˆ / ä½œç”¨ |
+|------|----------------|
+| `client/` | Vue 3 + Vite SPAã€‚åŒç«¯æž„å»ºï¼ˆ`VITE_APP_ENTRY`ï¼‰â†’ `dist/user`ï¼ˆpay.payincus.comï¼‰+ `dist/admin`ï¼ˆadmin.payincus.comï¼‰ã€‚ä¸¤ç«¯ç‹¬ç«‹æºã€**ä¸å…±äº« cookie åŸŸ**ã€‚ |
+| `server/` | Fastify 5 + Prisma 7 + PostgreSQLï¼Œ~300 TS æ–‡ä»¶ã€~70 è·¯ç”±ã€~15 è°ƒåº¦/workerã€‚æ—  Redisï¼ˆç”¨ PG advisory lockï¼‰ã€‚ä¸‰å¥—é‰´æƒé¢ï¼šWeb çš„ JWT+refresh cookieã€Public API çš„ `pat_`/`poa_` tokenã€host agent çš„ HMACã€‚ |
+| `agent/` | Go å®¿ä¸» agentï¼Œåªè¯»ç›‘æŽ§ï¼ˆå¿ƒè·³/èµ„æº/å®žä¾‹æ€/æµé‡ï¼‰ï¼ŒHMAC ç­¾åï¼Œè‡ªå‡çº§ã€‚ |
+| å…¶å®ƒ | `docs-site/`ï¼ˆVitePressï¼‰ã€`deploy/`ï¼ˆsystemd+Nginxï¼‰ã€`scripts/`ï¼ˆå®‰è£…/æ ¡éªŒ/OTAï¼‰ã€`plugin-templates/`ã€`theme-templates/`ã€‚ |
+
+éƒ¨ç½²ï¼šä¸‰å±‚æ‹†åˆ†ï¼ˆuser / admin / ç§æœ‰åŽç«¯ `127.0.0.1:3001`ï¼‰ï¼Œè£…æœºæ ¹ `/opt/incudal`ï¼ŒåŽŸå­ OTAï¼ˆ`releases/<ver-ts>` + `current` è½¯é“¾ï¼‰+ è‡ªåŠ¨å›žæ»šã€‚
+
+---
+
+## 2. ðŸ”´ ç¡¬è§„çŸ©ï¼ˆä¸å¯åå•†ï¼Œè¿åå³äº‹æ•…ï¼‰
+
+1. **ä¸ç¢°ç”Ÿäº§**ï¼šæœªç» owner æ˜Žç¡®è¦æ±‚ï¼Œ**ç»ä¸** OTAã€å‘å¸ƒã€pushã€æ‰“ tagã€æ”¹ç”Ÿäº§çŽ¯å¢ƒã€‚
+2. **ä¸åšç ´åæ€§ git**ï¼šæœªç» owner æ˜Žç¡®è¦æ±‚ï¼Œ**ç»ä¸** `git reset`ã€`git checkout --`ã€å¼ºåˆ¶åˆ é™¤ã€æ¸…ç†æœªè·Ÿè¸ªæ–‡ä»¶ã€`git commit`/`git push`ã€‚
+3. **é«˜å±è·¯å¾„å…ˆè¯»åŽå†™**ï¼šæ”¹åŠ¨ä»¥ä¸‹ä»»ä¸€é¢†åŸŸï¼Œ**å¿…é¡»å…ˆè¯»ç›¸å…³ä»£ç  + å¯¹åº”å®ˆå«æµ‹è¯•**å†åŠ¨æ‰‹ï¼š
+   > é‰´æƒ Â· æ”¯ä»˜ Â· æƒé™ Â· é£ŽæŽ§ Â· èµ„æºäº¤ä»˜ Â· å…‘æ¢æµç¨‹ Â· å®žä¾‹åˆ›å»º Â· OTA
+4. **æ”¹åŠ¨æœ€å°åŒ–**ï¼šä¿® bug / å‘ç‰ˆæœŸé—´**ä¸åšå¤§èŒƒå›´é‡æž„**ï¼Œåªæ”¹å¿…è¦çš„ã€‚
+5. **ç»ä¸æ³„å¯†**ï¼šä»»ä½• commitã€handoffã€æ€»ç»“ã€æˆªå›¾ä¸­éƒ½**ä¸å¾—**å‡ºçŽ°å‡­è¯ / token / cookie / å¯†é’¥ã€‚
+6. **æœ¬åœ°è¿‡ â‰  ç”Ÿäº§éªŒè¯**ï¼šæœ¬åœ°é€šè¿‡ã€GitHub Actionsã€Release èµ„äº§ã€OTAã€çº¿ä¸Šå®žè¯æ˜¯**åˆ†å¼€çš„è¯æ®**ï¼Œä¸å¯æ··ä¸ºä¸€è°ˆã€‚
+7. **æ¯æ¬¡æ”¹åŠ¨å¿…é¡»è¿‡å¯¹åº”å®ˆå«**ï¼ˆè§ Â§4ï¼‰ï¼Œå¦åˆ™è§†ä¸º**æœªå®Œæˆ**ã€‚
+8. `RUN_DB_CHECKS=0 bash scripts/apply-online-update.sh <ver>` ä¼š**è·³è¿‡ DB/æ”¯ä»˜å°±ç»ªæ ¡éªŒ**ï¼Œä»…åœ¨ owner æ˜Žç¡®æ‰¹å‡†æ—¶ä½¿ç”¨ã€‚
+
+---
+
+## 3. æœ¬åœ°æ€Žä¹ˆè·‘
+
+- **çŽ¯å¢ƒ**ï¼šNode â‰¥ 20ã€pnpm 9.14.2ã€æœ¬åœ° PostgreSQL 16ã€‚
+- **è£…ä¾èµ–**ï¼š`pnpm install`
+- **ä¸€æŠŠèµ·å…¨éƒ¨ï¼ˆserver + user + adminï¼‰**ï¼š`pnpm dev`
+- **åˆ†å¼€èµ·**ï¼š
+  - åŽç«¯ï¼š`NODE_ENV=development JWT_SECRET=dev-secret-12345678 HOST=127.0.0.1 PORT=3001 pnpm --filter server exec tsx watch src/app.ts`
+  - ç”¨æˆ·å‰ç«¯ï¼š`pnpm dev:user`
+  - ç®¡ç†å‰ç«¯ï¼š`pnpm dev:admin`
+- **ç«¯å£**ï¼šåŽç«¯ API **3001** Â· ç”¨æˆ·å‰ç«¯ **3000** Â· ç®¡ç†å‰ç«¯ **3002**ï¼ˆå‰ç«¯ dev ç» proxy æ‰“åˆ° 3001ï¼‰ã€‚
+
+---
+
+## 4. ðŸ›¡ï¸ å®ˆå«æµ‹è¯•çºªå¾‹ï¼ˆæœ¬ä»“åº“çš„å‘½é—¨ï¼‰
+
+`server/package.json` é‡Œæœ‰ **200+ ä¸ªç‹¬ç«‹ `test-*-guards.ts`**ã€‚å®ƒä»¬æŠŠå…³é”®ä¸šåŠ¡/å‰ç«¯ç»“æž„â€œé’‰æ­»â€ï¼Œ`pnpm test` ä¼šè·‘å…¨å¥—ï¼ˆclient+server type-check + å…¨éƒ¨å®ˆå«ï¼‰ã€‚**ä»»ä½•æ”¹åŠ¨å¿…é¡»è®©ç›¸å…³å®ˆå«é€šè¿‡ã€‚**
+
+- **å…¨é‡**ï¼ˆæ…¢ï¼Œå‘ç‰ˆå‰è·‘ï¼‰ï¼š`pnpm test`
+- **å•ä¸ª**ï¼š`pnpm --filter server test:<guard-name>`
+- **å‰ç«¯æœ€å¸¸ç”¨ä¸‰ä¸ª**ï¼š
+  - `test:frontend-route-guards` â€”â€” è·¯ç”± / **è¡¨æ ¼å¸ƒå±€** / `@click` è·¯å¾„æ–­è¨€
+  - `test:frontend-dist-boundary-guards` â€”â€” åŒç«¯ dist è¾¹ç•Œ
+  - `test:frontend-i18n-keys` â€”â€” i18n key å®Œæ•´æ€§
+- **Go agent**ï¼š`pnpm test:agent`
+
+### âš ï¸ è¡¨æ ¼å¸ƒå±€å®ˆå«ï¼ˆæœ€å®¹æ˜“è¸©é›·ï¼‰
+ä¸€æ‰¹è¡¨è¢«å®ˆå«**é”å®š**ä¸ºâ€œ**ç§»åŠ¨å¡ + PC å®šå®½è¡¨ï¼ˆ`table-fixed` / `overflow-hidden`ï¼‰ï¼Œç»ä¸æ¨ªå‘æ»šåŠ¨**â€ï¼Œå¹¶**åå‘ç¦æ­¢** `overflow-x-auto` / `min-w-[...]` / åŽ»æŽ‰ `table-fixed`ã€‚
+- æƒ³ä¿®â€œå®½è¡¨æŒ¤åŽ‹â€æ—¶ï¼š**å…ˆåˆ¤æ–­è¯¥è¡¨æ˜¯å¦åœ¨å®ˆå«æ¸…å•é‡Œ**ã€‚é”å®šè¡¨**åªèƒ½åœ¨ `table-fixed` å†…å¹³è¡¡åˆ—å®½**ï¼ˆåˆ—å®½ç™¾åˆ†æ¯”åˆè®¡ = 100%ï¼‰+ å…è®¸å•å…ƒæ ¼æ¢è¡Œ + é ç§»åŠ¨å¡åº”å¯¹çª„å±ï¼›**ä¸èƒ½**æ”¹æˆæ¨ªå‘æ»šåŠ¨ã€‚
+- å—é”å®šçš„è¡¨ï¼ˆç”¨æˆ·ç«¯ï¼‰ï¼š`MyPackagesView`ã€`MyHostsView`ã€`TransfersView`ã€`OrdersView`ã€`InvitesView`ã€`FlashSalesView`ã€`HostingWalletView`ã€`InstancesView`ã€`LogsView`ã€`EntertainmentView`ï¼›ï¼ˆç®¡ç†ç«¯ï¼‰`admin/BillingView`ã€`admin/ImagesView`ã€`admin/HelpManageView`ã€`admin/MailView`ã€`admin/PluginCenterView`ï¼›ï¼ˆç»„ä»¶ï¼‰`HostPublicIpv4Tab`ã€`InstanceLogsTab`ã€`ConfigEditModal`ã€‚
+- æ”¹ä»»ä¸€å‰ç«¯æ–‡ä»¶åŽ**å¿…è·‘** `test:frontend-route-guards`ã€‚
+
+---
+
+## 5. æž„å»º / æ ¡éªŒå‘½ä»¤
+
+| ç›®çš„ | å‘½ä»¤ |
+|------|------|
+| æž„å»ºï¼ˆå« dist è¾¹ç•Œå®ˆå«ï¼‰| `pnpm build` |
+| åªæž„å»ºå‰ç«¯ / åŽç«¯ | `pnpm build:client` / `pnpm build:server` |
+| Lintï¼ˆæ£€æŸ¥ / è‡ªåŠ¨ä¿®ï¼‰| `pnpm lint` / `pnpm lint:fix` |
+| ç±»åž‹æ£€æŸ¥ | `pnpm --filter client type-check` Â· `pnpm --filter server type-check` |
+| å…¨å¥—å®ˆå« | `pnpm test` |
+| æ–‡æ¡£ç«™å¼€å‘ / æž„å»º | `pnpm docs:dev` / `pnpm docs:build` |
+
+---
+
+## 6. UI æ”¹åŠ¨çº¦æŸï¼ˆå•è‰²é‡åšè¿›è¡Œä¸­ï¼‰
+
+- **æ–¹å‘**ï¼šè‹¹æžœå¼**çº¯é»‘ç™½å•è‰²**ï¼ˆæµ…è‰²=ç™½åº•é»‘å­—ï¼Œæ·±è‰²=é»‘åº•ç™½å­—ï¼‰ï¼ŒåŽ»äºŒæ¬¡å…ƒ/å‰ç¥¥ç‰©/ç«‹ç»˜ã€‚çŠ¶æ€è‰²**åªä¿ç•™ç»¿/ç¥ç€/çº¢**ä¸‰ç§ï¼ˆè¿è¡Œ/å¾…å¤„ç†/å¤±è´¥ï¼‰ã€‚
+- **çº¢çº¿**ï¼šåªæ”¹**æ ·å¼ / å¸ƒå±€ / æ–‡æ¡ˆå±‚çº§**ï¼Œ**ä¸ç¢°**åŽç«¯æŽ¥å£ã€æƒé™ã€æ”¯ä»˜/è®¢å•/å®žä¾‹åˆ›å»º/OTA ç­‰ä¸šåŠ¡é€»è¾‘ä¸Žè·¯ç”±è¡Œä¸ºâ€”â€”**åŠŸèƒ½ 100% ä¸å˜**ã€‚
+- **é…è‰²èµ° token å±‚**ï¼ˆ`client/tailwind.config.js`ï¼‰ï¼šä¸€å †å½©è‰² ramp å·²æ˜ å°„åˆ°ä¸­æ€§ç°ï¼›`rose â†’ çœŸçº¢`ï¼ˆå±é™©/äºæŸè¯­ä¹‰ï¼‰**ä¿ç•™ä¸å¯ç°åŒ–**ï¼›æ¸¸æˆåŒ–æ¨¡å—ï¼ˆæˆå°±/ç­¾åˆ°/æŠ½å¥–/ç¨€æœ‰åº¦ï¼‰å½©è‰²**åˆ»æ„ä¿ç•™**ã€‚
+- `kawaii-cloud.css` **æ¸è¿›æ”¹é€ ã€ä¸é‡å†™**ï¼›å•é¡µåŽ»è‰²ç”¨é¡µé¢ `<style scoped>`ã€‚
+- åŠ¨æ•ˆå¯ç”¨ **GSAP**ï¼ˆå·²è£… gsap-skillsï¼Œè§ `.claude/skills/`ï¼‰ï¼›å°Šé‡ `prefers-reduced-motion`ã€‚
+
+---
+
+## 7. åä½œæ¨¡åž‹ï¼ˆClaude Code â‡„ codexï¼‰
+
+- **Claude Code = æŠ€æœ¯è´Ÿè´£äºº / é›†æˆæ–¹**ï¼šå®šæ ¹å› ã€åˆ‡ä»»åŠ¡ã€å†™è§„æ ¼ã€å®ˆä¸å˜é‡ã€å®¡ diffã€è·‘å®ˆå«ã€çœŸæœºéªŒè¯ã€ç®¡ gitï¼ˆ**ä»…åœ¨ owner åŒæ„æ—¶** commit / pushï¼‰ã€‚
+- **codex = å®žçŽ°å·¥äºº**ï¼šæŒ‰ Claude ç»™çš„è§„æ ¼å®žçŽ°æ”¹åŠ¨ï¼Œå°¤å…¶**ä½Ž/ä¸­å±ã€è‡ªåŒ…å«ã€å¯å¹¶è¡Œ**çš„å—ã€‚
+- **é£Žé™©åˆ†æ¡£**ï¼šé«˜å±è·¯å¾„ç”± Claude å®šæ ¹å›  + æ”¶ç´§è§„æ ¼ï¼›ä½Ž/ä¸­å± codex å¯ç«¯åˆ°ç«¯ä¿®ã€‚**ä»»ä½•ä¸€æ–¹æ”¹å®Œéƒ½è¦è·‘ç›¸å…³å®ˆå«ï¼ŒClaude ç»Ÿä¸€å®¡æŸ¥åŽæ‰è¿›å…¥ä¸‹ä¸€æ­¥ã€‚**
+- **é¿å…å†²çª**ï¼šåŒä¸€æ‰¹æ–‡ä»¶ä¸€æ¬¡åªè®©ä¸€ä¸ª agent æ”¹ã€‚
+
+---
+
+## 8. ä¸€ä¸ªæ”¹åŠ¨çš„ã€Œå®Œæˆã€å®šä¹‰
+
+1. ç›¸å…³ **type-check** é€šè¿‡ï¼›
+2. ç›¸å…³ **å®ˆå«æµ‹è¯•** é€šè¿‡ï¼›
+3. è‹¥åŠ¨å‰ç«¯ â†’ **åŒç«¯ build** é€šè¿‡ï¼›
+4. **çœŸæœºè·‘è¿‡**å—å½±å“æµç¨‹ï¼ˆä¸æ˜¯åªçœ‹æµ‹è¯•ï¼‰ï¼›
+5. **æŠ¥å‘Š**ï¼šæ”¹äº†å“ªäº›æ–‡ä»¶ / ä¸ºä»€ä¹ˆ / é£Žé™© / æ€Žä¹ˆéªŒè¯çš„ã€‚
+
+ä»¥ä¸Šä»»ä¸€æœªæ»¡è¶³ = **æœªå®Œæˆ**ã€‚
+
+rg : The term 'rg' is not recognized as the name of a cmdlet, function, script file, or operable program. Check the 
+spelling of the name, or if a path was included, verify that the path is correct and try again.
+At line:2 char:29
++ Get-Content -Raw AGENTS.md; rg -n "deductHostingBalance|hostingBalanc ...
++                             ~~
+    + CategoryInfo          : ObjectNotFound: (rg:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+
+codex
+`rg` 在当前环境不可用，我已改用 PowerShell 原生只读检索继续；AGENTS.md 已完整读取。接下来重点核对事务内的余额更新、日志字段与守卫现有断言形态。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$files = @('"'server/src/db/billing-operations.ts','server/scripts/test-hosting-balance-guards.ts','server/scripts/test-financial-reconciliation-guards.ts'); Select-String -Path "'$files -Pattern '"'deductHostingBalance|hostingBalance|hostingBalanceLog' -Context 3,5; Get-ChildItem server -Recurse -Filter *.prisma | Select-String -Pattern 'hostingBalance|HostingBalanceLog' -Context 3,8" in C:\Users\Administrator\Desktop\payinces
+ succeeded in 675ms:
+
+  server\src\db\billing-operations.ts:65:  isPaid: boolean
+  server\src\db\billing-operations.ts:66:}
+  server\src\db\billing-operations.ts:67:
+> server\src\db\billing-operations.ts:68:export interface HostingBalanceDeductionResult {
+  server\src\db\billing-operations.ts:69:  hostOwnerId: number
+  server\src\db\billing-operations.ts:70:  deductedAmount: number
+  server\src\db\billing-operations.ts:71:  fromFrozen: number
+  server\src\db\billing-operations.ts:72:  fromAvailable: number
+  server\src\db\billing-operations.ts:73:  fromBalance: number
+  server\src\db\billing-operations.ts:1178:    }
+  server\src\db\billing-operations.ts:1179:  })
+  server\src\db\billing-operations.ts:1180:
+> server\src\db\billing-operations.ts:1181:  await client.hostingBalanceLog.create({
+  server\src\db\billing-operations.ts:1182:    data: {
+  server\src\db\billing-operations.ts:1183:      userId: params.userId,
+  server\src\db\billing-operations.ts:1184:      type: params.type,
+  server\src\db\billing-operations.ts:1185:      actionType: params.actionType,
+  server\src\db\billing-operations.ts:1186:      amount: params.amount,
+  server\src\db\billing-operations.ts:1237:    return null
+  server\src\db\billing-operations.ts:1238:  }
+  server\src\db\billing-operations.ts:1239:
+> server\src\db\billing-operations.ts:1240:  const latestIncomeLog = await client.hostingBalanceLog.findFirst({
+  server\src\db\billing-operations.ts:1241:    where: {
+  server\src\db\billing-operations.ts:1242:      relatedId: instanceId,
+  server\src\db\billing-operations.ts:1243:      type: 'income'
+  server\src\db\billing-operations.ts:1244:    },
+  server\src\db\billing-operations.ts:1245:    orderBy: {
+  server\src\db\billing-operations.ts:1406: * @param tx 可选的事务客户端
+  server\src\db\billing-operations.ts:1407: * @returns 如果是用户托管节点，返回扣除结果；否则返回 null
+  server\src\db\billing-operations.ts:1408: */
+> server\src\db\billing-operations.ts:1409:export async function deductHostingBalance(
+  server\src\db\billing-operations.ts:1410:  hostId: number,
+  server\src\db\billing-operations.ts:1411:  amount: number,
+  server\src\db\billing-operations.ts:1412:  instanceId: number,
+  server\src\db\billing-operations.ts:1413:  remark: string,
+  server\src\db\billing-operations.ts:1414:  tx?: any
+> server\src\db\billing-operations.ts:1415:): Promise<HostingBalanceDeductionResult | null> {
+> server\src\db\billing-operations.ts:1416:  const run = async (client: Prisma.TransactionClient): 
+Promise<HostingBalanceDeductionResult | null> => {
+  server\src\db\billing-operations.ts:1417:    const hostingOwner = await resolveHostedIncomeOwner(client, hostId, {
+  server\src\db\billing-operations.ts:1418:      instanceId,
+  server\src\db\billing-operations.ts:1419:      allowHistoricalFallback: true
+  server\src\db\billing-operations.ts:1420:    })
+  server\src\db\billing-operations.ts:1421:    if (!hostingOwner) {
+  server\src\db\billing-operations.ts:1434:    }
+  server\src\db\billing-operations.ts:1435:
+  server\src\db\billing-operations.ts:1436:    // 查找该实例相关的冻结托管收入记录
+> server\src\db\billing-operations.ts:1437:    const frozenLogs = await client.hostingBalanceLog.findMany({
+  server\src\db\billing-operations.ts:1438:      where: {
+  server\src\db\billing-operations.ts:1439:        userId: hostOwnerId,
+  server\src\db\billing-operations.ts:1440:        relatedId: instanceId,
+  server\src\db\billing-operations.ts:1441:        type: 'income',
+  server\src\db\billing-operations.ts:1442:        frozen: true
+  server\src\db\billing-operations.ts:1450:    let fromBalance = 0
+  server\src\db\billing-operations.ts:1451:
+  server\src\db\billing-operations.ts:1452:    // 第一步：优先从冻结收入中扣除
+> server\src\db\billing-operations.ts:1453:    // 冻结记录尚未计入 hostingBalance，通过删除/减少原记录来确保这部分钱不会被计入，
+  server\src\db\billing-operations.ts:1454:    // 即账务上正确地抵消了这笔收入。同时在下方统一新建一条独立的审计扣除记录。
+  server\src\db\billing-operations.ts:1455:    for (const log of frozenLogs) {
+  server\src\db\billing-operations.ts:1456:      if (remainingToDeduct <= 0) break
+  server\src\db\billing-operations.ts:1457:
+  server\src\db\billing-operations.ts:1458:      const logAmount = Number(log.amount)
+  server\src\db\billing-operations.ts:1459:      const deductFromThis = Math.min(logAmount, remainingToDeduct)
+  server\src\db\billing-operations.ts:1460:
+  server\src\db\billing-operations.ts:1461:      if (deductFromThis >= logAmount) {
+> server\src\db\billing-operations.ts:1462:        // 全额抵扣：删除整条冻结收入记录（此笔收入永远不会进入 hostingBalance）
+> server\src\db\billing-operations.ts:1463:        await client.hostingBalanceLog.delete({
+  server\src\db\billing-operations.ts:1464:          where: { id: log.id }
+  server\src\db\billing-operations.ts:1465:        })
+  server\src\db\billing-operations.ts:1466:      } else {
+  server\src\db\billing-operations.ts:1467:        // 部分抵扣：减少冻结记录金额，剩余部分继续冻结等待解冻
+> server\src\db\billing-operations.ts:1468:        await client.hostingBalanceLog.update({
+  server\src\db\billing-operations.ts:1469:          where: { id: log.id },
+  server\src\db\billing-operations.ts:1470:          data: { amount: { decrement: deductFromThis } }
+  server\src\db\billing-operations.ts:1471:        })
+  server\src\db\billing-operations.ts:1472:      }
+  server\src\db\billing-operations.ts:1473:
+  server\src\db\billing-operations.ts:1479:    if (remainingToDeduct > 0) {
+  server\src\db\billing-operations.ts:1480:      const user = await client.user.findUnique({
+  server\src\db\billing-operations.ts:1481:        where: { id: hostOwnerId },
+> server\src\db\billing-operations.ts:1482:        select: { hostingBalance: true, balance: true }
+  server\src\db\billing-operations.ts:1483:      })
+  server\src\db\billing-operations.ts:1484:
+> server\src\db\billing-operations.ts:1485:      const availableHostingBalance = Number(user?.hostingBalance || 0)
+> server\src\db\billing-operations.ts:1486:      const deductFromAvailable = Math.min(availableHostingBalance, 
+remainingToDeduct)
+  server\src\db\billing-operations.ts:1487:
+  server\src\db\billing-operations.ts:1488:      if (deductFromAvailable > 0) {
+> server\src\db\billing-operations.ts:1489:        const hostingBalanceUpdateResult = await client.user.updateMany({
+  server\src\db\billing-operations.ts:1490:          where: {
+  server\src\db\billing-operations.ts:1491:            id: hostOwnerId,
+> server\src\db\billing-operations.ts:1492:            hostingBalance: { gte: deductFromAvailable }
+  server\src\db\billing-operations.ts:1493:          },
+> server\src\db\billing-operations.ts:1494:          data: { hostingBalance: { decrement: deductFromAvailable } }
+  server\src\db\billing-operations.ts:1495:        })
+> server\src\db\billing-operations.ts:1496:        if (hostingBalanceUpdateResult.count === 0) {
+  server\src\db\billing-operations.ts:1497:          throw new Error('托管余额不足，请稍后重试')
+  server\src\db\billing-operations.ts:1498:        }
+  server\src\db\billing-operations.ts:1499:
+  server\src\db\billing-operations.ts:1500:        fromAvailable = deductFromAvailable
+  server\src\db\billing-operations.ts:1501:        remainingToDeduct -= deductFromAvailable
+  server\src\db\billing-operations.ts:1564:      })
+  server\src\db\billing-operations.ts:1565:    }
+  server\src\db\billing-operations.ts:1566:
+> server\src\db\billing-operations.ts:1567:    console.log(`[HostingBalance] 扣除托管余额: hostOwnerId=${hostOwnerId}, 
+amount=${amount}, deducted=${totalDeducted}, fromFrozen=${fromFrozen}, fromAvailable=${fromAvailable}, 
+fromBalance=${fromBalance}, instanceId=${instanceId}`)
+  server\src\db\billing-operations.ts:1568:
+  server\src\db\billing-operations.ts:1569:    return { hostOwnerId, deductedAmount: totalDeducted, fromFrozen, 
+fromAvailable, fromBalance }
+  server\src\db\billing-operations.ts:1570:  }
+  server\src\db\billing-operations.ts:1571:
+  server\src\db\billing-operations.ts:1572:  if (tx) {
+  server\scripts\test-hosting-balance-guards.ts:40:  'admin available hosting-balance grants must be excluded from 
+total income, VIP income, and operating-income history'
+  server\scripts\test-hosting-balance-guards.ts:41:)
+  server\scripts\test-hosting-balance-guards.ts:42:
+> server\scripts\test-hosting-balance-guards.ts:43:const hostingBalanceLogsStart = 
+usersRouteSource.indexOf("}>('/:id/hosting-balance/logs'")
+> server\scripts\test-hosting-balance-guards.ts:44:assert.notEqual(hostingBalanceLogsStart, -1, 'hosting-balance logs 
+route not found')
+> server\scripts\test-hosting-balance-guards.ts:45:const hostingBalanceLogsEnd = usersRouteSource.indexOf('// 
+调整用户托管余额（管理员）', hostingBalanceLogsStart)
+> server\scripts\test-hosting-balance-guards.ts:46:assert.notEqual(hostingBalanceLogsEnd, -1, 'hosting-balance logs 
+route end marker not found')
+> server\scripts\test-hosting-balance-guards.ts:47:const hostingBalanceLogsRoute = 
+usersRouteSource.slice(hostingBalanceLogsStart, hostingBalanceLogsEnd)
+  server\scripts\test-hosting-balance-guards.ts:48:
+  server\scripts\test-hosting-balance-guards.ts:49:assert.ok(
+> server\scripts\test-hosting-balance-guards.ts:50:  hostingBalanceLogsRoute.includes('const pageNum = 
+parsePositiveIntegerQuery(page, 1)') &&
+> server\scripts\test-hosting-balance-guards.ts:51:    hostingBalanceLogsRoute.includes('const size = 
+parseClampedPositiveIntegerQuery(pageSize, 20, 100)') &&
+> server\scripts\test-hosting-balance-guards.ts:52:    hostingBalanceLogsRoute.includes('const skip = (pageNum - 1) * 
+size') &&
+> server\scripts\test-hosting-balance-guards.ts:53:    !hostingBalanceLogsRoute.includes('parseInt('),
+  server\scripts\test-hosting-balance-guards.ts:54:  'admin hosting-balance logs route must strictly parse pagination 
+before Prisma skip/take'
+  server\scripts\test-hosting-balance-guards.ts:55:)
+  server\scripts\test-hosting-balance-guards.ts:56:
+  server\scripts\test-hosting-balance-guards.ts:57:assert.ok(
+  server\scripts\test-hosting-balance-guards.ts:58:  hostingRouteSource.includes('const POSITIVE_ROUTE_ID_PATTERN = 
+/^[1-9]\\d*$/') &&
+  server\scripts\test-hosting-balance-guards.ts:101:)
+  server\scripts\test-hosting-balance-guards.ts:102:
+  server\scripts\test-hosting-balance-guards.ts:103:assert.ok(
+> server\scripts\test-hosting-balance-guards.ts:104:  billingSource.includes('const hostingBalanceUpdateResult = await 
+client.user.updateMany({') &&
+> server\scripts\test-hosting-balance-guards.ts:105:    billingSource.includes('hostingBalance: { gte: 
+deductFromAvailable }') &&
+  server\scripts\test-hosting-balance-guards.ts:106:    billingSource.includes("throw new Error('托管余额不足，请稍后重试')"),
+  server\scripts\test-hosting-balance-guards.ts:107:  'hosted instance destruction must conditionally decrement 
+available hosting balance'
+  server\scripts\test-hosting-balance-guards.ts:108:)
+  server\scripts\test-hosting-balance-guards.ts:109:
+  server\scripts\test-hosting-balance-guards.ts:110:assert.ok(
+  server\prisma\schema.prisma:827:  affWithdrawals   AffWithdrawal[]
+  server\prisma\schema.prisma:828:
+  server\prisma\schema.prisma:829:  // 托管余额系统
+> server\prisma\schema.prisma:830:  hostingBalance      Decimal              @default(0) @map("hosting_balance") 
+@db.Decimal(10, 2) // 可用托管余额
+> server\prisma\schema.prisma:831:  hostingBalanceLogs  HostingBalanceLog[]
+  server\prisma\schema.prisma:832:  hostingWithdrawals  HostingWithdrawal[]
+  server\prisma\schema.prisma:833:  hostingBlocksCreated  HostingUserBlock[] @relation("HostingBlocker")
+  server\prisma\schema.prisma:834:  hostingBlocksReceived HostingUserBlock[] @relation("HostingBlockedUser")
+  server\prisma\schema.prisma:835:  hostingZone         HostingZone?         @relation("HostingZoneOwner")
+  server\prisma\schema.prisma:836:
+  server\prisma\schema.prisma:837:  // 域名邮箱系统
+  server\prisma\schema.prisma:838:  mailSubscriptions   MailSubscription[]
+  server\prisma\schema.prisma:839:
+  server\prisma\schema.prisma:4790:
+  server\prisma\schema.prisma:4791:// ==================== 托管余额系统模型 ====================
+  server\prisma\schema.prisma:4792:
+> server\prisma\schema.prisma:4793:enum HostingBalanceType {
+  server\prisma\schema.prisma:4794:  income    // 收入（用户购买/续费）
+  server\prisma\schema.prisma:4795:  unfreeze  // 解冻
+  server\prisma\schema.prisma:4796:  withdraw  // 提现
+  server\prisma\schema.prisma:4797:  deduction // 扣除（用户销毁托管实例）
+  server\prisma\schema.prisma:4798:}
+  server\prisma\schema.prisma:4799:
+  server\prisma\schema.prisma:4800:// 托管收支操作类型（用于区分具体操作）
+  server\prisma\schema.prisma:4801:enum HostingActionType {
+  server\prisma\schema.prisma:4954:}
+  server\prisma\schema.prisma:4955:
+  server\prisma\schema.prisma:4956:// 托管余额变动日志
+> server\prisma\schema.prisma:4957:model HostingBalanceLog {
+  server\prisma\schema.prisma:4958:  id         Int                 @id @default(autoincrement())
+  server\prisma\schema.prisma:4959:  userId     Int                 @map("user_id")
+> server\prisma\schema.prisma:4960:  type       HostingBalanceType
+  server\prisma\schema.prisma:4961:  actionType HostingActionType?  @map("action_type") // 具体操作类型（开通/续费/升级/销毁等）
+  server\prisma\schema.prisma:4962:  amount     Decimal             @db.Decimal(10, 2) // 金额（正数）
+  server\prisma\schema.prisma:4963:  frozen     Boolean             @default(true)     // 是否冻结状态
+  server\prisma\schema.prisma:4964:  unfreezeAt DateTime?           @map("unfreeze_at") // 解冻时间
+  server\prisma\schema.prisma:4965:  relatedId  Int?                @map("related_id") // 关联ID（实例ID/提现ID）
+  server\prisma\schema.prisma:4966:  remark     String?
+  server\prisma\schema.prisma:4967:
+  server\prisma\schema.prisma:4968:  // Snapshot fields for data persistence
+
+
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$b = Get-Content server/src/db/billing-operations.ts; $b[1120..1210]; $b[1380..1585]; Get-Content -Raw server/scripts/test-hosting-balance-guards.ts; Get-Content -Raw server/scripts/test-financial-reconciliation-guards.ts; $s = Get-Content server/prisma/schema.prisma; $s[4790..4835]; $s[4950..4985]' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 988ms:
+ * æ·»åŠ æœˆä»½åˆ°æ—¥æœŸ
+ * ä½¿ç”¨å…¬å…±æ–¹æ³• calcAddMonths
+ */
+function addMonths(date: Date, months: number): Date {
+  return calcAddMonths(date, months)
+}
+
+/**
+ * æ£€æŸ¥å®žä¾‹æ˜¯å¦ä¸ºå…è´¹å®žä¾‹
+ */
+export function isFreeInstance(instance: { packagePlanId: number | null }): boolean {
+  return instance.packagePlanId === null
+}
+
+/**
+ * æ£€æŸ¥å®žä¾‹æ˜¯å¦ä¸ºä»˜è´¹å®žä¾‹
+ */
+export function isPaidInstance(instance: { packagePlanId: number | null }): boolean {
+  return instance.packagePlanId !== null
+}
+
+/**
+ * æ£€æŸ¥å®žä¾‹æ˜¯å¦å·²è¿‡æœŸ
+ */
+export function isExpired(instance: { expiresAt: Date | null }): boolean {
+  if (instance.expiresAt === null) return false
+  return new Date() > instance.expiresAt
+}
+
+// ==================== æ‰˜ç®¡ä½™é¢ç»“ç®— ====================
+
+/**
+ * å†…éƒ¨è¾…åŠ©å‡½æ•°ï¼šç»Ÿä¸€åˆ›å»ºå¸¦å¿«ç…§çš„æ‰˜ç®¡æ—¥å¿—
+ * ç”¨äºŽæ‰€æœ‰å®žä¾‹ç›¸å…³æ‰˜ç®¡æ—¥å¿—çš„å†™å…¥ï¼Œç¡®ä¿å¿«ç…§å­—æ®µä¸€è‡´æ€§
+ */
+async function createHostingLogWithSnapshot(
+  client: any,
+  params: {
+    userId: number
+    type: 'income' | 'deduction'
+    actionType: string
+    amount: number
+    instanceId: number
+    frozen: boolean
+    unfreezeAt?: Date | null
+    remark: string
+  }
+) {
+  // æŸ¥è¯¢å®žä¾‹åŠå…³è”ä¿¡æ¯ç”¨äºŽå¿«ç…§
+  const instance = await client.instance.findUnique({
+    where: { id: params.instanceId },
+    select: {
+      name: true,
+      user: { select: { username: true, email: true, avatarStyle: true } },
+      host: { select: { name: true } },
+      package: { select: { name: true } },
+      packagePlan: { select: { name: true } }
+    }
+  })
+
+  await client.hostingBalanceLog.create({
+    data: {
+      userId: params.userId,
+      type: params.type,
+      actionType: params.actionType,
+      amount: params.amount,
+      frozen: params.frozen,
+      unfreezeAt: params.unfreezeAt ?? null,
+      relatedId: params.instanceId,
+      remark: params.remark,
+      snapshotBuyerName: instance?.user.username ?? null,
+      snapshotBuyerEmail: instance?.user.email ?? null,
+      snapshotBuyerAvatar: instance?.user.avatarStyle ?? null,
+      snapshotInstanceName: instance?.name ?? null,
+      snapshotHostName: instance?.host.name ?? null,
+      snapshotPackageName: instance?.package?.name ?? null,
+      snapshotPlanName: instance?.packagePlan?.name ?? null
+    }
+  })
+}
+
+async function resolveHostedIncomeOwner(
+  client: any,
+  hostId: number,
+  options: {
+    instanceId?: number | null
+    allowHistoricalFallback?: boolean
+  } = {}
+): Promise<{ userId: number; hostName: string } | null> {
+  const { instanceId = null, allowHistoricalFallback = false } = options
+
+  await recordHostingIncome(host.userId, amount, instanceId, remark, type, client)
+
+  console.log(`[HostingIncome] è®°å½•æ‰˜ç®¡æ”¶å…¥: hostOwnerId=${host.userId}, amount=${amount}, instanceId=${instanceId}, type=${type}`)
+
+  return { hostOwnerId: host.userId, hostName: host.name }
+}
+
+/**
+ * èŽ·å–å®žä¾‹å‰©ä½™å¤©æ•°
+ * ä½¿ç”¨å…¬å…±æ–¹æ³• calculateRemainingDays
+ */
+export function getRemainingDays(instance: { expiresAt: Date | null }): number | null {
+  if (instance.expiresAt === null) return null
+  return calculateRemainingDays(instance.expiresAt)
+}
+
+/**
+ * æ‰˜ç®¡å®žä¾‹é”€æ¯æ—¶æ‰£é™¤èŠ‚ç‚¹æ‰€æœ‰è€…çš„æ‰˜ç®¡ä½™é¢
+ * 
+ * ä¼˜å…ˆä»Žè¯¥å®žä¾‹ç›¸å…³çš„å†»ç»“æ”¶å…¥ä¸­æ‰£é™¤ï¼Œä¸è¶³éƒ¨åˆ†ä»Žå¯ç”¨ä½™é¢æ‰£é™¤
+ * 
+ * @param hostId èŠ‚ç‚¹ID
+ * @param amount æ‰£é™¤é‡‘é¢ï¼ˆå…ƒï¼‰
+ * @param instanceId å®žä¾‹ID
+ * @param remark å¤‡æ³¨
+ * @param tx å¯é€‰çš„äº‹åŠ¡å®¢æˆ·ç«¯
+ * @returns å¦‚æžœæ˜¯ç”¨æˆ·æ‰˜ç®¡èŠ‚ç‚¹ï¼Œè¿”å›žæ‰£é™¤ç»“æžœï¼›å¦åˆ™è¿”å›ž null
+ */
+export async function deductHostingBalance(
+  hostId: number,
+  amount: number,
+  instanceId: number,
+  remark: string,
+  tx?: any
+): Promise<HostingBalanceDeductionResult | null> {
+  const run = async (client: Prisma.TransactionClient): Promise<HostingBalanceDeductionResult | null> => {
+    const hostingOwner = await resolveHostedIncomeOwner(client, hostId, {
+      instanceId,
+      allowHistoricalFallback: true
+    })
+    if (!hostingOwner) {
+      return null
+    }
+    const hostOwnerId = hostingOwner.userId
+
+    const locked = await tryAdvisoryTransactionLock(client, HOSTING_BALANCE_LOG_LOCK_NAMESPACE, hostOwnerId)
+    if (!locked) {
+      throw new Error('æ‰˜ç®¡ä½™é¢æ­£åœ¨å¤„ç†ï¼Œè¯·ç¨åŽé‡è¯•')
+    }
+
+    const userBalanceLocked = await tryAdvisoryTransactionLock(client, USER_BALANCE_LOCK_NAMESPACE, hostOwnerId)
+    if (!userBalanceLocked) {
+      throw new Error('ä½™é¢æ­£åœ¨å¤„ç†ï¼Œè¯·ç¨åŽé‡è¯•')
+    }
+
+    // æŸ¥æ‰¾è¯¥å®žä¾‹ç›¸å…³çš„å†»ç»“æ‰˜ç®¡æ”¶å…¥è®°å½•
+    const frozenLogs = await client.hostingBalanceLog.findMany({
+      where: {
+        userId: hostOwnerId,
+        relatedId: instanceId,
+        type: 'income',
+        frozen: true
+      },
+      orderBy: { createdAt: 'asc' }
+    })
+
+    let remainingToDeduct = amount
+    let fromFrozen = 0
+    let fromAvailable = 0
+    let fromBalance = 0
+
+    // ç¬¬ä¸€æ­¥ï¼šä¼˜å…ˆä»Žå†»ç»“æ”¶å…¥ä¸­æ‰£é™¤
+    // å†»ç»“è®°å½•å°šæœªè®¡å…¥ hostingBalanceï¼Œé€šè¿‡åˆ é™¤/å‡å°‘åŽŸè®°å½•æ¥ç¡®ä¿è¿™éƒ¨åˆ†é’±ä¸ä¼šè¢«è®¡å…¥ï¼Œ
+    // å³è´¦åŠ¡ä¸Šæ­£ç¡®åœ°æŠµæ¶ˆäº†è¿™ç¬”æ”¶å…¥ã€‚åŒæ—¶åœ¨ä¸‹æ–¹ç»Ÿä¸€æ–°å»ºä¸€æ¡ç‹¬ç«‹çš„å®¡è®¡æ‰£é™¤è®°å½•ã€‚
+    for (const log of frozenLogs) {
+      if (remainingToDeduct <= 0) break
+
+      const logAmount = Number(log.amount)
+      const deductFromThis = Math.min(logAmount, remainingToDeduct)
+
+      if (deductFromThis >= logAmount) {
+        // å…¨é¢æŠµæ‰£ï¼šåˆ é™¤æ•´æ¡å†»ç»“æ”¶å…¥è®°å½•ï¼ˆæ­¤ç¬”æ”¶å…¥æ°¸è¿œä¸ä¼šè¿›å…¥ hostingBalanceï¼‰
+        await client.hostingBalanceLog.delete({
+          where: { id: log.id }
+        })
+      } else {
+        // éƒ¨åˆ†æŠµæ‰£ï¼šå‡å°‘å†»ç»“è®°å½•é‡‘é¢ï¼Œå‰©ä½™éƒ¨åˆ†ç»§ç»­å†»ç»“ç­‰å¾…è§£å†»
+        await client.hostingBalanceLog.update({
+          where: { id: log.id },
+          data: { amount: { decrement: deductFromThis } }
+        })
+      }
+
+      fromFrozen += deductFromThis
+      remainingToDeduct -= deductFromThis
+    }
+
+    // ç¬¬äºŒæ­¥ï¼šå¦‚æžœå†»ç»“æ”¶å…¥ä¸è¶³ï¼Œä»Žå·²è§£å†»çš„æ‰˜ç®¡ä½™é¢æ‰£é™¤
+    if (remainingToDeduct > 0) {
+      const user = await client.user.findUnique({
+        where: { id: hostOwnerId },
+        select: { hostingBalance: true, balance: true }
+      })
+
+      const availableHostingBalance = Number(user?.hostingBalance || 0)
+      const deductFromAvailable = Math.min(availableHostingBalance, remainingToDeduct)
+
+      if (deductFromAvailable > 0) {
+        const hostingBalanceUpdateResult = await client.user.updateMany({
+          where: {
+            id: hostOwnerId,
+            hostingBalance: { gte: deductFromAvailable }
+          },
+          data: { hostingBalance: { decrement: deductFromAvailable } }
+        })
+        if (hostingBalanceUpdateResult.count === 0) {
+          throw new Error('æ‰˜ç®¡ä½™é¢ä¸è¶³ï¼Œè¯·ç¨åŽé‡è¯•')
+        }
+
+        fromAvailable = deductFromAvailable
+        remainingToDeduct -= deductFromAvailable
+      }
+
+      // ç¬¬ä¸‰æ­¥ï¼šå¦‚æžœæ‰˜ç®¡ä½™é¢ä»ä¸è¶³ï¼Œä»Žé¢æ¿ä½™é¢æ‰£é™¤
+      if (remainingToDeduct > 0) {
+        const availableBalance = Number(user?.balance || 0)
+        const deductFromBalance = Math.min(availableBalance, remainingToDeduct)
+
+        if (deductFromBalance > 0) {
+          const balanceUpdateResult = await client.user.updateMany({
+            where: {
+              id: hostOwnerId,
+              balance: { gte: deductFromBalance }
+            },
+            data: { balance: { decrement: deductFromBalance } }
+          })
+          if (balanceUpdateResult.count === 0) {
+            throw new Error('ä½™é¢ä¸è¶³ï¼Œè¯·ç¨åŽé‡è¯•')
+          }
+          const updatedUser = await client.user.findUniqueOrThrow({
+            where: { id: hostOwnerId },
+            select: { balance: true }
+          })
+          const balanceAfter = Number(updatedUser.balance)
+
+          // è®°å½•é¢æ¿ä½™é¢å˜åŠ¨æ—¥å¿—
+          await client.balanceLog.create({
+            data: {
+              userId: hostOwnerId,
+              type: 'hosting_deduction',
+              amount: -deductFromBalance,
+              balanceBefore: availableBalance,
+              balanceAfter,
+              instanceId,
+              remark: `æ‰˜ç®¡å®žä¾‹é”€æ¯æ‰£æ¬¾ï¼šç”¨æˆ·é€€æ¬¾éœ€ä»Žé¢æ¿ä½™é¢è¡¥æ‰£`
+            }
+          })
+
+          fromBalance = deductFromBalance
+          remainingToDeduct -= deductFromBalance
+        }
+      }
+    }
+
+    const totalDeducted = fromFrozen + fromAvailable + fromBalance
+
+    // å§‹ç»ˆåˆ›å»ºä¸€æ¡ç‹¬ç«‹çš„é”€æ¯æ‰£é™¤å®¡è®¡è®°å½•ï¼ˆæ— è®ºæ‰£æ¬¾æ¥è‡ªå†»ç»“ã€æ‰˜ç®¡ä½™é¢è¿˜æ˜¯é¢æ¿ä½™é¢ï¼‰
+    // åŽŸæ¥çš„æ¡ä»¶ (fromFrozen>0 || fromAvailable>0) é—æ¼äº†çº¯ä»Žé¢æ¿ä½™é¢æ‰£æ¬¾çš„æƒ…å†µï¼Œ
+    // ä¸”é‡‘é¢ä¹ŸæœªåŒ…å« fromBalanceï¼ŒçŽ°ç»Ÿä¸€ä¿®æ­£ã€‚
+    if (totalDeducted > 0) {
+      const parts: string[] = []
+      if (fromFrozen > 0) parts.push(`å†»ç»“æŠµæ‰£ Â¥${fromFrozen.toFixed(2)}`)
+      if (fromAvailable > 0) parts.push(`æ‰˜ç®¡ä½™é¢æ‰£é™¤ Â¥${fromAvailable.toFixed(2)}`)
+      if (fromBalance > 0) parts.push(`é¢æ¿ä½™é¢è¡¥æ‰£ Â¥${fromBalance.toFixed(2)}`)
+
+      await createHostingLogWithSnapshot(client, {
+        userId: hostOwnerId,
+        type: 'deduction',
+        actionType: 'destroy',
+        amount: -totalDeducted,
+        instanceId,
+        frozen: false,
+        remark: `${remark}ï¼ˆ${parts.join('ï¼Œ')}ï¼‰`
+      })
+    }
+
+    console.log(`[HostingBalance] æ‰£é™¤æ‰˜ç®¡ä½™é¢: hostOwnerId=${hostOwnerId}, amount=${amount}, deducted=${totalDeducted}, fromFrozen=${fromFrozen}, fromAvailable=${fromAvailable}, fromBalance=${fromBalance}, instanceId=${instanceId}`)
+
+    return { hostOwnerId, deductedAmount: totalDeducted, fromFrozen, fromAvailable, fromBalance }
+  }
+
+  if (tx) {
+    return run(tx)
+  }
+
+  return prisma.$transaction(async (transaction) => run(transaction))
+}
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import assert from 'node:assert/strict'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+
+const billingSource = readFileSync(resolve(__dirname, '../src/db/billing-operations.ts'), 'utf8')
+const schedulerSource = readFileSync(resolve(__dirname, '../src/services/hosting-scheduler.ts'), 'utf8')
+const hostingRouteSource = readFileSync(resolve(__dirname, '../src/routes/hosting.ts'), 'utf8')
+const usersRouteSource = readFileSync(resolve(__dirname, '../src/routes/users.ts'), 'utf8')
+
+assert.ok(
+  usersRouteSource.includes('!Number.isFinite(amount)') &&
+    usersRouteSource.includes('Amount must be a finite non-zero number') &&
+    usersRouteSource.includes('const MAX_HOSTING_BALANCE_ADJUST_AMOUNT = 99999999.99') &&
+    usersRouteSource.includes('Math.abs(amount) > MAX_HOSTING_BALANCE_ADJUST_AMOUNT'),
+  'admin hosting-balance adjustment must reject non-finite and oversized amounts'
+)
+
+assert.ok(
+  usersRouteSource.includes('const MAX_HOSTING_BALANCE_ADJUST_REASON_LENGTH = 500') &&
+    usersRouteSource.includes("const normalizedReason = typeof reason === 'string' ? reason.trim() : ''") &&
+    usersRouteSource.includes('normalizedReason.length > MAX_HOSTING_BALANCE_ADJUST_REASON_LENGTH') &&
+    usersRouteSource.includes("const ADMIN_HOSTING_BALANCE_ADJUST_REMARK_PREFIX = '[Admin]'") &&
+    usersRouteSource.includes('remark: `${ADMIN_HOSTING_BALANCE_ADJUST_REMARK_PREFIX} ${normalizedReason}`') &&
+    usersRouteSource.includes('remark: `[Admin Frozen] ${normalizedReason}`') &&
+    usersRouteSource.includes('remark: `[Admin Frozen Deduct] ${normalizedReason} (Â¥${absAmount.toFixed(2)})`') &&
+    usersRouteSource.includes('reason=${normalizedReason}'),
+  'admin hosting-balance adjustment must trim and bound audit reasons before persistence/logging'
+)
+
+assert.ok(
+  hostingRouteSource.includes("const ADMIN_HOSTING_BALANCE_ADJUST_REMARK_PREFIX = '[Admin]'") &&
+    hostingRouteSource.includes('const OPERATING_HOSTING_INCOME_WHERE = {') &&
+    hostingRouteSource.includes('{ remark: null }') &&
+    hostingRouteSource.includes('{ NOT: { remark: { startsWith: ADMIN_HOSTING_BALANCE_ADJUST_REMARK_PREFIX } } }') &&
+    (hostingRouteSource.match(/\.\.\.OPERATING_HOSTING_INCOME_WHERE/g) || []).length === 4,
+  'admin available hosting-balance grants must be excluded from total income, VIP income, and operating-income history'
+)
+
+const hostingBalanceLogsStart = usersRouteSource.indexOf("}>('/:id/hosting-balance/logs'")
+assert.notEqual(hostingBalanceLogsStart, -1, 'hosting-balance logs route not found')
+const hostingBalanceLogsEnd = usersRouteSource.indexOf('// è°ƒæ•´ç”¨æˆ·æ‰˜ç®¡ä½™é¢ï¼ˆç®¡ç†å‘˜ï¼‰', hostingBalanceLogsStart)
+assert.notEqual(hostingBalanceLogsEnd, -1, 'hosting-balance logs route end marker not found')
+const hostingBalanceLogsRoute = usersRouteSource.slice(hostingBalanceLogsStart, hostingBalanceLogsEnd)
+
+assert.ok(
+  hostingBalanceLogsRoute.includes('const pageNum = parsePositiveIntegerQuery(page, 1)') &&
+    hostingBalanceLogsRoute.includes('const size = parseClampedPositiveIntegerQuery(pageSize, 20, 100)') &&
+    hostingBalanceLogsRoute.includes('const skip = (pageNum - 1) * size') &&
+    !hostingBalanceLogsRoute.includes('parseInt('),
+  'admin hosting-balance logs route must strictly parse pagination before Prisma skip/take'
+)
+
+assert.ok(
+  hostingRouteSource.includes('const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\\d*$/') &&
+    hostingRouteSource.includes('function parsePositiveRouteId(value: string): number | null') &&
+    hostingRouteSource.includes('Number.isSafeInteger(parsed)') &&
+    hostingRouteSource.includes('const blockedUserId = parsePositiveRouteId(request.params.userId)'),
+  'hosting block delete route must reject malformed, zero, and unsafe user IDs'
+)
+
+assert.ok(
+  hostingRouteSource.includes('function parsePositiveIntegerQuery(value: string | undefined, fallback: number): number') &&
+    hostingRouteSource.includes('function parseClampedPositiveIntegerQuery(value: string | undefined, fallback: number, max: number): number') &&
+    hostingRouteSource.includes('const safePageSize = parseClampedPositiveIntegerQuery(pageSize, 30, 100)') &&
+    hostingRouteSource.includes('const pageNum = parsePositiveIntegerQuery(page, 1)') &&
+    hostingRouteSource.includes('const safePageSize = parseClampedPositiveIntegerQuery(pageSize, 20, 100)') &&
+    hostingRouteSource.includes('const safeStatus = normalizeWithdrawalStatus(status)') &&
+    hostingRouteSource.includes('const safeActionType = normalizeHostingActionType(actionType)') &&
+    hostingRouteSource.includes('const searchTerm = normalizeSearch(search, 128)'),
+  'hosting logs and withdrawal routes must strictly parse pagination, cap search, and allowlist filters'
+)
+
+for (const forbiddenPattern of [
+  'Number(request.params.userId)',
+  'Number.isNaN(blockedUserId)',
+  'Number(page) || 1',
+  'Number(pageSize) ||',
+  'baseWhere.actionType = actionType',
+  'where.status = status'
+] as const) {
+  assert.ok(
+    !hostingRouteSource.includes(forbiddenPattern),
+    `hosting routes must not use loose parsing or raw enum filters: ${forbiddenPattern}`
+  )
+}
+
+assert.ok(
+  schedulerSource.includes('[...lockedAmounts.keys()].sort((a, b) => a - b)') &&
+    schedulerSource.includes('tryAdvisoryTransactionLock(tx, HOSTING_BALANCE_LOG_LOCK_NAMESPACE, userId)'),
+  'hosting unfreeze job must acquire per-user hosting-balance locks in deterministic order'
+)
+
+assert.ok(
+  billingSource.includes('tryAdvisoryTransactionLock(client, HOSTING_BALANCE_LOG_LOCK_NAMESPACE, hostOwnerId)') &&
+    billingSource.includes('tryAdvisoryTransactionLock(client, USER_BALANCE_LOCK_NAMESPACE, hostOwnerId)'),
+  'hosted instance destruction must lock both hosting balance and panel balance before deductions'
+)
+
+assert.ok(
+  billingSource.includes('const hostingBalanceUpdateResult = await client.user.updateMany({') &&
+    billingSource.includes('hostingBalance: { gte: deductFromAvailable }') &&
+    billingSource.includes("throw new Error('æ‰˜ç®¡ä½™é¢ä¸è¶³ï¼Œè¯·ç¨åŽé‡è¯•')"),
+  'hosted instance destruction must conditionally decrement available hosting balance'
+)
+
+assert.ok(
+  billingSource.includes('const balanceUpdateResult = await client.user.updateMany({') &&
+    billingSource.includes('balance: { gte: deductFromBalance }') &&
+    billingSource.includes("throw new Error('ä½™é¢ä¸è¶³ï¼Œè¯·ç¨åŽé‡è¯•')") &&
+    billingSource.includes('const updatedUser = await client.user.findUniqueOrThrow({'),
+  'hosted instance destruction must conditionally decrement panel balance before writing balance logs'
+)
+
+console.log('hosting balance guard checks passed')
+
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import { dirname, resolve } from 'node:path'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+const root = resolve(__dirname, '..')
+const repoRoot = resolve(root, '..')
+
+const schema = readFileSync(resolve(root, 'prisma/schema.prisma'), 'utf8')
+const migration = readFileSync(resolve(root, 'prisma/migrations/20260624214500_add_financial_reconciliation/migration.sql'), 'utf8')
+const refundLifecycleMigration = readFileSync(resolve(root, 'prisma/migrations/20260627093000_add_recharge_refund_reconciliation_item/migration.sql'), 'utf8')
+const adminBillingRoute = readFileSync(resolve(root, 'src/routes/admin-billing.ts'), 'utf8')
+const adminApi = readFileSync(resolve(repoRoot, 'client/src/api/admin.ts'), 'utf8')
+const userApi = readFileSync(resolve(repoRoot, 'client/src/api/index.ts'), 'utf8')
+const billingView = readFileSync(resolve(repoRoot, 'client/src/views/admin/BillingView.vue'), 'utf8')
+const exportRoute = adminBillingRoute.slice(
+  adminBillingRoute.indexOf("'/api/admin/billing/reconciliation/export'"),
+  adminBillingRoute.indexOf('// ==================== ç®¡ç†å‘˜å°åœ/è§£å° ====================')
+)
+
+assert.ok(schema.includes('enum FinancialReconciliationStatus'), 'schema must define reconciliation status enum')
+assert.ok(schema.includes('normal') && schema.includes('discrepancy') && schema.includes('confirmed') && schema.includes('ignored'), 'reconciliation statuses must cover lifecycle')
+assert.ok(schema.includes('enum FinancialReconciliationItemType'), 'schema must define reconciliation item types')
+assert.ok(schema.includes('model FinancialReconciliationRun'), 'schema must define daily reconciliation run')
+assert.ok(schema.includes('model FinancialReconciliationItem'), 'schema must define reconciliation item')
+assert.ok(schema.includes('recharge_refund_lifecycle_issue'), 'schema must support recharge refund lifecycle differences')
+assert.ok(schema.includes('@@unique([date])'), 'one reconciliation run per business date is required')
+assert.ok(schema.includes('@@unique([runId, itemKey])'), 'reconciliation items must be idempotent per run')
+assert.ok(schema.includes('amount          Decimal?'), 'reconciliation item amount must use Decimal')
+
+assert.ok(migration.includes('CREATE TYPE "FinancialReconciliationStatus"'), 'migration must create status enum')
+assert.ok(migration.includes('CREATE TABLE "financial_reconciliation_runs"'), 'migration must create run table')
+assert.ok(migration.includes('CREATE TABLE "financial_reconciliation_items"'), 'migration must create item table')
+assert.ok(migration.includes('financial_reconciliation_runs_date_key'), 'migration must enforce one run per date')
+assert.ok(migration.includes('financial_reconciliation_items_run_id_item_key_key'), 'migration must enforce idempotent items')
+assert.ok(migration.includes('ON DELETE CASCADE'), 'items should be removed with their run')
+assert.ok(migration.includes('ON DELETE SET NULL'), 'handler/user references should preserve reconciliation history')
+assert.ok(refundLifecycleMigration.includes("ADD VALUE 'recharge_refund_lifecycle_issue'"), 'migration must add recharge refund lifecycle item type')
+
+assert.ok(adminBillingRoute.includes("'/api/admin/billing/reconciliation'"), 'view reconciliation route missing')
+assert.ok(adminBillingRoute.includes("'/api/admin/billing/reconciliation/run'"), 'run reconciliation route missing')
+assert.ok(adminBillingRoute.includes("'/api/admin/billing/reconciliation/items/:id'"), 'item handling route missing')
+assert.ok(adminBillingRoute.includes("'/api/admin/billing/reconciliation/export'"), 'CSV export route missing')
+assert.ok(adminBillingRoute.includes('onRequest: [app.authenticate, app.requireAdmin]'), 'reconciliation admin routes must keep the admin guard')
+assert.ok(adminBillingRoute.includes('canViewFinancialReconciliation'), 'read permission entrypoint missing')
+assert.ok(adminBillingRoute.includes('canManageFinancialReconciliation'), 'write permission entrypoint missing')
+assert.ok(adminBillingRoute.includes('FINANCE_READONLY'), 'write routes must preserve read-only finance boundary')
+assert.ok(adminBillingRoute.includes('financialReconciliationRun.upsert'), 'rerun must upsert the daily run')
+assert.ok(adminBillingRoute.includes('financialReconciliationItem.upsert'), 'rerun must upsert stable difference items')
+assert.ok(adminBillingRoute.includes('itemKey'), 'difference detection must use stable item keys')
+assert.ok(adminBillingRoute.includes("status: 'discrepancy'") && adminBillingRoute.includes('deleteMany'), 'rerun must avoid duplicate stale open differences')
+assert.ok(adminBillingRoute.includes('recharge_missing_balance_log'), 'must detect completed recharge without balance log')
+assert.ok(adminBillingRoute.includes('orphan_balance_log'), 'must detect balance log without business source')
+assert.ok(adminBillingRoute.includes('delivered_instance_missing_billing'), 'must detect delivered paid instance without billing')
+assert.ok(adminBillingRoute.includes('approved_adjustment_missing_balance_log'), 'must detect approved adjustment without balance log')
+assert.ok(adminBillingRoute.includes('rechargeRefundRequest.findMany'), 'must include recharge refund requests in daily reconciliation')
+assert.ok(adminBillingRoute.includes('recharge_refund_lifecycle_issue'), 'must detect recharge refund lifecycle issues')
+assert.ok(adminBillingRoute.includes('pending_stale'), 'must detect stale pending recharge refund requests')
+assert.ok(adminBillingRoute.includes('processing_stale'), 'must detect stale processing recharge refund requests')
+assert.ok(adminBillingRoute.includes('missing_failed_refund_restore_log'), 'must detect failed refund requests missing restore balance logs')
+assert.ok(adminBillingRoute.includes("'/api/admin/billing/recharge-refunds'"), 'admin billing must expose original-route refund request list')
+assert.ok(adminBillingRoute.includes('listRechargeRefundRequests'), 'admin refund workbench must use the shared refund request query')
+assert.ok(adminBillingRoute.includes("'/api/admin/billing/recharge-refunds/:id/retry'"), 'admin refund workbench must preserve retry/sync route')
+assert.ok(exportRoute.includes('maskExportIdentifier'), 'CSV export must mask sensitive identifiers')
+assert.ok(exportRoute.includes('text/csv; charset=utf-8'), 'CSV export must return csv content type')
+assert.ok(!exportRoute.includes('callbackData') && !exportRoute.includes('providerConfigSnapshot'), 'reconciliation export must not select raw callback or provider snapshots')
+assert.ok(!exportRoute.includes('adminPassword') && !exportRoute.includes('token'), 'reconciliation export must not expose passwords or tokens')
+
+assert.ok(adminApi.includes('FinancialReconciliationRun'), 'admin API must expose typed reconciliation run')
+assert.ok(adminApi.includes('recharge_refund_lifecycle_issue'), 'admin API must type recharge refund reconciliation differences')
+assert.ok(adminApi.includes('getFinancialReconciliation'), 'admin API must expose reconciliation read')
+assert.ok(adminApi.includes('runFinancialReconciliation'), 'admin API must expose reconciliation run')
+assert.ok(adminApi.includes('updateFinancialReconciliationItem'), 'admin API must expose item handling')
+assert.ok(adminApi.includes('exportFinancialReconciliationCsv'), 'admin API must download CSV with auth')
+assert.ok(adminApi.includes("responseType: 'blob'"), 'CSV download must use authenticated blob request')
+assert.ok(adminApi.includes('RechargeRefundRequest'), 'admin API must expose typed recharge refund requests')
+assert.ok(adminApi.includes('getRechargeRefundRequests'), 'admin API must expose refund workbench list')
+assert.ok(adminApi.includes('createRechargeRefund'), 'admin API must expose original-route refund creation')
+assert.ok(adminApi.includes('retryRechargeRefund'), 'admin API must expose refund retry/sync action')
+assert.ok(!userApi.includes('reconciliation'), 'user API must not expose financial reconciliation')
+
+assert.ok(billingView.includes("'reconciliation'"), 'admin billing UI must include reconciliation tab')
+assert.ok(billingView.includes("'refundRequests'"), 'admin billing UI must include original-route refund tab')
+assert.ok(billingView.includes('refundWorkbenchTitle'), 'admin UI must render original-route refund workbench')
+assert.ok(billingView.includes('loadRefundRequests'), 'admin UI must load original-route refund requests')
+assert.ok(billingView.includes('canCreateOriginalRefund'), 'admin UI must only expose original-route refund creation when supported')
+assert.ok(billingView.includes('openCreateOriginalRefund'), 'admin UI must open original-route refund creation dialog')
+assert.ok(billingView.includes('submitCreateOriginalRefund'), 'admin UI must submit original-route refund creation')
+assert.ok(billingView.includes('retryRechargeRefund'), 'admin UI must retry/sync original-route refunds')
+assert.ok(billingView.includes('æ—¥å¯¹è´¦å·¥ä½œå°'), 'admin UI must render reconciliation workspace')
+assert.ok(billingView.includes('runFinancialReconciliation'), 'admin UI must run reconciliation')
+assert.ok(billingView.includes('saveReconciliationItem'), 'admin UI must handle difference status')
+assert.ok(billingView.includes('exportFinancialReconciliation'), 'admin UI must expose CSV export')
+assert.ok(billingView.includes('å¯¼å‡ºå†…å®¹å·²è„±æ•'), 'admin UI must state export redaction boundary')
+
+console.log('financial reconciliation guards passed')
+
+// ==================== æ‰˜ç®¡ä½™é¢ç³»ç»Ÿæ¨¡åž‹ ====================
+
+enum HostingBalanceType {
+  income    // æ”¶å…¥ï¼ˆç”¨æˆ·è´­ä¹°/ç»­è´¹ï¼‰
+  unfreeze  // è§£å†»
+  withdraw  // æçŽ°
+  deduction // æ‰£é™¤ï¼ˆç”¨æˆ·é”€æ¯æ‰˜ç®¡å®žä¾‹ï¼‰
+}
+
+// æ‰˜ç®¡æ”¶æ”¯æ“ä½œç±»åž‹ï¼ˆç”¨äºŽåŒºåˆ†å…·ä½“æ“ä½œï¼‰
+enum HostingActionType {
+  purchase     // ç”¨æˆ·å¼€é€šå®žä¾‹
+  renew        // ç”¨æˆ·ç»­è´¹å®žä¾‹
+  upgrade      // ç”¨æˆ·å‡çº§æ–¹æ¡ˆ
+  destroy      // ç”¨æˆ·é”€æ¯å®žä¾‹
+  unfreeze     // è‡ªåŠ¨è§£å†»
+  withdraw     // æçŽ°
+  admin_adjust // ç®¡ç†å‘˜è°ƒæ•´
+}
+
+enum WithdrawalStatus {
+  pending   // å¾…å®¡æ ¸
+  approved  // å·²é€šè¿‡
+  rejected  // å·²æ‹’ç»
+  completed // å·²å®Œæˆ
+}
+
+enum WithdrawalTarget {
+  balance // æçŽ°åˆ°é¢æ¿ä½™é¢
+  usdt    // æçŽ°åˆ°USDT
+}
+
+// ==================== åŸŸåé‚®ç®±æ¨¡å— ====================
+
+// åŸŸåéªŒè¯çŠ¶æ€
+enum MailDomainStatus {
+  pending   // ç­‰å¾… DNS éªŒè¯
+  verified  // å·²éªŒè¯
+  suspended // å·²æš‚åœ
+}
+
+// é‚®ç®±è®¢é˜…çŠ¶æ€
+enum MailSubscriptionStatus {
+  active    // æ­£å¸¸
+  expired   // å·²è¿‡æœŸ
+  suspended // å·²æš‚åœ
+  @@unique([domainId, username])
+  @@index([domainId])
+  @@map("mail_accounts")
+}
+
+// æ‰˜ç®¡ä½™é¢å˜åŠ¨æ—¥å¿—
+model HostingBalanceLog {
+  id         Int                 @id @default(autoincrement())
+  userId     Int                 @map("user_id")
+  type       HostingBalanceType
+  actionType HostingActionType?  @map("action_type") // å…·ä½“æ“ä½œç±»åž‹ï¼ˆå¼€é€š/ç»­è´¹/å‡çº§/é”€æ¯ç­‰ï¼‰
+  amount     Decimal             @db.Decimal(10, 2) // é‡‘é¢ï¼ˆæ­£æ•°ï¼‰
+  frozen     Boolean             @default(true)     // æ˜¯å¦å†»ç»“çŠ¶æ€
+  unfreezeAt DateTime?           @map("unfreeze_at") // è§£å†»æ—¶é—´
+  relatedId  Int?                @map("related_id") // å…³è”IDï¼ˆå®žä¾‹ID/æçŽ°IDï¼‰
+  remark     String?
+
+  // Snapshot fields for data persistence
+  snapshotBuyerName    String?   @map("snapshot_buyer_name")
+  snapshotBuyerEmail   String?   @map("snapshot_buyer_email")
+  snapshotBuyerAvatar  String?   @map("snapshot_buyer_avatar")
+  snapshotInstanceName String?   @map("snapshot_instance_name")
+  snapshotHostName     String?   @map("snapshot_host_name")
+  snapshotPackageName  String?   @map("snapshot_package_name")
+  snapshotPlanName     String?   @map("snapshot_plan_name")
+
+  createdAt  DateTime            @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, frozen])
+  @@index([unfreezeAt])
+  @@map("hosting_balance_logs")
+}
+
+// æ‰˜ç®¡ä½™é¢æçŽ°è®°å½•
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "Select-String -Path server/src/db/billing-operations.ts,server/src/services/hosting-scheduler.ts -Pattern 'recordHostingIncome|hostingBalance: \\{ increment|hostingBalance.*increment|unfreeze' -Context 5,10; git status --short -- server/src/db/billing-operations.ts server/scripts/test-hosting-balance-guards.ts server/src/routes/gift-cards.ts server/src/services/instance-billing.ts" in C:\Users\Administrator\Desktop\payinces
+ succeeded in 1127ms:
+
+  server\src\db\billing-operations.ts:692:    let hostingIncomeResult: { hostOwnerId: number; hostName: string } | 
+null = null
+  server\src\db\billing-operations.ts:693:
+  server\src\db\billing-operations.ts:694:    const hostingOwner = await resolveHostedIncomeOwner(tx, instance.hostId)
+  server\src\db\billing-operations.ts:695:    if (hostingOwner) {
+  server\src\db\billing-operations.ts:696:      // 用户托管节点，记录托管收入（带快照）
+> server\src\db\billing-operations.ts:697:      const unfreezeAt = addMonths(new Date(), 1)
+  server\src\db\billing-operations.ts:698:      await createHostingLogWithSnapshot(tx, {
+  server\src\db\billing-operations.ts:699:        userId: hostingOwner.userId,
+  server\src\db\billing-operations.ts:700:        type: 'income',
+  server\src\db\billing-operations.ts:701:        actionType: 'renew',
+  server\src\db\billing-operations.ts:702:        amount: finalAmount,
+  server\src\db\billing-operations.ts:703:        instanceId: instance.id,
+  server\src\db\billing-operations.ts:704:        frozen: true,
+> server\src\db\billing-operations.ts:705:        unfreezeAt,
+  server\src\db\billing-operations.ts:706:        remark: `用户续费实例收入（冻结30天）`
+  server\src\db\billing-operations.ts:707:      })
+  server\src\db\billing-operations.ts:708:      console.log(`[HostingIncome] 记录续费托管收入: 
+hostOwnerId=${hostingOwner.userId}, amount=${finalAmount}, instanceId=${instance.id}`)
+  server\src\db\billing-operations.ts:709:      hostingIncomeResult = { hostOwnerId: hostingOwner.userId, hostName: 
+hostingOwner.hostName }
+  server\src\db\billing-operations.ts:710:    }
+  server\src\db\billing-operations.ts:711:
+  server\src\db\billing-operations.ts:712:    return { balanceLogId: balanceLog.id, hostingIncomeResult }
+  server\src\db\billing-operations.ts:713:  })
+  server\src\db\billing-operations.ts:714:
+  server\src\db\billing-operations.ts:715:  return {
+  server\src\db\billing-operations.ts:857:      })
+  server\src\db\billing-operations.ts:858:
+  server\src\db\billing-operations.ts:859:      const hostingOwner = await resolveHostedIncomeOwner(tx, 
+instance.hostId)
+  server\src\db\billing-operations.ts:860:      if (hostingOwner) {
+  server\src\db\billing-operations.ts:861:        // 用户托管节点，记录托管收入（升级差价，带快照）
+> server\src\db\billing-operations.ts:862:        const unfreezeAt = addMonths(new Date(), 1)
+  server\src\db\billing-operations.ts:863:        await createHostingLogWithSnapshot(tx, {
+  server\src\db\billing-operations.ts:864:          userId: hostingOwner.userId,
+  server\src\db\billing-operations.ts:865:          type: 'income',
+  server\src\db\billing-operations.ts:866:          actionType: 'upgrade',
+  server\src\db\billing-operations.ts:867:          amount: changeResult.priceDiff,
+  server\src\db\billing-operations.ts:868:          instanceId: instance.id,
+  server\src\db\billing-operations.ts:869:          frozen: true,
+> server\src\db\billing-operations.ts:870:          unfreezeAt,
+  server\src\db\billing-operations.ts:871:          remark: `用户升级实例方案收入（冻结30天）`
+  server\src\db\billing-operations.ts:872:        })
+  server\src\db\billing-operations.ts:873:        console.log(`[HostingIncome] 记录升级托管收入: 
+hostOwnerId=${hostingOwner.userId}, amount=${changeResult.priceDiff}, instanceId=${instance.id}`)
+  server\src\db\billing-operations.ts:874:        hostingIncomeResult = { hostOwnerId: hostingOwner.userId, hostName: 
+hostingOwner.hostName }
+  server\src\db\billing-operations.ts:875:      }
+  server\src\db\billing-operations.ts:876:    }
+  server\src\db\billing-operations.ts:877:
+  server\src\db\billing-operations.ts:878:    // 降级退款到余额
+  server\src\db\billing-operations.ts:879:    if (changeResult.priceDiff < 0) {
+  server\src\db\billing-operations.ts:880:      refundAmount = Math.abs(changeResult.priceDiff)
+  server\src\db\billing-operations.ts:1160:    type: 'income' | 'deduction'
+  server\src\db\billing-operations.ts:1161:    actionType: string
+  server\src\db\billing-operations.ts:1162:    amount: number
+  server\src\db\billing-operations.ts:1163:    instanceId: number
+  server\src\db\billing-operations.ts:1164:    frozen: boolean
+> server\src\db\billing-operations.ts:1165:    unfreezeAt?: Date | null
+  server\src\db\billing-operations.ts:1166:    remark: string
+  server\src\db\billing-operations.ts:1167:  }
+  server\src\db\billing-operations.ts:1168:) {
+  server\src\db\billing-operations.ts:1169:  // 查询实例及关联信息用于快照
+  server\src\db\billing-operations.ts:1170:  const instance = await client.instance.findUnique({
+  server\src\db\billing-operations.ts:1171:    where: { id: params.instanceId },
+  server\src\db\billing-operations.ts:1172:    select: {
+  server\src\db\billing-operations.ts:1173:      name: true,
+  server\src\db\billing-operations.ts:1174:      user: { select: { username: true, email: true, avatarStyle: true } },
+  server\src\db\billing-operations.ts:1175:      host: { select: { name: true } },
+  server\src\db\billing-operations.ts:1183:      userId: params.userId,
+  server\src\db\billing-operations.ts:1184:      type: params.type,
+  server\src\db\billing-operations.ts:1185:      actionType: params.actionType,
+  server\src\db\billing-operations.ts:1186:      amount: params.amount,
+  server\src\db\billing-operations.ts:1187:      frozen: params.frozen,
+> server\src\db\billing-operations.ts:1188:      unfreezeAt: params.unfreezeAt ?? null,
+  server\src\db\billing-operations.ts:1189:      relatedId: params.instanceId,
+  server\src\db\billing-operations.ts:1190:      remark: params.remark,
+  server\src\db\billing-operations.ts:1191:      snapshotBuyerName: instance?.user.username ?? null,
+  server\src\db\billing-operations.ts:1192:      snapshotBuyerEmail: instance?.user.email ?? null,
+  server\src\db\billing-operations.ts:1193:      snapshotBuyerAvatar: instance?.user.avatarStyle ?? null,
+  server\src\db\billing-operations.ts:1194:      snapshotInstanceName: instance?.name ?? null,
+  server\src\db\billing-operations.ts:1195:      snapshotHostName: instance?.host.name ?? null,
+  server\src\db\billing-operations.ts:1196:      snapshotPackageName: instance?.package?.name ?? null,
+  server\src\db\billing-operations.ts:1197:      snapshotPlanName: instance?.packagePlan?.name ?? null
+  server\src\db\billing-operations.ts:1198:    }
+  server\src\db\billing-operations.ts:1307: * @param instanceId 关联的实例ID
+  server\src\db\billing-operations.ts:1308: * @param remark 备注
+  server\src\db\billing-operations.ts:1309: * @param actionType 操作类型（purchase/renew/upgrade/destroy等）
+  server\src\db\billing-operations.ts:1310: * @param tx 可选的事务客户端
+  server\src\db\billing-operations.ts:1311: */
+> server\src\db\billing-operations.ts:1312:export async function recordHostingIncome(
+  server\src\db\billing-operations.ts:1313:  hostOwnerId: number,
+  server\src\db\billing-operations.ts:1314:  amount: number,
+  server\src\db\billing-operations.ts:1315:  instanceId: number,
+  server\src\db\billing-operations.ts:1316:  remark: string,
+> server\src\db\billing-operations.ts:1317:  actionType: 'purchase' | 'renew' | 'upgrade' | 'destroy' | 'unfreeze' | 
+'withdraw',
+  server\src\db\billing-operations.ts:1318:  tx?: any
+  server\src\db\billing-operations.ts:1319:): Promise<void> {
+  server\src\db\billing-operations.ts:1320:  const client = tx || prisma
+  server\src\db\billing-operations.ts:1321:
+  server\src\db\billing-operations.ts:1322:  // 计算解冻时间（30天后）
+> server\src\db\billing-operations.ts:1323:  const unfreezeAt = addMonths(new Date(), 1) // 使用 1 个月作为 30 天的近似
+  server\src\db\billing-operations.ts:1324:
+  server\src\db\billing-operations.ts:1325:  await createHostingLogWithSnapshot(client, {
+  server\src\db\billing-operations.ts:1326:    userId: hostOwnerId,
+  server\src\db\billing-operations.ts:1327:    type: 'income',
+  server\src\db\billing-operations.ts:1328:    actionType,
+  server\src\db\billing-operations.ts:1329:    amount,
+  server\src\db\billing-operations.ts:1330:    instanceId,
+  server\src\db\billing-operations.ts:1331:    frozen: true,
+> server\src\db\billing-operations.ts:1332:    unfreezeAt,
+  server\src\db\billing-operations.ts:1333:    remark
+  server\src\db\billing-operations.ts:1334:  })
+  server\src\db\billing-operations.ts:1335:}
+  server\src\db\billing-operations.ts:1336:
+  server\src\db\billing-operations.ts:1337:/**
+  server\src\db\billing-operations.ts:1338: * 处理托管收入结算
+  server\src\db\billing-operations.ts:1339: * 在用户购买或续费实例时调用，检查节点是否为用户托管，如是则记录收入
+  server\src\db\billing-operations.ts:1340: * 
+  server\src\db\billing-operations.ts:1341: * @param hostId 节点ID
+  server\src\db\billing-operations.ts:1342: * @param amount 金额（元）
+  server\src\db\billing-operations.ts:1376:  // 用户托管节点，记录托管收入
+  server\src\db\billing-operations.ts:1377:  const remark = type === 'purchase'
+  server\src\db\billing-operations.ts:1378:    ? `用户购买实例收入（冻结30天）`
+  server\src\db\billing-operations.ts:1379:    : `用户续费实例收入（冻结30天）`
+  server\src\db\billing-operations.ts:1380:
+> server\src\db\billing-operations.ts:1381:  await recordHostingIncome(host.userId, amount, instanceId, remark, type, 
+client)
+  server\src\db\billing-operations.ts:1382:
+  server\src\db\billing-operations.ts:1383:  console.log(`[HostingIncome] 记录托管收入: hostOwnerId=${host.userId}, 
+amount=${amount}, instanceId=${instanceId}, type=${type}`)
+  server\src\db\billing-operations.ts:1384:
+  server\src\db\billing-operations.ts:1385:  return { hostOwnerId: host.userId, hostName: host.name }
+  server\src\db\billing-operations.ts:1386:}
+  server\src\db\billing-operations.ts:1387:
+  server\src\db\billing-operations.ts:1388:/**
+  server\src\db\billing-operations.ts:1389: * 获取实例剩余天数
+  server\src\db\billing-operations.ts:1390: * 使用公共方法 calculateRemainingDays
+  server\src\db\billing-operations.ts:1391: */
+  server\src\services\hosting-scheduler.ts:16:
+  server\src\services\hosting-scheduler.ts:17:/**
+  server\src\services\hosting-scheduler.ts:18: * 解冻到期的托管余额
+  server\src\services\hosting-scheduler.ts:19: * 每小时执行一次，将已到解冻时间的冻结收入解冻并计入用户可用托管余额
+  server\src\services\hosting-scheduler.ts:20: */
+> server\src\services\hosting-scheduler.ts:21:async function unfreezeHostingBalance(): Promise<void> {
+> server\src\services\hosting-scheduler.ts:22:  console.log('[Hosting] Starting unfreeze job...')
+  server\src\services\hosting-scheduler.ts:23:  const startTime = Date.now()
+  server\src\services\hosting-scheduler.ts:24:
+  server\src\services\hosting-scheduler.ts:25:  try {
+  server\src\services\hosting-scheduler.ts:26:    const now = new Date()
+  server\src\services\hosting-scheduler.ts:27:
+> server\src\services\hosting-scheduler.ts:28:    // 获取待解冻的记录（frozen=true 且 unfreezeAt <= now）
+  server\src\services\hosting-scheduler.ts:29:    const frozenRecords = await prisma.hostingBalanceLog.findMany({
+  server\src\services\hosting-scheduler.ts:30:      where: {
+  server\src\services\hosting-scheduler.ts:31:        frozen: true,
+> server\src\services\hosting-scheduler.ts:32:        unfreezeAt: { lte: now }
+  server\src\services\hosting-scheduler.ts:33:      },
+  server\src\services\hosting-scheduler.ts:34:      select: {
+  server\src\services\hosting-scheduler.ts:35:        id: true,
+  server\src\services\hosting-scheduler.ts:36:        userId: true,
+  server\src\services\hosting-scheduler.ts:37:        amount: true
+  server\src\services\hosting-scheduler.ts:38:      }
+  server\src\services\hosting-scheduler.ts:39:    })
+  server\src\services\hosting-scheduler.ts:40:
+> server\src\services\hosting-scheduler.ts:41:    console.log(`[Hosting] Found ${frozenRecords.length} records to 
+unfreeze`)
+  server\src\services\hosting-scheduler.ts:42:
+  server\src\services\hosting-scheduler.ts:43:    if (frozenRecords.length === 0) {
+> server\src\services\hosting-scheduler.ts:44:      console.log('[Hosting] No records to unfreeze')
+  server\src\services\hosting-scheduler.ts:45:      return
+  server\src\services\hosting-scheduler.ts:46:    }
+  server\src\services\hosting-scheduler.ts:47:
+  server\src\services\hosting-scheduler.ts:48:    const recordIds: number[] = []
+  server\src\services\hosting-scheduler.ts:49:
+  server\src\services\hosting-scheduler.ts:50:    for (const record of frozenRecords) {
+  server\src\services\hosting-scheduler.ts:51:      recordIds.push(record.id)
+  server\src\services\hosting-scheduler.ts:52:    }
+  server\src\services\hosting-scheduler.ts:53:
+  server\src\services\hosting-scheduler.ts:54:    // 执行事务：更新记录状态并增加用户可用托管余额
+  server\src\services\hosting-scheduler.ts:55:    await prisma.$transaction(async (tx) => {
+  server\src\services\hosting-scheduler.ts:56:      const lockedRecords = await tx.hostingBalanceLog.findMany({
+  server\src\services\hosting-scheduler.ts:57:        where: {
+  server\src\services\hosting-scheduler.ts:58:          id: { in: recordIds },
+  server\src\services\hosting-scheduler.ts:59:          frozen: true,
+> server\src\services\hosting-scheduler.ts:60:          unfreezeAt: { lte: now }
+  server\src\services\hosting-scheduler.ts:61:        },
+  server\src\services\hosting-scheduler.ts:62:        select: {
+  server\src\services\hosting-scheduler.ts:63:          id: true,
+  server\src\services\hosting-scheduler.ts:64:          userId: true,
+  server\src\services\hosting-scheduler.ts:65:          amount: true
+  server\src\services\hosting-scheduler.ts:66:        }
+  server\src\services\hosting-scheduler.ts:67:      })
+  server\src\services\hosting-scheduler.ts:68:
+  server\src\services\hosting-scheduler.ts:69:      if (lockedRecords.length === 0) {
+  server\src\services\hosting-scheduler.ts:70:        return
+  server\src\services\hosting-scheduler.ts:82:        if (!locked) {
+  server\src\services\hosting-scheduler.ts:83:          throw new Error('托管余额正在处理，请稍后重试解冻')
+  server\src\services\hosting-scheduler.ts:84:        }
+  server\src\services\hosting-scheduler.ts:85:      }
+  server\src\services\hosting-scheduler.ts:86:
+> server\src\services\hosting-scheduler.ts:87:      // 批量更新记录状态为已解冻。条件带上 frozen/unfreezeAt，避免和销毁抵扣
+  server\src\services\hosting-scheduler.ts:88:      // 同时处理同一批冻结收入时，把已被抵扣删除或改动的旧快照解冻到账。
+  server\src\services\hosting-scheduler.ts:89:      const updateResult = await tx.hostingBalanceLog.updateMany({
+  server\src\services\hosting-scheduler.ts:90:        where: {
+  server\src\services\hosting-scheduler.ts:91:          id: { in: lockedRecordIds },
+  server\src\services\hosting-scheduler.ts:92:          frozen: true,
+> server\src\services\hosting-scheduler.ts:93:          unfreezeAt: { lte: now }
+  server\src\services\hosting-scheduler.ts:94:        },
+  server\src\services\hosting-scheduler.ts:95:        data: { frozen: false }
+  server\src\services\hosting-scheduler.ts:96:      })
+  server\src\services\hosting-scheduler.ts:97:
+  server\src\services\hosting-scheduler.ts:98:      if (updateResult.count !== lockedRecordIds.length) {
+  server\src\services\hosting-scheduler.ts:99:        throw new Error('部分托管冻结收入已被其他任务处理，请重试解冻')
+  server\src\services\hosting-scheduler.ts:100:      }
+  server\src\services\hosting-scheduler.ts:101:
+  server\src\services\hosting-scheduler.ts:102:      // 逐用户更新托管余额
+  server\src\services\hosting-scheduler.ts:103:      for (const [userId, amount] of lockedAmounts) {
+  server\src\services\hosting-scheduler.ts:104:        await tx.user.update({
+  server\src\services\hosting-scheduler.ts:105:          where: { id: userId },
+> server\src\services\hosting-scheduler.ts:106:          data: { hostingBalance: { increment: amount } }
+  server\src\services\hosting-scheduler.ts:107:        })
+  server\src\services\hosting-scheduler.ts:108:        console.log(`[Hosting] Unfroze ${amount} for user ${userId}`)
+  server\src\services\hosting-scheduler.ts:109:      }
+  server\src\services\hosting-scheduler.ts:110:    })
+  server\src\services\hosting-scheduler.ts:111:
+  server\src\services\hosting-scheduler.ts:112:    const duration = Date.now() - startTime
+> server\src\services\hosting-scheduler.ts:113:    console.log(`[Hosting] Unfreeze job completed in ${duration}ms, 
+processed ${frozenRecords.length} records`)
+  server\src\services\hosting-scheduler.ts:114:  } catch (error) {
+> server\src\services\hosting-scheduler.ts:115:    console.error('[Hosting] Unfreeze job failed:', error)
+  server\src\services\hosting-scheduler.ts:116:  }
+  server\src\services\hosting-scheduler.ts:117:}
+  server\src\services\hosting-scheduler.ts:118:
+  server\src\services\hosting-scheduler.ts:119:// ==================== 调度器启动 ====================
+  server\src\services\hosting-scheduler.ts:120:
+  server\src\services\hosting-scheduler.ts:121:/**
+  server\src\services\hosting-scheduler.ts:122: * 启动托管余额调度器
+  server\src\services\hosting-scheduler.ts:123: */
+  server\src\services\hosting-scheduler.ts:124:export function startHostingScheduler(): void {
+  server\src\services\hosting-scheduler.ts:125:  if (schedulerStarted) {
+  server\src\services\hosting-scheduler.ts:129:  schedulerStarted = true
+  server\src\services\hosting-scheduler.ts:130:
+  server\src\services\hosting-scheduler.ts:131:  console.log('[Hosting] Starting hosting scheduler...')
+  server\src\services\hosting-scheduler.ts:132:
+  server\src\services\hosting-scheduler.ts:133:  // 每小时执行一次解冻任务（每小时第0分钟）
+> server\src\services\hosting-scheduler.ts:134:  schedule('0 * * * *', unfreezeHostingBalance, {
+  server\src\services\hosting-scheduler.ts:135:    timezone: 'Asia/Shanghai'
+  server\src\services\hosting-scheduler.ts:136:  })
+  server\src\services\hosting-scheduler.ts:137:
+  server\src\services\hosting-scheduler.ts:138:  console.log('[Hosting] Hosting scheduler started')
+> server\src\services\hosting-scheduler.ts:139:  console.log('[Hosting] - Unfreeze: Every hour at minute 0')
+  server\src\services\hosting-scheduler.ts:140:}
+  server\src\services\hosting-scheduler.ts:141:
+  server\src\services\hosting-scheduler.ts:142:/**
+  server\src\services\hosting-scheduler.ts:143: * 手动执行解冻任务（用于测试或管理员手动触发）
+  server\src\services\hosting-scheduler.ts:144: */
+> server\src\services\hosting-scheduler.ts:145:export async function runUnfreezeNow(): Promise<{ processed: number }> {
+> server\src\services\hosting-scheduler.ts:146:  console.log('[Hosting] Manual unfreeze triggered')
+  server\src\services\hosting-scheduler.ts:147:  
+  server\src\services\hosting-scheduler.ts:148:  const now = new Date()
+  server\src\services\hosting-scheduler.ts:149:  const frozenRecords = await prisma.hostingBalanceLog.findMany({
+  server\src\services\hosting-scheduler.ts:150:    where: {
+  server\src\services\hosting-scheduler.ts:151:      frozen: true,
+> server\src\services\hosting-scheduler.ts:152:      unfreezeAt: { lte: now }
+  server\src\services\hosting-scheduler.ts:153:    }
+  server\src\services\hosting-scheduler.ts:154:  })
+  server\src\services\hosting-scheduler.ts:155:
+  server\src\services\hosting-scheduler.ts:156:  if (frozenRecords.length === 0) {
+  server\src\services\hosting-scheduler.ts:157:    return { processed: 0 }
+  server\src\services\hosting-scheduler.ts:158:  }
+  server\src\services\hosting-scheduler.ts:159:
+> server\src\services\hosting-scheduler.ts:160:  await unfreezeHostingBalance()
+  server\src\services\hosting-scheduler.ts:161:  return { processed: frozenRecords.length }
+  server\src\services\hosting-scheduler.ts:162:}
+  server\src\services\hosting-scheduler.ts:163:
+  server\src\services\hosting-scheduler.ts:164:/**
+  server\src\services\hosting-scheduler.ts:165: * 获取待解冻的记录统计
+  server\src\services\hosting-scheduler.ts:166: */
+> server\src\services\hosting-scheduler.ts:167:export async function getPendingUnfreezeStats(): Promise<{
+  server\src\services\hosting-scheduler.ts:168:  total: number
+  server\src\services\hosting-scheduler.ts:169:  totalAmount: number
+> server\src\services\hosting-scheduler.ts:170:  nextUnfreezeAt: Date | null
+  server\src\services\hosting-scheduler.ts:171:}> {
+  server\src\services\hosting-scheduler.ts:172:  // 获取所有待解冻记录
+  server\src\services\hosting-scheduler.ts:173:  const result = await prisma.hostingBalanceLog.aggregate({
+  server\src\services\hosting-scheduler.ts:174:    where: { frozen: true },
+  server\src\services\hosting-scheduler.ts:175:    _count: { id: true },
+  server\src\services\hosting-scheduler.ts:176:    _sum: { amount: true },
+> server\src\services\hosting-scheduler.ts:177:    _min: { unfreezeAt: true }
+  server\src\services\hosting-scheduler.ts:178:  })
+  server\src\services\hosting-scheduler.ts:179:
+  server\src\services\hosting-scheduler.ts:180:  return {
+  server\src\services\hosting-scheduler.ts:181:    total: result._count.id || 0,
+  server\src\services\hosting-scheduler.ts:182:    totalAmount: Number(result._sum.amount || 0),
+> server\src\services\hosting-scheduler.ts:183:    nextUnfreezeAt: result._min.unfreezeAt
+  server\src\services\hosting-scheduler.ts:184:  }
+  server\src\services\hosting-scheduler.ts:185:}
+ M server/scripts/test-hosting-balance-guards.ts
+ M server/src/db/billing-operations.ts
+ M server/src/routes/gift-cards.ts
+
+
+
+codex
+检查到目标两个文件当前已存在未提交改动，同时 `gift-cards.ts` 也有并行改动；我不会触碰后者。先审阅目标文件现有 diff，区分并保留他人改动，只在指定函数和守卫末尾叠加最小变更。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "git diff -- server/src/db/billing-operations.ts server/scripts/test-hosting-balance-guards.ts; Select-String -Path server/prisma/migrations/*/migration.sql -Pattern 'hosting_balance.*CHECK|CHECK.*hosting_balance|hosting_balance' -Context 1,2" in C:\Users\Administrator\Desktop\payinces
+ succeeded in 828ms:
+diff --git a/server/scripts/test-hosting-balance-guards.ts b/server/scripts/test-hosting-balance-guards.ts
+index 31823ab..08cdc16 100644
+--- a/server/scripts/test-hosting-balance-guards.ts
++++ b/server/scripts/test-hosting-balance-guards.ts
+@@ -23,13 +23,23 @@ assert.ok(
+   usersRouteSource.includes('const MAX_HOSTING_BALANCE_ADJUST_REASON_LENGTH = 500') &&
+     usersRouteSource.includes("const normalizedReason = typeof reason === 'string' ? reason.trim() : ''") &&
+     usersRouteSource.includes('normalizedReason.length > MAX_HOSTING_BALANCE_ADJUST_REASON_LENGTH') &&
+-    usersRouteSource.includes('remark: `[Admin] ${normalizedReason}`') &&
++    usersRouteSource.includes("const ADMIN_HOSTING_BALANCE_ADJUST_REMARK_PREFIX = '[Admin]'") &&
++    usersRouteSource.includes('remark: `${ADMIN_HOSTING_BALANCE_ADJUST_REMARK_PREFIX} ${normalizedReason}`') &&
+     usersRouteSource.includes('remark: `[Admin Frozen] ${normalizedReason}`') &&
+     usersRouteSource.includes('remark: `[Admin Frozen Deduct] ${normalizedReason} (¥${absAmount.toFixed(2)})`') &&
+     usersRouteSource.includes('reason=${normalizedReason}'),
+   'admin hosting-balance adjustment must trim and bound audit reasons before persistence/logging'
+ )
+ 
++assert.ok(
++  hostingRouteSource.includes("const ADMIN_HOSTING_BALANCE_ADJUST_REMARK_PREFIX = '[Admin]'") &&
++    hostingRouteSource.includes('const OPERATING_HOSTING_INCOME_WHERE = {') &&
++    hostingRouteSource.includes('{ remark: null }') &&
++    hostingRouteSource.includes('{ NOT: { remark: { startsWith: ADMIN_HOSTING_BALANCE_ADJUST_REMARK_PREFIX } } }') &&
++    (hostingRouteSource.match(/\.\.\.OPERATING_HOSTING_INCOME_WHERE/g) || []).length === 4,
++  'admin available hosting-balance grants must be excluded from total income, VIP income, and operating-income history'
++)
++
+ const hostingBalanceLogsStart = usersRouteSource.indexOf("}>('/:id/hosting-balance/logs'")
+ assert.notEqual(hostingBalanceLogsStart, -1, 'hosting-balance logs route not found')
+ const hostingBalanceLogsEnd = usersRouteSource.indexOf('// 调整用户托管余额（管理员）', hostingBalanceLogsStart)
+diff --git a/server/src/db/billing-operations.ts b/server/src/db/billing-operations.ts
+index 5cb1e59..4deac9c 100644
+--- a/server/src/db/billing-operations.ts
++++ b/server/src/db/billing-operations.ts
+@@ -540,6 +540,10 @@ export async function performRenewal(
+   instance: Instance,
+   months: number
+ ): Promise<{ newExpiresAt: Date; amount: number; balanceLogId: number; discountAmount?: number; hostingIncomeResult?: { hostOwnerId: number; hostName: string } | null }> {
++  if (instance.status === 'deleted') {
++    throw new Error('实例已删除，无法续费')
++  }
++
+   // 验证付费实例
+   if (!instance.packagePlanId) {
+     throw new Error('免费实例无需续费')
+@@ -565,7 +569,7 @@ export async function performRenewal(
+   let discountAmount = 0
+   let finalAmount = originalAmount
+ 
+-  if (affBinding) {
++  if (affBinding?.affCode.enabled) {
+     discountRate = Number(affBinding.affCode.discountRate)
+     discountAmount = calculateDiscountAmount(originalAmount, discountRate)
+     finalAmount = calculateDiscountedPrice(originalAmount, discountRate)
+@@ -619,6 +623,7 @@ export async function performRenewal(
+     const instanceUpdateResult = await tx.instance.updateMany({
+       where: {
+         id: instance.id,
++        status: { not: 'deleted' },
+         version: instance.version  // 确保版本号未变
+       },
+       data: {
+@@ -674,7 +679,7 @@ export async function performRenewal(
+     })
+ 
+     // 如果有 AFF 绑定，给优惠码创建者返利
+-    if (affBinding) {
++    if (affBinding?.affCode.enabled) {
+       await processAffCommission(
+         affBinding.affCode.id,
+         instance.id,
+@@ -735,6 +740,10 @@ export async function performPlanChange(
+   bandwidthLimit: string | null
+   capacity: PlanUpgradeCapacityCheck
+ }> {
++  if (instance.status === 'deleted') {
++    throw new Error('实例已删除，无法改配')
++  }
++
+   const pkg = await prisma.package.findUnique({
+     where: { id: newPlan.packageId },
+     select: { instanceType: true }
+@@ -901,6 +910,7 @@ export async function performPlanChange(
+     const instanceUpdateResult = await tx.instance.updateMany({
+       where: {
+         id: instance.id,
++        status: { not: 'deleted' },
+         version: instance.version  // 确保版本号未变
+       },
+       data: {
+
+  server\prisma\migrations\20260222200000_add_hosting_balance_system\migration.sql:9:-- 在 users 表添加托管余额字段
+> server\prisma\migrations\20260222200000_add_hosting_balance_system\migration.sql:10:ALTER TABLE "users" ADD COLUMN 
+"hosting_balance" DECIMAL(10, 2) NOT NULL DEFAULT 0;
+  server\prisma\migrations\20260222200000_add_hosting_balance_system\migration.sql:11:
+  server\prisma\migrations\20260222200000_add_hosting_balance_system\migration.sql:12:-- 托管余额变动日志表
+> server\prisma\migrations\20260222200000_add_hosting_balance_system\migration.sql:13:CREATE TABLE 
+"hosting_balance_logs" (
+  server\prisma\migrations\20260222200000_add_hosting_balance_system\migration.sql:14:    "id" SERIAL NOT NULL,
+  server\prisma\migrations\20260222200000_add_hosting_balance_system\migration.sql:15:    "user_id" INTEGER NOT NULL,
+  server\prisma\migrations\20260222200000_add_hosting_balance_system\migration.sql:23:
+> server\prisma\migrations\20260222200000_add_hosting_balance_system\migration.sql:24:    CONSTRAINT 
+"hosting_balance_logs_pkey" PRIMARY KEY ("id")
+  server\prisma\migrations\20260222200000_add_hosting_balance_system\migration.sql:25:);
+  server\prisma\migrations\20260222200000_add_hosting_balance_system\migration.sql:26:
+  server\prisma\migrations\20260222200000_add_hosting_balance_system\migration.sql:46:-- 索引
+> server\prisma\migrations\20260222200000_add_hosting_balance_system\migration.sql:47:CREATE INDEX 
+"hosting_balance_logs_user_id_frozen_idx" ON "hosting_balance_logs"("user_id", "frozen");
+> server\prisma\migrations\20260222200000_add_hosting_balance_system\migration.sql:48:CREATE INDEX 
+"hosting_balance_logs_unfreeze_at_idx" ON "hosting_balance_logs"("unfreeze_at");
+  server\prisma\migrations\20260222200000_add_hosting_balance_system\migration.sql:49:CREATE INDEX 
+"hosting_withdrawals_user_id_status_idx" ON "hosting_withdrawals"("user_id", "status");
+  server\prisma\migrations\20260222200000_add_hosting_balance_system\migration.sql:50:
+  server\prisma\migrations\20260222200000_add_hosting_balance_system\migration.sql:51:-- 外键约束
+> server\prisma\migrations\20260222200000_add_hosting_balance_system\migration.sql:52:ALTER TABLE 
+"hosting_balance_logs" ADD CONSTRAINT "hosting_balance_logs_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES 
+"users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+  server\prisma\migrations\20260222200000_add_hosting_balance_system\migration.sql:53:ALTER TABLE 
+"hosting_withdrawals" ADD CONSTRAINT "hosting_withdrawals_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES 
+"users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+> server\prisma\migrations\20260309000000_add_hosting_action_type\migration.sql:1:-- Add HostingActionType enum and 
+action_type column to hosting_balance_logs
+  server\prisma\migrations\20260309000000_add_hosting_action_type\migration.sql:2:
+  server\prisma\migrations\20260309000000_add_hosting_action_type\migration.sql:3:-- Create HostingActionType enum
+  server\prisma\migrations\20260309000000_add_hosting_action_type\migration.sql:6:-- Add action_type column (nullable 
+for existing records)
+> server\prisma\migrations\20260309000000_add_hosting_action_type\migration.sql:7:ALTER TABLE "hosting_balance_logs" 
+ADD COLUMN "action_type" "HostingActionType";
+  server\prisma\migrations\20260309000000_add_hosting_action_type\migration.sql:8:
+  server\prisma\migrations\20260309000000_add_hosting_action_type\migration.sql:9:-- Backfill action_type for existing 
+records based on type
+> server\prisma\migrations\20260309000000_add_hosting_action_type\migration.sql:10:UPDATE "hosting_balance_logs" SET 
+"action_type" = 'purchase' WHERE "type" = 'income' AND "action_type" IS NULL;
+> server\prisma\migrations\20260309000000_add_hosting_action_type\migration.sql:11:UPDATE "hosting_balance_logs" SET 
+"action_type" = 'unfreeze' WHERE "type" = 'unfreeze' AND "action_type" IS NULL;
+> server\prisma\migrations\20260309000000_add_hosting_action_type\migration.sql:12:UPDATE "hosting_balance_logs" SET 
+"action_type" = 'destroy' WHERE "type" = 'deduction' AND "action_type" IS NULL;
+> server\prisma\migrations\20260309000000_add_hosting_action_type\migration.sql:13:UPDATE "hosting_balance_logs" SET 
+"action_type" = 'withdraw' WHERE "type" = 'withdraw' AND "action_type" IS NULL;
+  server\prisma\migrations\20260318000000_add_hosting_log_snapshot_fields\migration.sql:1:-- AlterTable
+> server\prisma\migrations\20260318000000_add_hosting_log_snapshot_fields\migration.sql:2:ALTER TABLE 
+"hosting_balance_logs" ADD COLUMN "snapshot_buyer_name" TEXT;
+> server\prisma\migrations\20260318000000_add_hosting_log_snapshot_fields\migration.sql:3:ALTER TABLE 
+"hosting_balance_logs" ADD COLUMN "snapshot_buyer_email" TEXT;
+> server\prisma\migrations\20260318000000_add_hosting_log_snapshot_fields\migration.sql:4:ALTER TABLE 
+"hosting_balance_logs" ADD COLUMN "snapshot_buyer_avatar" TEXT;
+> server\prisma\migrations\20260318000000_add_hosting_log_snapshot_fields\migration.sql:5:ALTER TABLE 
+"hosting_balance_logs" ADD COLUMN "snapshot_instance_name" TEXT;
+> server\prisma\migrations\20260318000000_add_hosting_log_snapshot_fields\migration.sql:6:ALTER TABLE 
+"hosting_balance_logs" ADD COLUMN "snapshot_host_name" TEXT;
+> server\prisma\migrations\20260318000000_add_hosting_log_snapshot_fields\migration.sql:7:ALTER TABLE 
+"hosting_balance_logs" ADD COLUMN "snapshot_package_name" TEXT;
+> server\prisma\migrations\20260318000000_add_hosting_log_snapshot_fields\migration.sql:8:ALTER TABLE 
+"hosting_balance_logs" ADD COLUMN "snapshot_plan_name" TEXT;
+  server\prisma\migrations\20260318000000_add_hosting_log_snapshot_fields\migration.sql:9:
+  server\prisma\migrations\20260318000000_add_hosting_log_snapshot_fields\migration.sql:10:-- Backfill snapshot data 
+from existing instances
+> server\prisma\migrations\20260318000000_add_hosting_log_snapshot_fields\migration.sql:11:UPDATE 
+"hosting_balance_logs" AS hbl
+  server\prisma\migrations\20260318000000_add_hosting_log_snapshot_fields\migration.sql:12:SET
+  server\prisma\migrations\20260318000000_add_hosting_log_snapshot_fields\migration.sql:13:  "snapshot_buyer_name" = 
+u.username,
+
+
+warning: in the working copy of 'server/scripts/test-hosting-balance-guards.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/db/billing-operations.ts', LF will be replaced by CRLF the next time Git touches it
+
+codex
+已确认数据库字段与迁移没有禁止 `hostingBalance < 0` 的 CHECK；现有解冻任务对该字段使用原子 `increment`，因此负余额会被后续收入自然冲抵。实现会保留前三层条件扣减，仅对最终缺口执行一次无 `gte` 下限的 `hostingBalance decrement`，并把该欠款计入总扣款及同一条 deduction 审计日志。
+apply patch
+patch: completed
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-hosting-balance-guards.ts
+C:\Users\Administrator\Desktop\payinces\server\src\db\billing-operations.ts
+diff --git a/server/scripts/test-hosting-balance-guards.ts b/server/scripts/test-hosting-balance-guards.ts
+index 08cdc1640bc3052948462478dd8bb3103eb0d924..76ce3adefbf84d09e99dce2f6aeecc3d28a9a3dd
+--- a/server/scripts/test-hosting-balance-guards.ts
++++ b/server/scripts/test-hosting-balance-guards.ts
+@@ -115,4 +115,13 @@
+   'hosted instance destruction must conditionally decrement panel balance before writing balance logs'
+ )
+ 
++assert.ok(
++  billingSource.includes('const shortfall = remainingToDeduct') &&
++    billingSource.includes('data: { hostingBalance: { decrement: shortfall } }') &&
++    billingSource.includes('shortfallDebt = shortfall') &&
++    billingSource.includes('const totalDeducted = fromFrozen + fromAvailable + fromBalance + shortfallDebt') &&
++    billingSource.includes('回扣缺口记欠款 ¥${shortfallDebt.toFixed(2)}'),
++  'hosted instance deduction shortfall must become host-owner hosting-balance debt instead of a platform loss'
++)
++
+ console.log('hosting balance guard checks passed')
+diff --git a/server/src/db/billing-operations.ts b/server/src/db/billing-operations.ts
+index 4deac9ce2d60e908bd47b7251958da5b462f91e7..fb5ce3c1d8e2c4014caa269589c67919b52b537d
+--- a/server/src/db/billing-operations.ts
++++ b/server/src/db/billing-operations.ts
+@@ -1448,6 +1448,7 @@
+     let fromFrozen = 0
+     let fromAvailable = 0
+     let fromBalance = 0
++    let shortfallDebt = 0
+ 
+     // 第一步：优先从冻结收入中扣除
+     // 冻结记录尚未计入 hostingBalance，通过删除/减少原记录来确保这部分钱不会被计入，
+@@ -1542,7 +1543,19 @@
+       }
+     }
+ 
+-    const totalDeducted = fromFrozen + fromAvailable + fromBalance
++    // 前三层余额仍不足时，将缺口记入节点主人的托管余额欠款。
++    // 此处刻意不设置非负条件，仅该回扣缺口场景允许 hostingBalance 变为负数。
++    if (remainingToDeduct > 0) {
++      const shortfall = remainingToDeduct
++      await client.user.update({
++        where: { id: hostOwnerId },
++        data: { hostingBalance: { decrement: shortfall } }
++      })
++      shortfallDebt = shortfall
++      remainingToDeduct = 0
++    }
++
++    const totalDeducted = fromFrozen + fromAvailable + fromBalance + shortfallDebt
+ 
+     // 始终创建一条独立的销毁扣除审计记录（无论扣款来自冻结、托管余额还是面板余额）
+     // 原来的条件 (fromFrozen>0 || fromAvailable>0) 遗漏了纯从面板余额扣款的情况，
+@@ -1552,6 +1565,7 @@
+       if (fromFrozen > 0) parts.push(`冻结抵扣 ¥${fromFrozen.toFixed(2)}`)
+       if (fromAvailable > 0) parts.push(`托管余额扣除 ¥${fromAvailable.toFixed(2)}`)
+       if (fromBalance > 0) parts.push(`面板余额补扣 ¥${fromBalance.toFixed(2)}`)
++      if (shortfallDebt > 0) parts.push(`回扣缺口记欠款 ¥${shortfallDebt.toFixed(2)}`)
+ 
+       await createHostingLogWithSnapshot(client, {
+         userId: hostOwnerId,
+
+diff --git a/server/scripts/test-hosting-balance-guards.ts b/server/scripts/test-hosting-balance-guards.ts
+index 08cdc1640bc3052948462478dd8bb3103eb0d924..76ce3adefbf84d09e99dce2f6aeecc3d28a9a3dd
+--- a/server/scripts/test-hosting-balance-guards.ts
++++ b/server/scripts/test-hosting-balance-guards.ts
+@@ -115,4 +115,13 @@
+   'hosted instance destruction must conditionally decrement panel balance before writing balance logs'
+ )
+ 
++assert.ok(
++  billingSource.includes('const shortfall = remainingToDeduct') &&
++    billingSource.includes('data: { hostingBalance: { decrement: shortfall } }') &&
++    billingSource.includes('shortfallDebt = shortfall') &&
++    billingSource.includes('const totalDeducted = fromFrozen + fromAvailable + fromBalance + shortfallDebt') &&
++    billingSource.includes('回扣缺口记欠款 ¥${shortfallDebt.toFixed(2)}'),
++  'hosted instance deduction shortfall must become host-owner hosting-balance debt instead of a platform loss'
++)
++
+ console.log('hosting balance guard checks passed')
+diff --git a/server/src/db/billing-operations.ts b/server/src/db/billing-operations.ts
+index 4deac9ce2d60e908bd47b7251958da5b462f91e7..fb5ce3c1d8e2c4014caa269589c67919b52b537d
+--- a/server/src/db/billing-operations.ts
++++ b/server/src/db/billing-operations.ts
+@@ -1448,6 +1448,7 @@
+     let fromFrozen = 0
+     let fromAvailable = 0
+     let fromBalance = 0
++    let shortfallDebt = 0
+ 
+     // 第一步：优先从冻结收入中扣除
+     // 冻结记录尚未计入 hostingBalance，通过删除/减少原记录来确保这部分钱不会被计入，
+@@ -1542,7 +1543,19 @@
+       }
+     }
+ 
+-    const totalDeducted = fromFrozen + fromAvailable + fromBalance
++    // 前三层余额仍不足时，将缺口记入节点主人的托管余额欠款。
++    // 此处刻意不设置非负条件，仅该回扣缺口场景允许 hostingBalance 变为负数。
++    if (remainingToDeduct > 0) {
++      const shortfall = remainingToDeduct
++      await client.user.update({
++        where: { id: hostOwnerId },
++        data: { hostingBalance: { decrement: shortfall } }
++      })
++      shortfallDebt = shortfall
++      remainingToDeduct = 0
++    }
++
++    const totalDeducted = fromFrozen + fromAvailable + fromBalance + shortfallDebt
+ 
+     // 始终创建一条独立的销毁扣除审计记录（无论扣款来自冻结、托管余额还是面板余额）
+     // 原来的条件 (fromFrozen>0 || fromAvailable>0) 遗漏了纯从面板余额扣款的情况，
+@@ -1552,6 +1565,7 @@
+       if (fromFrozen > 0) parts.push(`冻结抵扣 ¥${fromFrozen.toFixed(2)}`)
+       if (fromAvailable > 0) parts.push(`托管余额扣除 ¥${fromAvailable.toFixed(2)}`)
+       if (fromBalance > 0) parts.push(`面板余额补扣 ¥${fromBalance.toFixed(2)}`)
++      if (shortfallDebt > 0) parts.push(`回扣缺口记欠款 ¥${shortfallDebt.toFixed(2)}`)
+ 
+       await createHostingLogWithSnapshot(client, {
+         userId: hostOwnerId,
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'git diff --check -- server/src/db/billing-operations.ts server/scripts/test-hosting-balance-guards.ts; git diff -- server/src/db/billing-operations.ts server/scripts/test-hosting-balance-guards.ts' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 700ms:
+diff --git a/server/scripts/test-hosting-balance-guards.ts b/server/scripts/test-hosting-balance-guards.ts
+index 31823ab..76ce3ad 100644
+--- a/server/scripts/test-hosting-balance-guards.ts
++++ b/server/scripts/test-hosting-balance-guards.ts
+@@ -23,13 +23,23 @@ assert.ok(
+   usersRouteSource.includes('const MAX_HOSTING_BALANCE_ADJUST_REASON_LENGTH = 500') &&
+     usersRouteSource.includes("const normalizedReason = typeof reason === 'string' ? reason.trim() : ''") &&
+     usersRouteSource.includes('normalizedReason.length > MAX_HOSTING_BALANCE_ADJUST_REASON_LENGTH') &&
+-    usersRouteSource.includes('remark: `[Admin] ${normalizedReason}`') &&
++    usersRouteSource.includes("const ADMIN_HOSTING_BALANCE_ADJUST_REMARK_PREFIX = '[Admin]'") &&
++    usersRouteSource.includes('remark: `${ADMIN_HOSTING_BALANCE_ADJUST_REMARK_PREFIX} ${normalizedReason}`') &&
+     usersRouteSource.includes('remark: `[Admin Frozen] ${normalizedReason}`') &&
+     usersRouteSource.includes('remark: `[Admin Frozen Deduct] ${normalizedReason} (¥${absAmount.toFixed(2)})`') &&
+     usersRouteSource.includes('reason=${normalizedReason}'),
+   'admin hosting-balance adjustment must trim and bound audit reasons before persistence/logging'
+ )
+ 
++assert.ok(
++  hostingRouteSource.includes("const ADMIN_HOSTING_BALANCE_ADJUST_REMARK_PREFIX = '[Admin]'") &&
++    hostingRouteSource.includes('const OPERATING_HOSTING_INCOME_WHERE = {') &&
++    hostingRouteSource.includes('{ remark: null }') &&
++    hostingRouteSource.includes('{ NOT: { remark: { startsWith: ADMIN_HOSTING_BALANCE_ADJUST_REMARK_PREFIX } } }') &&
++    (hostingRouteSource.match(/\.\.\.OPERATING_HOSTING_INCOME_WHERE/g) || []).length === 4,
++  'admin available hosting-balance grants must be excluded from total income, VIP income, and operating-income history'
++)
++
+ const hostingBalanceLogsStart = usersRouteSource.indexOf("}>('/:id/hosting-balance/logs'")
+ assert.notEqual(hostingBalanceLogsStart, -1, 'hosting-balance logs route not found')
+ const hostingBalanceLogsEnd = usersRouteSource.indexOf('// 调整用户托管余额（管理员）', hostingBalanceLogsStart)
+@@ -105,4 +115,13 @@ assert.ok(
+   'hosted instance destruction must conditionally decrement panel balance before writing balance logs'
+ )
+ 
++assert.ok(
++  billingSource.includes('const shortfall = remainingToDeduct') &&
++    billingSource.includes('data: { hostingBalance: { decrement: shortfall } }') &&
++    billingSource.includes('shortfallDebt = shortfall') &&
++    billingSource.includes('const totalDeducted = fromFrozen + fromAvailable + fromBalance + shortfallDebt') &&
++    billingSource.includes('回扣缺口记欠款 ¥${shortfallDebt.toFixed(2)}'),
++  'hosted instance deduction shortfall must become host-owner hosting-balance debt instead of a platform loss'
++)
++
+ console.log('hosting balance guard checks passed')
+diff --git a/server/src/db/billing-operations.ts b/server/src/db/billing-operations.ts
+index 5cb1e59..fb5ce3c 100644
+--- a/server/src/db/billing-operations.ts
++++ b/server/src/db/billing-operations.ts
+@@ -540,6 +540,10 @@ export async function performRenewal(
+   instance: Instance,
+   months: number
+ ): Promise<{ newExpiresAt: Date; amount: number; balanceLogId: number; discountAmount?: number; hostingIncomeResult?: { hostOwnerId: number; hostName: string } | null }> {
++  if (instance.status === 'deleted') {
++    throw new Error('实例已删除，无法续费')
++  }
++
+   // 验证付费实例
+   if (!instance.packagePlanId) {
+     throw new Error('免费实例无需续费')
+@@ -565,7 +569,7 @@ export async function performRenewal(
+   let discountAmount = 0
+   let finalAmount = originalAmount
+ 
+-  if (affBinding) {
++  if (affBinding?.affCode.enabled) {
+     discountRate = Number(affBinding.affCode.discountRate)
+     discountAmount = calculateDiscountAmount(originalAmount, discountRate)
+     finalAmount = calculateDiscountedPrice(originalAmount, discountRate)
+@@ -619,6 +623,7 @@ export async function performRenewal(
+     const instanceUpdateResult = await tx.instance.updateMany({
+       where: {
+         id: instance.id,
++        status: { not: 'deleted' },
+         version: instance.version  // 确保版本号未变
+       },
+       data: {
+@@ -674,7 +679,7 @@ export async function performRenewal(
+     })
+ 
+     // 如果有 AFF 绑定，给优惠码创建者返利
+-    if (affBinding) {
++    if (affBinding?.affCode.enabled) {
+       await processAffCommission(
+         affBinding.affCode.id,
+         instance.id,
+@@ -735,6 +740,10 @@ export async function performPlanChange(
+   bandwidthLimit: string | null
+   capacity: PlanUpgradeCapacityCheck
+ }> {
++  if (instance.status === 'deleted') {
++    throw new Error('实例已删除，无法改配')
++  }
++
+   const pkg = await prisma.package.findUnique({
+     where: { id: newPlan.packageId },
+     select: { instanceType: true }
+@@ -901,6 +910,7 @@ export async function performPlanChange(
+     const instanceUpdateResult = await tx.instance.updateMany({
+       where: {
+         id: instance.id,
++        status: { not: 'deleted' },
+         version: instance.version  // 确保版本号未变
+       },
+       data: {
+@@ -1438,6 +1448,7 @@ export async function deductHostingBalance(
+     let fromFrozen = 0
+     let fromAvailable = 0
+     let fromBalance = 0
++    let shortfallDebt = 0
+ 
+     // 第一步：优先从冻结收入中扣除
+     // 冻结记录尚未计入 hostingBalance，通过删除/减少原记录来确保这部分钱不会被计入，
+@@ -1532,7 +1543,19 @@ export async function deductHostingBalance(
+       }
+     }
+ 
+-    const totalDeducted = fromFrozen + fromAvailable + fromBalance
++    // 前三层余额仍不足时，将缺口记入节点主人的托管余额欠款。
++    // 此处刻意不设置非负条件，仅该回扣缺口场景允许 hostingBalance 变为负数。
++    if (remainingToDeduct > 0) {
++      const shortfall = remainingToDeduct
++      await client.user.update({
++        where: { id: hostOwnerId },
++        data: { hostingBalance: { decrement: shortfall } }
++      })
++      shortfallDebt = shortfall
++      remainingToDeduct = 0
++    }
++
++    const totalDeducted = fromFrozen + fromAvailable + fromBalance + shortfallDebt
+ 
+     // 始终创建一条独立的销毁扣除审计记录（无论扣款来自冻结、托管余额还是面板余额）
+     // 原来的条件 (fromFrozen>0 || fromAvailable>0) 遗漏了纯从面板余额扣款的情况，
+@@ -1542,6 +1565,7 @@ export async function deductHostingBalance(
+       if (fromFrozen > 0) parts.push(`冻结抵扣 ¥${fromFrozen.toFixed(2)}`)
+       if (fromAvailable > 0) parts.push(`托管余额扣除 ¥${fromAvailable.toFixed(2)}`)
+       if (fromBalance > 0) parts.push(`面板余额补扣 ¥${fromBalance.toFixed(2)}`)
++      if (shortfallDebt > 0) parts.push(`回扣缺口记欠款 ¥${shortfallDebt.toFixed(2)}`)
+ 
+       await createHostingLogWithSnapshot(client, {
+         userId: hostOwnerId,
+warning: in the working copy of 'server/scripts/test-hosting-balance-guards.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/db/billing-operations.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/scripts/test-hosting-balance-guards.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/db/billing-operations.ts', LF will be replaced by CRLF the next time Git touches it
+
+diff --git a/server/scripts/test-hosting-balance-guards.ts b/server/scripts/test-hosting-balance-guards.ts
+index 08cdc1640bc3052948462478dd8bb3103eb0d924..76ce3adefbf84d09e99dce2f6aeecc3d28a9a3dd
+--- a/server/scripts/test-hosting-balance-guards.ts
++++ b/server/scripts/test-hosting-balance-guards.ts
+@@ -115,4 +115,13 @@
+   'hosted instance destruction must conditionally decrement panel balance before writing balance logs'
+ )
+ 
++assert.ok(
++  billingSource.includes('const shortfall = remainingToDeduct') &&
++    billingSource.includes('data: { hostingBalance: { decrement: shortfall } }') &&
++    billingSource.includes('shortfallDebt = shortfall') &&
++    billingSource.includes('const totalDeducted = fromFrozen + fromAvailable + fromBalance + shortfallDebt') &&
++    billingSource.includes('回扣缺口记欠款 ¥${shortfallDebt.toFixed(2)}'),
++  'hosted instance deduction shortfall must become host-owner hosting-balance debt instead of a platform loss'
++)
++
+ console.log('hosting balance guard checks passed')
+diff --git a/server/src/db/billing-operations.ts b/server/src/db/billing-operations.ts
+index 4deac9ce2d60e908bd47b7251958da5b462f91e7..fb5ce3c1d8e2c4014caa269589c67919b52b537d
+--- a/server/src/db/billing-operations.ts
++++ b/server/src/db/billing-operations.ts
+@@ -1448,6 +1448,7 @@
+     let fromFrozen = 0
+     let fromAvailable = 0
+     let fromBalance = 0
++    let shortfallDebt = 0
+ 
+     // 第一步：优先从冻结收入中扣除
+     // 冻结记录尚未计入 hostingBalance，通过删除/减少原记录来确保这部分钱不会被计入，
+@@ -1542,7 +1543,19 @@
+       }
+     }
+ 
+-    const totalDeducted = fromFrozen + fromAvailable + fromBalance
++    // 前三层余额仍不足时，将缺口记入节点主人的托管余额欠款。
++    // 此处刻意不设置非负条件，仅该回扣缺口场景允许 hostingBalance 变为负数。
++    if (remainingToDeduct > 0) {
++      const shortfall = remainingToDeduct
++      await client.user.update({
++        where: { id: hostOwnerId },
++        data: { hostingBalance: { decrement: shortfall } }
++      })
++      shortfallDebt = shortfall
++      remainingToDeduct = 0
++    }
++
++    const totalDeducted = fromFrozen + fromAvailable + fromBalance + shortfallDebt
+ 
+     // 始终创建一条独立的销毁扣除审计记录（无论扣款来自冻结、托管余额还是面板余额）
+     // 原来的条件 (fromFrozen>0 || fromAvailable>0) 遗漏了纯从面板余额扣款的情况，
+@@ -1552,6 +1565,7 @@
+       if (fromFrozen > 0) parts.push(`冻结抵扣 ¥${fromFrozen.toFixed(2)}`)
+       if (fromAvailable > 0) parts.push(`托管余额扣除 ¥${fromAvailable.toFixed(2)}`)
+       if (fromBalance > 0) parts.push(`面板余额补扣 ¥${fromBalance.toFixed(2)}`)
++      if (shortfallDebt > 0) parts.push(`回扣缺口记欠款 ¥${shortfallDebt.toFixed(2)}`)
+ 
+       await createHostingLogWithSnapshot(client, {
+         userId: hostOwnerId,
+
+codex
+补丁已落下且 `git diff --check` 通过；现有目标文件中的其他并行改动均原样保留。现在按验收依次运行 server type-check、托管余额守卫和财务对账守卫。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'pnpm --filter server type-check' in C:\Users\Administrator\Desktop\payinces
+diff --git a/server/scripts/test-hosting-balance-guards.ts b/server/scripts/test-hosting-balance-guards.ts
+index 08cdc1640bc3052948462478dd8bb3103eb0d924..76ce3adefbf84d09e99dce2f6aeecc3d28a9a3dd
+--- a/server/scripts/test-hosting-balance-guards.ts
++++ b/server/scripts/test-hosting-balance-guards.ts
+@@ -115,4 +115,13 @@
+   'hosted instance destruction must conditionally decrement panel balance before writing balance logs'
+ )
+ 
++assert.ok(
++  billingSource.includes('const shortfall = remainingToDeduct') &&
++    billingSource.includes('data: { hostingBalance: { decrement: shortfall } }') &&
++    billingSource.includes('shortfallDebt = shortfall') &&
++    billingSource.includes('const totalDeducted = fromFrozen + fromAvailable + fromBalance + shortfallDebt') &&
++    billingSource.includes('回扣缺口记欠款 ¥${shortfallDebt.toFixed(2)}'),
++  'hosted instance deduction shortfall must become host-owner hosting-balance debt instead of a platform loss'
++)
++
+ console.log('hosting balance guard checks passed')
+diff --git a/server/src/db/billing-operations.ts b/server/src/db/billing-operations.ts
+index 4deac9ce2d60e908bd47b7251958da5b462f91e7..fb5ce3c1d8e2c4014caa269589c67919b52b537d
+--- a/server/src/db/billing-operations.ts
++++ b/server/src/db/billing-operations.ts
+@@ -1448,6 +1448,7 @@
+     let fromFrozen = 0
+     let fromAvailable = 0
+     let fromBalance = 0
++    let shortfallDebt = 0
+ 
+     // 第一步：优先从冻结收入中扣除
+     // 冻结记录尚未计入 hostingBalance，通过删除/减少原记录来确保这部分钱不会被计入，
+@@ -1542,7 +1543,19 @@
+       }
+     }
+ 
+-    const totalDeducted = fromFrozen + fromAvailable + fromBalance
++    // 前三层余额仍不足时，将缺口记入节点主人的托管余额欠款。
++    // 此处刻意不设置非负条件，仅该回扣缺口场景允许 hostingBalance 变为负数。
++    if (remainingToDeduct > 0) {
++      const shortfall = remainingToDeduct
++      await client.user.update({
++        where: { id: hostOwnerId },
++        data: { hostingBalance: { decrement: shortfall } }
++      })
++      shortfallDebt = shortfall
++      remainingToDeduct = 0
++    }
++
++    const totalDeducted = fromFrozen + fromAvailable + fromBalance + shortfallDebt
+ 
+     // 始终创建一条独立的销毁扣除审计记录（无论扣款来自冻结、托管余额还是面板余额）
+     // 原来的条件 (fromFrozen>0 || fromAvailable>0) 遗漏了纯从面板余额扣款的情况，
+@@ -1552,6 +1565,7 @@
+       if (fromFrozen > 0) parts.push(`冻结抵扣 ¥${fromFrozen.toFixed(2)}`)
+       if (fromAvailable > 0) parts.push(`托管余额扣除 ¥${fromAvailable.toFixed(2)}`)
+       if (fromBalance > 0) parts.push(`面板余额补扣 ¥${fromBalance.toFixed(2)}`)
++      if (shortfallDebt > 0) parts.push(`回扣缺口记欠款 ¥${shortfallDebt.toFixed(2)}`)
+ 
+       await createHostingLogWithSnapshot(client, {
+         userId: hostOwnerId,
+
+diff --git a/server/scripts/test-hosting-balance-guards.ts b/server/scripts/test-hosting-balance-guards.ts
+index 08cdc1640bc3052948462478dd8bb3103eb0d924..76ce3adefbf84d09e99dce2f6aeecc3d28a9a3dd
+--- a/server/scripts/test-hosting-balance-guards.ts
++++ b/server/scripts/test-hosting-balance-guards.ts
+@@ -115,4 +115,13 @@
+   'hosted instance destruction must conditionally decrement panel balance before writing balance logs'
+ )
+ 
++assert.ok(
++  billingSource.includes('const shortfall = remainingToDeduct') &&
++    billingSource.includes('data: { hostingBalance: { decrement: shortfall } }') &&
++    billingSource.includes('shortfallDebt = shortfall') &&
++    billingSource.includes('const totalDeducted = fromFrozen + fromAvailable + fromBalance + shortfallDebt') &&
++    billingSource.includes('回扣缺口记欠款 ¥${shortfallDebt.toFixed(2)}'),
++  'hosted instance deduction shortfall must become host-owner hosting-balance debt instead of a platform loss'
++)
++
+ console.log('hosting balance guard checks passed')
+diff --git a/server/src/db/billing-operations.ts b/server/src/db/billing-operations.ts
+index 4deac9ce2d60e908bd47b7251958da5b462f91e7..fb5ce3c1d8e2c4014caa269589c67919b52b537d
+--- a/server/src/db/billing-operations.ts
++++ b/server/src/db/billing-operations.ts
+@@ -1448,6 +1448,7 @@
+     let fromFrozen = 0
+     let fromAvailable = 0
+     let fromBalance = 0
++    let shortfallDebt = 0
+ 
+     // 第一步：优先从冻结收入中扣除
+     // 冻结记录尚未计入 hostingBalance，通过删除/减少原记录来确保这部分钱不会被计入，
+@@ -1542,7 +1543,19 @@
+       }
+     }
+ 
+-    const totalDeducted = fromFrozen + fromAvailable + fromBalance
++    // 前三层余额仍不足时，将缺口记入节点主人的托管余额欠款。
++    // 此处刻意不设置非负条件，仅该回扣缺口场景允许 hostingBalance 变为负数。
++    if (remainingToDeduct > 0) {
++      const shortfall = remainingToDeduct
++      await client.user.update({
++        where: { id: hostOwnerId },
++        data: { hostingBalance: { decrement: shortfall } }
++      })
++      shortfallDebt = shortfall
++      remainingToDeduct = 0
++    }
++
++    const totalDeducted = fromFrozen + fromAvailable + fromBalance + shortfallDebt
+ 
+     // 始终创建一条独立的销毁扣除审计记录（无论扣款来自冻结、托管余额还是面板余额）
+     // 原来的条件 (fromFrozen>0 || fromAvailable>0) 遗漏了纯从面板余额扣款的情况，
+@@ -1552,6 +1565,7 @@
+       if (fromFrozen > 0) parts.push(`冻结抵扣 ¥${fromFrozen.toFixed(2)}`)
+       if (fromAvailable > 0) parts.push(`托管余额扣除 ¥${fromAvailable.toFixed(2)}`)
+       if (fromBalance > 0) parts.push(`面板余额补扣 ¥${fromBalance.toFixed(2)}`)
++      if (shortfallDebt > 0) parts.push(`回扣缺口记欠款 ¥${shortfallDebt.toFixed(2)}`)
+ 
+       await createHostingLogWithSnapshot(client, {
+         userId: hostOwnerId,
+
+diff --git a/server/scripts/test-hosting-balance-guards.ts b/server/scripts/test-hosting-balance-guards.ts
+index 08cdc1640bc3052948462478dd8bb3103eb0d924..76ce3adefbf84d09e99dce2f6aeecc3d28a9a3dd
+--- a/server/scripts/test-hosting-balance-guards.ts
++++ b/server/scripts/test-hosting-balance-guards.ts
+@@ -115,4 +115,13 @@
+   'hosted instance destruction must conditionally decrement panel balance before writing balance logs'
+ )
+ 
++assert.ok(
++  billingSource.includes('const shortfall = remainingToDeduct') &&
++    billingSource.includes('data: { hostingBalance: { decrement: shortfall } }') &&
++    billingSource.includes('shortfallDebt = shortfall') &&
++    billingSource.includes('const totalDeducted = fromFrozen + fromAvailable + fromBalance + shortfallDebt') &&
++    billingSource.includes('回扣缺口记欠款 ¥${shortfallDebt.toFixed(2)}'),
++  'hosted instance deduction shortfall must become host-owner hosting-balance debt instead of a platform loss'
++)
++
+ console.log('hosting balance guard checks passed')
+diff --git a/server/src/db/billing-operations.ts b/server/src/db/billing-operations.ts
+index 4deac9ce2d60e908bd47b7251958da5b462f91e7..fb5ce3c1d8e2c4014caa269589c67919b52b537d
+--- a/server/src/db/billing-operations.ts
++++ b/server/src/db/billing-operations.ts
+@@ -1448,6 +1448,7 @@
+     let fromFrozen = 0
+     let fromAvailable = 0
+     let fromBalance = 0
++    let shortfallDebt = 0
+ 
+     // 第一步：优先从冻结收入中扣除
+     // 冻结记录尚未计入 hostingBalance，通过删除/减少原记录来确保这部分钱不会被计入，
+@@ -1542,7 +1543,19 @@
+       }
+     }
+ 
+-    const totalDeducted = fromFrozen + fromAvailable + fromBalance
++    // 前三层余额仍不足时，将缺口记入节点主人的托管余额欠款。
++    // 此处刻意不设置非负条件，仅该回扣缺口场景允许 hostingBalance 变为负数。
++    if (remainingToDeduct > 0) {
++      const shortfall = remainingToDeduct
++      await client.user.update({
++        where: { id: hostOwnerId },
++        data: { hostingBalance: { decrement: shortfall } }
++      })
++      shortfallDebt = shortfall
++      remainingToDeduct = 0
++    }
++
++    const totalDeducted = fromFrozen + fromAvailable + fromBalance + shortfallDebt
+ 
+     // 始终创建一条独立的销毁扣除审计记录（无论扣款来自冻结、托管余额还是面板余额）
+     // 原来的条件 (fromFrozen>0 || fromAvailable>0) 遗漏了纯从面板余额扣款的情况，
+@@ -1552,6 +1565,7 @@
+       if (fromFrozen > 0) parts.push(`冻结抵扣 ¥${fromFrozen.toFixed(2)}`)
+       if (fromAvailable > 0) parts.push(`托管余额扣除 ¥${fromAvailable.toFixed(2)}`)
+       if (fromBalance > 0) parts.push(`面板余额补扣 ¥${fromBalance.toFixed(2)}`)
++      if (shortfallDebt > 0) parts.push(`回扣缺口记欠款 ¥${shortfallDebt.toFixed(2)}`)
+ 
+       await createHostingLogWithSnapshot(client, {
+         userId: hostOwnerId,
+
+diff --git a/server/scripts/test-hosting-balance-guards.ts b/server/scripts/test-hosting-balance-guards.ts
+index 08cdc1640bc3052948462478dd8bb3103eb0d924..76ce3adefbf84d09e99dce2f6aeecc3d28a9a3dd
+--- a/server/scripts/test-hosting-balance-guards.ts
++++ b/server/scripts/test-hosting-balance-guards.ts
+@@ -115,4 +115,13 @@
+   'hosted instance destruction must conditionally decrement panel balance before writing balance logs'
+ )
+ 
++assert.ok(
++  billingSource.includes('const shortfall = remainingToDeduct') &&
++    billingSource.includes('data: { hostingBalance: { decrement: shortfall } }') &&
++    billingSource.includes('shortfallDebt = shortfall') &&
++    billingSource.includes('const totalDeducted = fromFrozen + fromAvailable + fromBalance + shortfallDebt') &&
++    billingSource.includes('回扣缺口记欠款 ¥${shortfallDebt.toFixed(2)}'),
++  'hosted instance deduction shortfall must become host-owner hosting-balance debt instead of a platform loss'
++)
++
+ console.log('hosting balance guard checks passed')
+diff --git a/server/src/db/billing-operations.ts b/server/src/db/billing-operations.ts
+index 4deac9ce2d60e908bd47b7251958da5b462f91e7..fb5ce3c1d8e2c4014caa269589c67919b52b537d
+--- a/server/src/db/billing-operations.ts
++++ b/server/src/db/billing-operations.ts
+@@ -1448,6 +1448,7 @@
+     let fromFrozen = 0
+     let fromAvailable = 0
+     let fromBalance = 0
++    let shortfallDebt = 0
+ 
+     // 第一步：优先从冻结收入中扣除
+     // 冻结记录尚未计入 hostingBalance，通过删除/减少原记录来确保这部分钱不会被计入，
+@@ -1542,7 +1543,19 @@
+       }
+     }
+ 
+-    const totalDeducted = fromFrozen + fromAvailable + fromBalance
++    // 前三层余额仍不足时，将缺口记入节点主人的托管余额欠款。
++    // 此处刻意不设置非负条件，仅该回扣缺口场景允许 hostingBalance 变为负数。
++    if (remainingToDeduct > 0) {
++      const shortfall = remainingToDeduct
++      await client.user.update({
++        where: { id: hostOwnerId },
++        data: { hostingBalance: { decrement: shortfall } }
++      })
++      shortfallDebt = shortfall
++      remainingToDeduct = 0
++    }
++
++    const totalDeducted = fromFrozen + fromAvailable + fromBalance + shortfallDebt
+ 
+     // 始终创建一条独立的销毁扣除审计记录（无论扣款来自冻结、托管余额还是面板余额）
+     // 原来的条件 (fromFrozen>0 || fromAvailable>0) 遗漏了纯从面板余额扣款的情况，
+@@ -1552,6 +1565,7 @@
+       if (fromFrozen > 0) parts.push(`冻结抵扣 ¥${fromFrozen.toFixed(2)}`)
+       if (fromAvailable > 0) parts.push(`托管余额扣除 ¥${fromAvailable.toFixed(2)}`)
+       if (fromBalance > 0) parts.push(`面板余额补扣 ¥${fromBalance.toFixed(2)}`)
++      if (shortfallDebt > 0) parts.push(`回扣缺口记欠款 ¥${shortfallDebt.toFixed(2)}`)
+ 
+       await createHostingLogWithSnapshot(client, {
+         userId: hostOwnerId,
+
+ succeeded in 26839ms:
+
+> server@1.3.7 type-check C:\Users\Administrator\Desktop\payinces\server
+> tsc --noEmit
+
+
+diff --git a/server/scripts/test-hosting-balance-guards.ts b/server/scripts/test-hosting-balance-guards.ts
+index 08cdc1640bc3052948462478dd8bb3103eb0d924..76ce3adefbf84d09e99dce2f6aeecc3d28a9a3dd
+--- a/server/scripts/test-hosting-balance-guards.ts
++++ b/server/scripts/test-hosting-balance-guards.ts
+@@ -115,4 +115,13 @@
+   'hosted instance destruction must conditionally decrement panel balance before writing balance logs'
+ )
+ 
++assert.ok(
++  billingSource.includes('const shortfall = remainingToDeduct') &&
++    billingSource.includes('data: { hostingBalance: { decrement: shortfall } }') &&
++    billingSource.includes('shortfallDebt = shortfall') &&
++    billingSource.includes('const totalDeducted = fromFrozen + fromAvailable + fromBalance + shortfallDebt') &&
++    billingSource.includes('回扣缺口记欠款 ¥${shortfallDebt.toFixed(2)}'),
++  'hosted instance deduction shortfall must become host-owner hosting-balance debt instead of a platform loss'
++)
++
+ console.log('hosting balance guard checks passed')
+diff --git a/server/src/db/billing-operations.ts b/server/src/db/billing-operations.ts
+index 4deac9ce2d60e908bd47b7251958da5b462f91e7..fb5ce3c1d8e2c4014caa269589c67919b52b537d
+--- a/server/src/db/billing-operations.ts
++++ b/server/src/db/billing-operations.ts
+@@ -1448,6 +1448,7 @@
+     let fromFrozen = 0
+     let fromAvailable = 0
+     let fromBalance = 0
++    let shortfallDebt = 0
+ 
+     // 第一步：优先从冻结收入中扣除
+     // 冻结记录尚未计入 hostingBalance，通过删除/减少原记录来确保这部分钱不会被计入，
+@@ -1542,7 +1543,19 @@
+       }
+     }
+ 
+-    const totalDeducted = fromFrozen + fromAvailable + fromBalance
++    // 前三层余额仍不足时，将缺口记入节点主人的托管余额欠款。
++    // 此处刻意不设置非负条件，仅该回扣缺口场景允许 hostingBalance 变为负数。
++    if (remainingToDeduct > 0) {
++      const shortfall = remainingToDeduct
++      await client.user.update({
++        where: { id: hostOwnerId },
++        data: { hostingBalance: { decrement: shortfall } }
++      })
++      shortfallDebt = shortfall
++      remainingToDeduct = 0
++    }
++
++    const totalDeducted = fromFrozen + fromAvailable + fromBalance + shortfallDebt
+ 
+     // 始终创建一条独立的销毁扣除审计记录（无论扣款来自冻结、托管余额还是面板余额）
+     // 原来的条件 (fromFrozen>0 || fromAvailable>0) 遗漏了纯从面板余额扣款的情况，
+@@ -1552,6 +1565,7 @@
+       if (fromFrozen > 0) parts.push(`冻结抵扣 ¥${fromFrozen.toFixed(2)}`)
+       if (fromAvailable > 0) parts.push(`托管余额扣除 ¥${fromAvailable.toFixed(2)}`)
+       if (fromBalance > 0) parts.push(`面板余额补扣 ¥${fromBalance.toFixed(2)}`)
++      if (shortfallDebt > 0) parts.push(`回扣缺口记欠款 ¥${shortfallDebt.toFixed(2)}`)
+ 
+       await createHostingLogWithSnapshot(client, {
+         userId: hostOwnerId,
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'pnpm --filter server test:financial-reconciliation-guards' in C:\Users\Administrator\Desktop\payinces
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'pnpm --filter server test:hosting-balance-guards' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 1257ms:
+
+> server@1.3.7 test:financial-reconciliation-guards C:\Users\Administrator\Desktop\payinces\server
+> node --import tsx scripts/test-financial-reconciliation-guards.ts
+
+financial reconciliation guards passed
+
+ succeeded in 1298ms:
+
+> server@1.3.7 test:hosting-balance-guards C:\Users\Administrator\Desktop\payinces\server
+> node --import tsx scripts/test-hosting-balance-guards.ts
+
+hosting balance guard checks passed
+
+diff --git a/server/scripts/test-hosting-balance-guards.ts b/server/scripts/test-hosting-balance-guards.ts
+index 08cdc1640bc3052948462478dd8bb3103eb0d924..76ce3adefbf84d09e99dce2f6aeecc3d28a9a3dd
+--- a/server/scripts/test-hosting-balance-guards.ts
++++ b/server/scripts/test-hosting-balance-guards.ts
+@@ -115,4 +115,13 @@
+   'hosted instance destruction must conditionally decrement panel balance before writing balance logs'
+ )
+ 
++assert.ok(
++  billingSource.includes('const shortfall = remainingToDeduct') &&
++    billingSource.includes('data: { hostingBalance: { decrement: shortfall } }') &&
++    billingSource.includes('shortfallDebt = shortfall') &&
++    billingSource.includes('const totalDeducted = fromFrozen + fromAvailable + fromBalance + shortfallDebt') &&
++    billingSource.includes('回扣缺口记欠款 ¥${shortfallDebt.toFixed(2)}'),
++  'hosted instance deduction shortfall must become host-owner hosting-balance debt instead of a platform loss'
++)
++
+ console.log('hosting balance guard checks passed')
+diff --git a/server/src/db/billing-operations.ts b/server/src/db/billing-operations.ts
+index 4deac9ce2d60e908bd47b7251958da5b462f91e7..fb5ce3c1d8e2c4014caa269589c67919b52b537d
+--- a/server/src/db/billing-operations.ts
++++ b/server/src/db/billing-operations.ts
+@@ -1448,6 +1448,7 @@
+     let fromFrozen = 0
+     let fromAvailable = 0
+     let fromBalance = 0
++    let shortfallDebt = 0
+ 
+     // 第一步：优先从冻结收入中扣除
+     // 冻结记录尚未计入 hostingBalance，通过删除/减少原记录来确保这部分钱不会被计入，
+@@ -1542,7 +1543,19 @@
+       }
+     }
+ 
+-    const totalDeducted = fromFrozen + fromAvailable + fromBalance
++    // 前三层余额仍不足时，将缺口记入节点主人的托管余额欠款。
++    // 此处刻意不设置非负条件，仅该回扣缺口场景允许 hostingBalance 变为负数。
++    if (remainingToDeduct > 0) {
++      const shortfall = remainingToDeduct
++      await client.user.update({
++        where: { id: hostOwnerId },
++        data: { hostingBalance: { decrement: shortfall } }
++      })
++      shortfallDebt = shortfall
++      remainingToDeduct = 0
++    }
++
++    const totalDeducted = fromFrozen + fromAvailable + fromBalance + shortfallDebt
+ 
+     // 始终创建一条独立的销毁扣除审计记录（无论扣款来自冻结、托管余额还是面板余额）
+     // 原来的条件 (fromFrozen>0 || fromAvailable>0) 遗漏了纯从面板余额扣款的情况，
+@@ -1552,6 +1565,7 @@
+       if (fromFrozen > 0) parts.push(`冻结抵扣 ¥${fromFrozen.toFixed(2)}`)
+       if (fromAvailable > 0) parts.push(`托管余额扣除 ¥${fromAvailable.toFixed(2)}`)
+       if (fromBalance > 0) parts.push(`面板余额补扣 ¥${fromBalance.toFixed(2)}`)
++      if (shortfallDebt > 0) parts.push(`回扣缺口记欠款 ¥${shortfallDebt.toFixed(2)}`)
+ 
+       await createHostingLogWithSnapshot(client, {
+         userId: hostOwnerId,
+
+codex
+三项验收已首次通过。复核规格时我再收紧守卫：把断言限定到“缺口处理代码块”，明确要求该路径没有 `gte` 非负门槛，并校验 deduction 日志金额使用完整扣款的负数；这只增强守卫证据，不改业务实现。之后会重跑受影响守卫。
+apply patch
+patch: completed
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-hosting-balance-guards.ts
+diff --git a/server/scripts/test-hosting-balance-guards.ts b/server/scripts/test-hosting-balance-guards.ts
+index 08cdc1640bc3052948462478dd8bb3103eb0d924..522a1299ae97bdd891bca20a1a672d8d44b65c76
+--- a/server/scripts/test-hosting-balance-guards.ts
++++ b/server/scripts/test-hosting-balance-guards.ts
+@@ -115,4 +115,20 @@
+   'hosted instance destruction must conditionally decrement panel balance before writing balance logs'
+ )
+ 
++const shortfallDebtStart = billingSource.indexOf('const shortfall = remainingToDeduct')
++assert.notEqual(shortfallDebtStart, -1, 'hosting-balance shortfall debt block not found')
++const shortfallDebtEnd = billingSource.indexOf('const totalDeducted =', shortfallDebtStart)
++assert.notEqual(shortfallDebtEnd, -1, 'hosting-balance total deduction calculation not found')
++const shortfallDebtBlock = billingSource.slice(shortfallDebtStart, shortfallDebtEnd)
++
++assert.ok(
++  shortfallDebtBlock.includes('data: { hostingBalance: { decrement: shortfall } }') &&
++    shortfallDebtBlock.includes('shortfallDebt = shortfall') &&
++    !shortfallDebtBlock.includes('gte:') &&
++    billingSource.includes('const totalDeducted = fromFrozen + fromAvailable + fromBalance + shortfallDebt') &&
++    billingSource.includes('amount: -totalDeducted') &&
++    billingSource.includes('回扣缺口记欠款 ¥${shortfallDebt.toFixed(2)}'),
++  'hosted instance deduction shortfall must become host-owner hosting-balance debt instead of a platform loss'
++)
++
+ console.log('hosting balance guard checks passed')
+diff --git a/server/src/db/billing-operations.ts b/server/src/db/billing-operations.ts
+index 4deac9ce2d60e908bd47b7251958da5b462f91e7..fb5ce3c1d8e2c4014caa269589c67919b52b537d
+--- a/server/src/db/billing-operations.ts
++++ b/server/src/db/billing-operations.ts
+@@ -1448,6 +1448,7 @@
+     let fromFrozen = 0
+     let fromAvailable = 0
+     let fromBalance = 0
++    let shortfallDebt = 0
+ 
+     // 第一步：优先从冻结收入中扣除
+     // 冻结记录尚未计入 hostingBalance，通过删除/减少原记录来确保这部分钱不会被计入，
+@@ -1542,7 +1543,19 @@
+       }
+     }
+ 
+-    const totalDeducted = fromFrozen + fromAvailable + fromBalance
++    // 前三层余额仍不足时，将缺口记入节点主人的托管余额欠款。
++    // 此处刻意不设置非负条件，仅该回扣缺口场景允许 hostingBalance 变为负数。
++    if (remainingToDeduct > 0) {
++      const shortfall = remainingToDeduct
++      await client.user.update({
++        where: { id: hostOwnerId },
++        data: { hostingBalance: { decrement: shortfall } }
++      })
++      shortfallDebt = shortfall
++      remainingToDeduct = 0
++    }
++
++    const totalDeducted = fromFrozen + fromAvailable + fromBalance + shortfallDebt
+ 
+     // 始终创建一条独立的销毁扣除审计记录（无论扣款来自冻结、托管余额还是面板余额）
+     // 原来的条件 (fromFrozen>0 || fromAvailable>0) 遗漏了纯从面板余额扣款的情况，
+@@ -1552,6 +1565,7 @@
+       if (fromFrozen > 0) parts.push(`冻结抵扣 ¥${fromFrozen.toFixed(2)}`)
+       if (fromAvailable > 0) parts.push(`托管余额扣除 ¥${fromAvailable.toFixed(2)}`)
+       if (fromBalance > 0) parts.push(`面板余额补扣 ¥${fromBalance.toFixed(2)}`)
++      if (shortfallDebt > 0) parts.push(`回扣缺口记欠款 ¥${shortfallDebt.toFixed(2)}`)
+ 
+       await createHostingLogWithSnapshot(client, {
+         userId: hostOwnerId,
+
+diff --git a/server/scripts/test-hosting-balance-guards.ts b/server/scripts/test-hosting-balance-guards.ts
+index 08cdc1640bc3052948462478dd8bb3103eb0d924..522a1299ae97bdd891bca20a1a672d8d44b65c76
+--- a/server/scripts/test-hosting-balance-guards.ts
++++ b/server/scripts/test-hosting-balance-guards.ts
+@@ -115,4 +115,20 @@
+   'hosted instance destruction must conditionally decrement panel balance before writing balance logs'
+ )
+ 
++const shortfallDebtStart = billingSource.indexOf('const shortfall = remainingToDeduct')
++assert.notEqual(shortfallDebtStart, -1, 'hosting-balance shortfall debt block not found')
++const shortfallDebtEnd = billingSource.indexOf('const totalDeducted =', shortfallDebtStart)
++assert.notEqual(shortfallDebtEnd, -1, 'hosting-balance total deduction calculation not found')
++const shortfallDebtBlock = billingSource.slice(shortfallDebtStart, shortfallDebtEnd)
++
++assert.ok(
++  shortfallDebtBlock.includes('data: { hostingBalance: { decrement: shortfall } }') &&
++    shortfallDebtBlock.includes('shortfallDebt = shortfall') &&
++    !shortfallDebtBlock.includes('gte:') &&
++    billingSource.includes('const totalDeducted = fromFrozen + fromAvailable + fromBalance + shortfallDebt') &&
++    billingSource.includes('amount: -totalDeducted') &&
++    billingSource.includes('回扣缺口记欠款 ¥${shortfallDebt.toFixed(2)}'),
++  'hosted instance deduction shortfall must become host-owner hosting-balance debt instead of a platform loss'
++)
++
+ console.log('hosting balance guard checks passed')
+diff --git a/server/src/db/billing-operations.ts b/server/src/db/billing-operations.ts
+index 4deac9ce2d60e908bd47b7251958da5b462f91e7..fb5ce3c1d8e2c4014caa269589c67919b52b537d
+--- a/server/src/db/billing-operations.ts
++++ b/server/src/db/billing-operations.ts
+@@ -1448,6 +1448,7 @@
+     let fromFrozen = 0
+     let fromAvailable = 0
+     let fromBalance = 0
++    let shortfallDebt = 0
+ 
+     // 第一步：优先从冻结收入中扣除
+     // 冻结记录尚未计入 hostingBalance，通过删除/减少原记录来确保这部分钱不会被计入，
+@@ -1542,7 +1543,19 @@
+       }
+     }
+ 
+-    const totalDeducted = fromFrozen + fromAvailable + fromBalance
++    // 前三层余额仍不足时，将缺口记入节点主人的托管余额欠款。
++    // 此处刻意不设置非负条件，仅该回扣缺口场景允许 hostingBalance 变为负数。
++    if (remainingToDeduct > 0) {
++      const shortfall = remainingToDeduct
++      await client.user.update({
++        where: { id: hostOwnerId },
++        data: { hostingBalance: { decrement: shortfall } }
++      })
++      shortfallDebt = shortfall
++      remainingToDeduct = 0
++    }
++
++    const totalDeducted = fromFrozen + fromAvailable + fromBalance + shortfallDebt
+ 
+     // 始终创建一条独立的销毁扣除审计记录（无论扣款来自冻结、托管余额还是面板余额）
+     // 原来的条件 (fromFrozen>0 || fromAvailable>0) 遗漏了纯从面板余额扣款的情况，
+@@ -1552,6 +1565,7 @@
+       if (fromFrozen > 0) parts.push(`冻结抵扣 ¥${fromFrozen.toFixed(2)}`)
+       if (fromAvailable > 0) parts.push(`托管余额扣除 ¥${fromAvailable.toFixed(2)}`)
+       if (fromBalance > 0) parts.push(`面板余额补扣 ¥${fromBalance.toFixed(2)}`)
++      if (shortfallDebt > 0) parts.push(`回扣缺口记欠款 ¥${shortfallDebt.toFixed(2)}`)
+ 
+       await createHostingLogWithSnapshot(client, {
+         userId: hostOwnerId,
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'pnpm --filter server test:hosting-balance-guards' in C:\Users\Administrator\Desktop\payinces
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'pnpm --filter server test:financial-reconciliation-guards' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 1168ms:
+
+> server@1.3.7 test:financial-reconciliation-guards C:\Users\Administrator\Desktop\payinces\server
+> node --import tsx scripts/test-financial-reconciliation-guards.ts
+
+financial reconciliation guards passed
+
+ succeeded in 1216ms:
+
+> server@1.3.7 test:hosting-balance-guards C:\Users\Administrator\Desktop\payinces\server
+> node --import tsx scripts/test-hosting-balance-guards.ts
+
+hosting balance guard checks passed
+
+diff --git a/server/scripts/test-hosting-balance-guards.ts b/server/scripts/test-hosting-balance-guards.ts
+index 08cdc1640bc3052948462478dd8bb3103eb0d924..522a1299ae97bdd891bca20a1a672d8d44b65c76
+--- a/server/scripts/test-hosting-balance-guards.ts
++++ b/server/scripts/test-hosting-balance-guards.ts
+@@ -115,4 +115,20 @@
+   'hosted instance destruction must conditionally decrement panel balance before writing balance logs'
+ )
+ 
++const shortfallDebtStart = billingSource.indexOf('const shortfall = remainingToDeduct')
++assert.notEqual(shortfallDebtStart, -1, 'hosting-balance shortfall debt block not found')
++const shortfallDebtEnd = billingSource.indexOf('const totalDeducted =', shortfallDebtStart)
++assert.notEqual(shortfallDebtEnd, -1, 'hosting-balance total deduction calculation not found')
++const shortfallDebtBlock = billingSource.slice(shortfallDebtStart, shortfallDebtEnd)
++
++assert.ok(
++  shortfallDebtBlock.includes('data: { hostingBalance: { decrement: shortfall } }') &&
++    shortfallDebtBlock.includes('shortfallDebt = shortfall') &&
++    !shortfallDebtBlock.includes('gte:') &&
++    billingSource.includes('const totalDeducted = fromFrozen + fromAvailable + fromBalance + shortfallDebt') &&
++    billingSource.includes('amount: -totalDeducted') &&
++    billingSource.includes('回扣缺口记欠款 ¥${shortfallDebt.toFixed(2)}'),
++  'hosted instance deduction shortfall must become host-owner hosting-balance debt instead of a platform loss'
++)
++
+ console.log('hosting balance guard checks passed')
+diff --git a/server/src/db/billing-operations.ts b/server/src/db/billing-operations.ts
+index 4deac9ce2d60e908bd47b7251958da5b462f91e7..fb5ce3c1d8e2c4014caa269589c67919b52b537d
+--- a/server/src/db/billing-operations.ts
++++ b/server/src/db/billing-operations.ts
+@@ -1448,6 +1448,7 @@
+     let fromFrozen = 0
+     let fromAvailable = 0
+     let fromBalance = 0
++    let shortfallDebt = 0
+ 
+     // 第一步：优先从冻结收入中扣除
+     // 冻结记录尚未计入 hostingBalance，通过删除/减少原记录来确保这部分钱不会被计入，
+@@ -1542,7 +1543,19 @@
+       }
+     }
+ 
+-    const totalDeducted = fromFrozen + fromAvailable + fromBalance
++    // 前三层余额仍不足时，将缺口记入节点主人的托管余额欠款。
++    // 此处刻意不设置非负条件，仅该回扣缺口场景允许 hostingBalance 变为负数。
++    if (remainingToDeduct > 0) {
++      const shortfall = remainingToDeduct
++      await client.user.update({
++        where: { id: hostOwnerId },
++        data: { hostingBalance: { decrement: shortfall } }
++      })
++      shortfallDebt = shortfall
++      remainingToDeduct = 0
++    }
++
++    const totalDeducted = fromFrozen + fromAvailable + fromBalance + shortfallDebt
+ 
+     // 始终创建一条独立的销毁扣除审计记录（无论扣款来自冻结、托管余额还是面板余额）
+     // 原来的条件 (fromFrozen>0 || fromAvailable>0) 遗漏了纯从面板余额扣款的情况，
+@@ -1552,6 +1565,7 @@
+       if (fromFrozen > 0) parts.push(`冻结抵扣 ¥${fromFrozen.toFixed(2)}`)
+       if (fromAvailable > 0) parts.push(`托管余额扣除 ¥${fromAvailable.toFixed(2)}`)
+       if (fromBalance > 0) parts.push(`面板余额补扣 ¥${fromBalance.toFixed(2)}`)
++      if (shortfallDebt > 0) parts.push(`回扣缺口记欠款 ¥${shortfallDebt.toFixed(2)}`)
+ 
+       await createHostingLogWithSnapshot(client, {
+         userId: hostOwnerId,
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "git diff --check -- server/src/db/billing-operations.ts server/scripts/test-hosting-balance-guards.ts; Select-String -Path server/src/db/billing-operations.ts -Pattern 'let shortfallDebt|const shortfall = remainingToDeduct|回扣缺口记欠款'; Select-String -Path server/scripts/test-hosting-balance-guards.ts -Pattern 'shortfallDebtStart|hosted instance deduction shortfall'; git status --short -- server/src/db/billing-operations.ts server/scripts/test-hosting-balance-guards.ts server/src/routes/gift-cards.ts server/src/services/instance-billing.ts" in C:\Users\Administrator\Desktop\payinces
+ succeeded in 590ms:
+
+server\src\db\billing-operations.ts:1451:    let shortfallDebt = 0
+server\src\db\billing-operations.ts:1549:      const shortfall = remainingToDeduct
+server\src\db\billing-operations.ts:1568:      if (shortfallDebt > 0) parts.push(`回扣缺口记欠款 
+¥${shortfallDebt.toFixed(2)}`)
+server\scripts\test-hosting-balance-guards.ts:118:const shortfallDebtStart = billingSource.indexOf('const shortfall = 
+remainingToDeduct')
+server\scripts\test-hosting-balance-guards.ts:119:assert.notEqual(shortfallDebtStart, -1, 'hosting-balance shortfall 
+debt block not found')
+server\scripts\test-hosting-balance-guards.ts:120:const shortfallDebtEnd = billingSource.indexOf('const totalDeducted 
+=', shortfallDebtStart)
+server\scripts\test-hosting-balance-guards.ts:122:const shortfallDebtBlock = billingSource.slice(shortfallDebtStart, 
+shortfallDebtEnd)
+server\scripts\test-hosting-balance-guards.ts:131:  'hosted instance deduction shortfall must become host-owner 
+hosting-balance debt instead of a platform loss'
+ M server/scripts/test-hosting-balance-guards.ts
+ M server/src/db/billing-operations.ts
+ M server/src/routes/gift-cards.ts
+
+
+warning: in the working copy of 'server/scripts/test-hosting-balance-guards.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/db/billing-operations.ts', LF will be replaced by CRLF the next time Git touches it
+
+diff --git a/server/scripts/test-hosting-balance-guards.ts b/server/scripts/test-hosting-balance-guards.ts
+index 08cdc1640bc3052948462478dd8bb3103eb0d924..522a1299ae97bdd891bca20a1a672d8d44b65c76
+--- a/server/scripts/test-hosting-balance-guards.ts
++++ b/server/scripts/test-hosting-balance-guards.ts
+@@ -115,4 +115,20 @@
+   'hosted instance destruction must conditionally decrement panel balance before writing balance logs'
+ )
+ 
++const shortfallDebtStart = billingSource.indexOf('const shortfall = remainingToDeduct')
++assert.notEqual(shortfallDebtStart, -1, 'hosting-balance shortfall debt block not found')
++const shortfallDebtEnd = billingSource.indexOf('const totalDeducted =', shortfallDebtStart)
++assert.notEqual(shortfallDebtEnd, -1, 'hosting-balance total deduction calculation not found')
++const shortfallDebtBlock = billingSource.slice(shortfallDebtStart, shortfallDebtEnd)
++
++assert.ok(
++  shortfallDebtBlock.includes('data: { hostingBalance: { decrement: shortfall } }') &&
++    shortfallDebtBlock.includes('shortfallDebt = shortfall') &&
++    !shortfallDebtBlock.includes('gte:') &&
++    billingSource.includes('const totalDeducted = fromFrozen + fromAvailable + fromBalance + shortfallDebt') &&
++    billingSource.includes('amount: -totalDeducted') &&
++    billingSource.includes('回扣缺口记欠款 ¥${shortfallDebt.toFixed(2)}'),
++  'hosted instance deduction shortfall must become host-owner hosting-balance debt instead of a platform loss'
++)
++
+ console.log('hosting balance guard checks passed')
+diff --git a/server/src/db/billing-operations.ts b/server/src/db/billing-operations.ts
+index 4deac9ce2d60e908bd47b7251958da5b462f91e7..fb5ce3c1d8e2c4014caa269589c67919b52b537d
+--- a/server/src/db/billing-operations.ts
++++ b/server/src/db/billing-operations.ts
+@@ -1448,6 +1448,7 @@
+     let fromFrozen = 0
+     let fromAvailable = 0
+     let fromBalance = 0
++    let shortfallDebt = 0
+ 
+     // 第一步：优先从冻结收入中扣除
+     // 冻结记录尚未计入 hostingBalance，通过删除/减少原记录来确保这部分钱不会被计入，
+@@ -1542,7 +1543,19 @@
+       }
+     }
+ 
+-    const totalDeducted = fromFrozen + fromAvailable + fromBalance
++    // 前三层余额仍不足时，将缺口记入节点主人的托管余额欠款。
++    // 此处刻意不设置非负条件，仅该回扣缺口场景允许 hostingBalance 变为负数。
++    if (remainingToDeduct > 0) {
++      const shortfall = remainingToDeduct
++      await client.user.update({
++        where: { id: hostOwnerId },
++        data: { hostingBalance: { decrement: shortfall } }
++      })
++      shortfallDebt = shortfall
++      remainingToDeduct = 0
++    }
++
++    const totalDeducted = fromFrozen + fromAvailable + fromBalance + shortfallDebt
+ 
+     // 始终创建一条独立的销毁扣除审计记录（无论扣款来自冻结、托管余额还是面板余额）
+     // 原来的条件 (fromFrozen>0 || fromAvailable>0) 遗漏了纯从面板余额扣款的情况，
+@@ -1552,6 +1565,7 @@
+       if (fromFrozen > 0) parts.push(`冻结抵扣 ¥${fromFrozen.toFixed(2)}`)
+       if (fromAvailable > 0) parts.push(`托管余额扣除 ¥${fromAvailable.toFixed(2)}`)
+       if (fromBalance > 0) parts.push(`面板余额补扣 ¥${fromBalance.toFixed(2)}`)
++      if (shortfallDebt > 0) parts.push(`回扣缺口记欠款 ¥${shortfallDebt.toFixed(2)}`)
+ 
+       await createHostingLogWithSnapshot(client, {
+         userId: hostOwnerId,
+
+codex
+已按 FX-014 完成：在 [billing-operations.ts](C:\Users\Administrator\Desktop\payinces\server\src\db\billing-operations.ts:1546) 中，三级回扣后剩余缺口会直接 decrement 节点主人的 `hostingBalance`，仅此欠款路径不设非负限制，并以负数 deduction 日志注明“回扣缺口记欠款”，确保 `totalDeducted` 等于应扣全额；schema/数据库无负余额约束，后续解冻收入使用 `increment`，可自然抵扣欠款。守卫已追加至 [test-hosting-balance-guards.ts](C:\Users\Administrator\Desktop\payinces\server\scripts\test-hosting-balance-guards.ts:118)。`server type-check`、`test:hosting-balance-guards`、`test:financial-reconciliation-guards` 均通过；未修改指定并行文件、未改 schema/package.json、未 commit。
+diff --git a/server/scripts/test-hosting-balance-guards.ts b/server/scripts/test-hosting-balance-guards.ts
+index 08cdc1640bc3052948462478dd8bb3103eb0d924..522a1299ae97bdd891bca20a1a672d8d44b65c76
+--- a/server/scripts/test-hosting-balance-guards.ts
++++ b/server/scripts/test-hosting-balance-guards.ts
+@@ -115,4 +115,20 @@
+   'hosted instance destruction must conditionally decrement panel balance before writing balance logs'
+ )
+ 
++const shortfallDebtStart = billingSource.indexOf('const shortfall = remainingToDeduct')
++assert.notEqual(shortfallDebtStart, -1, 'hosting-balance shortfall debt block not found')
++const shortfallDebtEnd = billingSource.indexOf('const totalDeducted =', shortfallDebtStart)
++assert.notEqual(shortfallDebtEnd, -1, 'hosting-balance total deduction calculation not found')
++const shortfallDebtBlock = billingSource.slice(shortfallDebtStart, shortfallDebtEnd)
++
++assert.ok(
++  shortfallDebtBlock.includes('data: { hostingBalance: { decrement: shortfall } }') &&
++    shortfallDebtBlock.includes('shortfallDebt = shortfall') &&
++    !shortfallDebtBlock.includes('gte:') &&
++    billingSource.includes('const totalDeducted = fromFrozen + fromAvailable + fromBalance + shortfallDebt') &&
++    billingSource.includes('amount: -totalDeducted') &&
++    billingSource.includes('回扣缺口记欠款 ¥${shortfallDebt.toFixed(2)}'),
++  'hosted instance deduction shortfall must become host-owner hosting-balance debt instead of a platform loss'
++)
++
+ console.log('hosting balance guard checks passed')
+diff --git a/server/src/db/billing-operations.ts b/server/src/db/billing-operations.ts
+index 4deac9ce2d60e908bd47b7251958da5b462f91e7..fb5ce3c1d8e2c4014caa269589c67919b52b537d
+--- a/server/src/db/billing-operations.ts
++++ b/server/src/db/billing-operations.ts
+@@ -1448,6 +1448,7 @@
+     let fromFrozen = 0
+     let fromAvailable = 0
+     let fromBalance = 0
++    let shortfallDebt = 0
+ 
+     // 第一步：优先从冻结收入中扣除
+     // 冻结记录尚未计入 hostingBalance，通过删除/减少原记录来确保这部分钱不会被计入，
+@@ -1542,7 +1543,19 @@
+       }
+     }
+ 
+-    const totalDeducted = fromFrozen + fromAvailable + fromBalance
++    // 前三层余额仍不足时，将缺口记入节点主人的托管余额欠款。
++    // 此处刻意不设置非负条件，仅该回扣缺口场景允许 hostingBalance 变为负数。
++    if (remainingToDeduct > 0) {
++      const shortfall = remainingToDeduct
++      await client.user.update({
++        where: { id: hostOwnerId },
++        data: { hostingBalance: { decrement: shortfall } }
++      })
++      shortfallDebt = shortfall
++      remainingToDeduct = 0
++    }
++
++    const totalDeducted = fromFrozen + fromAvailable + fromBalance + shortfallDebt
+ 
+     // 始终创建一条独立的销毁扣除审计记录（无论扣款来自冻结、托管余额还是面板余额）
+     // 原来的条件 (fromFrozen>0 || fromAvailable>0) 遗漏了纯从面板余额扣款的情况，
+@@ -1552,6 +1565,7 @@
+       if (fromFrozen > 0) parts.push(`冻结抵扣 ¥${fromFrozen.toFixed(2)}`)
+       if (fromAvailable > 0) parts.push(`托管余额扣除 ¥${fromAvailable.toFixed(2)}`)
+       if (fromBalance > 0) parts.push(`面板余额补扣 ¥${fromBalance.toFixed(2)}`)
++      if (shortfallDebt > 0) parts.push(`回扣缺口记欠款 ¥${shortfallDebt.toFixed(2)}`)
+ 
+       await createHostingLogWithSnapshot(client, {
+         userId: hostOwnerId,
+
+tokens used
+59,797

@@ -1,0 +1,3761 @@
+OpenAI Codex v0.144.0-alpha.4
+--------
+workdir: C:\Users\Administrator\Desktop\payinces
+model: gpt-5.6-sol
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: high
+reasoning summaries: none
+session id: 019f534e-512d-7882-84c9-1b23a77b547b
+--------
+user
+你是 PayIncus 实现工程师。先读 AGENTS.md(实例/数据安全高危,先读代码+守卫;不 commit/push/发版、不大重构;不改 schema/package)。严格按规格只改 restoreTaskWorker.ts + 守卫:删临时副本前先确认原实例仍存在(Incus 实际存在性),原实例已删则保留临时+标记人工介入,绝不删唯一副本。不要碰 caddy-client(并行)。改完跑守卫报告,不 commit。
+---
+# FX-048 规格：恢复流程删原实例→重命名前抛错即删唯一临时副本致数据全灭(P1-数据安全 / D-058 / M05-02)
+
+## 根因
+`server/src/workers/restoreTaskWorker.ts:332,412`:恢复流程"删原实例 → 重命名临时副本 → 启动";若在**删原实例之后、重命名之前**抛错,catch 分支**无条件删除临时实例** —— 而此刻临时实例是**唯一副本** → 实例数据彻底丢失且无残留可人工恢复。
+
+## 修法(只改 server/src/workers/restoreTaskWorker.ts + 守卫;不改 schema/package;不碰 caddy-client(并行))
+1. 先只读:恢复流程各步骤(删原→重命名临时→启动)、catch 清理临时实例的逻辑、如何判断"原实例是否仍存在"(查 Incus/DB)、是否有"人工介入/失败标记"机制。
+2. **清理临时实例前先确认原实例仍存在**:
+   - catch 分支删除临时实例**之前**,先检查原实例是否仍存在(Incus 层实际存在性,不能只看 DB 状态):
+     - 原实例**仍在** → 说明还没走到"删原"步骤,删临时副本是安全的(回滚重试),可保留现有清理。
+     - 原实例**已删**(临时副本是唯一数据) → **绝不删临时实例**;改为**保留临时实例 + 标记人工介入**(任务置需人工处理/告警),让 owner 能手工把临时副本恢复成正式实例。
+3. 不改恢复流程的正常成功路径。要幂等/可重入安全(重复恢复不误删)。
+
+## 加守卫
+`test:instance-recreate-consistency`/`test:backup-task-race-guards` 追加:删原后失败不删唯一临时副本、原实例已删则保留临时+标记人工介入。不改 package.json。
+
+## 不许动
+不碰 caddy-client(并行)。不改 schema/package。不 commit。
+
+## 验收
+type-check 通过;`test:instance-recreate-consistency`、`test:backup-task-race-guards` 通过。交付一段话:如何判定原实例存在性、保留临时+人工介入怎么标记、守卫结果。
+
+codex
+我会严格限定在 `restoreTaskWorker.ts` 和现有两组守卫内：先读恢复流程、Incus 实际存在性判断和现有人工介入标记，再做最小补丁；不碰 schema、package、caddy-client，也不做 commit/push/发版。
+  → 读取 AGENTS.md、恢复 worker 与两组守卫，确认现有存在性检查和人工介入机制
+  • 仅修改 restoreTaskWorker.ts 与对应守卫，覆盖唯一副本保护
+  • 运行两个指定守卫和 server type-check，审查变更范围
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Content -Raw AGENTS.md; rg -n "restoreTaskWorker|instance-recreate-consistency|backup-task-race-guards" server/package.json server/src scripts -g "*.ts" -g "package.json"' in C:\Users\Administrator\Desktop\payinces
+2026-07-11T22:31:18.893712Z ERROR codex_core::tools::router: error=Exit code: 1
+Wall time: 0.7 seconds
+Output:
+# PayIncus / Incudal â€” é¡¹ç›®ç»Ÿä¸€è§„çŸ©ï¼ˆAGENTS.mdï¼‰
+
+> æœ¬æ–‡ä»¶æ˜¯æœ¬ä»“åº“**æ‰€æœ‰ AI agentï¼ˆClaude Codeã€codex ç­‰ï¼‰çš„ç»Ÿä¸€å·¥ä½œè§„èŒƒ**ã€‚
+> `CLAUDE.md` é€šè¿‡ `@AGENTS.md` å¼•ç”¨æœ¬æ–‡ä»¶ â€”â€” Claude Code ä¸Ž codex è¯»åˆ°çš„æ˜¯**åŒä¸€å¥—è§„çŸ©**ï¼Œæ”¹è¿™ä¸€ä¸ªæ–‡ä»¶å³å¯ã€‚
+> æƒå¨è¿ç»´/å‘ç‰ˆäº‹å®žä»¥ä»“åº“æ ¹çš„ `OPERATIONS_HANDOFF.md`ï¼ˆæ“ä½œæ‰‹å†Œï¼‰ä¸Ž `HANDOFF.md`ï¼ˆç‰ˆæœ¬è¯æ®å°è´¦ï¼‰ä¸ºå‡†ã€‚
+
+---
+
+## 0. æ²Ÿé€šè¯­è¨€
+- ä¸Ž owner é»˜è®¤ç”¨**ä¸­æ–‡**æ²Ÿé€šã€‚
+
+## 1. è¿™æ˜¯ä»€ä¹ˆé¡¹ç›®
+**PayIncus**ï¼ˆå†…éƒ¨ä»£å· `incudal`ï¼‰â€”â€”å•†ç”¨ Incusï¼ˆLXC/KVMï¼‰NAT VPS å”®å–ä¸Žäº¤ä»˜å¹³å°ï¼Œ**çº¿ä¸Šè¿è¥ä¸­**ã€‚å½“å‰ç”Ÿäº§ç‰ˆæœ¬ **v1.3.7**ã€‚pnpm monorepoï¼š
+
+| ç›®å½• | æŠ€æœ¯æ ˆ / ä½œç”¨ |
+|------|----------------|
+| `client/` | Vue 3 + Vite SPAã€‚åŒç«¯æž„å»ºï¼ˆ`VITE_APP_ENTRY`ï¼‰â†’ `dist/user`ï¼ˆpay.payincus.comï¼‰+ `dist/admin`ï¼ˆadmin.payincus.comï¼‰ã€‚ä¸¤ç«¯ç‹¬ç«‹æºã€**ä¸å…±äº« cookie åŸŸ**ã€‚ |
+| `server/` | Fastify 5 + Prisma 7 + PostgreSQLï¼Œ~300 TS æ–‡ä»¶ã€~70 è·¯ç”±ã€~15 è°ƒåº¦/workerã€‚æ—  Redisï¼ˆç”¨ PG advisory lockï¼‰ã€‚ä¸‰å¥—é‰´æƒé¢ï¼šWeb çš„ JWT+refresh cookieã€Public API çš„ `pat_`/`poa_` tokenã€host agent çš„ HMACã€‚ |
+| `agent/` | Go å®¿ä¸» agentï¼Œåªè¯»ç›‘æŽ§ï¼ˆå¿ƒè·³/èµ„æº/å®žä¾‹æ€/æµé‡ï¼‰ï¼ŒHMAC ç­¾åï¼Œè‡ªå‡çº§ã€‚ |
+| å…¶å®ƒ | `docs-site/`ï¼ˆVitePressï¼‰ã€`deploy/`ï¼ˆsystemd+Nginxï¼‰ã€`scripts/`ï¼ˆå®‰è£…/æ ¡éªŒ/OTAï¼‰ã€`plugin-templates/`ã€`theme-templates/`ã€‚ |
+
+éƒ¨ç½²ï¼šä¸‰å±‚æ‹†åˆ†ï¼ˆuser / admin / ç§æœ‰åŽç«¯ `127.0.0.1:3001`ï¼‰ï¼Œè£…æœºæ ¹ `/opt/incudal`ï¼ŒåŽŸå­ OTAï¼ˆ`releases/<ver-ts>` + `current` è½¯é“¾ï¼‰+ è‡ªåŠ¨å›žæ»šã€‚
+
+---
+
+## 2. ðŸ”´ ç¡¬è§„çŸ©ï¼ˆä¸å¯åå•†ï¼Œè¿åå³äº‹æ•…ï¼‰
+
+1. **ä¸ç¢°ç”Ÿäº§**ï¼šæœªç» owner æ˜Žç¡®è¦æ±‚ï¼Œ**ç»ä¸** OTAã€å‘å¸ƒã€pushã€æ‰“ tagã€æ”¹ç”Ÿäº§çŽ¯å¢ƒã€‚
+2. **ä¸åšç ´åæ€§ git**ï¼šæœªç» owner æ˜Žç¡®è¦æ±‚ï¼Œ**ç»ä¸** `git reset`ã€`git checkout --`ã€å¼ºåˆ¶åˆ é™¤ã€æ¸…ç†æœªè·Ÿè¸ªæ–‡ä»¶ã€`git commit`/`git push`ã€‚
+3. **é«˜å±è·¯å¾„å…ˆè¯»åŽå†™**ï¼šæ”¹åŠ¨ä»¥ä¸‹ä»»ä¸€é¢†åŸŸï¼Œ**å¿…é¡»å…ˆè¯»ç›¸å…³ä»£ç  + å¯¹åº”å®ˆå«æµ‹è¯•**å†åŠ¨æ‰‹ï¼š
+   > é‰´æƒ Â· æ”¯ä»˜ Â· æƒé™ Â· é£ŽæŽ§ Â· èµ„æºäº¤ä»˜ Â· å…‘æ¢æµç¨‹ Â· å®žä¾‹åˆ›å»º Â· OTA
+4. **æ”¹åŠ¨æœ€å°åŒ–**ï¼šä¿® bug / å‘ç‰ˆæœŸé—´**ä¸åšå¤§èŒƒå›´é‡æž„**ï¼Œåªæ”¹å¿…è¦çš„ã€‚
+5. **ç»ä¸æ³„å¯†**ï¼šä»»ä½• commitã€handoffã€æ€»ç»“ã€æˆªå›¾ä¸­éƒ½**ä¸å¾—**å‡ºçŽ°å‡­è¯ / token / cookie / å¯†é’¥ã€‚
+6. **æœ¬åœ°è¿‡ â‰  ç”Ÿäº§éªŒè¯**ï¼šæœ¬åœ°é€šè¿‡ã€GitHub Actionsã€Release èµ„äº§ã€OTAã€çº¿ä¸Šå®žè¯æ˜¯**åˆ†å¼€çš„è¯æ®**ï¼Œä¸å¯æ··ä¸ºä¸€è°ˆã€‚
+7. **æ¯æ¬¡æ”¹åŠ¨å¿…é¡»è¿‡å¯¹åº”å®ˆå«**ï¼ˆè§ Â§4ï¼‰ï¼Œå¦åˆ™è§†ä¸º**æœªå®Œæˆ**ã€‚
+8. `RUN_DB_CHECKS=0 bash scripts/apply-online-update.sh <ver>` ä¼š**è·³è¿‡ DB/æ”¯ä»˜å°±ç»ªæ ¡éªŒ**ï¼Œä»…åœ¨ owner æ˜Žç¡®æ‰¹å‡†æ—¶ä½¿ç”¨ã€‚
+
+---
+
+## 3. æœ¬åœ°æ€Žä¹ˆè·‘
+
+- **çŽ¯å¢ƒ**ï¼šNode â‰¥ 20ã€pnpm 9.14.2ã€æœ¬åœ° PostgreSQL 16ã€‚
+- **è£…ä¾èµ–**ï¼š`pnpm install`
+- **ä¸€æŠŠèµ·å…¨éƒ¨ï¼ˆserver + user + adminï¼‰**ï¼š`pnpm dev`
+- **åˆ†å¼€èµ·**ï¼š
+  - åŽç«¯ï¼š`NODE_ENV=development JWT_SECRET=dev-secret-12345678 HOST=127.0.0.1 PORT=3001 pnpm --filter server exec tsx watch src/app.ts`
+  - ç”¨æˆ·å‰ç«¯ï¼š`pnpm dev:user`
+  - ç®¡ç†å‰ç«¯ï¼š`pnpm dev:admin`
+- **ç«¯å£**ï¼šåŽç«¯ API **3001** Â· ç”¨æˆ·å‰ç«¯ **3000** Â· ç®¡ç†å‰ç«¯ **3002**ï¼ˆå‰ç«¯ dev ç» proxy æ‰“åˆ° 3001ï¼‰ã€‚
+
+---
+
+## 4. ðŸ›¡ï¸ å®ˆå«æµ‹è¯•çºªå¾‹ï¼ˆæœ¬ä»“åº“çš„å‘½é—¨ï¼‰
+
+`server/package.json` é‡Œæœ‰ **200+ ä¸ªç‹¬ç«‹ `test-*-guards.ts`**ã€‚å®ƒä»¬æŠŠå…³é”®ä¸šåŠ¡/å‰ç«¯ç»“æž„â€œé’‰æ­»â€ï¼Œ`pnpm test` ä¼šè·‘å…¨å¥—ï¼ˆclient+server type-check + å…¨éƒ¨å®ˆå«ï¼‰ã€‚**ä»»ä½•æ”¹åŠ¨å¿…é¡»è®©ç›¸å…³å®ˆå«é€šè¿‡ã€‚**
+
+- **å…¨é‡**ï¼ˆæ…¢ï¼Œå‘ç‰ˆå‰è·‘ï¼‰ï¼š`pnpm test`
+- **å•ä¸ª**ï¼š`pnpm --filter server test:<guard-name>`
+- **å‰ç«¯æœ€å¸¸ç”¨ä¸‰ä¸ª**ï¼š
+  - `test:frontend-route-guards` â€”â€” è·¯ç”± / **è¡¨æ ¼å¸ƒå±€** / `@click` è·¯å¾„æ–­è¨€
+  - `test:frontend-dist-boundary-guards` â€”â€” åŒç«¯ dist è¾¹ç•Œ
+  - `test:frontend-i18n-keys` â€”â€” i18n key å®Œæ•´æ€§
+- **Go agent**ï¼š`pnpm test:agent`
+
+### âš ï¸ è¡¨æ ¼å¸ƒå±€å®ˆå«ï¼ˆæœ€å®¹æ˜“è¸©é›·ï¼‰
+ä¸€æ‰¹è¡¨è¢«å®ˆå«**é”å®š**ä¸ºâ€œ**ç§»åŠ¨å¡ + PC å®šå®½è¡¨ï¼ˆ`table-fixed` / `overflow-hidden`ï¼‰ï¼Œç»ä¸æ¨ªå‘æ»šåŠ¨**â€ï¼Œå¹¶**åå‘ç¦æ­¢** `overflow-x-auto` / `min-w-[...]` / åŽ»æŽ‰ `table-fixed`ã€‚
+- æƒ³ä¿®â€œå®½è¡¨æŒ¤åŽ‹â€æ—¶ï¼š**å…ˆåˆ¤æ–­è¯¥è¡¨æ˜¯å¦åœ¨å®ˆå«æ¸…å•é‡Œ**ã€‚é”å®šè¡¨**åªèƒ½åœ¨ `table-fixed` å†…å¹³è¡¡åˆ—å®½**ï¼ˆåˆ—å®½ç™¾åˆ†æ¯”åˆè®¡ = 100%ï¼‰+ å…è®¸å•å…ƒæ ¼æ¢è¡Œ + é ç§»åŠ¨å¡åº”å¯¹çª„å±ï¼›**ä¸èƒ½**æ”¹æˆæ¨ªå‘æ»šåŠ¨ã€‚
+- å—é”å®šçš„è¡¨ï¼ˆç”¨æˆ·ç«¯ï¼‰ï¼š`MyPackagesView`ã€`MyHostsView`ã€`TransfersView`ã€`OrdersView`ã€`InvitesView`ã€`FlashSalesView`ã€`HostingWalletView`ã€`InstancesView`ã€`LogsView`ã€`EntertainmentView`ï¼›ï¼ˆç®¡ç†ç«¯ï¼‰`admin/BillingView`ã€`admin/ImagesView`ã€`admin/HelpManageView`ã€`admin/MailView`ã€`admin/PluginCenterView`ï¼›ï¼ˆç»„ä»¶ï¼‰`HostPublicIpv4Tab`ã€`InstanceLogsTab`ã€`ConfigEditModal`ã€‚
+- æ”¹ä»»ä¸€å‰ç«¯æ–‡ä»¶åŽ**å¿…è·‘** `test:frontend-route-guards`ã€‚
+
+---
+
+## 5. æž„å»º / æ ¡éªŒå‘½ä»¤
+
+| ç›®çš„ | å‘½ä»¤ |
+|------|------|
+| æž„å»ºï¼ˆå« dist è¾¹ç•Œå®ˆå«ï¼‰| `pnpm build` |
+| åªæž„å»ºå‰ç«¯ / åŽç«¯ | `pnpm build:client` / `pnpm build:server` |
+| Lintï¼ˆæ£€æŸ¥ / è‡ªåŠ¨ä¿®ï¼‰| `pnpm lint` / `pnpm lint:fix` |
+| ç±»åž‹æ£€æŸ¥ | `pnpm --filter client type-check` Â· `pnpm --filter server type-check` |
+| å…¨å¥—å®ˆå« | `pnpm test` |
+| æ–‡æ¡£ç«™å¼€å‘ / æž„å»º | `pnpm docs:dev` / `pnpm docs:build` |
+
+---
+
+## 6. UI æ”¹åŠ¨çº¦æŸï¼ˆå•è‰²é‡åšè¿›è¡Œä¸­ï¼‰
+
+- **æ–¹å‘**ï¼šè‹¹æžœå¼**çº¯é»‘ç™½å•è‰²**ï¼ˆæµ…è‰²=ç™½åº•é»‘å­—ï¼Œæ·±è‰²=é»‘åº•ç™½å­—ï¼‰ï¼ŒåŽ»äºŒæ¬¡å…ƒ/å‰ç¥¥ç‰©/ç«‹ç»˜ã€‚çŠ¶æ€è‰²**åªä¿ç•™ç»¿/ç¥ç€/çº¢**ä¸‰ç§ï¼ˆè¿è¡Œ/å¾…å¤„ç†/å¤±è´¥ï¼‰ã€‚
+- **çº¢çº¿**ï¼šåªæ”¹**æ ·å¼ / å¸ƒå±€ / æ–‡æ¡ˆå±‚çº§**ï¼Œ**ä¸ç¢°**åŽç«¯æŽ¥å£ã€æƒé™ã€æ”¯ä»˜/è®¢å•/å®žä¾‹åˆ›å»º/OTA ç­‰ä¸šåŠ¡é€»è¾‘ä¸Žè·¯ç”±è¡Œä¸ºâ€”â€”**åŠŸèƒ½ 100% ä¸å˜**ã€‚
+- **é…è‰²èµ° token å±‚**ï¼ˆ`client/tailwind.config.js`ï¼‰ï¼šä¸€å †å½©è‰² ramp å·²æ˜ å°„åˆ°ä¸­æ€§ç°ï¼›`rose â†’ çœŸçº¢`ï¼ˆå±é™©/äºæŸè¯­ä¹‰ï¼‰**ä¿ç•™ä¸å¯ç°åŒ–**ï¼›æ¸¸æˆåŒ–æ¨¡å—ï¼ˆæˆå°±/ç­¾åˆ°/æŠ½å¥–/ç¨€æœ‰åº¦ï¼‰å½©è‰²**åˆ»æ„ä¿ç•™**ã€‚
+- `kawaii-cloud.css` **æ¸è¿›æ”¹é€ ã€ä¸é‡å†™**ï¼›å•é¡µåŽ»è‰²ç”¨é¡µé¢ `<style scoped>`ã€‚
+- åŠ¨æ•ˆå¯ç”¨ **GSAP**ï¼ˆå·²è£… gsap-skillsï¼Œè§ `.claude/skills/`ï¼‰ï¼›å°Šé‡ `prefers-reduced-motion`ã€‚
+
+---
+
+## 7. åä½œæ¨¡åž‹ï¼ˆClaude Code â‡„ codexï¼‰
+
+- **Claude Code = æŠ€æœ¯è´Ÿè´£äºº / é›†æˆæ–¹**ï¼šå®šæ ¹å› ã€åˆ‡ä»»åŠ¡ã€å†™è§„æ ¼ã€å®ˆä¸å˜é‡ã€å®¡ diffã€è·‘å®ˆå«ã€çœŸæœºéªŒè¯ã€ç®¡ gitï¼ˆ**ä»…åœ¨ owner åŒæ„æ—¶** commit / pushï¼‰ã€‚
+- **codex = å®žçŽ°å·¥äºº**ï¼šæŒ‰ Claude ç»™çš„è§„æ ¼å®žçŽ°æ”¹åŠ¨ï¼Œå°¤å…¶**ä½Ž/ä¸­å±ã€è‡ªåŒ…å«ã€å¯å¹¶è¡Œ**çš„å—ã€‚
+- **é£Žé™©åˆ†æ¡£**ï¼šé«˜å±è·¯å¾„ç”± Claude å®šæ ¹å›  + æ”¶ç´§è§„æ ¼ï¼›ä½Ž/ä¸­å± codex å¯ç«¯åˆ°ç«¯ä¿®ã€‚**ä»»ä½•ä¸€æ–¹æ”¹å®Œéƒ½è¦è·‘ç›¸å…³å®ˆå«ï¼ŒClaude ç»Ÿä¸€å®¡æŸ¥åŽæ‰è¿›å…¥ä¸‹ä¸€æ­¥ã€‚**
+- **é¿å…å†²çª**ï¼šåŒä¸€æ‰¹æ–‡ä»¶ä¸€æ¬¡åªè®©ä¸€ä¸ª agent æ”¹ã€‚
+
+---
+
+## 8. ä¸€ä¸ªæ”¹åŠ¨çš„ã€Œå®Œæˆã€å®šä¹‰
+
+1. ç›¸å…³ **type-check** é€šè¿‡ï¼›
+2. ç›¸å…³ **å®ˆå«æµ‹è¯•** é€šè¿‡ï¼›
+3. è‹¥åŠ¨å‰ç«¯ â†’ **åŒç«¯ build** é€šè¿‡ï¼›
+4. **çœŸæœºè·‘è¿‡**å—å½±å“æµç¨‹ï¼ˆä¸æ˜¯åªçœ‹æµ‹è¯•ï¼‰ï¼›
+5. **æŠ¥å‘Š**ï¼šæ”¹äº†å“ªäº›æ–‡ä»¶ / ä¸ºä»€ä¹ˆ / é£Žé™© / æ€Žä¹ˆéªŒè¯çš„ã€‚
+
+ä»¥ä¸Šä»»ä¸€æœªæ»¡è¶³ = **æœªå®Œæˆ**ã€‚
+
+rg : The term 'rg' is not recognized as the name of a cmdlet, function, script file, or operable program. Check the 
+spelling of the name, or if a path was included, verify that the path is correct and try again.
+At line:2 char:29
++ Get-Content -Raw AGENTS.md; rg -n "restoreTaskWorker|instance-recreat ...
++                             ~~
+    + CategoryInfo          : ObjectNotFound: (rg:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+
+ exited 1 in 666ms:
+# PayIncus / Incudal â€” é¡¹ç›®ç»Ÿä¸€è§„çŸ©ï¼ˆAGENTS.mdï¼‰
+
+> æœ¬æ–‡ä»¶æ˜¯æœ¬ä»“åº“**æ‰€æœ‰ AI agentï¼ˆClaude Codeã€codex ç­‰ï¼‰çš„ç»Ÿä¸€å·¥ä½œè§„èŒƒ**ã€‚
+> `CLAUDE.md` é€šè¿‡ `@AGENTS.md` å¼•ç”¨æœ¬æ–‡ä»¶ â€”â€” Claude Code ä¸Ž codex è¯»åˆ°çš„æ˜¯**åŒä¸€å¥—è§„çŸ©**ï¼Œæ”¹è¿™ä¸€ä¸ªæ–‡ä»¶å³å¯ã€‚
+> æƒå¨è¿ç»´/å‘ç‰ˆäº‹å®žä»¥ä»“åº“æ ¹çš„ `OPERATIONS_HANDOFF.md`ï¼ˆæ“ä½œæ‰‹å†Œï¼‰ä¸Ž `HANDOFF.md`ï¼ˆç‰ˆæœ¬è¯æ®å°è´¦ï¼‰ä¸ºå‡†ã€‚
+
+---
+
+## 0. æ²Ÿé€šè¯­è¨€
+- ä¸Ž owner é»˜è®¤ç”¨**ä¸­æ–‡**æ²Ÿé€šã€‚
+
+## 1. è¿™æ˜¯ä»€ä¹ˆé¡¹ç›®
+**PayIncus**ï¼ˆå†…éƒ¨ä»£å· `incudal`ï¼‰â€”â€”å•†ç”¨ Incusï¼ˆLXC/KVMï¼‰NAT VPS å”®å–ä¸Žäº¤ä»˜å¹³å°ï¼Œ**çº¿ä¸Šè¿è¥ä¸­**ã€‚å½“å‰ç”Ÿäº§ç‰ˆæœ¬ **v1.3.7**ã€‚pnpm monorepoï¼š
+
+| ç›®å½• | æŠ€æœ¯æ ˆ / ä½œç”¨ |
+|------|----------------|
+| `client/` | Vue 3 + Vite SPAã€‚åŒç«¯æž„å»ºï¼ˆ`VITE_APP_ENTRY`ï¼‰â†’ `dist/user`ï¼ˆpay.payincus.comï¼‰+ `dist/admin`ï¼ˆadmin.payincus.comï¼‰ã€‚ä¸¤ç«¯ç‹¬ç«‹æºã€**ä¸å…±äº« cookie åŸŸ**ã€‚ |
+| `server/` | Fastify 5 + Prisma 7 + PostgreSQLï¼Œ~300 TS æ–‡ä»¶ã€~70 è·¯ç”±ã€~15 è°ƒåº¦/workerã€‚æ—  Redisï¼ˆç”¨ PG advisory lockï¼‰ã€‚ä¸‰å¥—é‰´æƒé¢ï¼šWeb çš„ JWT+refresh cookieã€Public API çš„ `pat_`/`poa_` tokenã€host agent çš„ HMACã€‚ |
+| `agent/` | Go å®¿ä¸» agentï¼Œåªè¯»ç›‘æŽ§ï¼ˆå¿ƒè·³/èµ„æº/å®žä¾‹æ€/æµé‡ï¼‰ï¼ŒHMAC ç­¾åï¼Œè‡ªå‡çº§ã€‚ |
+| å…¶å®ƒ | `docs-site/`ï¼ˆVitePressï¼‰ã€`deploy/`ï¼ˆsystemd+Nginxï¼‰ã€`scripts/`ï¼ˆå®‰è£…/æ ¡éªŒ/OTAï¼‰ã€`plugin-templates/`ã€`theme-templates/`ã€‚ |
+
+éƒ¨ç½²ï¼šä¸‰å±‚æ‹†åˆ†ï¼ˆuser / admin / ç§æœ‰åŽç«¯ `127.0.0.1:3001`ï¼‰ï¼Œè£…æœºæ ¹ `/opt/incudal`ï¼ŒåŽŸå­ OTAï¼ˆ`releases/<ver-ts>` + `current` è½¯é“¾ï¼‰+ è‡ªåŠ¨å›žæ»šã€‚
+
+---
+
+## 2. ðŸ”´ ç¡¬è§„çŸ©ï¼ˆä¸å¯åå•†ï¼Œè¿åå³äº‹æ•…ï¼‰
+
+1. **ä¸ç¢°ç”Ÿäº§**ï¼šæœªç» owner æ˜Žç¡®è¦æ±‚ï¼Œ**ç»ä¸** OTAã€å‘å¸ƒã€pushã€æ‰“ tagã€æ”¹ç”Ÿäº§çŽ¯å¢ƒã€‚
+2. **ä¸åšç ´åæ€§ git**ï¼šæœªç» owner æ˜Žç¡®è¦æ±‚ï¼Œ**ç»ä¸** `git reset`ã€`git checkout --`ã€å¼ºåˆ¶åˆ é™¤ã€æ¸…ç†æœªè·Ÿè¸ªæ–‡ä»¶ã€`git commit`/`git push`ã€‚
+3. **é«˜å±è·¯å¾„å…ˆè¯»åŽå†™**ï¼šæ”¹åŠ¨ä»¥ä¸‹ä»»ä¸€é¢†åŸŸï¼Œ**å¿…é¡»å…ˆè¯»ç›¸å…³ä»£ç  + å¯¹åº”å®ˆå«æµ‹è¯•**å†åŠ¨æ‰‹ï¼š
+   > é‰´æƒ Â· æ”¯ä»˜ Â· æƒé™ Â· é£ŽæŽ§ Â· èµ„æºäº¤ä»˜ Â· å…‘æ¢æµç¨‹ Â· å®žä¾‹åˆ›å»º Â· OTA
+4. **æ”¹åŠ¨æœ€å°åŒ–**ï¼šä¿® bug / å‘ç‰ˆæœŸé—´**ä¸åšå¤§èŒƒå›´é‡æž„**ï¼Œåªæ”¹å¿…è¦çš„ã€‚
+5. **ç»ä¸æ³„å¯†**ï¼šä»»ä½• commitã€handoffã€æ€»ç»“ã€æˆªå›¾ä¸­éƒ½**ä¸å¾—**å‡ºçŽ°å‡­è¯ / token / cookie / å¯†é’¥ã€‚
+6. **æœ¬åœ°è¿‡ â‰  ç”Ÿäº§éªŒè¯**ï¼šæœ¬åœ°é€šè¿‡ã€GitHub Actionsã€Release èµ„äº§ã€OTAã€çº¿ä¸Šå®žè¯æ˜¯**åˆ†å¼€çš„è¯æ®**ï¼Œä¸å¯æ··ä¸ºä¸€è°ˆã€‚
+7. **æ¯æ¬¡æ”¹åŠ¨å¿…é¡»è¿‡å¯¹åº”å®ˆå«**ï¼ˆè§ Â§4ï¼‰ï¼Œå¦åˆ™è§†ä¸º**æœªå®Œæˆ**ã€‚
+8. `RUN_DB_CHECKS=0 bash scripts/apply-online-update.sh <ver>` ä¼š**è·³è¿‡ DB/æ”¯ä»˜å°±ç»ªæ ¡éªŒ**ï¼Œä»…åœ¨ owner æ˜Žç¡®æ‰¹å‡†æ—¶ä½¿ç”¨ã€‚
+
+---
+
+## 3. æœ¬åœ°æ€Žä¹ˆè·‘
+
+- **çŽ¯å¢ƒ**ï¼šNode â‰¥ 20ã€pnpm 9.14.2ã€æœ¬åœ° PostgreSQL 16ã€‚
+- **è£…ä¾èµ–**ï¼š`pnpm install`
+- **ä¸€æŠŠèµ·å…¨éƒ¨ï¼ˆserver + user + adminï¼‰**ï¼š`pnpm dev`
+- **åˆ†å¼€èµ·**ï¼š
+  - åŽç«¯ï¼š`NODE_ENV=development JWT_SECRET=dev-secret-12345678 HOST=127.0.0.1 PORT=3001 pnpm --filter server exec tsx watch src/app.ts`
+  - ç”¨æˆ·å‰ç«¯ï¼š`pnpm dev:user`
+  - ç®¡ç†å‰ç«¯ï¼š`pnpm dev:admin`
+- **ç«¯å£**ï¼šåŽç«¯ API **3001** Â· ç”¨æˆ·å‰ç«¯ **3000** Â· ç®¡ç†å‰ç«¯ **3002**ï¼ˆå‰ç«¯ dev ç» proxy æ‰“åˆ° 3001ï¼‰ã€‚
+
+---
+
+## 4. ðŸ›¡ï¸ å®ˆå«æµ‹è¯•çºªå¾‹ï¼ˆæœ¬ä»“åº“çš„å‘½é—¨ï¼‰
+
+`server/package.json` é‡Œæœ‰ **200+ ä¸ªç‹¬ç«‹ `test-*-guards.ts`**ã€‚å®ƒä»¬æŠŠå…³é”®ä¸šåŠ¡/å‰ç«¯ç»“æž„â€œé’‰æ­»â€ï¼Œ`pnpm test` ä¼šè·‘å…¨å¥—ï¼ˆclient+server type-check + å…¨éƒ¨å®ˆå«ï¼‰ã€‚**ä»»ä½•æ”¹åŠ¨å¿…é¡»è®©ç›¸å…³å®ˆå«é€šè¿‡ã€‚**
+
+- **å…¨é‡**ï¼ˆæ…¢ï¼Œå‘ç‰ˆå‰è·‘ï¼‰ï¼š`pnpm test`
+- **å•ä¸ª**ï¼š`pnpm --filter server test:<guard-name>`
+- **å‰ç«¯æœ€å¸¸ç”¨ä¸‰ä¸ª**ï¼š
+  - `test:frontend-route-guards` â€”â€” è·¯ç”± / **è¡¨æ ¼å¸ƒå±€** / `@click` è·¯å¾„æ–­è¨€
+  - `test:frontend-dist-boundary-guards` â€”â€” åŒç«¯ dist è¾¹ç•Œ
+  - `test:frontend-i18n-keys` â€”â€” i18n key å®Œæ•´æ€§
+- **Go agent**ï¼š`pnpm test:agent`
+
+### âš ï¸ è¡¨æ ¼å¸ƒå±€å®ˆå«ï¼ˆæœ€å®¹æ˜“è¸©é›·ï¼‰
+ä¸€æ‰¹è¡¨è¢«å®ˆå«**é”å®š**ä¸ºâ€œ**ç§»åŠ¨å¡ + PC å®šå®½è¡¨ï¼ˆ`table-fixed` / `overflow-hidden`ï¼‰ï¼Œç»ä¸æ¨ªå‘æ»šåŠ¨**â€ï¼Œå¹¶**åå‘ç¦æ­¢** `overflow-x-auto` / `min-w-[...]` / åŽ»æŽ‰ `table-fixed`ã€‚
+- æƒ³ä¿®â€œå®½è¡¨æŒ¤åŽ‹â€æ—¶ï¼š**å…ˆåˆ¤æ–­è¯¥è¡¨æ˜¯å¦åœ¨å®ˆå«æ¸…å•é‡Œ**ã€‚é”å®šè¡¨**åªèƒ½åœ¨ `table-fixed` å†…å¹³è¡¡åˆ—å®½**ï¼ˆåˆ—å®½ç™¾åˆ†æ¯”åˆè®¡ = 100%ï¼‰+ å…è®¸å•å…ƒæ ¼æ¢è¡Œ + é ç§»åŠ¨å¡åº”å¯¹çª„å±ï¼›**ä¸èƒ½**æ”¹æˆæ¨ªå‘æ»šåŠ¨ã€‚
+- å—é”å®šçš„è¡¨ï¼ˆç”¨æˆ·ç«¯ï¼‰ï¼š`MyPackagesView`ã€`MyHostsView`ã€`TransfersView`ã€`OrdersView`ã€`InvitesView`ã€`FlashSalesView`ã€`HostingWalletView`ã€`InstancesView`ã€`LogsView`ã€`EntertainmentView`ï¼›ï¼ˆç®¡ç†ç«¯ï¼‰`admin/BillingView`ã€`admin/ImagesView`ã€`admin/HelpManageView`ã€`admin/MailView`ã€`admin/PluginCenterView`ï¼›ï¼ˆç»„ä»¶ï¼‰`HostPublicIpv4Tab`ã€`InstanceLogsTab`ã€`ConfigEditModal`ã€‚
+- æ”¹ä»»ä¸€å‰ç«¯æ–‡ä»¶åŽ**å¿…è·‘** `test:frontend-route-guards`ã€‚
+
+---
+
+## 5. æž„å»º / æ ¡éªŒå‘½ä»¤
+
+| ç›®çš„ | å‘½ä»¤ |
+|------|------|
+| æž„å»ºï¼ˆå« dist è¾¹ç•Œå®ˆå«ï¼‰| `pnpm build` |
+| åªæž„å»ºå‰ç«¯ / åŽç«¯ | `pnpm build:client` / `pnpm build:server` |
+| Lintï¼ˆæ£€æŸ¥ / è‡ªåŠ¨ä¿®ï¼‰| `pnpm lint` / `pnpm lint:fix` |
+| ç±»åž‹æ£€æŸ¥ | `pnpm --filter client type-check` Â· `pnpm --filter server type-check` |
+| å…¨å¥—å®ˆå« | `pnpm test` |
+| æ–‡æ¡£ç«™å¼€å‘ / æž„å»º | `pnpm docs:dev` / `pnpm docs:build` |
+
+---
+
+## 6. UI æ”¹åŠ¨çº¦æŸï¼ˆå•è‰²é‡åšè¿›è¡Œä¸­ï¼‰
+
+- **æ–¹å‘**ï¼šè‹¹æžœå¼**çº¯é»‘ç™½å•è‰²**ï¼ˆæµ…è‰²=ç™½åº•é»‘å­—ï¼Œæ·±è‰²=é»‘åº•ç™½å­—ï¼‰ï¼ŒåŽ»äºŒæ¬¡å…ƒ/å‰ç¥¥ç‰©/ç«‹ç»˜ã€‚çŠ¶æ€è‰²**åªä¿ç•™ç»¿/ç¥ç€/çº¢**ä¸‰ç§ï¼ˆè¿è¡Œ/å¾…å¤„ç†/å¤±è´¥ï¼‰ã€‚
+- **çº¢çº¿**ï¼šåªæ”¹**æ ·å¼ / å¸ƒå±€ / æ–‡æ¡ˆå±‚çº§**ï¼Œ**ä¸ç¢°**åŽç«¯æŽ¥å£ã€æƒé™ã€æ”¯ä»˜/è®¢å•/å®žä¾‹åˆ›å»º/OTA ç­‰ä¸šåŠ¡é€»è¾‘ä¸Žè·¯ç”±è¡Œä¸ºâ€”â€”**åŠŸèƒ½ 100% ä¸å˜**ã€‚
+- **é…è‰²èµ° token å±‚**ï¼ˆ`client/tailwind.config.js`ï¼‰ï¼šä¸€å †å½©è‰² ramp å·²æ˜ å°„åˆ°ä¸­æ€§ç°ï¼›`rose â†’ çœŸçº¢`ï¼ˆå±é™©/äºæŸè¯­ä¹‰ï¼‰**ä¿ç•™ä¸å¯ç°åŒ–**ï¼›æ¸¸æˆåŒ–æ¨¡å—ï¼ˆæˆå°±/ç­¾åˆ°/æŠ½å¥–/ç¨€æœ‰åº¦ï¼‰å½©è‰²**åˆ»æ„ä¿ç•™**ã€‚
+- `kawaii-cloud.css` **æ¸è¿›æ”¹é€ ã€ä¸é‡å†™**ï¼›å•é¡µåŽ»è‰²ç”¨é¡µé¢ `<style scoped>`ã€‚
+- åŠ¨æ•ˆå¯ç”¨ **GSAP**ï¼ˆå·²è£… gsap-skillsï¼Œè§ `.claude/skills/`ï¼‰ï¼›å°Šé‡ `prefers-reduced-motion`ã€‚
+
+---
+
+## 7. åä½œæ¨¡åž‹ï¼ˆClaude Code â‡„ codexï¼‰
+
+- **Claude Code = æŠ€æœ¯è´Ÿè´£äºº / é›†æˆæ–¹**ï¼šå®šæ ¹å› ã€åˆ‡ä»»åŠ¡ã€å†™è§„æ ¼ã€å®ˆä¸å˜é‡ã€å®¡ diffã€è·‘å®ˆå«ã€çœŸæœºéªŒè¯ã€ç®¡ gitï¼ˆ**ä»…åœ¨ owner åŒæ„æ—¶** commit / pushï¼‰ã€‚
+- **codex = å®žçŽ°å·¥äºº**ï¼šæŒ‰ Claude ç»™çš„è§„æ ¼å®žçŽ°æ”¹åŠ¨ï¼Œå°¤å…¶**ä½Ž/ä¸­å±ã€è‡ªåŒ…å«ã€å¯å¹¶è¡Œ**çš„å—ã€‚
+- **é£Žé™©åˆ†æ¡£**ï¼šé«˜å±è·¯å¾„ç”± Claude å®šæ ¹å›  + æ”¶ç´§è§„æ ¼ï¼›ä½Ž/ä¸­å± codex å¯ç«¯åˆ°ç«¯ä¿®ã€‚**ä»»ä½•ä¸€æ–¹æ”¹å®Œéƒ½è¦è·‘ç›¸å…³å®ˆå«ï¼ŒClaude ç»Ÿä¸€å®¡æŸ¥åŽæ‰è¿›å…¥ä¸‹ä¸€æ­¥ã€‚**
+- **é¿å…å†²çª**ï¼šåŒä¸€æ‰¹æ–‡ä»¶ä¸€æ¬¡åªè®©ä¸€ä¸ª agent æ”¹ã€‚
+
+---
+
+## 8. ä¸€ä¸ªæ”¹åŠ¨çš„ã€Œå®Œæˆã€å®šä¹‰
+
+1. ç›¸å…³ **type-check** é€šè¿‡ï¼›
+2. ç›¸å…³ **å®ˆå«æµ‹è¯•** é€šè¿‡ï¼›
+3. è‹¥åŠ¨å‰ç«¯ â†’ **åŒç«¯ build** é€šè¿‡ï¼›
+4. **çœŸæœºè·‘è¿‡**å—å½±å“æµç¨‹ï¼ˆä¸æ˜¯åªçœ‹æµ‹è¯•ï¼‰ï¼›
+5. **æŠ¥å‘Š**ï¼šæ”¹äº†å“ªäº›æ–‡ä»¶ / ä¸ºä»€ä¹ˆ / é£Žé™© / æ€Žä¹ˆéªŒè¯çš„ã€‚
+
+ä»¥ä¸Šä»»ä¸€æœªæ»¡è¶³ = **æœªå®Œæˆ**ã€‚
+
+rg : The term 'rg' is not recognized as the name of a cmdlet, function, script file, or operable program. Check the 
+spelling of the name, or if a path was included, verify that the path is correct and try again.
+At line:2 char:29
++ Get-Content -Raw AGENTS.md; rg -n "restoreTaskWorker|instance-recreat ...
++                             ~~
+    + CategoryInfo          : ObjectNotFound: (rg:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+
+codex
+已确认仓库硬规矩；当前环境没有 `rg`，我会改用 PowerShell 只读检索。下一步先完整核对 worker 的异常清理分支及两组守卫，确认已有改动，避免覆盖并行工作。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "git status --short; Get-ChildItem server -Recurse -File -Include *.ts,package.json | Select-String -Pattern 'instance-recreate-consistency|backup-task-race-guards|restoreTaskWorker' | Select-Object Path,LineNumber,Line" in C:\Users\Administrator\Desktop\payinces
+ succeeded in 3799ms:
+ M client/src/components/plugins/PluginFrame.vue
+ M client/src/utils/validation.ts
+ M deploy/incudal-backend.service.example
+ M deploy/incudal-online-rollback@.service.example
+ M deploy/incudal-online-update@.service.example
+ M package.json
+ M scripts/install-panel.sh
+ M scripts/test-install-panel-guards.sh
+ M server/package.json
+ M server/scripts/test-admin-billing-route-id-guards.ts
+ M server/scripts/test-admin-entertainment-route-guards.ts
+ M server/scripts/test-admin-user-delete-resource-guards.ts
+ M server/scripts/test-aff-review-ui-guards.ts
+ M server/scripts/test-agent-report-state-guards.ts
+ M server/scripts/test-balance-adjustment-approval-guards.ts
+ M server/scripts/test-billing-expiry-delete.ts
+ M server/scripts/test-billing-expiry-race-guards.ts
+ M server/scripts/test-billing-query-guards.ts
+ M server/scripts/test-capacity-cost-guards.ts
+ M server/scripts/test-commercial-operations-overview-guards.ts
+ M server/scripts/test-flash-sale-guards.ts
+ M server/scripts/test-gift-card-guards.ts
+ M server/scripts/test-host-resource-atomic-guards.ts
+ M server/scripts/test-hosting-balance-guards.ts
+ M server/scripts/test-instance-billing-route-id-guards.ts
+ M server/scripts/test-instance-create-failure-compensation.ts
+ M server/scripts/test-instance-operation-conflict-guards.ts
+ M server/scripts/test-instance-quota-zero-guards.ts
+ M server/scripts/test-ip-address-route-guards.ts
+ M server/scripts/test-log-sanitizer.ts
+ M server/scripts/test-mail-plan-financial-guards.ts
+ M server/scripts/test-mail-renewal-month-guards.ts
+ M server/scripts/test-order-payment-operations-guards.ts
+ M server/scripts/test-plugin-client-boundary-guards.ts
+ M server/scripts/test-port-mapping-safety.ts
+ M server/scripts/test-proxy-site-route-id-guards.ts
+ M server/scripts/test-recharge-state-transitions.ts
+ M server/scripts/test-resource-pool-apply-consistency.ts
+ M server/scripts/test-resource-risk-guards.ts
+ M server/scripts/test-system-config-value-guards.ts
+ M server/scripts/test-system-update-guards.ts
+ M server/scripts/test-terminal-route-id-guards.ts
+ M server/scripts/test-traffic-collector-status-guard.ts
+ M server/scripts/test-traffic-notification-claim-guards.ts
+ M server/scripts/test-traffic-reset-locks.ts
+ M server/scripts/test-traffic-route-limit-guards.ts
+ M server/scripts/test-trust-proxy-config.ts
+ M server/scripts/test-user-destroy-incus-order.ts
+ M server/scripts/test-vip-benefit-route-guards.ts
+ M server/src/app.ts
+ M server/src/db/aff.ts
+ M server/src/db/balance.ts
+ M server/src/db/billing-operations.ts
+ M server/src/db/gift-cards.ts
+ M server/src/db/instances.ts
+ M server/src/db/ipv6-subnets.ts
+ M server/src/db/lottery.ts
+ M server/src/db/resource-pool.ts
+ M server/src/db/traffic.ts
+ M server/src/db/users.ts
+ M server/src/lib/billing-calc.ts
+ M server/src/lib/caddy-client.ts
+ M server/src/lib/epay.ts
+ M server/src/lib/errors.ts
+ M server/src/lib/heleket.ts
+ M server/src/lib/log-sanitizer.ts
+ M server/src/lib/lottery-notifier.ts
+ M server/src/lib/lsky.ts
+ M server/src/lib/notifier.ts
+ M server/src/lib/outbound-security.ts
+ M server/src/lib/plugin-market-submission-scan.ts
+ M server/src/lib/redirect-validator.ts
+ M server/src/lib/terminal-proxy.ts
+ M server/src/lib/theme-market-submission-scan.ts
+ M server/src/lib/trust-proxy-config.ts
+ M server/src/routes/admin-billing.ts
+ M server/src/routes/admin-capacity-cost.ts
+ M server/src/routes/admin-entertainment.ts
+ M server/src/routes/admin-statistics.ts
+ M server/src/routes/gift-cards.ts
+ M server/src/routes/hosting.ts
+ M server/src/routes/instance-billing.ts
+ M server/src/routes/instance-destroy.ts
+ M server/src/routes/instances.ts
+ M server/src/routes/ip-addresses.ts
+ M server/src/routes/mail.ts
+ M server/src/routes/orders.ts
+ M server/src/routes/recharge.ts
+ M server/src/routes/resource-pool.ts
+ M server/src/routes/resource-risk.ts
+ M server/src/routes/system-config.ts
+ M server/src/routes/terminal.ts
+ M server/src/routes/tickets.ts
+ M server/src/routes/traffic.ts
+ M server/src/routes/users.ts
+ M server/src/services/agent-instance-report.ts
+ M server/src/services/billing-scheduler.ts
+ M server/src/services/cranemail.ts
+ M server/src/services/flash-sales.ts
+ M server/src/services/instance-traffic-collector.ts
+ M server/src/services/resource-risk.ts
+ M server/src/services/smartermail.ts
+ M server/src/services/system-monitor.ts
+ M server/src/services/traffic-notifier.ts
+ M server/src/services/traffic-scheduler.ts
+ M server/src/services/traffic-utils.ts
+ M server/src/services/vip-benefits.ts
+?? AGENTS.md
+?? BEHAVIOR.md
+?? CLAUDE.md
+?? DEFECTS.md
+?? EXECUTION.md
+?? EXECUTION_LOG.md
+?? FIX_PLAN.md
+?? MAINTENANCE_PLAN.md
+?? artifacts/
+?? audits/
+?? deploy/incudal-online-task.sh.example
+?? deploy/incudal-ota-chown-wrapper.sh.example
+?? deploy/incudal-systemctl-wrapper.sh.example
+?? server/scripts/test-error-response-guards.ts
+?? server/scripts/test-redirect-validator-guards.ts
+?? server/scripts/test-safe-outbound-fetch-guards.ts
+?? skills-lock.json
+
+Path                                                                                   LineNumber Line                 
+----                                                                                   ---------- ----                 
+C:\Users\Administrator\Desktop\payinces\server\dist\workers\restoreTaskWorker.d.ts             29 //# sourceMappingU...
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-backup-task-race-guards.ts         22 const restoreWorke...
+C:\Users\Administrator\Desktop\payinces\server\src\db\restore-tasks.ts                        131 // hasActiveRestor...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\backups.ts                           32 } from '../workers...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\backups.ts                          104 // 恢复任务现在使用数据库存储，由...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\backups.ts                         1476   // 恢复工作流已移至 rest...
+C:\Users\Administrator\Desktop\payinces\server\src\app.ts                                     819     } = await impo...
+C:\Users\Administrator\Desktop\payinces\server\package.json                                    50     "test:backup-t...
+C:\Users\Administrator\Desktop\payinces\server\package.json                                   210     "test:instance...
+
+
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$pkg = Get-Content server/package.json -Encoding utf8; $pkg[40..55]; $pkg[202..214]; Get-ChildItem server/scripts -File -Filter '"'*instance*recreate*' | Select-Object FullName; Get-Content server/src/workers/restoreTaskWorker.ts -Encoding utf8; Get-Content server/scripts/test-backup-task-race-guards.ts -Encoding utf8" in C:\Users\Administrator\Desktop\payinces
+ succeeded in 777ms:
+    "test:admin-billing-route-id-guards": "node --import tsx scripts/test-admin-billing-route-id-guards.ts",
+    "test:admin-entertainment-route-guards": "node --import tsx scripts/test-admin-entertainment-route-guards.ts",
+    "test:admin-route-guards": "node --import tsx scripts/test-admin-route-guards.ts",
+    "test:aff-review-ui-guards": "node --import tsx scripts/test-aff-review-ui-guards.ts",
+    "test:auth-session-status-guards": "node --import tsx scripts/test-auth-session-status-guards.ts",
+    "test:auto-policy-scheduler-guards": "node --import tsx scripts/test-auto-policy-scheduler-guards.ts",
+    "test:balance-adjustment-approval-guards": "node --import tsx scripts/test-balance-adjustment-approval-guards.ts",
+    "test:balance-change-amount-guard": "node --import tsx scripts/test-balance-change-amount-guard.ts",
+    "test:backup-route-id-guards": "node --import tsx scripts/test-backup-route-id-guards.ts",
+    "test:backup-task-race-guards": "node --import tsx scripts/test-backup-task-race-guards.ts",
+    "test:batch-config-route-guards": "node --import tsx scripts/test-batch-config-route-guards.ts",
+    "test:commercial-operations-overview-guards": "node --import tsx scripts/test-commercial-operations-overview-guards.ts",
+    "test:capacity-cost-guards": "node --import tsx scripts/test-capacity-cost-guards.ts",
+    "test:content-route-guards": "node --import tsx scripts/test-content-route-guards.ts",
+    "test:cookie-config": "node --import tsx scripts/test-cookie-config.ts",
+    "test:cors-origin-config": "node --import tsx scripts/test-cors-origin-config.ts",
+    "test:user-destroy-incus-order": "node --import tsx scripts/test-user-destroy-incus-order.ts",
+    "test:instance-delete-incus-order": "node --import tsx scripts/test-instance-delete-incus-order.ts",
+    "test:host-route-id-guards": "node --import tsx scripts/test-host-route-id-guards.ts",
+    "test:host-install-script-guards": "node --import tsx scripts/test-host-install-script-guards.ts",
+    "test:incus-certificate-paths": "node --import tsx scripts/test-incus-certificate-paths.ts",
+    "test:host-migration-consistency": "node --import tsx scripts/test-host-migration-consistency.ts",
+    "test:host-resource-atomic-guards": "node --import tsx scripts/test-host-resource-atomic-guards.ts",
+    "test:instance-recreate-consistency": "node --import tsx scripts/test-instance-recreate-consistency.ts",
+    "test:traffic-collector-status-guard": "node --import tsx scripts/test-traffic-collector-status-guard.ts",
+    "test:traffic-notification-claim-guards": "node --import tsx scripts/test-traffic-notification-claim-guards.ts",
+    "test:traffic-route-limit-guards": "node --import tsx scripts/test-traffic-route-limit-guards.ts",
+    "test:traffic-reset-locks": "node --import tsx scripts/test-traffic-reset-locks.ts",
+    "test:instance-create-failure-compensation": "node --import tsx scripts/test-instance-create-failure-compensation.ts",
+
+FullName                                                                                    
+--------                                                                                    
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-instance-recreate-consistency.ts
+/**
+ * 恢复任务队列调度器
+ * 确保同一台宿主机同一时间只有一个恢复任务在执行
+ */
+
+import { prisma } from '../db/prisma.js'
+import { resolveStoragePoolForExistingInstance } from '../db/storage-pools.js'
+import { getIncusClient } from '../lib/incus/index.js'
+import { getBackupExportStream } from '../lib/incus/incus-backups.js'
+import {
+    restoreFromStream,
+    renameInstance
+} from '../lib/incus/incus-restore.js'
+import {
+    stopInstance,
+    startInstance,
+    deleteInstance
+} from '../lib/incus/incus-instances.js'
+import { listBackups, deleteBackup as deleteIncusBackup } from '../lib/incus/incus-backups.js'
+import { listSnapshots, deleteSnapshot as deleteIncusSnapshot } from '../lib/incus/incus-snapshots.js'
+import { sendNotification } from '../lib/notifier.js'
+import { createLog } from '../db/logs.js'
+import { collectTrafficForRunningInstance } from '../services/instance-traffic-collector.js'
+import { Readable } from 'stream'
+import {
+    HOST_TASK_CLAIM_LOCK_NAMESPACE,
+    INSTANCE_OPERATION_LOCK_NAMESPACE,
+    tryAdvisoryTransactionLock
+} from '../db/advisory-locks.js'
+import { createWorkerDbBackoff } from './db-failure-backoff.js'
+
+// 恢复任务超时时间 (10 分钟)
+const RESTORE_TIMEOUT = 10 * 60 * 1000
+
+// Worker 轮询间隔 (5 秒)
+const POLL_INTERVAL = 5000
+
+// 超时检查间隔 (1 分钟)
+const TIMEOUT_CHECK_INTERVAL = 60000
+
+let workerInterval: ReturnType<typeof setInterval> | null = null
+let timeoutCheckInterval: ReturnType<typeof setInterval> | null = null
+const runningRestoreTaskIds = new Set<number>()
+const dbBackoff = createWorkerDbBackoff('RestoreWorker')
+
+/**
+ * 服务启动时清理僵尸任务
+ * 把所有 PROCESSING 状态的任务标记为 FAILED
+ */
+export async function cleanupStaleTasks(): Promise<void> {
+    // 仅清理确实超时（超过 RESTORE_TIMEOUT）的 PROCESSING 任务，而不是无条件把所有 PROCESSING 置为 FAILED。
+    // 多节点部署下，无条件清理会误杀其他节点上正在执行的任务；按启动时间阈值判断可避免。
+    const result = await prisma.restoreTask.updateMany({
+        where: {
+            status: 'PROCESSING',
+            startedAt: { lt: new Date(Date.now() - RESTORE_TIMEOUT) }
+        },
+        data: {
+            status: 'FAILED',
+            error: '系统重启，任务中断',
+            finishedAt: new Date()
+        }
+    })
+    if (result.count > 0) {
+        console.log(`[RestoreWorker] 清理了 ${result.count} 个僵尸任务`)
+    }
+}
+
+/**
+ * 运行时检查并清理超时的任务
+ * 每分钟检查一次，将超过超时时间的 PROCESSING 任务标记为 FAILED
+ */
+async function cleanupTimeoutTasks(): Promise<void> {
+    if (dbBackoff.shouldSkip()) return
+    const timeoutThreshold = new Date(Date.now() - RESTORE_TIMEOUT)
+    
+    const timedOutTasks = await prisma.restoreTask.findMany({
+        where: {
+            status: 'PROCESSING',
+            startedAt: { lt: timeoutThreshold }
+        },
+        select: { id: true }
+    })
+    const timedOutTaskIds = timedOutTasks
+        .map(task => task.id)
+        .filter(taskId => !runningRestoreTaskIds.has(taskId))
+
+    if (timedOutTaskIds.length === 0) {
+        return
+    }
+
+    const result = await prisma.restoreTask.updateMany({
+        where: {
+            id: { in: timedOutTaskIds },
+            status: 'PROCESSING'
+        },
+        data: {
+            status: 'FAILED',
+            error: '任务执行超时 (10 分钟)',
+            finishedAt: new Date()
+        }
+    })
+    
+    if (result.count > 0) {
+        console.log(`[RestoreWorker] 清理了 ${result.count} 个超时任务`)
+    }
+}
+
+/**
+ * 检查队列并执行任务
+ */
+async function processQueue(): Promise<void> {
+    if (dbBackoff.shouldSkip()) return
+    try {
+        // 1. 获取所有有 PENDING 任务的宿主机 ID (去重)
+        const hostsWithPendingTasks = await prisma.restoreTask.groupBy({
+            by: ['hostId'],
+            where: { status: 'PENDING' }
+        })
+
+        for (const group of hostsWithPendingTasks) {
+            const hostId = group.hostId
+
+            // 使用事务原子操作：检查锁 + 获取任务 + 标记为 PROCESSING
+            const claimedTask = await claimNextTask(hostId)
+            
+            if (claimedTask) {
+                // 执行任务 (不 await，让它异步跑)
+                executeRestoreTask(claimedTask.id).catch(err => {
+                    console.error(`[RestoreWorker] Task ${claimedTask.id} execution error:`, err)
+                })
+            }
+        }
+    } catch (err) {
+        console.error('[RestoreWorker] Queue processing error:', err)
+        dbBackoff.arm(err)
+    }
+}
+
+/**
+ * 原子操作：获取并锁定下一个任务
+ * 使用事务确保检查锁和获取任务是原子的，防止竞态条件
+ */
+async function claimNextTask(hostId: number) {
+        return await prisma.$transaction(async (tx) => {
+            const locked = await tryAdvisoryTransactionLock(tx, HOST_TASK_CLAIM_LOCK_NAMESPACE, hostId)
+            if (!locked) return null
+
+            // 1. 检查是否有正在执行的恢复任务
+            const runningRestoreTask = await tx.restoreTask.findFirst({
+                where: { hostId, status: 'PROCESSING' }
+            })
+            if (runningRestoreTask) return null
+
+            // 2. 检查是否有正在执行的上传任务（共享锁）
+            const runningUploadTask = await tx.backupUploadTask.findFirst({
+                where: { hostId, status: 'PROCESSING' }
+            })
+            if (runningUploadTask) return null
+
+            // 3. 检查是否有正在执行的实例任务（共享锁）
+            const runningInstanceTask = await tx.instanceTask.findFirst({
+                where: { hostId, status: 'PROCESSING' }
+            })
+            if (runningInstanceTask) return null
+
+            // 4. 获取最早的 PENDING 任务
+            const taskToRun = await tx.restoreTask.findFirst({
+                where: { hostId, status: 'PENDING' },
+                orderBy: { createdAt: 'asc' }
+            })
+            if (!taskToRun) return null
+
+            const instanceOperationLocked = await tryAdvisoryTransactionLock(tx, INSTANCE_OPERATION_LOCK_NAMESPACE, taskToRun.instanceId)
+            if (!instanceOperationLocked) return null
+
+            const instance = await tx.instance.findUnique({
+                where: { id: taskToRun.instanceId },
+                select: { status: true }
+            })
+            if (!instance || instance.status === 'deleted') return null
+
+            // 5. 原子标记为 PROCESSING
+            const claimedTask = await tx.restoreTask.update({
+                where: { id: taskToRun.id },
+                data: { status: 'PROCESSING', startedAt: new Date() }
+            })
+
+            return claimedTask
+        })
+}
+
+
+/**
+ * 更新任务进度
+ */
+async function updateProgress(taskId: number, progress: string): Promise<void> {
+    await prisma.restoreTask.updateMany({
+        where: { id: taskId, status: 'PROCESSING' },
+        data: { progress }
+    })
+}
+
+
+/**
+ * 执行单个恢复任务
+ * 工作流: 停止原实例 -> 恢复到临时实例 -> 删除原实例 -> 重命名 -> 启动
+ * 注意：任务已在 claimNextTask 中标记为 PROCESSING
+ */
+async function executeRestoreTask(taskId: number): Promise<void> {
+    const startTime = Date.now()
+    runningRestoreTaskIds.add(taskId)
+
+    // 获取任务信息（已在事务中标记为 PROCESSING）
+    const task = await prisma.restoreTask.findUnique({
+        where: { id: taskId }
+    })
+
+    if (!task) {
+        console.error(`[RestoreWorker] Task ${taskId} not found`)
+        return
+    }
+
+    console.log(`[RestoreWorker] 开始执行任务 ${taskId}`)
+
+    try {
+        // 2. 获取相关数据
+        const host = await prisma.host.findUnique({ where: { id: task.hostId } })
+        if (!host) throw new Error('宿主机不存在')
+
+        const instance = await prisma.instance.findUnique({ where: { id: task.instanceId } })
+        if (!instance) throw new Error('实例不存在')
+        if (instance.status === 'deleted') throw new Error('实例已删除，任务取消')
+
+        const backup = task.backupId
+            ? await prisma.backup.findUnique({ where: { id: task.backupId } })
+            : null
+        if (task.backupId && !backup) throw new Error('备份不存在')
+
+        const client = await getIncusClient({
+            id: host.id,
+            url: host.url,
+            certPath: host.certPath,
+            keyPath: host.keyPath
+        })
+
+        const checkTimeout = () => {
+            if (Date.now() - startTime > RESTORE_TIMEOUT) {
+                throw new Error('恢复操作超时 (10 分钟)')
+            }
+        }
+
+        // 3. 停止原实例
+        await updateProgress(taskId, 'stopping')
+        console.log(`[RestoreWorker] Task ${taskId}: 停止原实例 ${task.originalIncusId}`)
+        const collectResult = await collectTrafficForRunningInstance(task.instanceId)
+        if (!collectResult.success) {
+            console.warn(`[RestoreWorker] Task ${taskId}: 恢复前即时采集流量失败: ${collectResult.error}`)
+        }
+        try {
+            await stopInstance(client, task.originalIncusId, true)
+        } catch (err) {
+            console.warn(`[RestoreWorker] Task ${taskId}: 停止实例警告: ${err}`)
+        }
+        checkTimeout()
+
+        // 4. 获取存储池配置
+        // 使用宿主机的系统盘存储池，确保恢复的实例使用正确的存储池
+        const storagePool = await resolveStoragePoolForExistingInstance(task.instanceId, task.hostId, {
+            packageId: instance.packageId
+        })
+        if (!storagePool) {
+            throw new Error('宿主机未配置系统盘存储池，无法恢复实例')
+        }
+        console.log(`[RestoreWorker] Task ${taskId}: 使用存储池 ${storagePool}`)
+
+        // 5. 获取备份流并恢复到临时实例
+        await updateProgress(taskId, 'restoring')
+        if (!backup) {
+            throw new Error('备份记录不存在')
+        }
+        console.log(`[RestoreWorker] Task ${taskId}: 恢复到临时实例 ${task.tempInstanceName}`)
+        const { stream } = await getBackupExportStream(
+            client,
+            task.originalIncusId,
+            backup.incusName
+        )
+        const nodeStream = Readable.fromWeb(stream as import('stream/web').ReadableStream)
+
+        await restoreFromStream({
+            client,
+            backupStream: nodeStream,
+            targetName: task.tempInstanceName!,
+            poolName: storagePool
+        })
+        checkTimeout()
+
+        // 6. 删除原实例在 Incus 中的所有备份和快照
+        await updateProgress(taskId, 'cleaning')
+        console.log(`[RestoreWorker] Task ${taskId}: 清理原实例的备份和快照`)
+        try {
+            // 删除 Incus 中的备份
+            const incusBackups = await listBackups(client, task.originalIncusId)
+            for (const b of incusBackups) {
+                const backupName = b.name
+                if (backupName) {
+                    try {
+                        await deleteIncusBackup(client, task.originalIncusId, backupName)
+                        console.log(`[RestoreWorker] Task ${taskId}: 已删除 Incus 备份 ${backupName}`)
+                    } catch (e) {
+                        console.warn(`[RestoreWorker] Task ${taskId}: 删除 Incus 备份失败: ${e}`)
+                    }
+                }
+            }
+            // 删除 Incus 中的快照
+            const incusSnapshots = await listSnapshots(client, task.originalIncusId)
+            for (const s of incusSnapshots) {
+                const snapshotName = s.name
+                if (snapshotName) {
+                    try {
+                        await deleteIncusSnapshot(client, task.originalIncusId, snapshotName)
+                        console.log(`[RestoreWorker] Task ${taskId}: 已删除 Incus 快照 ${snapshotName}`)
+                    } catch (e) {
+                        console.warn(`[RestoreWorker] Task ${taskId}: 删除 Incus 快照失败: ${e}`)
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn(`[RestoreWorker] Task ${taskId}: 清理备份/快照时出错: ${e}`)
+        }
+
+        // 7. 删除原实例
+        await updateProgress(taskId, 'replacing')
+        console.log(`[RestoreWorker] Task ${taskId}: 删除原实例 ${task.originalIncusId}`)
+        await deleteInstance(client, task.originalIncusId)
+        checkTimeout()
+
+        // 8. 重命名临时实例为原名
+        console.log(`[RestoreWorker] Task ${taskId}: 重命名 ${task.tempInstanceName} -> ${task.originalIncusId}`)
+        await renameInstance(client, task.tempInstanceName!, task.originalIncusId)
+
+        await prisma.trafficSnapshot.deleteMany({ where: { instanceId: task.instanceId } })
+
+        // 9. 启动恢复后的实例
+        await updateProgress(taskId, 'starting')
+        console.log(`[RestoreWorker] Task ${taskId}: 启动实例`)
+        await startInstance(client, task.originalIncusId)
+
+        // 10. 删除数据库中原实例的备份和快照记录
+        // Incus 原实例及其所有备份已被删除，恢复后的新实例没有这些旧备份。
+        console.log(`[RestoreWorker] Task ${taskId}: 清理数据库中的备份和快照记录`)
+        await prisma.backup.updateMany({
+            where: {
+                instanceId: task.instanceId
+            },
+            data: { status: 'deleted' }
+        })
+        await prisma.snapshot.deleteMany({
+            where: { instanceId: task.instanceId }
+        })
+
+        // 11. 更新实例名称和恢复来源信息（在标记成功之前，确保原子性）
+        // 名称格式: 原名 | restored:备份名
+        const newInstanceName = `${task.originalInstanceName} | restored:${backup?.name || 'unknown'}`
+        const instanceUpdateResult = await prisma.instance.updateMany({
+            where: {
+                id: task.instanceId,
+                status: { not: 'deleted' }
+            },
+            data: {
+                name: newInstanceName,
+                storagePoolName: storagePool,
+                restoredFrom: {
+                    backupId: task.backupId,
+                    backupName: backup?.name,
+                    restoredAt: new Date().toISOString()
+                }
+            }
+        })
+        if (instanceUpdateResult.count === 0) {
+            throw new Error('实例已删除，恢复结果不再写入')
+        }
+
+        // 12. 标记成功
+        const completeResult = await prisma.restoreTask.updateMany({
+            where: { id: taskId, status: 'PROCESSING' },
+            data: { status: 'COMPLETED', finishedAt: new Date() }
+        })
+        if (completeResult.count === 0) {
+            console.warn(`[RestoreWorker] Task ${taskId}: 已不处于 PROCESSING，跳过完成状态覆盖`)
+            return
+        }
+
+        console.log(`[RestoreWorker] Task ${taskId}: 恢复完成`)
+
+        // 发送通知
+        await sendNotification(task.userId, 'backup_restored', {
+            instanceName: task.originalInstanceName,
+            backupName: backup?.name || '未知',
+            hostName: host.name
+        })
+
+        await createLog(
+            task.userId,
+            'backup',
+            'backup.restore',
+            `Successfully restored instance "${task.originalInstanceName}" from backup "${backup?.name}"`,
+            'success',
+            { instanceId: task.instanceId }
+        )
+
+    } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : String(err)
+        console.error(`[RestoreWorker] Task ${taskId} failed:`, errorMessage)
+
+        // 尝试清理临时实例
+        if (task.tempInstanceName) {
+            try {
+                const host = await prisma.host.findUnique({ where: { id: task.hostId } })
+                if (host) {
+                    const client = await getIncusClient({
+                        id: host.id,
+                        url: host.url,
+                        certPath: host.certPath,
+                        keyPath: host.keyPath
+                    })
+                    const { instanceExists } = await import('../lib/incus/incus-restore.js')
+                    const tempExists = await instanceExists(client, task.tempInstanceName)
+                    if (tempExists) {
+                        await deleteInstance(client, task.tempInstanceName)
+                        console.log(`[RestoreWorker] Task ${taskId}: 已清理临时实例 ${task.tempInstanceName}`)
+                    }
+                }
+            } catch (cleanupErr) {
+                console.warn(`[RestoreWorker] Task ${taskId}: 清理临时实例失败:`, cleanupErr)
+            }
+        }
+
+        const failResult = await prisma.restoreTask.updateMany({
+            where: { id: taskId, status: 'PROCESSING' },
+            data: {
+                status: 'FAILED',
+                error: errorMessage,
+                finishedAt: new Date()
+            }
+        })
+        if (failResult.count === 0) {
+            console.warn(`[RestoreWorker] Task ${taskId}: 已不处于 PROCESSING，跳过失败状态覆盖`)
+            return
+        }
+
+        await createLog(
+            task.userId,
+            'backup',
+            'backup.restore',
+            `Failed to restore instance "${task.originalInstanceName}": ${errorMessage}`,
+            'failed',
+            { instanceId: task.instanceId }
+        )
+    } finally {
+        runningRestoreTaskIds.delete(taskId)
+    }
+}
+
+/**
+ * 启动恢复任务 Worker
+ */
+export function startRestoreWorker(): void {
+    if (workerInterval) {
+        console.warn('[RestoreWorker] Worker 已在运行')
+        return
+    }
+    console.log('[RestoreWorker] 启动恢复任务调度器')
+    workerInterval = setInterval(() => {
+        processQueue().catch(err => {
+            console.error('[RestoreWorker] 队列处理错误:', err)
+            dbBackoff.arm(err)
+        })
+    }, POLL_INTERVAL)
+    
+    // 启动超时检查定时器
+    if (!timeoutCheckInterval) {
+        timeoutCheckInterval = setInterval(() => {
+            cleanupTimeoutTasks().catch(err => {
+                console.error('[RestoreWorker] 超时检查错误:', err)
+                dbBackoff.arm(err)
+            })
+        }, TIMEOUT_CHECK_INTERVAL)
+        console.log('[RestoreWorker] 启动超时任务检查器')
+    }
+}
+
+/**
+ * 停止恢复任务 Worker
+ */
+export function stopRestoreWorker(): void {
+    if (workerInterval) {
+        clearInterval(workerInterval)
+        workerInterval = null
+        console.log('[RestoreWorker] 恢复任务调度器已停止')
+    }
+    if (timeoutCheckInterval) {
+        clearInterval(timeoutCheckInterval)
+        timeoutCheckInterval = null
+        console.log('[RestoreWorker] 超时任务检查器已停止')
+    }
+}
+
+/**
+ * 检查实例是否有正在进行的恢复任务
+ */
+export async function hasActiveRestoreTask(instanceId: number): Promise<{ id: number } | null> {
+    return prisma.restoreTask.findFirst({
+        where: {
+            instanceId,
+            status: { in: ['PENDING', 'PROCESSING'] }
+        },
+        select: { id: true }
+    })
+}
+
+/**
+ * 获取任务在队列中的位置
+ * 考虑共享锁：上传任务和恢复任务互斥
+ */
+export async function getQueuePosition(taskId: number): Promise<number> {
+    const task = await prisma.restoreTask.findUnique({
+        where: { id: taskId },
+        select: { hostId: true, createdAt: true, status: true }
+    })
+
+    if (!task || task.status !== 'PENDING') return 0
+
+    // 检查是否有正在执行的恢复任务
+    const processingRestoreTask = await prisma.restoreTask.findFirst({
+        where: {
+            hostId: task.hostId,
+            status: 'PROCESSING'
+        },
+        orderBy: { createdAt: 'asc' }
+    })
+
+    // 检查是否有正在执行的上传任务（共享锁）
+    const processingUploadTask = await prisma.backupUploadTask.findFirst({
+        where: {
+            hostId: task.hostId,
+            status: 'PROCESSING'
+        },
+        orderBy: { createdAt: 'asc' }
+    })
+
+    // 如果有 PROCESSING 任务（恢复或上传），且创建时间早于当前任务，则位置+1
+    const hasProcessingTask =
+        (processingRestoreTask && processingRestoreTask.createdAt < task.createdAt) ||
+        (processingUploadTask && processingUploadTask.createdAt < task.createdAt)
+    const processingCount = hasProcessingTask ? 1 : 0
+
+    // 统计创建时间更早的 PENDING 恢复任务数量
+    const pendingCount = await prisma.restoreTask.count({
+        where: {
+            hostId: task.hostId,
+            status: 'PENDING',
+            createdAt: { lt: task.createdAt }
+        }
+    })
+
+    return processingCount + pendingCount + 1
+}
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+
+function section(source: string, startMarker: string, endMarker?: string): string {
+  const start = source.indexOf(startMarker)
+  assert.notEqual(start, -1, `missing start marker: ${startMarker}`)
+  const end = endMarker ? source.indexOf(endMarker, start + startMarker.length) : source.length
+  if (endMarker) assert.notEqual(end, -1, `missing end marker: ${endMarker}`)
+  return source.slice(start, end)
+}
+
+const restoreSource = readFileSync(resolve(__dirname, '../src/db/restore-tasks.ts'), 'utf8')
+const uploadSource = readFileSync(resolve(__dirname, '../src/db/backup-upload-tasks.ts'), 'utf8')
+const backupDbSource = readFileSync(resolve(__dirname, '../src/db/backups.ts'), 'utf8')
+const quotaSource = readFileSync(resolve(__dirname, '../src/db/quota-operations.ts'), 'utf8')
+const routeSource = readFileSync(resolve(__dirname, '../src/routes/backups.ts'), 'utf8')
+const restoreWorkerSource = readFileSync(resolve(__dirname, '../src/workers/restoreTaskWorker.ts'), 'utf8')
+const uploadWorkerSource = readFileSync(resolve(__dirname, '../src/workers/backupUploadWorker.ts'), 'utf8')
+const appSource = readFileSync(resolve(__dirname, '../src/app.ts'), 'utf8')
+
+const createRestoreSection = section(restoreSource, 'export async function createRestoreTask(', '/**\n * 获取恢复任务')
+assert.ok(createRestoreSection.includes('prisma.$transaction'), 'createRestoreTask must be transactional')
+assert.ok(
+  createRestoreSection.includes('tryAdvisoryTransactionLock(tx, INSTANCE_OPERATION_LOCK_NAMESPACE, data.instanceId)'),
+  'createRestoreTask must acquire the instance operation lock'
+)
+assert.ok(
+  createRestoreSection.includes("status: { in: ['PENDING', 'PROCESSING'] }"),
+  'createRestoreTask must check active restore tasks inside the transaction'
+)
+
+const cancelRestoreSection = section(restoreSource, 'export async function cancelRestoreTask(', '// hasActiveRestoreTask')
+assert.ok(cancelRestoreSection.includes('prisma.$transaction'), 'cancelRestoreTask must be transactional')
+assert.ok(
+  cancelRestoreSection.includes('tryAdvisoryTransactionLock(tx, INSTANCE_OPERATION_LOCK_NAMESPACE, task.instanceId)'),
+  'cancelRestoreTask must share the worker instance operation lock'
+)
+assert.ok(cancelRestoreSection.includes('tx.restoreTask.updateMany'), 'cancelRestoreTask must use conditional updateMany')
+assert.ok(cancelRestoreSection.includes("status: 'PENDING'"), 'cancelRestoreTask must only update pending tasks')
+
+const createUploadSection = section(uploadSource, 'export async function createBackupUploadTask(', '/**\n * 根据 ID 获取任务')
+assert.ok(createUploadSection.includes('prisma.$transaction'), 'createBackupUploadTask must be transactional')
+assert.ok(
+  createUploadSection.includes('tryAdvisoryTransactionLock(tx, USER_BACKUP_UPLOAD_LOCK_NAMESPACE, data.userId)'),
+  'createBackupUploadTask must acquire the per-user upload lock'
+)
+assert.ok(
+  createUploadSection.includes("status: { in: ['PENDING', 'PROCESSING'] }"),
+  'createBackupUploadTask must check active user upload tasks inside the transaction'
+)
+
+assert.ok(
+  uploadSource.includes('const BACKUP_UPLOAD_TASK_STATUSES = new Set<BackupUploadTaskStatus>') &&
+    uploadSource.includes("'PENDING'") &&
+    uploadSource.includes("'PROCESSING'") &&
+    uploadSource.includes("'COMPLETED'") &&
+    uploadSource.includes("'FAILED'"),
+  'backup upload task helpers must define an explicit status allowlist'
+)
+
+assert.ok(
+  uploadSource.includes('function normalizeBackupUploadTaskLimit(limit: number | undefined): number') &&
+    uploadSource.includes('Math.min(Math.max(limit, 1), 100)'),
+  'backup upload task list helper must clamp invalid or excessive limits'
+)
+
+assert.ok(
+  uploadSource.includes('function normalizeBackupUploadTaskStatus(status: BackupUploadTaskStatus | undefined): BackupUploadTaskStatus | undefined') &&
+    uploadSource.includes('BACKUP_UPLOAD_TASK_STATUSES.has(status)'),
+  'backup upload task list helper must ignore unknown status filters'
+)
+
+const listUploadSection = section(uploadSource, 'export async function getBackupUploadTasksByUserId(', '/**\n * 获取实例的上传任务列表')
+assert.ok(
+  listUploadSection.includes('const limit = normalizeBackupUploadTaskLimit(options?.limit)') &&
+    listUploadSection.includes('const status = normalizeBackupUploadTaskStatus(options?.status)') &&
+    listUploadSection.includes('...(status ? { status } : {})') &&
+    listUploadSection.includes('take: limit'),
+  'getBackupUploadTasksByUserId must query with sanitized limit and status values'
+)
+assert.ok(
+  !listUploadSection.includes('take: options?.limit || 50') &&
+    !listUploadSection.includes('...(options?.status ? { status: options.status } : {})'),
+  'getBackupUploadTasksByUserId must not trust raw caller limit or status options'
+)
+
+const cancelUploadSection = section(uploadSource, 'export async function cancelBackupUploadTask(', '/**\n * 获取实例的活跃上传任务')
+assert.ok(cancelUploadSection.includes('prisma.$transaction'), 'cancelBackupUploadTask must be transactional')
+assert.ok(
+  cancelUploadSection.includes('tryAdvisoryTransactionLock(tx, INSTANCE_OPERATION_LOCK_NAMESPACE, task.instanceId)'),
+  'cancelBackupUploadTask must share the worker instance operation lock'
+)
+assert.ok(cancelUploadSection.includes('tx.backupUploadTask.updateMany'), 'cancelBackupUploadTask must use conditional updateMany')
+assert.ok(cancelUploadSection.includes("status: 'PENDING'"), 'cancelBackupUploadTask must only update pending tasks')
+
+assert.ok(routeSource.includes('if (!taskId)'), 'restore route must handle concurrent create conflicts')
+assert.ok(routeSource.includes('if (!cancelledTask)'), 'backup routes must handle failed cancellation races')
+assert.ok(routeSource.includes('if (!task)'), 'upload route must handle concurrent create conflicts')
+assert.ok(
+  routeSource.includes('const reservation = await db.createBackupWithQuotaReservation({') &&
+    routeSource.includes('const backupId = reservation.backupId') &&
+    !routeSource.includes('const backupId = await db.createBackup({'),
+  'backup create route must reserve quota and creating rows atomically before Incus backup creation'
+)
+const createBackupReservationSection = section(
+  backupDbSource,
+  'export async function createBackupWithQuotaReservation(',
+  '/**\n * 更新备份状态'
+)
+assert.ok(
+  createBackupReservationSection.includes('prisma.$transaction') &&
+    createBackupReservationSection.includes('advisoryTransactionLock(tx, INSTANCE_OPERATION_LOCK_NAMESPACE, data.instanceId)'),
+  'backup quota reservation must run under the instance operation advisory transaction lock'
+)
+assert.ok(
+  createBackupReservationSection.includes("status: { in: ['creating', 'ready'] }") &&
+    createBackupReservationSection.includes('if (current >= limit)') &&
+    createBackupReservationSection.includes("status: 'creating'"),
+  'backup quota reservation must count reserved/ready backups and create the reserved row inside the lock'
+)
+const staleBackupCleanupSection = section(
+  backupDbSource,
+  'export async function cleanupStaleCreatingBackups(',
+  '/**\n * 删除备份'
+)
+assert.ok(
+  staleBackupCleanupSection.includes('const cutoff = new Date(Date.now() - maxAgeMs)') &&
+    staleBackupCleanupSection.includes("status: 'creating'") &&
+    staleBackupCleanupSection.includes('createdAt: { lt: cutoff }') &&
+    staleBackupCleanupSection.includes("status: 'error'") &&
+    staleBackupCleanupSection.includes('return result.count'),
+  'stale backup cleanup must release only old creating rows by marking them error'
+)
+const checkBackupQuotaSection = section(
+  quotaSource,
+  'export async function checkBackupQuota(',
+  '/**\n * 同步用户配额使用量'
+)
+assert.ok(
+  checkBackupQuotaSection.includes("status: { in: ['creating', 'ready'] }") &&
+    !checkBackupQuotaSection.includes("status: { not: 'deleted' }"),
+  'backup quota checks must not let failed error backups permanently consume quota'
+)
+assert.ok(
+  routeSource.includes("reply.raw.on('finish'") &&
+    routeSource.includes("finalizeExportTask('completed')"),
+  'backup export download must only mark completed after the response finish event'
+)
+assert.ok(
+  routeSource.includes("reply.raw.on('close'") &&
+    routeSource.includes('!reply.raw.writableEnded') &&
+    routeSource.includes('Download connection closed before completion'),
+  'backup export download must treat premature connection close as an error'
+)
+const restoreRollbackRouteSection = section(
+  routeSource,
+  "'/:instanceId/restore/:taskId/rollback',",
+  '  // 取消恢复任务'
+)
+const rollbackOriginalCheckIndex = restoreRollbackRouteSection.indexOf('const originalExists = await instanceExists(client, task.originalIncusId)')
+const rollbackUnsafeIndex = restoreRollbackRouteSection.indexOf("error: 'ROLLBACK_UNSAFE'")
+const rollbackStartIndex = restoreRollbackRouteSection.indexOf('await startInstance(client, task.originalIncusId)')
+const rollbackTempCheckIndex = restoreRollbackRouteSection.indexOf('if (task.tempInstanceName)')
+const rollbackDeleteTempIndex = restoreRollbackRouteSection.indexOf('await deleteInstance(client, task.tempInstanceName)')
+assert.ok(
+  rollbackOriginalCheckIndex !== -1 &&
+    rollbackUnsafeIndex !== -1 &&
+    rollbackStartIndex !== -1 &&
+    rollbackTempCheckIndex !== -1 &&
+    rollbackDeleteTempIndex !== -1,
+  'restore rollback route must check original instance safety and keep temp cleanup explicit'
+)
+assert.ok(
+  rollbackOriginalCheckIndex < rollbackStartIndex &&
+    rollbackStartIndex < rollbackTempCheckIndex &&
+    rollbackTempCheckIndex < rollbackDeleteTempIndex,
+  'restore rollback route must start the original instance before deleting the temporary restored instance'
+)
+assert.ok(
+  !restoreRollbackRouteSection.includes('Failed to start original instance') &&
+    !restoreRollbackRouteSection.includes('fastify.log.warn(`Failed to delete temp instance'),
+  'restore rollback route must not swallow original-start or temp-delete failures while reporting success'
+)
+
+const restoreTimeoutSection = section(
+  restoreWorkerSource,
+  'async function cleanupTimeoutTasks()',
+  '/**\n * 检查队列并执行任务'
+)
+assert.ok(
+  restoreWorkerSource.includes('const runningRestoreTaskIds = new Set<number>()'),
+  'restore worker must track tasks currently executing in this process'
+)
+assert.ok(
+  restoreTimeoutSection.includes('.filter(taskId => !runningRestoreTaskIds.has(taskId))'),
+  'restore timeout cleanup must not mark tasks still executing in this worker as failed'
+)
+assert.ok(
+  restoreTimeoutSection.includes("where: {\n            id: { in: timedOutTaskIds },\n            status: 'PROCESSING'"),
+  'restore timeout cleanup must conditionally fail only still-processing tasks'
+)
+
+const restoreExecuteSection = section(
+  restoreWorkerSource,
+  'async function executeRestoreTask(',
+  '/**\n * 启动恢复任务 Worker'
+)
+assert.ok(
+  restoreExecuteSection.includes('runningRestoreTaskIds.add(taskId)') &&
+    restoreExecuteSection.includes('runningRestoreTaskIds.delete(taskId)'),
+  'restore worker must remove running task tracking in a finally block'
+)
+assert.ok(
+  restoreExecuteSection.includes("where: { id: taskId, status: 'PROCESSING' }") &&
+    restoreExecuteSection.includes("status: 'COMPLETED'") &&
+    restoreExecuteSection.includes("status: 'FAILED'"),
+  'restore worker final status writes must not overwrite non-processing task states'
+)
+assert.ok(
+  restoreExecuteSection.includes('await prisma.backup.updateMany({') &&
+    restoreExecuteSection.includes('where: {\n                instanceId: task.instanceId\n            }') &&
+    restoreExecuteSection.includes("data: { status: 'deleted' }"),
+  'restore worker must mark every old DB backup deleted after deleting the original Incus instance and its backups'
+)
+assert.ok(
+  !restoreExecuteSection.includes('id: { not: task.backupId'),
+  'restore worker must not keep the used backup as ready after deleting all original Incus backups'
+)
+
+const uploadTimeoutSection = section(
+  uploadWorkerSource,
+  'async function cleanupTimeoutUploadTasks()',
+  '/**\n * 检查队列并执行任务'
+)
+assert.ok(
+  uploadWorkerSource.includes('const runningUploadTaskIds = new Set<number>()'),
+  'upload worker must track tasks currently executing in this process'
+)
+assert.ok(
+  uploadTimeoutSection.includes('.filter(taskId => !runningUploadTaskIds.has(taskId))'),
+  'upload timeout cleanup must not mark tasks still executing in this worker as failed'
+)
+assert.ok(
+  uploadTimeoutSection.includes("where: {\n            id: { in: timedOutTaskIds },\n            status: 'PROCESSING'"),
+  'upload timeout cleanup must conditionally fail only still-processing tasks'
+)
+
+const uploadExecuteSection = section(
+  uploadWorkerSource,
+  'async function executeUploadTask(',
+  '/**\n * 启动备份上传 Worker'
+)
+assert.ok(
+  uploadExecuteSection.includes('runningUploadTaskIds.add(taskId)') &&
+    uploadExecuteSection.includes('runningUploadTaskIds.delete(taskId)'),
+  'upload worker must remove running task tracking in a finally block'
+)
+assert.ok(
+  uploadExecuteSection.includes("where: { id: taskId, status: 'PROCESSING' }") &&
+    uploadExecuteSection.includes("status: 'COMPLETED'") &&
+    uploadExecuteSection.includes("status: 'PENDING'") &&
+    uploadExecuteSection.includes("status: 'FAILED'"),
+  'upload worker final/retry status writes must not overwrite non-processing task states'
+)
+
+assert.ok(
+  appSource.includes('cleanupStaleTasks: cleanupStaleRestoreTasks') &&
+    appSource.includes('cleanupStaleUploadTasks') &&
+    appSource.includes('cleanupStaleCreatingBackups') &&
+    appSource.includes('startRestoreWorker()') &&
+    appSource.includes('startBackupUploadWorker()'),
+  'app startup must clean stale creating backups and start restore/upload workers for queued backup tasks'
+)
+assert.ok(
+  appSource.includes('stopRestoreWorker()') &&
+    appSource.includes('stopBackupUploadWorker()'),
+  'app graceful shutdown must stop restore and backup upload workers'
+)
+assert.ok(
+  !appSource.includes('failRetiredBackupTasks') &&
+    !appSource.includes('备份恢复功能已下线') &&
+    !appSource.includes('备份上传功能已下线'),
+  'app startup must not fail pending restore/upload tasks as retired features'
+)
+
+console.log('backup task race guard tests passed')
+
+
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "Get-Content server/scripts/test-instance-recreate-consistency.ts -Encoding utf8; Get-Content server/src/lib/incus/incus-restore.ts -Encoding utf8; Get-ChildItem server/src -Recurse -File -Filter '*.ts' | Select-String -Pattern '人工介入|manual intervention|MANUAL|NEEDS_|需人工|人工处理' | Select-Object Path,LineNumber,Line; Get-ChildItem server/prisma -Recurse -File | Select-String -Pattern 'model RestoreTask|enum RestoreTask|restoreTask' | Select-Object Path,LineNumber,Line" in C:\Users\Administrator\Desktop\payinces
+ succeeded in 1655ms:
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+
+const source = readFileSync(resolve(__dirname, '../src/workers/instanceTaskWorker.ts'), 'utf8')
+const portMappingsSource = readFileSync(resolve(__dirname, '../src/db/port-mappings.ts'), 'utf8')
+
+function indexOfOrThrow(sourceText: string, pattern: string, label: string): number {
+  const index = sourceText.indexOf(pattern)
+  assert.ok(index >= 0, `Missing ${label}: ${pattern}`)
+  return index
+}
+
+function section(sourceText: string, startPattern: string, endPattern: string): string {
+  const start = indexOfOrThrow(sourceText, startPattern, startPattern)
+  const end = indexOfOrThrow(sourceText.slice(start), endPattern, endPattern)
+  return sourceText.slice(start, start + end)
+}
+
+const cleanupSection = section(
+  source,
+  'async function cleanupRecreatedInstanceRecords(',
+  '/**\n * 服务启动时清理僵尸任务'
+)
+
+assert.ok(
+  cleanupSection.includes('const deletedPortMappings = await tx.portMapping.deleteMany({ where: { instanceId } })') &&
+    cleanupSection.includes('natPortsUsedCount: { decrement: deletedPortMappings.count }') &&
+    cleanupSection.includes('data: { natPortsUsedCount: 0 }'),
+  'recreate cleanup must delete port mappings and release host NAT port counters defensively'
+)
+
+const recreateSection = section(
+  source,
+  'async function executeRecreateTask(',
+  '/**\n * 执行改节点任务'
+)
+
+assert.ok(
+  recreateSection.includes('let oldInstanceDeleted = false') &&
+    recreateSection.includes('let newInstanceCreated = false') &&
+    recreateSection.includes('let databaseSwitched = false'),
+  'recreate must track old/new/database switch state for failure compensation'
+)
+
+const deleteOld = indexOfOrThrow(recreateSection, 'await deleteInstance(client, oldIncusId)', 'old Incus delete')
+const markOldDeleted = indexOfOrThrow(recreateSection, 'oldInstanceDeleted = true', 'old deleted marker')
+const createNew = indexOfOrThrow(recreateSection, 'await createInstance(client, incusConfig)', 'new Incus create')
+const markNewCreated = indexOfOrThrow(recreateSection, 'newInstanceCreated = true', 'new created marker')
+const cleanupRecords = indexOfOrThrow(recreateSection, 'await cleanupRecreatedInstanceRecords(task.instanceId, instance.host_id)', 'recreate DB cleanup')
+const updateDb = indexOfOrThrow(recreateSection, 'await prisma.instance.update({', 'instance DB switch')
+const markDbSwitched = indexOfOrThrow(recreateSection, 'databaseSwitched = true', 'database switched marker')
+
+assert.ok(deleteOld < markOldDeleted, 'recreate must mark old deleted only after strict old Incus delete succeeds')
+assert.ok(markOldDeleted < createNew, 'recreate must create replacement only after old Incus is gone')
+assert.ok(createNew < markNewCreated, 'recreate must mark replacement created only after Incus create succeeds')
+assert.ok(markNewCreated < cleanupRecords, 'recreate must not delete old DB associations before replacement exists')
+assert.ok(cleanupRecords < updateDb, 'recreate must clean stale associations before switching DB to replacement')
+assert.ok(updateDb < markDbSwitched, 'recreate must mark DB switched only after instance update succeeds')
+
+const catchIndex = indexOfOrThrow(recreateSection, '} catch (err) {', 'recreate catch')
+const catchSection = recreateSection.slice(catchIndex)
+
+assert.ok(
+  catchSection.includes('if (!databaseSwitched && newInstanceCreated)') &&
+    catchSection.includes('await deleteInstance(client, newIncusId)'),
+  'recreate failure must clean up replacement Incus instance before DB switch'
+)
+
+assert.ok(
+  catchSection.includes('if (!databaseSwitched && oldInstanceDeleted)') &&
+    catchSection.includes("status: 'error'") &&
+    catchSection.includes('await prisma.ipAddress.deleteMany({ where: { instanceId: task.instanceId } })') &&
+    catchSection.includes('await prisma.ipv6Subnet.deleteMany({ where: { instanceId: task.instanceId } })'),
+  'recreate failure after old deletion must mark DB instance error and clear stale address records'
+)
+
+const cloneSection = section(
+  source,
+  'async function executeCloneTask(',
+  '/**\n * 启动 Worker'
+)
+assert.ok(
+  portMappingsSource.includes('excludedPorts: number[] = []') &&
+    portMappingsSource.includes('for (const port of excludedPorts)') &&
+    portMappingsSource.includes('usedPorts.add(port)'),
+  'allocatePort must support excluding caller-reserved ports from the available pool'
+)
+assert.ok(
+  cloneSection.includes("const selectedClonePortsByProtocol: Record<'tcp' | 'udp', Set<number>>") &&
+    cloneSection.includes('Array.from(selectedClonePortsByProtocol[protocol])') &&
+    cloneSection.includes('selectedClonePortsByProtocol[protocol].add(newPublicPort)'),
+  'clone port allocation must exclude ports already selected earlier in the same clone task'
+)
+const cloneCatchIndex = indexOfOrThrow(cloneSection, '} catch (error) {', 'clone catch')
+const cloneCatchSection = cloneSection.slice(cloneCatchIndex)
+
+assert.ok(
+  cloneCatchSection.includes('let incusCloneReleased = false') &&
+    cloneCatchSection.includes('incusCloneReleased = true') &&
+    cloneCatchSection.includes('Instance not found'),
+  'clone failure cleanup must explicitly track whether the Incus clone was deleted or already absent'
+)
+
+assert.ok(
+  cloneCatchSection.includes('if (incusCloneReleased)') &&
+    cloneCatchSection.includes('await prisma.instance.delete({') &&
+    cloneCatchSection.includes("data: { status: 'error' }"),
+  'clone failure cleanup must only delete DB rows after Incus cleanup, otherwise mark the clone record error'
+)
+
+assert.ok(
+  cloneCatchSection.includes('if (incusCloneReleased && (!cloneDbRecordExists || cloneDbRecordRemoved))') &&
+    cloneCatchSection.includes('await db.rollbackResources({') &&
+    cloneCatchSection.includes('暂不释放宿主机资源占用'),
+  'clone failure cleanup must release host resources only after the Incus clone and DB record are fully cleaned'
+)
+
+const cloneDbDeleteIndex = indexOfOrThrow(cloneCatchSection, 'await prisma.instance.delete({', 'clone DB delete')
+const cloneRollbackIndex = indexOfOrThrow(cloneCatchSection, 'await db.rollbackResources({', 'clone resource rollback')
+assert.ok(
+  cloneDbDeleteIndex < cloneRollbackIndex,
+  'clone failure cleanup must delete the failed DB clone before rolling back reserved host resources'
+)
+
+console.log('instance recreate consistency checks passed')
+/**
+ * Incus 备份恢复服务
+ * 实现从备份流恢复实例、重命名实例等功能
+ */
+
+import { Agent, request } from 'undici'
+import { readFileSync } from 'fs'
+import type { Readable } from 'stream'
+import type { IncusClient } from './incus-client.js'
+import type { IncusApiResponse } from '../../types/incus.js'
+
+/**
+ * 生成临时实例名称
+ * 格式: {originalName}-restore-{timestamp}
+ */
+export function generateTempInstanceName(originalName: string): string {
+    const timestamp = Date.now()
+    return `${originalName}-restore-${timestamp}`
+}
+
+/**
+ * 等待 Incus 异步操作完成（用于恢复操作，超时 5 分钟）
+ */
+async function waitForRestoreOperation(
+    baseUrl: string,
+    operationUrl: string,
+    agent: Agent,
+    timeout: number = 300000 // 5 分钟
+): Promise<void> {
+    const startTime = Date.now()
+
+    while (Date.now() - startTime < timeout) {
+        const waitTimeout = Math.min(30, Math.floor((timeout - (Date.now() - startTime)) / 1000))
+        if (waitTimeout <= 0) break
+
+        try {
+            const waitUrl = `${baseUrl}${operationUrl}/wait?timeout=${waitTimeout}`
+
+            const response = await request(waitUrl, {
+                method: 'GET',
+                dispatcher: agent,
+                headers: { 'Content-Type': 'application/json' }
+            })
+
+            const text = await response.body.text()
+            
+            let data: IncusApiResponse
+            try {
+                data = JSON.parse(text) as IncusApiResponse
+            } catch {
+                console.error(`[Incus Restore] 解析响应失败: ${text.substring(0, 200)}`)
+                throw new Error(`无效的响应: ${text.substring(0, 100)}`)
+            }
+
+            const metadata = data.metadata as { status?: string; status_code?: number; err?: string; error?: string } | undefined
+            const status = metadata?.status || 'unknown'
+            const statusCode = metadata?.status_code
+
+            if (status === 'Success' || statusCode === 200) {
+                return
+            }
+
+            if (status === 'Failure' || (statusCode && statusCode >= 400)) {
+                const errMsg = metadata?.err || metadata?.error || '操作失败'
+                console.error(`[Incus Restore] 操作失败: ${errMsg}`)
+                throw new Error(errMsg)
+            }
+
+        } catch (err) {
+            const errorMessage = err instanceof Error ? err.message : String(err)
+            if (errorMessage.includes('操作失败') || errorMessage.includes('Failure')) {
+                throw err
+            }
+            console.error(`[Incus Restore] 轮询出错: ${errorMessage}`)
+            await new Promise(r => setTimeout(r, 2000))
+        }
+    }
+
+    throw new Error('恢复操作超时 (5 分钟)')
+}
+
+interface RestoreFromStreamParams {
+    client: IncusClient
+    backupStream: Readable
+    targetName: string
+    poolName?: string
+}
+
+/**
+ * 从备份流恢复实例
+ * 使用二进制流直接 POST 到 Incus API
+ */
+export async function restoreFromStream({
+    client,
+    backupStream,
+    targetName,
+    poolName
+}: RestoreFromStreamParams): Promise<void> {
+    if (!client.certPath || !client.keyPath) {
+        throw new Error('Certificate path not configured')
+    }
+
+    const cert = readFileSync(client.certPath)
+    const key = readFileSync(client.keyPath)
+
+    // 创建专用 Agent，设置长超时
+    const restoreAgent = new Agent({
+        connect: {
+            cert,
+            key,
+            rejectUnauthorized: false,
+            timeout: 60000
+        },
+        bodyTimeout: 0, // 禁用 body 超时
+        headersTimeout: 60000
+    })
+
+    try {
+        const url = `${client.baseUrl}/1.0/instances`
+
+        // 构建 headers
+        // Incus 使用 X-Incus-* headers，但也兼容 X-LXD-* (向后兼容)
+        const headers: Record<string, string> = {
+            'Content-Type': 'application/octet-stream',
+            'X-Incus-name': targetName
+        }
+        if (poolName) {
+            headers['X-Incus-pool'] = poolName
+        }
+
+        const response = await request(url, {
+            method: 'POST',
+            dispatcher: restoreAgent,
+            headers,
+            body: backupStream
+        })
+
+        const text = await response.body.text()
+        
+        let data: IncusApiResponse
+        try {
+            data = JSON.parse(text) as IncusApiResponse
+        } catch {
+            console.error(`[Incus Restore] 解析响应失败: ${text.substring(0, 200)}`)
+            throw new Error(`无效的响应: ${text.substring(0, 200)}`)
+        }
+
+        if (data.type === 'error') {
+            console.error(`[Incus Restore] 恢复失败: ${data.error}`)
+            throw new Error(data.error || '恢复失败')
+        }
+
+        // 异步操作，等待完成
+        if (data.type === 'async' && data.operation) {
+            await waitForRestoreOperation(client.baseUrl, data.operation, restoreAgent)
+        }
+    } finally {
+        await restoreAgent.close().catch(() => { })
+    }
+}
+
+/**
+ * 重命名实例
+ */
+export async function renameInstance(
+    client: IncusClient,
+    oldName: string,
+    newName: string
+): Promise<void> {
+    await client.request('POST', `/1.0/instances/${oldName}`, {
+        name: newName
+    })
+}
+
+/**
+ * 检查实例是否存在
+ */
+export async function instanceExists(
+    client: IncusClient,
+    instanceName: string
+): Promise<boolean> {
+    try {
+        await client.request('GET', `/1.0/instances/${instanceName}`)
+        return true
+    } catch {
+        return false
+    }
+}
+
+Path                                                                                    LineNumber Line                
+----                                                                                    ---------- ----                
+C:\Users\Administrator\Desktop\payinces\server\src\db\index.ts                                 130   suspendInstance...
+C:\Users\Administrator\Desktop\payinces\server\src\db\index.ts                                 133   isManualSuspens...
+C:\Users\Administrator\Desktop\payinces\server\src\db\instance-suspend.ts                       46 export async func...
+C:\Users\Administrator\Desktop\payinces\server\src\db\instance-suspend.ts                      106 export async func...
+C:\Users\Administrator\Desktop\payinces\server\src\db\instance-suspend.ts                      123   isManualSuspens...
+C:\Users\Administrator\Desktop\payinces\server\src\db\instance-suspend.ts                      144     isManualSuspe...
+C:\Users\Administrator\Desktop\payinces\server\src\db\instance-tasks.ts                        122           status:...
+C:\Users\Administrator\Desktop\payinces\server\src\db\instances.ts                             186   cloud_init_manu...
+C:\Users\Administrator\Desktop\payinces\server\src\db\instances.ts                             187   cloud_init_manu...
+C:\Users\Administrator\Desktop\payinces\server\src\db\instances.ts                             259     cloud_init_ma...
+C:\Users\Administrator\Desktop\payinces\server\src\db\instances.ts                             260     cloud_init_ma...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\antom.ts                                343         redirect:...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\cloud-init-status.ts                      5   | 'manual'        
+C:\Users\Administrator\Desktop\payinces\server\src\lib\cloud-init-status.ts                     14 export type Cloud...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\cloud-init-status.ts                     20   manualOverride:...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\cloud-init-status.ts                     32   cloud_init_manu...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\cloud-init-status.ts                     33   cloud_init_manu...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\cloud-init-status.ts                     44   'manual',         
+C:\Users\Administrator\Desktop\payinces\server\src\lib\cloud-init-status.ts                     52   'manual',         
+C:\Users\Administrator\Desktop\payinces\server\src\lib\cloud-init-status.ts                     64   manualOverride:...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\cloud-init-status.ts                     70     manualOverride, 
+C:\Users\Administrator\Desktop\payinces\server\src\lib\cloud-init-status.ts                    188     || instance.c...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\cloud-init-status.ts                    200   const message =...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\cloud-init-status.ts                    201     ? 'Cloud-init...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\cloud-init-status.ts                    210   return buildRes...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\cloud-init-status.ts                    216   manualCompleted...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\cloud-init-status.ts                    227       cloudInitMa...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\cloud-init-status.ts                    228       cloudInitMa...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\cloud-init-status.ts                    241       cloudInitMa...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\cloud-init-status.ts                    242       cloudInitMa...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\epay.ts                                 208         redirect:...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\errors.ts                               230     SNAPSHOT_MANU...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\errors.ts                               234     BACKUP_MANUAL...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\errors.ts                               577     [ErrorCode.SN...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\errors.ts                               581     [ErrorCode.BA...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\heleket.ts                              320     redirect: 'ma...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\lottery-notifier.ts                     162     redirect: 'ma...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\lottery-notifier.ts                     215     redirect: 'ma...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\lottery-notifier.ts                     257     redirect: 'ma...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\lsky.ts                                 212     redirect: 'ma...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\lsky.ts                                 301     redirect: 'ma...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\lsky.ts                                 417       redirect: '...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\notifier.ts                             434           : '需要人工处理'
+C:\Users\Administrator\Desktop\payinces\server\src\lib\notifier.ts                             455       let msg = `...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\notifier.ts                            1277       redirect: '...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\notifier.ts                            1343       redirect: '...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\notifier.ts                            1401       redirect: '...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\notifier.ts                            1595             redir...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\plugin-market-submission-scan.ts         82     redirect: 'ma...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\plugin-runtime.ts                       277     redirect: 'ma...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\public-api-openapi.ts                  1536             reque...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\public-api-openapi.ts                  1548             reque...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\recharge-payment-details.ts              17   manual?: {        
+C:\Users\Administrator\Desktop\payinces\server\src\lib\recharge-payment-details.ts              50 export function b...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\recharge-payment-details.ts              52     kind: 'manual', 
+C:\Users\Administrator\Desktop\payinces\server\src\lib\recharge-payment-details.ts              53     manual: {       
+C:\Users\Administrator\Desktop\payinces\server\src\lib\theme-market-submission-scan.ts          79     redirect: 'ma...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-billing.ts                    2259       await db.su...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-delivery.ts                     20 const CASE_STATUS...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-delivery.ts                     97       status: ret...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-delivery.ts                    108       status: 'pe...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-delivery.ts                    623         casesPend...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-exchange.ts                    128         status: {...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-exchange.ts                    345             statu...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-exchange.ts                    423           cloudIn...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-exchange.ts                    424           cloudIn...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-exchange.ts                    575         status: '...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-exchange.ts                    762         step: 'ma...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-exchange.ts                    770         status: '...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-exchange.ts                    791 async function re...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-exchange.ts                    804     action: 'orde...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-exchange.ts                    806     allowedStatus...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-exchange.ts                    810 async function ma...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-exchange.ts                    814   mode: 'manual_t...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-exchange.ts                    823       throw new E...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-exchange.ts                    829     const step = ...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-exchange.ts                    858         status: '...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-exchange.ts                    872         action: m...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-exchange.ts                    888 async function co...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-exchange.ts                    931         cloudInit...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-exchange.ts                    932         cloudInit...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-exchange.ts                    969           manualC...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-exchange.ts                   1007         action: '...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-exchange.ts                   1019           manualC...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-exchange.ts                   1020           manualS...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-exchange.ts                   1048       console.err...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-exchange.ts                   1127       prisma.exch...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-exchange.ts                   1340       const order...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-exchange.ts                   1491   fastify.post('/...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-exchange.ts                   1500       const task ...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-exchange.ts                   1516       const task ...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-exchange.ts                   1533       const task ...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-exchange.ts                   2006               sta...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-exchange.ts                   2068         allowedSt...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-integrations.ts                 54 const supportedRe...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-integrations.ts                265     redirect: 'ma...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-integrations.ts                298     redirect: 'ma...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-integrations.ts                340   const manualWit...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-integrations.ts                341     if (provider....
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-integrations.ts                345   if (manualWitho...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-integrations.ts                349       detail: man...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\balance.ts                            47   'manual_adjust',  
+C:\Users\Administrator\Desktop\payinces\server\src\routes\balance.ts                           199     : 'manual_adj...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\hosts.ts                            1380         : (autoCo...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\hosts.ts                            8258         `Ran manu...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\instance-destroy.ts                  104       status: { i...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\instances.ts                        3197       source: 'in...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\instances.ts                        3267       source: 'in...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\instances.ts                        6323         manualOve...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\instances.ts                        6332    * POST /instan...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\instances.ts                        6334   fastify.post<{ ...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\instances.ts                        6359         error: 'I...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\instances.ts                        6385       state: 'man...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\instances.ts                        6386       source: 'ma...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\instances.ts                        6387       manualOverr...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\instances.ts                        6388       message: 'C...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\instances.ts                        6396       'instance.c...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\instances.ts                        6397       `Manually m...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\oauth.ts                             416         redirect:...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\oauth.ts                             444         redirect:...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\public-api.ts                         70 const PUBLIC_BALA...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\public-api.ts                        413     : 'manual_adj...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\recharge.ts                           21   buildManualRech...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\recharge.ts                           62 const MANUAL_PROV...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\recharge.ts                           63 const SUPPORTED_R...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\recharge.ts                          283 function normaliz...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\recharge.ts                          289 function buildMan...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\recharge.ts                          291   const instructi...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\recharge.ts                         1116   if (provider.ty...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\recharge.ts                         1117     return normal...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\recharge.ts                         1222   if (providerTyp...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\recharge.ts                         1223     const instruc...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\recharge.ts                         1467           : provi...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\recharge.ts                         1468             ? bui...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\recharge.ts                         1560         manualPay...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\recharge.ts                         1561           ? build...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\recharge.ts                         1772       const payme...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\recharge.ts                         1809             : pro...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\recharge.ts                         1810               ? b...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\recharge.ts                         1850       if (!payUrl...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\recharge.ts                         1877         manualPay...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\recharge.ts                         1878           ? build...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\recharge.ts                         3147         callbackD...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\recharge.ts                         3166         source: '...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\recharge.ts                         3176         'recharge...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\recharge.ts                         3177         `Admin ma...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\recharge.ts                         3212         manual: t...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\recharge.ts                         3228         source: '...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\recharge.ts                         3238         'recharge...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\resource-risk.ts                       7   manualLimitInst...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\resource-risk.ts                       8   manualRestrictO...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\resource-risk.ts                       9   manualSuspendIn...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\resource-risk.ts                      10   manualUnsuspend...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\resource-risk.ts                     644   fastify.post('/...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\resource-risk.ts                     661     const state =...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\resource-risk.ts                     672   fastify.post('/...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\resource-risk.ts                     685     const state =...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\resource-risk.ts                     696   fastify.post('/...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\resource-risk.ts                     709     const state =...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\resource-risk.ts                     719   fastify.post('/...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\resource-risk.ts                     731     const restric...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\telegram.ts                          238     redirect: 'ma...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\telegram.ts                          257     redirect: 'ma...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\tickets.ts                           383         redirect:...
+C:\Users\Administrator\Desktop\payinces\server\src\scripts\lsky-production-proof.ts            107       redirect: '...
+C:\Users\Administrator\Desktop\payinces\server\src\scripts\rollback-system-update-ta...        172       // 属于无法安全自动...
+C:\Users\Administrator\Desktop\payinces\server\src\scripts\rollback-system-update-ta...        174         throw new...
+C:\Users\Administrator\Desktop\payinces\server\src\services\cranemail.ts                        48     redirect: 'ma...
+C:\Users\Administrator\Desktop\payinces\server\src\services\exchange-operation-lock.ts           4 const orderLocked...
+C:\Users\Administrator\Desktop\payinces\server\src\services\exchange.ts                         20 const orderBlocki...
+C:\Users\Administrator\Desktop\payinces\server\src\services\exchange.ts                       2030         status: {...
+C:\Users\Administrator\Desktop\payinces\server\src\services\exchange.ts                       2226     if (!['delive...
+C:\Users\Administrator\Desktop\payinces\server\src\services\exchange.ts                       2246       where: { id...
+C:\Users\Administrator\Desktop\payinces\server\src\services\hosting-scheduler.ts               146   console.log('[H...
+C:\Users\Administrator\Desktop\payinces\server\src\services\plan-upgrade-sync-repair.ts          8 const ACTIVE_CASE...
+C:\Users\Administrator\Desktop\payinces\server\src\services\resource-risk.ts                   152 function getManua...
+C:\Users\Administrator\Desktop\payinces\server\src\services\resource-risk.ts                   495   const manualLoc...
+C:\Users\Administrator\Desktop\payinces\server\src\services\resource-risk.ts                   500   let actionTaken...
+C:\Users\Administrator\Desktop\payinces\server\src\services\resource-risk.ts                   503   let nextStatus ...
+C:\Users\Administrator\Desktop\payinces\server\src\services\resource-risk.ts                   510   const canRecove...
+C:\Users\Administrator\Desktop\payinces\server\src\services\resource-risk.ts                   536   const canEscala...
+C:\Users\Administrator\Desktop\payinces\server\src\services\resource-risk.ts                   571   if (!manualLock...
+C:\Users\Administrator\Desktop\payinces\server\src\services\resource-risk.ts                   575   if (manualLocke...
+C:\Users\Administrator\Desktop\payinces\server\src\services\resource-risk.ts                   579   if (shouldAutoS...
+C:\Users\Administrator\Desktop\payinces\server\src\services\resource-risk.ts                   597     manualStatePr...
+C:\Users\Administrator\Desktop\payinces\server\src\services\resource-risk.ts                   669   if (shouldRestr...
+C:\Users\Administrator\Desktop\payinces\server\src\services\resource-risk.ts                   746     const manualL...
+C:\Users\Administrator\Desktop\payinces\server\src\services\resource-risk.ts                   749     const wouldAp...
+C:\Users\Administrator\Desktop\payinces\server\src\services\resource-risk.ts                   753     if (!manualLo...
+C:\Users\Administrator\Desktop\payinces\server\src\services\resource-risk.ts                   754     if (!manualLo...
+C:\Users\Administrator\Desktop\payinces\server\src\services\resource-risk.ts                   845       type: 'manu...
+C:\Users\Administrator\Desktop\payinces\server\src\services\resource-risk.ts                   859 export async func...
+C:\Users\Administrator\Desktop\payinces\server\src\services\resource-risk.ts                   866   const reason = ...
+C:\Users\Administrator\Desktop\payinces\server\src\services\resource-risk.ts                   904     manualReason:...
+C:\Users\Administrator\Desktop\payinces\server\src\services\resource-risk.ts                   916       status: 'ma...
+C:\Users\Administrator\Desktop\payinces\server\src\services\resource-risk.ts                   930       status: 'ma...
+C:\Users\Administrator\Desktop\payinces\server\src\services\resource-risk.ts                   946       type: 'manu...
+C:\Users\Administrator\Desktop\payinces\server\src\services\resource-risk.ts                   950       actionTaken...
+C:\Users\Administrator\Desktop\payinces\server\src\services\resource-risk.ts                   965   await createLog...
+C:\Users\Administrator\Desktop\payinces\server\src\services\resource-risk.ts                   969 export async func...
+C:\Users\Administrator\Desktop\payinces\server\src\services\resource-risk.ts                   976   const reason = ...
+C:\Users\Administrator\Desktop\payinces\server\src\services\resource-risk.ts                  1014     manualReason:...
+C:\Users\Administrator\Desktop\payinces\server\src\services\resource-risk.ts                  1025       status: 'ma...
+C:\Users\Administrator\Desktop\payinces\server\src\services\resource-risk.ts                  1036       status: 'ma...
+C:\Users\Administrator\Desktop\payinces\server\src\services\resource-risk.ts                  1052       type: 'manu...
+C:\Users\Administrator\Desktop\payinces\server\src\services\resource-risk.ts                  1056       actionTaken...
+C:\Users\Administrator\Desktop\payinces\server\src\services\resource-risk.ts                  1077       console.err...
+C:\Users\Administrator\Desktop\payinces\server\src\services\resource-risk.ts                  1081   await createLog...
+C:\Users\Administrator\Desktop\payinces\server\src\services\resource-risk.ts                  1085 export async func...
+C:\Users\Administrator\Desktop\payinces\server\src\services\resource-risk.ts                  1091   const reason = ...
+C:\Users\Administrator\Desktop\payinces\server\src\services\resource-risk.ts                  1151       type: 'manu...
+C:\Users\Administrator\Desktop\payinces\server\src\services\resource-risk.ts                  1155       actionTaken...
+C:\Users\Administrator\Desktop\payinces\server\src\services\resource-risk.ts                  1166       console.err...
+C:\Users\Administrator\Desktop\payinces\server\src\services\resource-risk.ts                  1170   await createLog...
+C:\Users\Administrator\Desktop\payinces\server\src\services\resource-risk.ts                  1174 export async func...
+C:\Users\Administrator\Desktop\payinces\server\src\services\resource-risk.ts                  1179   const reason = ...
+C:\Users\Administrator\Desktop\payinces\server\src\services\resource-risk.ts                  1196       type: 'manu...
+C:\Users\Administrator\Desktop\payinces\server\src\services\resource-risk.ts                  1200       actionTaken...
+C:\Users\Administrator\Desktop\payinces\server\src\services\resource-risk.ts                  1202       evidence: {...
+C:\Users\Administrator\Desktop\payinces\server\src\services\resource-risk.ts                  1213   await createLog...
+C:\Users\Administrator\Desktop\payinces\server\src\services\smartermail.ts                      41     redirect: 'ma...
+C:\Users\Administrator\Desktop\payinces\server\src\services\smartermail.ts                      80     redirect: 'ma...
+C:\Users\Administrator\Desktop\payinces\server\src\services\system-monitor.ts                  159         redirect:...
+C:\Users\Administrator\Desktop\payinces\server\src\services\traffic-notifier.ts                241             redir...
+C:\Users\Administrator\Desktop\payinces\server\src\services\traffic-notifier.ts                295             redir...
+C:\Users\Administrator\Desktop\payinces\server\src\types\database.ts                           244   cloud_init_manu...
+C:\Users\Administrator\Desktop\payinces\server\src\types\database.ts                           245   cloud_init_manu...
+C:\Users\Administrator\Desktop\payinces\server\src\workers\exchangeDeliveryWorker.ts           190     const already...
+C:\Users\Administrator\Desktop\payinces\server\src\workers\exchangeDeliveryWorker.ts           195         step: 'ma...
+C:\Users\Administrator\Desktop\payinces\server\src\workers\exchangeDeliveryWorker.ts           196         progress:...
+C:\Users\Administrator\Desktop\payinces\server\src\workers\exchangeDeliveryWorker.ts           204         status: '...
+C:\Users\Administrator\Desktop\payinces\server\src\workers\exchangeDeliveryWorker.ts           272     throw new Err...
+C:\Users\Administrator\Desktop\payinces\server\src\workers\exchangeDeliveryWorker.ts           371   if (!['deliveri...
+C:\Users\Administrator\Desktop\payinces\server\src\workers\exchangeDeliveryWorker.ts           398       if (!['deli...
+C:\Users\Administrator\Desktop\payinces\server\src\workers\exchangeDeliveryWorker.ts           447           cloudIn...
+C:\Users\Administrator\Desktop\payinces\server\src\workers\exchangeDeliveryWorker.ts           448           cloudIn...
+C:\Users\Administrator\Desktop\payinces\server\src\workers\exchangeDeliveryWorker.ts           726       const resol...
+C:\Users\Administrator\Desktop\payinces\server\src\workers\exchangeDeliveryWorker.ts           745               sta...
+C:\Users\Administrator\Desktop\payinces\server\src\workers\exchangeDeliveryWorker.ts           770         createLog...
+C:\Users\Administrator\Desktop\payinces\server\src\workers\exchangeDeliveryWorker.ts           771         createLog...
+C:\Users\Administrator\Desktop\payinces\server\src\workers\instanceTaskWorker.ts              2114           cloudIn...
+C:\Users\Administrator\Desktop\payinces\server\src\workers\instanceTaskWorker.ts              2115           cloudIn...
+C:\Users\Administrator\Desktop\payinces\server\src\workers\instanceTaskWorker.ts              2765         console.w...
+C:\Users\Administrator\Desktop\payinces\server\src\workers\instanceTaskWorker.ts              2769     // 2. 只有确认 In...
+C:\Users\Administrator\Desktop\payinces\server\prisma\schema.prisma                            174 enum RestoreTaskS...
+C:\Users\Administrator\Desktop\payinces\server\prisma\schema.prisma                            324 model RestoreTask { 
+C:\Users\Administrator\Desktop\payinces\server\prisma\schema.prisma                            330   status         ...
+C:\Users\Administrator\Desktop\payinces\server\prisma\migrations\20251208072207_add_...          2 CREATE TYPE "Rest...
+C:\Users\Administrator\Desktop\payinces\server\prisma\migrations\20251208072207_add_...         14     "status" "Res...
+C:\Users\Administrator\Desktop\payinces\server\prisma\migrations\20251212205000_add_...          1 -- Add progress a...
+
+
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$s=Get-Content server/prisma/schema.prisma -Encoding utf8; $s[168..185]; $s[318..345]; $w=Get-Content server/src/workers/instanceTaskWorker.ts -Encoding utf8; $w[2740..2785]; $b=Get-Content server/src/routes/backups.ts -Encoding utf8; $b[1390..1485]' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 609ms:
+  ready
+  error
+  deleted
+}
+
+enum RestoreTaskStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+// 存储类型枚举
+enum StorageType {
+  S3 // 预留
+  WEBDAV
+  FTP
+  SFTP
+  market
+}
+
+// ==================== 恢复任务模型 ====================
+
+model RestoreTask {
+  id                   Int               @id @default(autoincrement())
+  instanceId           Int               @map("instance_id")
+  backupId             Int?              @map("backup_id")
+  hostId               Int               @map("host_id")
+  userId               Int               @map("user_id")
+  status               RestoreTaskStatus @default(PENDING)
+  progress             String? // 当前执行步骤: stopping, restoring, cleaning, replacing, starting
+  retryCount           Int               @default(0) @map("retry_count") // 重试次数
+  tempInstanceName     String?           @map("temp_instance_name")
+  originalInstanceName String            @map("original_instance_name")
+  originalIncusId      String            @map("original_incus_id")
+  error                String?
+  createdAt            DateTime          @default(now()) @map("created_at")
+  startedAt            DateTime?         @map("started_at")
+  finishedAt           DateTime?         @map("finished_at")
+
+  @@index([hostId, status])
+  @@index([instanceId])
+  @@map("restore_tasks")
+}
+
+// ==================== 实例操作任务模型 ====================
+    })
+
+    await createLog(
+      task.userId,
+      'instance',
+      'instance.clone',
+      `Cloned instance "${sourceInstance.name}" to "${newInstanceName}" [new instance ID: ${newInstanceId}]`,
+      'success',
+      { instanceId: newInstanceId }
+    )
+  } catch (error) {
+    // 如果创建失败，尝试清理已创建的资源
+
+    // 1. 清理 Incus 中的实例
+    let incusCloneReleased = false
+    try {
+      await deleteInstance(client, newIncusId)
+      console.log(`[Clone] 已清理失败的 Incus 实例: ${newIncusId}`)
+      incusCloneReleased = true
+    } catch (cleanupErr) {
+      const cleanupMessage = cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr)
+      if (cleanupMessage.includes('not found') || cleanupMessage.includes('Instance not found')) {
+        incusCloneReleased = true
+      } else {
+        console.warn(`[Clone] 清理失败 Incus 实例失败，保留数据库记录和资源占用以便人工处理: ${newIncusId}`, cleanupErr)
+      }
+    }
+
+    // 2. 只有确认 Incus 克隆实例已清理，才删除数据库记录；否则保留为 error 供人工处理。
+    let cloneDbRecordRemoved = false
+    let cloneDbRecordExists = false
+    try {
+      // 检查是否存在具有该 incusId 的实例记录
+      const existingInstance = await prisma.instance.findFirst({
+        where: { incusId: newIncusId }
+      })
+      if (existingInstance) {
+        cloneDbRecordExists = true
+        if (incusCloneReleased) {
+          await prisma.instance.delete({
+            where: { id: existingInstance.id }
+          })
+          cloneDbRecordRemoved = true
+          console.log(`[Clone] 已清理失败的 Instance 记录: ${existingInstance.id}`)
+        } else {
+          await prisma.instance.update({
+      }
+
+      const cancelledTask = await db.cancelBackupUploadTask(taskIdNum)
+      if (!cancelledTask) {
+        return reply.code(400).send({
+          error: 'CANCEL_FAILED',
+          message: '取消任务失败，任务可能已开始执行'
+        })
+      }
+
+      await createLog(
+        request.user.id,
+        'backup',
+        'backup.upload.cancel',
+        `Cancelled backup upload task`,
+        'success',
+        { instanceId: instanceIdNum }
+      )
+
+      return {
+        success: true,
+        message: '任务已取消'
+      }
+    }
+  )
+
+  // 获取实例的活跃上传任务（用于前端状态恢复）
+  fastify.get<{ Params: { instanceId: string } }>(
+    '/:instanceId/upload-tasks/active',
+    { onRequest: [fastify.authenticateUser] },
+    async (request, reply) => {
+      const { instanceId } = request.params
+      const instanceIdNum = parsePositiveRouteId(instanceId)
+
+      if (!instanceIdNum) {
+        return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
+      }
+
+      // 验证实例归属
+      const instance = await db.getInstanceById(instanceIdNum)
+      if (!instance) {
+        return reply.code(404).send(apiError(ErrorCode.INSTANCE_NOT_FOUND))
+      }
+
+      // AUTH004: 备份上传仅限实例所有者
+      if (instance.user_id !== request.user.id) {
+        return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
+      }
+
+      const task = await db.getActiveUploadTaskForInstance(instanceIdNum)
+      if (!task) {
+        return { task: null }
+      }
+
+      // 获取队列位置
+      const queuePosition = task.status === 'PENDING'
+        ? await db.getUploadTaskQueuePosition(task.id)
+        : 0
+
+      // 计算执行时长（秒）
+      let duration: number | null = null
+      if (task.startedAt && task.finishedAt) {
+        duration = Math.floor((task.finishedAt.getTime() - task.startedAt.getTime()) / 1000)
+      } else if (task.startedAt) {
+        // 正在执行中，计算已执行时长
+        duration = Math.floor((Date.now() - task.startedAt.getTime()) / 1000)
+      }
+
+      return {
+        task: {
+          taskId: task.id,
+          backupId: task.backupId,
+          status: task.status,
+          storageName: task.storageConfig?.name,
+          storageType: task.storageConfig?.type,
+          queuePosition,
+          duration,
+          createdAt: task.createdAt.toISOString(),
+          startedAt: task.startedAt?.toISOString() ?? null,
+          finishedAt: task.finishedAt?.toISOString() ?? null
+        }
+      }
+    }
+  )
+
+  // 恢复工作流已移至 restoreTaskWorker.ts
+  // 导出任务现在使用 Redis 存储，自动过期清理
+}
+
+codex
+只读结论：Incus 实际存在性已有 `instanceExists(client, name)`，它直接 GET `/1.0/instances/<name>`；任务状态枚举没有“人工介入”新状态，且规格禁止改 schema，因此最小兼容标记应为 `FAILED + progress: manual_intervention + error 明示保留的临时实例`，同时写失败日志/错误告警。判定不确定时也必须保守保留，不能执行删除。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'git diff -- server/src/workers/restoreTaskWorker.ts server/scripts/test-instance-recreate-consistency.ts server/scripts/test-backup-task-race-guards.ts' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 464ms:
+apply patch
+patch: completed
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-backup-task-race-guards.ts
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-instance-recreate-consistency.ts
+C:\Users\Administrator\Desktop\payinces\server\src\workers\restoreTaskWorker.ts
+diff --git a/server/scripts/test-backup-task-race-guards.ts b/server/scripts/test-backup-task-race-guards.ts
+index f1f77035013117bde93b7b94742ff33f0e0a02ac..9f3998bc51a7111a7fb70968cee5808888d2e182
+--- a/server/scripts/test-backup-task-race-guards.ts
++++ b/server/scripts/test-backup-task-race-guards.ts
+@@ -231,6 +231,26 @@
+   !restoreExecuteSection.includes('id: { not: task.backupId'),
+   'restore worker must not keep the used backup as ready after deleting all original Incus backups'
+ )
++const restoreCatchIndex = restoreExecuteSection.indexOf('    } catch (err) {')
++assert.notEqual(restoreCatchIndex, -1, 'restore worker must retain explicit failure cleanup')
++const restoreCatchSection = restoreExecuteSection.slice(restoreCatchIndex)
++const originalExistsIndex = restoreCatchSection.indexOf('const originalExists = await instanceExists(client, task.originalIncusId)')
++const preserveTempIndex = restoreCatchSection.indexOf('if (!originalExists)')
++const deleteTempIndex = restoreCatchSection.indexOf('await deleteInstance(client, task.tempInstanceName)')
++assert.ok(
++  originalExistsIndex !== -1 &&
++    preserveTempIndex !== -1 &&
++    deleteTempIndex !== -1 &&
++    originalExistsIndex < preserveTempIndex &&
++    preserveTempIndex < deleteTempIndex,
++  'restore cleanup must verify the original in Incus and preserve the only temporary copy after original deletion'
++)
++assert.ok(
++  restoreCatchSection.includes("progress: 'manual_intervention'") &&
++    restoreCatchSection.includes('已保留临时实例') &&
++    restoreCatchSection.includes('需要人工介入'),
++  'restore cleanup must mark retained temporary copies for manual intervention'
++)
+ 
+ const uploadTimeoutSection = section(
+   uploadWorkerSource,
+diff --git a/server/scripts/test-instance-recreate-consistency.ts b/server/scripts/test-instance-recreate-consistency.ts
+index 1ce7a60a8844ebc4f7f8ae6c589a50f9c07a4e55..4b6c590984056566e845a9dc97533474c3020fe9
+--- a/server/scripts/test-instance-recreate-consistency.ts
++++ b/server/scripts/test-instance-recreate-consistency.ts
+@@ -7,6 +7,7 @@
+ const __dirname = dirname(__filename)
+ 
+ const source = readFileSync(resolve(__dirname, '../src/workers/instanceTaskWorker.ts'), 'utf8')
++const restoreWorkerSource = readFileSync(resolve(__dirname, '../src/workers/restoreTaskWorker.ts'), 'utf8')
+ const portMappingsSource = readFileSync(resolve(__dirname, '../src/db/port-mappings.ts'), 'utf8')
+ 
+ function indexOfOrThrow(sourceText: string, pattern: string, label: string): number {
+@@ -127,4 +128,36 @@
+   'clone failure cleanup must delete the failed DB clone before rolling back reserved host resources'
+ )
+ 
++const restoreCatchSection = section(
++  restoreWorkerSource,
++  '    } catch (err) {',
++  '    } finally {'
++)
++const checkOriginalIndex = indexOfOrThrow(
++  restoreCatchSection,
++  'const originalExists = await instanceExists(client, task.originalIncusId)',
++  'original Incus existence check before restore temp cleanup'
++)
++const preserveUniqueTempIndex = indexOfOrThrow(
++  restoreCatchSection,
++  'if (!originalExists)',
++  'unique restored temp preservation branch'
++)
++const deleteRestoreTempIndex = indexOfOrThrow(
++  restoreCatchSection,
++  'await deleteInstance(client, task.tempInstanceName)',
++  'restore temp delete'
++)
++
++assert.ok(
++  checkOriginalIndex < preserveUniqueTempIndex && preserveUniqueTempIndex < deleteRestoreTempIndex,
++  'restore failure cleanup must check actual Incus original existence and preserve temp before any delete path'
++)
++assert.ok(
++  restoreCatchSection.includes("progress: 'manual_intervention'") &&
++    restoreCatchSection.includes('已保留临时实例') &&
++    restoreCatchSection.includes('需要人工介入'),
++  'restore failure after original deletion must keep the temp instance and mark the failed task for manual intervention'
++)
++
+ console.log('instance recreate consistency checks passed')
+diff --git a/server/src/workers/restoreTaskWorker.ts b/server/src/workers/restoreTaskWorker.ts
+index 917d6aaabdd67c627e968d5af0f8b390040ffb38..03457ec4bcbc765a8801862dc76905f7faebe108
+--- a/server/src/workers/restoreTaskWorker.ts
++++ b/server/src/workers/restoreTaskWorker.ts
+@@ -9,7 +9,8 @@
+ import { getBackupExportStream } from '../lib/incus/incus-backups.js'
+ import {
+     restoreFromStream,
+-    renameInstance
++    renameInstance,
++    instanceExists
+ } from '../lib/incus/incus-restore.js'
+ import {
+     stopInstance,
+@@ -412,8 +413,10 @@
+     } catch (err) {
+         const errorMessage = err instanceof Error ? err.message : String(err)
+         console.error(`[RestoreWorker] Task ${taskId} failed:`, errorMessage)
++        let manualInterventionReason: string | null = null
+ 
+-        // 尝试清理临时实例
++        // 只有确认 Incus 中的原实例仍存在，才允许清理临时副本。
++        // 原实例已不存在或无法确认时，临时实例可能是唯一数据副本，必须保留供人工恢复。
+         if (task.tempInstanceName) {
+             try {
+                 const host = await prisma.host.findUnique({ where: { id: task.hostId } })
+@@ -424,14 +427,21 @@
+                         certPath: host.certPath,
+                         keyPath: host.keyPath
+                     })
+-                    const { instanceExists } = await import('../lib/incus/incus-restore.js')
++                    const originalExists = await instanceExists(client, task.originalIncusId)
+                     const tempExists = await instanceExists(client, task.tempInstanceName)
+-                    if (tempExists) {
++                    if (!originalExists) {
++                        manualInterventionReason = `Incus 原实例 ${task.originalIncusId} 已不存在或无法确认，已保留临时实例 ${task.tempInstanceName}，需要人工介入恢复`
++                        console.error(`[RestoreWorker] Task ${taskId}: ${manualInterventionReason}`)
++                    } else if (tempExists) {
+                         await deleteInstance(client, task.tempInstanceName)
+                         console.log(`[RestoreWorker] Task ${taskId}: 已清理临时实例 ${task.tempInstanceName}`)
+                     }
++                } else {
++                    manualInterventionReason = `无法确认 Incus 原实例 ${task.originalIncusId} 是否存在，已保留临时实例 ${task.tempInstanceName}，需要人工介入核查`
++                    console.error(`[RestoreWorker] Task ${taskId}: ${manualInterventionReason}`)
+                 }
+             } catch (cleanupErr) {
++                manualInterventionReason = `无法安全确认 Incus 原实例 ${task.originalIncusId} 仍存在，已保留临时实例 ${task.tempInstanceName}，需要人工介入核查`
+                 console.warn(`[RestoreWorker] Task ${taskId}: 清理临时实例失败:`, cleanupErr)
+             }
+         }
+@@ -440,7 +450,12 @@
+             where: { id: taskId, status: 'PROCESSING' },
+             data: {
+                 status: 'FAILED',
+-                error: errorMessage,
++                ...(manualInterventionReason
++                    ? {
++                        progress: 'manual_intervention',
++                        error: `${errorMessage}; ${manualInterventionReason}`
++                    }
++                    : { error: errorMessage }),
+                 finishedAt: new Date()
+             }
+         })
+
+diff --git a/server/scripts/test-backup-task-race-guards.ts b/server/scripts/test-backup-task-race-guards.ts
+index f1f77035013117bde93b7b94742ff33f0e0a02ac..9f3998bc51a7111a7fb70968cee5808888d2e182
+--- a/server/scripts/test-backup-task-race-guards.ts
++++ b/server/scripts/test-backup-task-race-guards.ts
+@@ -231,6 +231,26 @@
+   !restoreExecuteSection.includes('id: { not: task.backupId'),
+   'restore worker must not keep the used backup as ready after deleting all original Incus backups'
+ )
++const restoreCatchIndex = restoreExecuteSection.indexOf('    } catch (err) {')
++assert.notEqual(restoreCatchIndex, -1, 'restore worker must retain explicit failure cleanup')
++const restoreCatchSection = restoreExecuteSection.slice(restoreCatchIndex)
++const originalExistsIndex = restoreCatchSection.indexOf('const originalExists = await instanceExists(client, task.originalIncusId)')
++const preserveTempIndex = restoreCatchSection.indexOf('if (!originalExists)')
++const deleteTempIndex = restoreCatchSection.indexOf('await deleteInstance(client, task.tempInstanceName)')
++assert.ok(
++  originalExistsIndex !== -1 &&
++    preserveTempIndex !== -1 &&
++    deleteTempIndex !== -1 &&
++    originalExistsIndex < preserveTempIndex &&
++    preserveTempIndex < deleteTempIndex,
++  'restore cleanup must verify the original in Incus and preserve the only temporary copy after original deletion'
++)
++assert.ok(
++  restoreCatchSection.includes("progress: 'manual_intervention'") &&
++    restoreCatchSection.includes('已保留临时实例') &&
++    restoreCatchSection.includes('需要人工介入'),
++  'restore cleanup must mark retained temporary copies for manual intervention'
++)
+ 
+ const uploadTimeoutSection = section(
+   uploadWorkerSource,
+diff --git a/server/scripts/test-instance-recreate-consistency.ts b/server/scripts/test-instance-recreate-consistency.ts
+index 1ce7a60a8844ebc4f7f8ae6c589a50f9c07a4e55..4b6c590984056566e845a9dc97533474c3020fe9
+--- a/server/scripts/test-instance-recreate-consistency.ts
++++ b/server/scripts/test-instance-recreate-consistency.ts
+@@ -7,6 +7,7 @@
+ const __dirname = dirname(__filename)
+ 
+ const source = readFileSync(resolve(__dirname, '../src/workers/instanceTaskWorker.ts'), 'utf8')
++const restoreWorkerSource = readFileSync(resolve(__dirname, '../src/workers/restoreTaskWorker.ts'), 'utf8')
+ const portMappingsSource = readFileSync(resolve(__dirname, '../src/db/port-mappings.ts'), 'utf8')
+ 
+ function indexOfOrThrow(sourceText: string, pattern: string, label: string): number {
+@@ -127,4 +128,36 @@
+   'clone failure cleanup must delete the failed DB clone before rolling back reserved host resources'
+ )
+ 
++const restoreCatchSection = section(
++  restoreWorkerSource,
++  '    } catch (err) {',
++  '    } finally {'
++)
++const checkOriginalIndex = indexOfOrThrow(
++  restoreCatchSection,
++  'const originalExists = await instanceExists(client, task.originalIncusId)',
++  'original Incus existence check before restore temp cleanup'
++)
++const preserveUniqueTempIndex = indexOfOrThrow(
++  restoreCatchSection,
++  'if (!originalExists)',
++  'unique restored temp preservation branch'
++)
++const deleteRestoreTempIndex = indexOfOrThrow(
++  restoreCatchSection,
++  'await deleteInstance(client, task.tempInstanceName)',
++  'restore temp delete'
++)
++
++assert.ok(
++  checkOriginalIndex < preserveUniqueTempIndex && preserveUniqueTempIndex < deleteRestoreTempIndex,
++  'restore failure cleanup must check actual Incus original existence and preserve temp before any delete path'
++)
++assert.ok(
++  restoreCatchSection.includes("progress: 'manual_intervention'") &&
++    restoreCatchSection.includes('已保留临时实例') &&
++    restoreCatchSection.includes('需要人工介入'),
++  'restore failure after original deletion must keep the temp instance and mark the failed task for manual intervention'
++)
++
+ console.log('instance recreate consistency checks passed')
+diff --git a/server/src/workers/restoreTaskWorker.ts b/server/src/workers/restoreTaskWorker.ts
+index 917d6aaabdd67c627e968d5af0f8b390040ffb38..03457ec4bcbc765a8801862dc76905f7faebe108
+--- a/server/src/workers/restoreTaskWorker.ts
++++ b/server/src/workers/restoreTaskWorker.ts
+@@ -9,7 +9,8 @@
+ import { getBackupExportStream } from '../lib/incus/incus-backups.js'
+ import {
+     restoreFromStream,
+-    renameInstance
++    renameInstance,
++    instanceExists
+ } from '../lib/incus/incus-restore.js'
+ import {
+     stopInstance,
+@@ -412,8 +413,10 @@
+     } catch (err) {
+         const errorMessage = err instanceof Error ? err.message : String(err)
+         console.error(`[RestoreWorker] Task ${taskId} failed:`, errorMessage)
++        let manualInterventionReason: string | null = null
+ 
+-        // 尝试清理临时实例
++        // 只有确认 Incus 中的原实例仍存在，才允许清理临时副本。
++        // 原实例已不存在或无法确认时，临时实例可能是唯一数据副本，必须保留供人工恢复。
+         if (task.tempInstanceName) {
+             try {
+                 const host = await prisma.host.findUnique({ where: { id: task.hostId } })
+@@ -424,14 +427,21 @@
+                         certPath: host.certPath,
+                         keyPath: host.keyPath
+                     })
+-                    const { instanceExists } = await import('../lib/incus/incus-restore.js')
++                    const originalExists = await instanceExists(client, task.originalIncusId)
+                     const tempExists = await instanceExists(client, task.tempInstanceName)
+-                    if (tempExists) {
++                    if (!originalExists) {
++                        manualInterventionReason = `Incus 原实例 ${task.originalIncusId} 已不存在或无法确认，已保留临时实例 ${task.tempInstanceName}，需要人工介入恢复`
++                        console.error(`[RestoreWorker] Task ${taskId}: ${manualInterventionReason}`)
++                    } else if (tempExists) {
+                         await deleteInstance(client, task.tempInstanceName)
+                         console.log(`[RestoreWorker] Task ${taskId}: 已清理临时实例 ${task.tempInstanceName}`)
+                     }
++                } else {
++                    manualInterventionReason = `无法确认 Incus 原实例 ${task.originalIncusId} 是否存在，已保留临时实例 ${task.tempInstanceName}，需要人工介入核查`
++                    console.error(`[RestoreWorker] Task ${taskId}: ${manualInterventionReason}`)
+                 }
+             } catch (cleanupErr) {
++                manualInterventionReason = `无法安全确认 Incus 原实例 ${task.originalIncusId} 仍存在，已保留临时实例 ${task.tempInstanceName}，需要人工介入核查`
+                 console.warn(`[RestoreWorker] Task ${taskId}: 清理临时实例失败:`, cleanupErr)
+             }
+         }
+@@ -440,7 +450,12 @@
+             where: { id: taskId, status: 'PROCESSING' },
+             data: {
+                 status: 'FAILED',
+-                error: errorMessage,
++                ...(manualInterventionReason
++                    ? {
++                        progress: 'manual_intervention',
++                        error: `${errorMessage}; ${manualInterventionReason}`
++                    }
++                    : { error: errorMessage }),
+                 finishedAt: new Date()
+             }
+         })
+
+codex
+补丁已落下：异常清理现在先查询 Incus 原实例；只有明确仍存在才允许删临时副本，原实例不存在或无法确认时保留临时副本，并将任务标成 `FAILED/manual_intervention`。我正在先跑两组守卫，若守卫暴露结构或顺序问题会只在这三个允许文件内修正。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'pnpm --filter server test:instance-recreate-consistency; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; pnpm --filter server test:backup-task-race-guards' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 1956ms:
+
+> server@1.3.7 test:instance-recreate-consistency C:\Users\Administrator\Desktop\payinces\server
+> node --import tsx scripts/test-instance-recreate-consistency.ts
+
+instance recreate consistency checks passed
+
+> server@1.3.7 test:backup-task-race-guards C:\Users\Administrator\Desktop\payinces\server
+> node --import tsx scripts/test-backup-task-race-guards.ts
+
+backup task race guard tests passed
+
+diff --git a/server/scripts/test-backup-task-race-guards.ts b/server/scripts/test-backup-task-race-guards.ts
+index f1f77035013117bde93b7b94742ff33f0e0a02ac..9f3998bc51a7111a7fb70968cee5808888d2e182
+--- a/server/scripts/test-backup-task-race-guards.ts
++++ b/server/scripts/test-backup-task-race-guards.ts
+@@ -231,6 +231,26 @@
+   !restoreExecuteSection.includes('id: { not: task.backupId'),
+   'restore worker must not keep the used backup as ready after deleting all original Incus backups'
+ )
++const restoreCatchIndex = restoreExecuteSection.indexOf('    } catch (err) {')
++assert.notEqual(restoreCatchIndex, -1, 'restore worker must retain explicit failure cleanup')
++const restoreCatchSection = restoreExecuteSection.slice(restoreCatchIndex)
++const originalExistsIndex = restoreCatchSection.indexOf('const originalExists = await instanceExists(client, task.originalIncusId)')
++const preserveTempIndex = restoreCatchSection.indexOf('if (!originalExists)')
++const deleteTempIndex = restoreCatchSection.indexOf('await deleteInstance(client, task.tempInstanceName)')
++assert.ok(
++  originalExistsIndex !== -1 &&
++    preserveTempIndex !== -1 &&
++    deleteTempIndex !== -1 &&
++    originalExistsIndex < preserveTempIndex &&
++    preserveTempIndex < deleteTempIndex,
++  'restore cleanup must verify the original in Incus and preserve the only temporary copy after original deletion'
++)
++assert.ok(
++  restoreCatchSection.includes("progress: 'manual_intervention'") &&
++    restoreCatchSection.includes('已保留临时实例') &&
++    restoreCatchSection.includes('需要人工介入'),
++  'restore cleanup must mark retained temporary copies for manual intervention'
++)
+ 
+ const uploadTimeoutSection = section(
+   uploadWorkerSource,
+diff --git a/server/scripts/test-instance-recreate-consistency.ts b/server/scripts/test-instance-recreate-consistency.ts
+index 1ce7a60a8844ebc4f7f8ae6c589a50f9c07a4e55..4b6c590984056566e845a9dc97533474c3020fe9
+--- a/server/scripts/test-instance-recreate-consistency.ts
++++ b/server/scripts/test-instance-recreate-consistency.ts
+@@ -7,6 +7,7 @@
+ const __dirname = dirname(__filename)
+ 
+ const source = readFileSync(resolve(__dirname, '../src/workers/instanceTaskWorker.ts'), 'utf8')
++const restoreWorkerSource = readFileSync(resolve(__dirname, '../src/workers/restoreTaskWorker.ts'), 'utf8')
+ const portMappingsSource = readFileSync(resolve(__dirname, '../src/db/port-mappings.ts'), 'utf8')
+ 
+ function indexOfOrThrow(sourceText: string, pattern: string, label: string): number {
+@@ -127,4 +128,36 @@
+   'clone failure cleanup must delete the failed DB clone before rolling back reserved host resources'
+ )
+ 
++const restoreCatchSection = section(
++  restoreWorkerSource,
++  '    } catch (err) {',
++  '    } finally {'
++)
++const checkOriginalIndex = indexOfOrThrow(
++  restoreCatchSection,
++  'const originalExists = await instanceExists(client, task.originalIncusId)',
++  'original Incus existence check before restore temp cleanup'
++)
++const preserveUniqueTempIndex = indexOfOrThrow(
++  restoreCatchSection,
++  'if (!originalExists)',
++  'unique restored temp preservation branch'
++)
++const deleteRestoreTempIndex = indexOfOrThrow(
++  restoreCatchSection,
++  'await deleteInstance(client, task.tempInstanceName)',
++  'restore temp delete'
++)
++
++assert.ok(
++  checkOriginalIndex < preserveUniqueTempIndex && preserveUniqueTempIndex < deleteRestoreTempIndex,
++  'restore failure cleanup must check actual Incus original existence and preserve temp before any delete path'
++)
++assert.ok(
++  restoreCatchSection.includes("progress: 'manual_intervention'") &&
++    restoreCatchSection.includes('已保留临时实例') &&
++    restoreCatchSection.includes('需要人工介入'),
++  'restore failure after original deletion must keep the temp instance and mark the failed task for manual intervention'
++)
++
+ console.log('instance recreate consistency checks passed')
+diff --git a/server/src/workers/restoreTaskWorker.ts b/server/src/workers/restoreTaskWorker.ts
+index 917d6aaabdd67c627e968d5af0f8b390040ffb38..03457ec4bcbc765a8801862dc76905f7faebe108
+--- a/server/src/workers/restoreTaskWorker.ts
++++ b/server/src/workers/restoreTaskWorker.ts
+@@ -9,7 +9,8 @@
+ import { getBackupExportStream } from '../lib/incus/incus-backups.js'
+ import {
+     restoreFromStream,
+-    renameInstance
++    renameInstance,
++    instanceExists
+ } from '../lib/incus/incus-restore.js'
+ import {
+     stopInstance,
+@@ -412,8 +413,10 @@
+     } catch (err) {
+         const errorMessage = err instanceof Error ? err.message : String(err)
+         console.error(`[RestoreWorker] Task ${taskId} failed:`, errorMessage)
++        let manualInterventionReason: string | null = null
+ 
+-        // 尝试清理临时实例
++        // 只有确认 Incus 中的原实例仍存在，才允许清理临时副本。
++        // 原实例已不存在或无法确认时，临时实例可能是唯一数据副本，必须保留供人工恢复。
+         if (task.tempInstanceName) {
+             try {
+                 const host = await prisma.host.findUnique({ where: { id: task.hostId } })
+@@ -424,14 +427,21 @@
+                         certPath: host.certPath,
+                         keyPath: host.keyPath
+                     })
+-                    const { instanceExists } = await import('../lib/incus/incus-restore.js')
++                    const originalExists = await instanceExists(client, task.originalIncusId)
+                     const tempExists = await instanceExists(client, task.tempInstanceName)
+-                    if (tempExists) {
++                    if (!originalExists) {
++                        manualInterventionReason = `Incus 原实例 ${task.originalIncusId} 已不存在或无法确认，已保留临时实例 ${task.tempInstanceName}，需要人工介入恢复`
++                        console.error(`[RestoreWorker] Task ${taskId}: ${manualInterventionReason}`)
++                    } else if (tempExists) {
+                         await deleteInstance(client, task.tempInstanceName)
+                         console.log(`[RestoreWorker] Task ${taskId}: 已清理临时实例 ${task.tempInstanceName}`)
+                     }
++                } else {
++                    manualInterventionReason = `无法确认 Incus 原实例 ${task.originalIncusId} 是否存在，已保留临时实例 ${task.tempInstanceName}，需要人工介入核查`
++                    console.error(`[RestoreWorker] Task ${taskId}: ${manualInterventionReason}`)
+                 }
+             } catch (cleanupErr) {
++                manualInterventionReason = `无法安全确认 Incus 原实例 ${task.originalIncusId} 仍存在，已保留临时实例 ${task.tempInstanceName}，需要人工介入核查`
+                 console.warn(`[RestoreWorker] Task ${taskId}: 清理临时实例失败:`, cleanupErr)
+             }
+         }
+@@ -440,7 +450,12 @@
+             where: { id: taskId, status: 'PROCESSING' },
+             data: {
+                 status: 'FAILED',
+-                error: errorMessage,
++                ...(manualInterventionReason
++                    ? {
++                        progress: 'manual_intervention',
++                        error: `${errorMessage}; ${manualInterventionReason}`
++                    }
++                    : { error: errorMessage }),
+                 finishedAt: new Date()
+             }
+         })
+
+已完成最小实现和两组守卫增补；指定守卫均已通过，继续执行 server type-check 并核对最终 diff/文件范围。
+  ✓ 读取 AGENTS.md、恢复 worker 与两组守卫，确认现有存在性检查和人工介入机制
+  ✓ 仅修改 restoreTaskWorker.ts 与对应守卫，覆盖唯一副本保护
+  → 运行两个指定守卫和 server type-check，审查变更范围
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'pnpm --filter server type-check' in C:\Users\Administrator\Desktop\payinces
+diff --git a/server/scripts/test-backup-task-race-guards.ts b/server/scripts/test-backup-task-race-guards.ts
+index f1f77035013117bde93b7b94742ff33f0e0a02ac..9f3998bc51a7111a7fb70968cee5808888d2e182
+--- a/server/scripts/test-backup-task-race-guards.ts
++++ b/server/scripts/test-backup-task-race-guards.ts
+@@ -231,6 +231,26 @@
+   !restoreExecuteSection.includes('id: { not: task.backupId'),
+   'restore worker must not keep the used backup as ready after deleting all original Incus backups'
+ )
++const restoreCatchIndex = restoreExecuteSection.indexOf('    } catch (err) {')
++assert.notEqual(restoreCatchIndex, -1, 'restore worker must retain explicit failure cleanup')
++const restoreCatchSection = restoreExecuteSection.slice(restoreCatchIndex)
++const originalExistsIndex = restoreCatchSection.indexOf('const originalExists = await instanceExists(client, task.originalIncusId)')
++const preserveTempIndex = restoreCatchSection.indexOf('if (!originalExists)')
++const deleteTempIndex = restoreCatchSection.indexOf('await deleteInstance(client, task.tempInstanceName)')
++assert.ok(
++  originalExistsIndex !== -1 &&
++    preserveTempIndex !== -1 &&
++    deleteTempIndex !== -1 &&
++    originalExistsIndex < preserveTempIndex &&
++    preserveTempIndex < deleteTempIndex,
++  'restore cleanup must verify the original in Incus and preserve the only temporary copy after original deletion'
++)
++assert.ok(
++  restoreCatchSection.includes("progress: 'manual_intervention'") &&
++    restoreCatchSection.includes('已保留临时实例') &&
++    restoreCatchSection.includes('需要人工介入'),
++  'restore cleanup must mark retained temporary copies for manual intervention'
++)
+ 
+ const uploadTimeoutSection = section(
+   uploadWorkerSource,
+diff --git a/server/scripts/test-instance-recreate-consistency.ts b/server/scripts/test-instance-recreate-consistency.ts
+index 1ce7a60a8844ebc4f7f8ae6c589a50f9c07a4e55..4b6c590984056566e845a9dc97533474c3020fe9
+--- a/server/scripts/test-instance-recreate-consistency.ts
++++ b/server/scripts/test-instance-recreate-consistency.ts
+@@ -7,6 +7,7 @@
+ const __dirname = dirname(__filename)
+ 
+ const source = readFileSync(resolve(__dirname, '../src/workers/instanceTaskWorker.ts'), 'utf8')
++const restoreWorkerSource = readFileSync(resolve(__dirname, '../src/workers/restoreTaskWorker.ts'), 'utf8')
+ const portMappingsSource = readFileSync(resolve(__dirname, '../src/db/port-mappings.ts'), 'utf8')
+ 
+ function indexOfOrThrow(sourceText: string, pattern: string, label: string): number {
+@@ -127,4 +128,36 @@
+   'clone failure cleanup must delete the failed DB clone before rolling back reserved host resources'
+ )
+ 
++const restoreCatchSection = section(
++  restoreWorkerSource,
++  '    } catch (err) {',
++  '    } finally {'
++)
++const checkOriginalIndex = indexOfOrThrow(
++  restoreCatchSection,
++  'const originalExists = await instanceExists(client, task.originalIncusId)',
++  'original Incus existence check before restore temp cleanup'
++)
++const preserveUniqueTempIndex = indexOfOrThrow(
++  restoreCatchSection,
++  'if (!originalExists)',
++  'unique restored temp preservation branch'
++)
++const deleteRestoreTempIndex = indexOfOrThrow(
++  restoreCatchSection,
++  'await deleteInstance(client, task.tempInstanceName)',
++  'restore temp delete'
++)
++
++assert.ok(
++  checkOriginalIndex < preserveUniqueTempIndex && preserveUniqueTempIndex < deleteRestoreTempIndex,
++  'restore failure cleanup must check actual Incus original existence and preserve temp before any delete path'
++)
++assert.ok(
++  restoreCatchSection.includes("progress: 'manual_intervention'") &&
++    restoreCatchSection.includes('已保留临时实例') &&
++    restoreCatchSection.includes('需要人工介入'),
++  'restore failure after original deletion must keep the temp instance and mark the failed task for manual intervention'
++)
++
+ console.log('instance recreate consistency checks passed')
+diff --git a/server/src/workers/restoreTaskWorker.ts b/server/src/workers/restoreTaskWorker.ts
+index 917d6aaabdd67c627e968d5af0f8b390040ffb38..03457ec4bcbc765a8801862dc76905f7faebe108
+--- a/server/src/workers/restoreTaskWorker.ts
++++ b/server/src/workers/restoreTaskWorker.ts
+@@ -9,7 +9,8 @@
+ import { getBackupExportStream } from '../lib/incus/incus-backups.js'
+ import {
+     restoreFromStream,
+-    renameInstance
++    renameInstance,
++    instanceExists
+ } from '../lib/incus/incus-restore.js'
+ import {
+     stopInstance,
+@@ -412,8 +413,10 @@
+     } catch (err) {
+         const errorMessage = err instanceof Error ? err.message : String(err)
+         console.error(`[RestoreWorker] Task ${taskId} failed:`, errorMessage)
++        let manualInterventionReason: string | null = null
+ 
+-        // 尝试清理临时实例
++        // 只有确认 Incus 中的原实例仍存在，才允许清理临时副本。
++        // 原实例已不存在或无法确认时，临时实例可能是唯一数据副本，必须保留供人工恢复。
+         if (task.tempInstanceName) {
+             try {
+                 const host = await prisma.host.findUnique({ where: { id: task.hostId } })
+@@ -424,14 +427,21 @@
+                         certPath: host.certPath,
+                         keyPath: host.keyPath
+                     })
+-                    const { instanceExists } = await import('../lib/incus/incus-restore.js')
++                    const originalExists = await instanceExists(client, task.originalIncusId)
+                     const tempExists = await instanceExists(client, task.tempInstanceName)
+-                    if (tempExists) {
++                    if (!originalExists) {
++                        manualInterventionReason = `Incus 原实例 ${task.originalIncusId} 已不存在或无法确认，已保留临时实例 ${task.tempInstanceName}，需要人工介入恢复`
++                        console.error(`[RestoreWorker] Task ${taskId}: ${manualInterventionReason}`)
++                    } else if (tempExists) {
+                         await deleteInstance(client, task.tempInstanceName)
+                         console.log(`[RestoreWorker] Task ${taskId}: 已清理临时实例 ${task.tempInstanceName}`)
+                     }
++                } else {
++                    manualInterventionReason = `无法确认 Incus 原实例 ${task.originalIncusId} 是否存在，已保留临时实例 ${task.tempInstanceName}，需要人工介入核查`
++                    console.error(`[RestoreWorker] Task ${taskId}: ${manualInterventionReason}`)
+                 }
+             } catch (cleanupErr) {
++                manualInterventionReason = `无法安全确认 Incus 原实例 ${task.originalIncusId} 仍存在，已保留临时实例 ${task.tempInstanceName}，需要人工介入核查`
+                 console.warn(`[RestoreWorker] Task ${taskId}: 清理临时实例失败:`, cleanupErr)
+             }
+         }
+@@ -440,7 +450,12 @@
+             where: { id: taskId, status: 'PROCESSING' },
+             data: {
+                 status: 'FAILED',
+-                error: errorMessage,
++                ...(manualInterventionReason
++                    ? {
++                        progress: 'manual_intervention',
++                        error: `${errorMessage}; ${manualInterventionReason}`
++                    }
++                    : { error: errorMessage }),
+                 finishedAt: new Date()
+             }
+         })
+
+codex
+两组指定守卫都已通过。`server type-check` 仍在运行；完成后我会核对最终 diff，确保只触及 `restoreTaskWorker.ts` 与两份指定守卫，且未混入当前工作区其他并行改动。
+diff --git a/server/scripts/test-backup-task-race-guards.ts b/server/scripts/test-backup-task-race-guards.ts
+index f1f77035013117bde93b7b94742ff33f0e0a02ac..9f3998bc51a7111a7fb70968cee5808888d2e182
+--- a/server/scripts/test-backup-task-race-guards.ts
++++ b/server/scripts/test-backup-task-race-guards.ts
+@@ -231,6 +231,26 @@
+   !restoreExecuteSection.includes('id: { not: task.backupId'),
+   'restore worker must not keep the used backup as ready after deleting all original Incus backups'
+ )
++const restoreCatchIndex = restoreExecuteSection.indexOf('    } catch (err) {')
++assert.notEqual(restoreCatchIndex, -1, 'restore worker must retain explicit failure cleanup')
++const restoreCatchSection = restoreExecuteSection.slice(restoreCatchIndex)
++const originalExistsIndex = restoreCatchSection.indexOf('const originalExists = await instanceExists(client, task.originalIncusId)')
++const preserveTempIndex = restoreCatchSection.indexOf('if (!originalExists)')
++const deleteTempIndex = restoreCatchSection.indexOf('await deleteInstance(client, task.tempInstanceName)')
++assert.ok(
++  originalExistsIndex !== -1 &&
++    preserveTempIndex !== -1 &&
++    deleteTempIndex !== -1 &&
++    originalExistsIndex < preserveTempIndex &&
++    preserveTempIndex < deleteTempIndex,
++  'restore cleanup must verify the original in Incus and preserve the only temporary copy after original deletion'
++)
++assert.ok(
++  restoreCatchSection.includes("progress: 'manual_intervention'") &&
++    restoreCatchSection.includes('已保留临时实例') &&
++    restoreCatchSection.includes('需要人工介入'),
++  'restore cleanup must mark retained temporary copies for manual intervention'
++)
+ 
+ const uploadTimeoutSection = section(
+   uploadWorkerSource,
+diff --git a/server/scripts/test-instance-recreate-consistency.ts b/server/scripts/test-instance-recreate-consistency.ts
+index 1ce7a60a8844ebc4f7f8ae6c589a50f9c07a4e55..4b6c590984056566e845a9dc97533474c3020fe9
+--- a/server/scripts/test-instance-recreate-consistency.ts
++++ b/server/scripts/test-instance-recreate-consistency.ts
+@@ -7,6 +7,7 @@
+ const __dirname = dirname(__filename)
+ 
+ const source = readFileSync(resolve(__dirname, '../src/workers/instanceTaskWorker.ts'), 'utf8')
++const restoreWorkerSource = readFileSync(resolve(__dirname, '../src/workers/restoreTaskWorker.ts'), 'utf8')
+ const portMappingsSource = readFileSync(resolve(__dirname, '../src/db/port-mappings.ts'), 'utf8')
+ 
+ function indexOfOrThrow(sourceText: string, pattern: string, label: string): number {
+@@ -127,4 +128,36 @@
+   'clone failure cleanup must delete the failed DB clone before rolling back reserved host resources'
+ )
+ 
++const restoreCatchSection = section(
++  restoreWorkerSource,
++  '    } catch (err) {',
++  '    } finally {'
++)
++const checkOriginalIndex = indexOfOrThrow(
++  restoreCatchSection,
++  'const originalExists = await instanceExists(client, task.originalIncusId)',
++  'original Incus existence check before restore temp cleanup'
++)
++const preserveUniqueTempIndex = indexOfOrThrow(
++  restoreCatchSection,
++  'if (!originalExists)',
++  'unique restored temp preservation branch'
++)
++const deleteRestoreTempIndex = indexOfOrThrow(
++  restoreCatchSection,
++  'await deleteInstance(client, task.tempInstanceName)',
++  'restore temp delete'
++)
++
++assert.ok(
++  checkOriginalIndex < preserveUniqueTempIndex && preserveUniqueTempIndex < deleteRestoreTempIndex,
++  'restore failure cleanup must check actual Incus original existence and preserve temp before any delete path'
++)
++assert.ok(
++  restoreCatchSection.includes("progress: 'manual_intervention'") &&
++    restoreCatchSection.includes('已保留临时实例') &&
++    restoreCatchSection.includes('需要人工介入'),
++  'restore failure after original deletion must keep the temp instance and mark the failed task for manual intervention'
++)
++
+ console.log('instance recreate consistency checks passed')
+diff --git a/server/src/workers/restoreTaskWorker.ts b/server/src/workers/restoreTaskWorker.ts
+index 917d6aaabdd67c627e968d5af0f8b390040ffb38..03457ec4bcbc765a8801862dc76905f7faebe108
+--- a/server/src/workers/restoreTaskWorker.ts
++++ b/server/src/workers/restoreTaskWorker.ts
+@@ -9,7 +9,8 @@
+ import { getBackupExportStream } from '../lib/incus/incus-backups.js'
+ import {
+     restoreFromStream,
+-    renameInstance
++    renameInstance,
++    instanceExists
+ } from '../lib/incus/incus-restore.js'
+ import {
+     stopInstance,
+@@ -412,8 +413,10 @@
+     } catch (err) {
+         const errorMessage = err instanceof Error ? err.message : String(err)
+         console.error(`[RestoreWorker] Task ${taskId} failed:`, errorMessage)
++        let manualInterventionReason: string | null = null
+ 
+-        // 尝试清理临时实例
++        // 只有确认 Incus 中的原实例仍存在，才允许清理临时副本。
++        // 原实例已不存在或无法确认时，临时实例可能是唯一数据副本，必须保留供人工恢复。
+         if (task.tempInstanceName) {
+             try {
+                 const host = await prisma.host.findUnique({ where: { id: task.hostId } })
+@@ -424,14 +427,21 @@
+                         certPath: host.certPath,
+                         keyPath: host.keyPath
+                     })
+-                    const { instanceExists } = await import('../lib/incus/incus-restore.js')
++                    const originalExists = await instanceExists(client, task.originalIncusId)
+                     const tempExists = await instanceExists(client, task.tempInstanceName)
+-                    if (tempExists) {
++                    if (!originalExists) {
++                        manualInterventionReason = `Incus 原实例 ${task.originalIncusId} 已不存在或无法确认，已保留临时实例 ${task.tempInstanceName}，需要人工介入恢复`
++                        console.error(`[RestoreWorker] Task ${taskId}: ${manualInterventionReason}`)
++                    } else if (tempExists) {
+                         await deleteInstance(client, task.tempInstanceName)
+                         console.log(`[RestoreWorker] Task ${taskId}: 已清理临时实例 ${task.tempInstanceName}`)
+                     }
++                } else {
++                    manualInterventionReason = `无法确认 Incus 原实例 ${task.originalIncusId} 是否存在，已保留临时实例 ${task.tempInstanceName}，需要人工介入核查`
++                    console.error(`[RestoreWorker] Task ${taskId}: ${manualInterventionReason}`)
+                 }
+             } catch (cleanupErr) {
++                manualInterventionReason = `无法安全确认 Incus 原实例 ${task.originalIncusId} 仍存在，已保留临时实例 ${task.tempInstanceName}，需要人工介入核查`
+                 console.warn(`[RestoreWorker] Task ${taskId}: 清理临时实例失败:`, cleanupErr)
+             }
+         }
+@@ -440,7 +450,12 @@
+             where: { id: taskId, status: 'PROCESSING' },
+             data: {
+                 status: 'FAILED',
+-                error: errorMessage,
++                ...(manualInterventionReason
++                    ? {
++                        progress: 'manual_intervention',
++                        error: `${errorMessage}; ${manualInterventionReason}`
++                    }
++                    : { error: errorMessage }),
+                 finishedAt: new Date()
+             }
+         })
+
+diff --git a/server/scripts/test-backup-task-race-guards.ts b/server/scripts/test-backup-task-race-guards.ts
+index f1f77035013117bde93b7b94742ff33f0e0a02ac..9f3998bc51a7111a7fb70968cee5808888d2e182
+--- a/server/scripts/test-backup-task-race-guards.ts
++++ b/server/scripts/test-backup-task-race-guards.ts
+@@ -231,6 +231,26 @@
+   !restoreExecuteSection.includes('id: { not: task.backupId'),
+   'restore worker must not keep the used backup as ready after deleting all original Incus backups'
+ )
++const restoreCatchIndex = restoreExecuteSection.indexOf('    } catch (err) {')
++assert.notEqual(restoreCatchIndex, -1, 'restore worker must retain explicit failure cleanup')
++const restoreCatchSection = restoreExecuteSection.slice(restoreCatchIndex)
++const originalExistsIndex = restoreCatchSection.indexOf('const originalExists = await instanceExists(client, task.originalIncusId)')
++const preserveTempIndex = restoreCatchSection.indexOf('if (!originalExists)')
++const deleteTempIndex = restoreCatchSection.indexOf('await deleteInstance(client, task.tempInstanceName)')
++assert.ok(
++  originalExistsIndex !== -1 &&
++    preserveTempIndex !== -1 &&
++    deleteTempIndex !== -1 &&
++    originalExistsIndex < preserveTempIndex &&
++    preserveTempIndex < deleteTempIndex,
++  'restore cleanup must verify the original in Incus and preserve the only temporary copy after original deletion'
++)
++assert.ok(
++  restoreCatchSection.includes("progress: 'manual_intervention'") &&
++    restoreCatchSection.includes('已保留临时实例') &&
++    restoreCatchSection.includes('需要人工介入'),
++  'restore cleanup must mark retained temporary copies for manual intervention'
++)
+ 
+ const uploadTimeoutSection = section(
+   uploadWorkerSource,
+diff --git a/server/scripts/test-instance-recreate-consistency.ts b/server/scripts/test-instance-recreate-consistency.ts
+index 1ce7a60a8844ebc4f7f8ae6c589a50f9c07a4e55..4b6c590984056566e845a9dc97533474c3020fe9
+--- a/server/scripts/test-instance-recreate-consistency.ts
++++ b/server/scripts/test-instance-recreate-consistency.ts
+@@ -7,6 +7,7 @@
+ const __dirname = dirname(__filename)
+ 
+ const source = readFileSync(resolve(__dirname, '../src/workers/instanceTaskWorker.ts'), 'utf8')
++const restoreWorkerSource = readFileSync(resolve(__dirname, '../src/workers/restoreTaskWorker.ts'), 'utf8')
+ const portMappingsSource = readFileSync(resolve(__dirname, '../src/db/port-mappings.ts'), 'utf8')
+ 
+ function indexOfOrThrow(sourceText: string, pattern: string, label: string): number {
+@@ -127,4 +128,36 @@
+   'clone failure cleanup must delete the failed DB clone before rolling back reserved host resources'
+ )
+ 
++const restoreCatchSection = section(
++  restoreWorkerSource,
++  '    } catch (err) {',
++  '    } finally {'
++)
++const checkOriginalIndex = indexOfOrThrow(
++  restoreCatchSection,
++  'const originalExists = await instanceExists(client, task.originalIncusId)',
++  'original Incus existence check before restore temp cleanup'
++)
++const preserveUniqueTempIndex = indexOfOrThrow(
++  restoreCatchSection,
++  'if (!originalExists)',
++  'unique restored temp preservation branch'
++)
++const deleteRestoreTempIndex = indexOfOrThrow(
++  restoreCatchSection,
++  'await deleteInstance(client, task.tempInstanceName)',
++  'restore temp delete'
++)
++
++assert.ok(
++  checkOriginalIndex < preserveUniqueTempIndex && preserveUniqueTempIndex < deleteRestoreTempIndex,
++  'restore failure cleanup must check actual Incus original existence and preserve temp before any delete path'
++)
++assert.ok(
++  restoreCatchSection.includes("progress: 'manual_intervention'") &&
++    restoreCatchSection.includes('已保留临时实例') &&
++    restoreCatchSection.includes('需要人工介入'),
++  'restore failure after original deletion must keep the temp instance and mark the failed task for manual intervention'
++)
++
+ console.log('instance recreate consistency checks passed')
+diff --git a/server/src/workers/restoreTaskWorker.ts b/server/src/workers/restoreTaskWorker.ts
+index 917d6aaabdd67c627e968d5af0f8b390040ffb38..03457ec4bcbc765a8801862dc76905f7faebe108
+--- a/server/src/workers/restoreTaskWorker.ts
++++ b/server/src/workers/restoreTaskWorker.ts
+@@ -9,7 +9,8 @@
+ import { getBackupExportStream } from '../lib/incus/incus-backups.js'
+ import {
+     restoreFromStream,
+-    renameInstance
++    renameInstance,
++    instanceExists
+ } from '../lib/incus/incus-restore.js'
+ import {
+     stopInstance,
+@@ -412,8 +413,10 @@
+     } catch (err) {
+         const errorMessage = err instanceof Error ? err.message : String(err)
+         console.error(`[RestoreWorker] Task ${taskId} failed:`, errorMessage)
++        let manualInterventionReason: string | null = null
+ 
+-        // 尝试清理临时实例
++        // 只有确认 Incus 中的原实例仍存在，才允许清理临时副本。
++        // 原实例已不存在或无法确认时，临时实例可能是唯一数据副本，必须保留供人工恢复。
+         if (task.tempInstanceName) {
+             try {
+                 const host = await prisma.host.findUnique({ where: { id: task.hostId } })
+@@ -424,14 +427,21 @@
+                         certPath: host.certPath,
+                         keyPath: host.keyPath
+                     })
+-                    const { instanceExists } = await import('../lib/incus/incus-restore.js')
++                    const originalExists = await instanceExists(client, task.originalIncusId)
+                     const tempExists = await instanceExists(client, task.tempInstanceName)
+-                    if (tempExists) {
++                    if (!originalExists) {
++                        manualInterventionReason = `Incus 原实例 ${task.originalIncusId} 已不存在或无法确认，已保留临时实例 ${task.tempInstanceName}，需要人工介入恢复`
++                        console.error(`[RestoreWorker] Task ${taskId}: ${manualInterventionReason}`)
++                    } else if (tempExists) {
+                         await deleteInstance(client, task.tempInstanceName)
+                         console.log(`[RestoreWorker] Task ${taskId}: 已清理临时实例 ${task.tempInstanceName}`)
+                     }
++                } else {
++                    manualInterventionReason = `无法确认 Incus 原实例 ${task.originalIncusId} 是否存在，已保留临时实例 ${task.tempInstanceName}，需要人工介入核查`
++                    console.error(`[RestoreWorker] Task ${taskId}: ${manualInterventionReason}`)
+                 }
+             } catch (cleanupErr) {
++                manualInterventionReason = `无法安全确认 Incus 原实例 ${task.originalIncusId} 仍存在，已保留临时实例 ${task.tempInstanceName}，需要人工介入核查`
+                 console.warn(`[RestoreWorker] Task ${taskId}: 清理临时实例失败:`, cleanupErr)
+             }
+         }
+@@ -440,7 +450,12 @@
+             where: { id: taskId, status: 'PROCESSING' },
+             data: {
+                 status: 'FAILED',
+-                error: errorMessage,
++                ...(manualInterventionReason
++                    ? {
++                        progress: 'manual_intervention',
++                        error: `${errorMessage}; ${manualInterventionReason}`
++                    }
++                    : { error: errorMessage }),
+                 finishedAt: new Date()
+             }
+         })
+
+ succeeded in 30806ms:
+
+> server@1.3.7 type-check C:\Users\Administrator\Desktop\payinces\server
+> tsc --noEmit
+
+
+diff --git a/server/scripts/test-backup-task-race-guards.ts b/server/scripts/test-backup-task-race-guards.ts
+index f1f77035013117bde93b7b94742ff33f0e0a02ac..9f3998bc51a7111a7fb70968cee5808888d2e182
+--- a/server/scripts/test-backup-task-race-guards.ts
++++ b/server/scripts/test-backup-task-race-guards.ts
+@@ -231,6 +231,26 @@
+   !restoreExecuteSection.includes('id: { not: task.backupId'),
+   'restore worker must not keep the used backup as ready after deleting all original Incus backups'
+ )
++const restoreCatchIndex = restoreExecuteSection.indexOf('    } catch (err) {')
++assert.notEqual(restoreCatchIndex, -1, 'restore worker must retain explicit failure cleanup')
++const restoreCatchSection = restoreExecuteSection.slice(restoreCatchIndex)
++const originalExistsIndex = restoreCatchSection.indexOf('const originalExists = await instanceExists(client, task.originalIncusId)')
++const preserveTempIndex = restoreCatchSection.indexOf('if (!originalExists)')
++const deleteTempIndex = restoreCatchSection.indexOf('await deleteInstance(client, task.tempInstanceName)')
++assert.ok(
++  originalExistsIndex !== -1 &&
++    preserveTempIndex !== -1 &&
++    deleteTempIndex !== -1 &&
++    originalExistsIndex < preserveTempIndex &&
++    preserveTempIndex < deleteTempIndex,
++  'restore cleanup must verify the original in Incus and preserve the only temporary copy after original deletion'
++)
++assert.ok(
++  restoreCatchSection.includes("progress: 'manual_intervention'") &&
++    restoreCatchSection.includes('已保留临时实例') &&
++    restoreCatchSection.includes('需要人工介入'),
++  'restore cleanup must mark retained temporary copies for manual intervention'
++)
+ 
+ const uploadTimeoutSection = section(
+   uploadWorkerSource,
+diff --git a/server/scripts/test-instance-recreate-consistency.ts b/server/scripts/test-instance-recreate-consistency.ts
+index 1ce7a60a8844ebc4f7f8ae6c589a50f9c07a4e55..4b6c590984056566e845a9dc97533474c3020fe9
+--- a/server/scripts/test-instance-recreate-consistency.ts
++++ b/server/scripts/test-instance-recreate-consistency.ts
+@@ -7,6 +7,7 @@
+ const __dirname = dirname(__filename)
+ 
+ const source = readFileSync(resolve(__dirname, '../src/workers/instanceTaskWorker.ts'), 'utf8')
++const restoreWorkerSource = readFileSync(resolve(__dirname, '../src/workers/restoreTaskWorker.ts'), 'utf8')
+ const portMappingsSource = readFileSync(resolve(__dirname, '../src/db/port-mappings.ts'), 'utf8')
+ 
+ function indexOfOrThrow(sourceText: string, pattern: string, label: string): number {
+@@ -127,4 +128,36 @@
+   'clone failure cleanup must delete the failed DB clone before rolling back reserved host resources'
+ )
+ 
++const restoreCatchSection = section(
++  restoreWorkerSource,
++  '    } catch (err) {',
++  '    } finally {'
++)
++const checkOriginalIndex = indexOfOrThrow(
++  restoreCatchSection,
++  'const originalExists = await instanceExists(client, task.originalIncusId)',
++  'original Incus existence check before restore temp cleanup'
++)
++const preserveUniqueTempIndex = indexOfOrThrow(
++  restoreCatchSection,
++  'if (!originalExists)',
++  'unique restored temp preservation branch'
++)
++const deleteRestoreTempIndex = indexOfOrThrow(
++  restoreCatchSection,
++  'await deleteInstance(client, task.tempInstanceName)',
++  'restore temp delete'
++)
++
++assert.ok(
++  checkOriginalIndex < preserveUniqueTempIndex && preserveUniqueTempIndex < deleteRestoreTempIndex,
++  'restore failure cleanup must check actual Incus original existence and preserve temp before any delete path'
++)
++assert.ok(
++  restoreCatchSection.includes("progress: 'manual_intervention'") &&
++    restoreCatchSection.includes('已保留临时实例') &&
++    restoreCatchSection.includes('需要人工介入'),
++  'restore failure after original deletion must keep the temp instance and mark the failed task for manual intervention'
++)
++
+ console.log('instance recreate consistency checks passed')
+diff --git a/server/src/workers/restoreTaskWorker.ts b/server/src/workers/restoreTaskWorker.ts
+index 917d6aaabdd67c627e968d5af0f8b390040ffb38..03457ec4bcbc765a8801862dc76905f7faebe108
+--- a/server/src/workers/restoreTaskWorker.ts
++++ b/server/src/workers/restoreTaskWorker.ts
+@@ -9,7 +9,8 @@
+ import { getBackupExportStream } from '../lib/incus/incus-backups.js'
+ import {
+     restoreFromStream,
+-    renameInstance
++    renameInstance,
++    instanceExists
+ } from '../lib/incus/incus-restore.js'
+ import {
+     stopInstance,
+@@ -412,8 +413,10 @@
+     } catch (err) {
+         const errorMessage = err instanceof Error ? err.message : String(err)
+         console.error(`[RestoreWorker] Task ${taskId} failed:`, errorMessage)
++        let manualInterventionReason: string | null = null
+ 
+-        // 尝试清理临时实例
++        // 只有确认 Incus 中的原实例仍存在，才允许清理临时副本。
++        // 原实例已不存在或无法确认时，临时实例可能是唯一数据副本，必须保留供人工恢复。
+         if (task.tempInstanceName) {
+             try {
+                 const host = await prisma.host.findUnique({ where: { id: task.hostId } })
+@@ -424,14 +427,21 @@
+                         certPath: host.certPath,
+                         keyPath: host.keyPath
+                     })
+-                    const { instanceExists } = await import('../lib/incus/incus-restore.js')
++                    const originalExists = await instanceExists(client, task.originalIncusId)
+                     const tempExists = await instanceExists(client, task.tempInstanceName)
+-                    if (tempExists) {
++                    if (!originalExists) {
++                        manualInterventionReason = `Incus 原实例 ${task.originalIncusId} 已不存在或无法确认，已保留临时实例 ${task.tempInstanceName}，需要人工介入恢复`
++                        console.error(`[RestoreWorker] Task ${taskId}: ${manualInterventionReason}`)
++                    } else if (tempExists) {
+                         await deleteInstance(client, task.tempInstanceName)
+                         console.log(`[RestoreWorker] Task ${taskId}: 已清理临时实例 ${task.tempInstanceName}`)
+                     }
++                } else {
++                    manualInterventionReason = `无法确认 Incus 原实例 ${task.originalIncusId} 是否存在，已保留临时实例 ${task.tempInstanceName}，需要人工介入核查`
++                    console.error(`[RestoreWorker] Task ${taskId}: ${manualInterventionReason}`)
+                 }
+             } catch (cleanupErr) {
++                manualInterventionReason = `无法安全确认 Incus 原实例 ${task.originalIncusId} 仍存在，已保留临时实例 ${task.tempInstanceName}，需要人工介入核查`
+                 console.warn(`[RestoreWorker] Task ${taskId}: 清理临时实例失败:`, cleanupErr)
+             }
+         }
+@@ -440,7 +450,12 @@
+             where: { id: taskId, status: 'PROCESSING' },
+             data: {
+                 status: 'FAILED',
+-                error: errorMessage,
++                ...(manualInterventionReason
++                    ? {
++                        progress: 'manual_intervention',
++                        error: `${errorMessage}; ${manualInterventionReason}`
++                    }
++                    : { error: errorMessage }),
+                 finishedAt: new Date()
+             }
+         })
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'git diff --check -- server/src/workers/restoreTaskWorker.ts server/scripts/test-instance-recreate-consistency.ts server/scripts/test-backup-task-race-guards.ts; git diff --stat -- server/src/workers/restoreTaskWorker.ts server/scripts/test-instance-recreate-consistency.ts server/scripts/test-backup-task-race-guards.ts; git diff -- server/src/workers/restoreTaskWorker.ts server/scripts/test-instance-recreate-consistency.ts server/scripts/test-backup-task-race-guards.ts; git status --short -- server/src/workers/restoreTaskWorker.ts server/scripts/test-instance-recreate-consistency.ts server/scripts/test-backup-task-race-guards.ts server/src/lib/caddy-client.ts server/package.json package.json server/prisma/schema.prisma' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 638ms:
+ server/scripts/test-backup-task-race-guards.ts     | 20 +++++++++++++
+ .../scripts/test-instance-recreate-consistency.ts  | 33 ++++++++++++++++++++++
+ server/src/workers/restoreTaskWorker.ts            | 25 ++++++++++++----
+ 3 files changed, 73 insertions(+), 5 deletions(-)
+diff --git a/server/scripts/test-backup-task-race-guards.ts b/server/scripts/test-backup-task-race-guards.ts
+index f1f7703..9f3998b 100644
+--- a/server/scripts/test-backup-task-race-guards.ts
++++ b/server/scripts/test-backup-task-race-guards.ts
+@@ -231,6 +231,26 @@ assert.ok(
+   !restoreExecuteSection.includes('id: { not: task.backupId'),
+   'restore worker must not keep the used backup as ready after deleting all original Incus backups'
+ )
++const restoreCatchIndex = restoreExecuteSection.indexOf('    } catch (err) {')
++assert.notEqual(restoreCatchIndex, -1, 'restore worker must retain explicit failure cleanup')
++const restoreCatchSection = restoreExecuteSection.slice(restoreCatchIndex)
++const originalExistsIndex = restoreCatchSection.indexOf('const originalExists = await instanceExists(client, task.originalIncusId)')
++const preserveTempIndex = restoreCatchSection.indexOf('if (!originalExists)')
++const deleteTempIndex = restoreCatchSection.indexOf('await deleteInstance(client, task.tempInstanceName)')
++assert.ok(
++  originalExistsIndex !== -1 &&
++    preserveTempIndex !== -1 &&
++    deleteTempIndex !== -1 &&
++    originalExistsIndex < preserveTempIndex &&
++    preserveTempIndex < deleteTempIndex,
++  'restore cleanup must verify the original in Incus and preserve the only temporary copy after original deletion'
++)
++assert.ok(
++  restoreCatchSection.includes("progress: 'manual_intervention'") &&
++    restoreCatchSection.includes('已保留临时实例') &&
++    restoreCatchSection.includes('需要人工介入'),
++  'restore cleanup must mark retained temporary copies for manual intervention'
++)
+ 
+ const uploadTimeoutSection = section(
+   uploadWorkerSource,
+diff --git a/server/scripts/test-instance-recreate-consistency.ts b/server/scripts/test-instance-recreate-consistency.ts
+index 1ce7a60..4b6c590 100644
+--- a/server/scripts/test-instance-recreate-consistency.ts
++++ b/server/scripts/test-instance-recreate-consistency.ts
+@@ -7,6 +7,7 @@ const __filename = fileURLToPath(import.meta.url)
+ const __dirname = dirname(__filename)
+ 
+ const source = readFileSync(resolve(__dirname, '../src/workers/instanceTaskWorker.ts'), 'utf8')
++const restoreWorkerSource = readFileSync(resolve(__dirname, '../src/workers/restoreTaskWorker.ts'), 'utf8')
+ const portMappingsSource = readFileSync(resolve(__dirname, '../src/db/port-mappings.ts'), 'utf8')
+ 
+ function indexOfOrThrow(sourceText: string, pattern: string, label: string): number {
+@@ -127,4 +128,36 @@ assert.ok(
+   'clone failure cleanup must delete the failed DB clone before rolling back reserved host resources'
+ )
+ 
++const restoreCatchSection = section(
++  restoreWorkerSource,
++  '    } catch (err) {',
++  '    } finally {'
++)
++const checkOriginalIndex = indexOfOrThrow(
++  restoreCatchSection,
++  'const originalExists = await instanceExists(client, task.originalIncusId)',
++  'original Incus existence check before restore temp cleanup'
++)
++const preserveUniqueTempIndex = indexOfOrThrow(
++  restoreCatchSection,
++  'if (!originalExists)',
++  'unique restored temp preservation branch'
++)
++const deleteRestoreTempIndex = indexOfOrThrow(
++  restoreCatchSection,
++  'await deleteInstance(client, task.tempInstanceName)',
++  'restore temp delete'
++)
++
++assert.ok(
++  checkOriginalIndex < preserveUniqueTempIndex && preserveUniqueTempIndex < deleteRestoreTempIndex,
++  'restore failure cleanup must check actual Incus original existence and preserve temp before any delete path'
++)
++assert.ok(
++  restoreCatchSection.includes("progress: 'manual_intervention'") &&
++    restoreCatchSection.includes('已保留临时实例') &&
++    restoreCatchSection.includes('需要人工介入'),
++  'restore failure after original deletion must keep the temp instance and mark the failed task for manual intervention'
++)
++
+ console.log('instance recreate consistency checks passed')
+diff --git a/server/src/workers/restoreTaskWorker.ts b/server/src/workers/restoreTaskWorker.ts
+index 917d6aa..03457ec 100644
+--- a/server/src/workers/restoreTaskWorker.ts
++++ b/server/src/workers/restoreTaskWorker.ts
+@@ -9,7 +9,8 @@ import { getIncusClient } from '../lib/incus/index.js'
+ import { getBackupExportStream } from '../lib/incus/incus-backups.js'
+ import {
+     restoreFromStream,
+-    renameInstance
++    renameInstance,
++    instanceExists
+ } from '../lib/incus/incus-restore.js'
+ import {
+     stopInstance,
+@@ -412,8 +413,10 @@ async function executeRestoreTask(taskId: number): Promise<void> {
+     } catch (err) {
+         const errorMessage = err instanceof Error ? err.message : String(err)
+         console.error(`[RestoreWorker] Task ${taskId} failed:`, errorMessage)
++        let manualInterventionReason: string | null = null
+ 
+-        // 尝试清理临时实例
++        // 只有确认 Incus 中的原实例仍存在，才允许清理临时副本。
++        // 原实例已不存在或无法确认时，临时实例可能是唯一数据副本，必须保留供人工恢复。
+         if (task.tempInstanceName) {
+             try {
+                 const host = await prisma.host.findUnique({ where: { id: task.hostId } })
+@@ -424,14 +427,21 @@ async function executeRestoreTask(taskId: number): Promise<void> {
+                         certPath: host.certPath,
+                         keyPath: host.keyPath
+                     })
+-                    const { instanceExists } = await import('../lib/incus/incus-restore.js')
++                    const originalExists = await instanceExists(client, task.originalIncusId)
+                     const tempExists = await instanceExists(client, task.tempInstanceName)
+-                    if (tempExists) {
++                    if (!originalExists) {
++                        manualInterventionReason = `Incus 原实例 ${task.originalIncusId} 已不存在或无法确认，已保留临时实例 ${task.tempInstanceName}，需要人工介入恢复`
++                        console.error(`[RestoreWorker] Task ${taskId}: ${manualInterventionReason}`)
++                    } else if (tempExists) {
+                         await deleteInstance(client, task.tempInstanceName)
+                         console.log(`[RestoreWorker] Task ${taskId}: 已清理临时实例 ${task.tempInstanceName}`)
+                     }
++                } else {
++                    manualInterventionReason = `无法确认 Incus 原实例 ${task.originalIncusId} 是否存在，已保留临时实例 ${task.tempInstanceName}，需要人工介入核查`
++                    console.error(`[RestoreWorker] Task ${taskId}: ${manualInterventionReason}`)
+                 }
+             } catch (cleanupErr) {
++                manualInterventionReason = `无法安全确认 Incus 原实例 ${task.originalIncusId} 仍存在，已保留临时实例 ${task.tempInstanceName}，需要人工介入核查`
+                 console.warn(`[RestoreWorker] Task ${taskId}: 清理临时实例失败:`, cleanupErr)
+             }
+         }
+@@ -440,7 +450,12 @@ async function executeRestoreTask(taskId: number): Promise<void> {
+             where: { id: taskId, status: 'PROCESSING' },
+             data: {
+                 status: 'FAILED',
+-                error: errorMessage,
++                ...(manualInterventionReason
++                    ? {
++                        progress: 'manual_intervention',
++                        error: `${errorMessage}; ${manualInterventionReason}`
++                    }
++                    : { error: errorMessage }),
+                 finishedAt: new Date()
+             }
+         })
+ M package.json
+ M server/package.json
+ M server/scripts/test-backup-task-race-guards.ts
+ M server/scripts/test-instance-recreate-consistency.ts
+ M server/src/lib/caddy-client.ts
+ M server/src/workers/restoreTaskWorker.ts
+warning: in the working copy of 'server/scripts/test-backup-task-race-guards.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/scripts/test-instance-recreate-consistency.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/workers/restoreTaskWorker.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/scripts/test-backup-task-race-guards.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/scripts/test-instance-recreate-consistency.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/workers/restoreTaskWorker.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/scripts/test-backup-task-race-guards.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/scripts/test-instance-recreate-consistency.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/workers/restoreTaskWorker.ts', LF will be replaced by CRLF the next time Git touches it
+
+diff --git a/server/scripts/test-backup-task-race-guards.ts b/server/scripts/test-backup-task-race-guards.ts
+index f1f77035013117bde93b7b94742ff33f0e0a02ac..9f3998bc51a7111a7fb70968cee5808888d2e182
+--- a/server/scripts/test-backup-task-race-guards.ts
++++ b/server/scripts/test-backup-task-race-guards.ts
+@@ -231,6 +231,26 @@
+   !restoreExecuteSection.includes('id: { not: task.backupId'),
+   'restore worker must not keep the used backup as ready after deleting all original Incus backups'
+ )
++const restoreCatchIndex = restoreExecuteSection.indexOf('    } catch (err) {')
++assert.notEqual(restoreCatchIndex, -1, 'restore worker must retain explicit failure cleanup')
++const restoreCatchSection = restoreExecuteSection.slice(restoreCatchIndex)
++const originalExistsIndex = restoreCatchSection.indexOf('const originalExists = await instanceExists(client, task.originalIncusId)')
++const preserveTempIndex = restoreCatchSection.indexOf('if (!originalExists)')
++const deleteTempIndex = restoreCatchSection.indexOf('await deleteInstance(client, task.tempInstanceName)')
++assert.ok(
++  originalExistsIndex !== -1 &&
++    preserveTempIndex !== -1 &&
++    deleteTempIndex !== -1 &&
++    originalExistsIndex < preserveTempIndex &&
++    preserveTempIndex < deleteTempIndex,
++  'restore cleanup must verify the original in Incus and preserve the only temporary copy after original deletion'
++)
++assert.ok(
++  restoreCatchSection.includes("progress: 'manual_intervention'") &&
++    restoreCatchSection.includes('已保留临时实例') &&
++    restoreCatchSection.includes('需要人工介入'),
++  'restore cleanup must mark retained temporary copies for manual intervention'
++)
+ 
+ const uploadTimeoutSection = section(
+   uploadWorkerSource,
+diff --git a/server/scripts/test-instance-recreate-consistency.ts b/server/scripts/test-instance-recreate-consistency.ts
+index 1ce7a60a8844ebc4f7f8ae6c589a50f9c07a4e55..4b6c590984056566e845a9dc97533474c3020fe9
+--- a/server/scripts/test-instance-recreate-consistency.ts
++++ b/server/scripts/test-instance-recreate-consistency.ts
+@@ -7,6 +7,7 @@
+ const __dirname = dirname(__filename)
+ 
+ const source = readFileSync(resolve(__dirname, '../src/workers/instanceTaskWorker.ts'), 'utf8')
++const restoreWorkerSource = readFileSync(resolve(__dirname, '../src/workers/restoreTaskWorker.ts'), 'utf8')
+ const portMappingsSource = readFileSync(resolve(__dirname, '../src/db/port-mappings.ts'), 'utf8')
+ 
+ function indexOfOrThrow(sourceText: string, pattern: string, label: string): number {
+@@ -127,4 +128,36 @@
+   'clone failure cleanup must delete the failed DB clone before rolling back reserved host resources'
+ )
+ 
++const restoreCatchSection = section(
++  restoreWorkerSource,
++  '    } catch (err) {',
++  '    } finally {'
++)
++const checkOriginalIndex = indexOfOrThrow(
++  restoreCatchSection,
++  'const originalExists = await instanceExists(client, task.originalIncusId)',
++  'original Incus existence check before restore temp cleanup'
++)
++const preserveUniqueTempIndex = indexOfOrThrow(
++  restoreCatchSection,
++  'if (!originalExists)',
++  'unique restored temp preservation branch'
++)
++const deleteRestoreTempIndex = indexOfOrThrow(
++  restoreCatchSection,
++  'await deleteInstance(client, task.tempInstanceName)',
++  'restore temp delete'
++)
++
++assert.ok(
++  checkOriginalIndex < preserveUniqueTempIndex && preserveUniqueTempIndex < deleteRestoreTempIndex,
++  'restore failure cleanup must check actual Incus original existence and preserve temp before any delete path'
++)
++assert.ok(
++  restoreCatchSection.includes("progress: 'manual_intervention'") &&
++    restoreCatchSection.includes('已保留临时实例') &&
++    restoreCatchSection.includes('需要人工介入'),
++  'restore failure after original deletion must keep the temp instance and mark the failed task for manual intervention'
++)
++
+ console.log('instance recreate consistency checks passed')
+diff --git a/server/src/workers/restoreTaskWorker.ts b/server/src/workers/restoreTaskWorker.ts
+index 917d6aaabdd67c627e968d5af0f8b390040ffb38..03457ec4bcbc765a8801862dc76905f7faebe108
+--- a/server/src/workers/restoreTaskWorker.ts
++++ b/server/src/workers/restoreTaskWorker.ts
+@@ -9,7 +9,8 @@
+ import { getBackupExportStream } from '../lib/incus/incus-backups.js'
+ import {
+     restoreFromStream,
+-    renameInstance
++    renameInstance,
++    instanceExists
+ } from '../lib/incus/incus-restore.js'
+ import {
+     stopInstance,
+@@ -412,8 +413,10 @@
+     } catch (err) {
+         const errorMessage = err instanceof Error ? err.message : String(err)
+         console.error(`[RestoreWorker] Task ${taskId} failed:`, errorMessage)
++        let manualInterventionReason: string | null = null
+ 
+-        // 尝试清理临时实例
++        // 只有确认 Incus 中的原实例仍存在，才允许清理临时副本。
++        // 原实例已不存在或无法确认时，临时实例可能是唯一数据副本，必须保留供人工恢复。
+         if (task.tempInstanceName) {
+             try {
+                 const host = await prisma.host.findUnique({ where: { id: task.hostId } })
+@@ -424,14 +427,21 @@
+                         certPath: host.certPath,
+                         keyPath: host.keyPath
+                     })
+-                    const { instanceExists } = await import('../lib/incus/incus-restore.js')
++                    const originalExists = await instanceExists(client, task.originalIncusId)
+                     const tempExists = await instanceExists(client, task.tempInstanceName)
+-                    if (tempExists) {
++                    if (!originalExists) {
++                        manualInterventionReason = `Incus 原实例 ${task.originalIncusId} 已不存在或无法确认，已保留临时实例 ${task.tempInstanceName}，需要人工介入恢复`
++                        console.error(`[RestoreWorker] Task ${taskId}: ${manualInterventionReason}`)
++                    } else if (tempExists) {
+                         await deleteInstance(client, task.tempInstanceName)
+                         console.log(`[RestoreWorker] Task ${taskId}: 已清理临时实例 ${task.tempInstanceName}`)
+                     }
++                } else {
++                    manualInterventionReason = `无法确认 Incus 原实例 ${task.originalIncusId} 是否存在，已保留临时实例 ${task.tempInstanceName}，需要人工介入核查`
++                    console.error(`[RestoreWorker] Task ${taskId}: ${manualInterventionReason}`)
+                 }
+             } catch (cleanupErr) {
++                manualInterventionReason = `无法安全确认 Incus 原实例 ${task.originalIncusId} 仍存在，已保留临时实例 ${task.tempInstanceName}，需要人工介入核查`
+                 console.warn(`[RestoreWorker] Task ${taskId}: 清理临时实例失败:`, cleanupErr)
+             }
+         }
+@@ -440,7 +450,12 @@
+             where: { id: taskId, status: 'PROCESSING' },
+             data: {
+                 status: 'FAILED',
+-                error: errorMessage,
++                ...(manualInterventionReason
++                    ? {
++                        progress: 'manual_intervention',
++                        error: `${errorMessage}; ${manualInterventionReason}`
++                    }
++                    : { error: errorMessage }),
+                 finishedAt: new Date()
+             }
+         })
+
+两个指定守卫、server type-check 与 scoped diff 检查均通过；本次仅改动 worker 和两份守卫，工作区中的 package/schema/caddy-client 等既有并行改动未触碰。
+  ✓ 读取 AGENTS.md、恢复 worker 与两组守卫，确认现有存在性检查和人工介入机制
+  ✓ 仅修改 restoreTaskWorker.ts 与对应守卫，覆盖唯一副本保护
+  ✓ 运行两个指定守卫和 server type-check，审查变更范围
+diff --git a/server/scripts/test-backup-task-race-guards.ts b/server/scripts/test-backup-task-race-guards.ts
+index f1f77035013117bde93b7b94742ff33f0e0a02ac..9f3998bc51a7111a7fb70968cee5808888d2e182
+--- a/server/scripts/test-backup-task-race-guards.ts
++++ b/server/scripts/test-backup-task-race-guards.ts
+@@ -231,6 +231,26 @@
+   !restoreExecuteSection.includes('id: { not: task.backupId'),
+   'restore worker must not keep the used backup as ready after deleting all original Incus backups'
+ )
++const restoreCatchIndex = restoreExecuteSection.indexOf('    } catch (err) {')
++assert.notEqual(restoreCatchIndex, -1, 'restore worker must retain explicit failure cleanup')
++const restoreCatchSection = restoreExecuteSection.slice(restoreCatchIndex)
++const originalExistsIndex = restoreCatchSection.indexOf('const originalExists = await instanceExists(client, task.originalIncusId)')
++const preserveTempIndex = restoreCatchSection.indexOf('if (!originalExists)')
++const deleteTempIndex = restoreCatchSection.indexOf('await deleteInstance(client, task.tempInstanceName)')
++assert.ok(
++  originalExistsIndex !== -1 &&
++    preserveTempIndex !== -1 &&
++    deleteTempIndex !== -1 &&
++    originalExistsIndex < preserveTempIndex &&
++    preserveTempIndex < deleteTempIndex,
++  'restore cleanup must verify the original in Incus and preserve the only temporary copy after original deletion'
++)
++assert.ok(
++  restoreCatchSection.includes("progress: 'manual_intervention'") &&
++    restoreCatchSection.includes('已保留临时实例') &&
++    restoreCatchSection.includes('需要人工介入'),
++  'restore cleanup must mark retained temporary copies for manual intervention'
++)
+ 
+ const uploadTimeoutSection = section(
+   uploadWorkerSource,
+diff --git a/server/scripts/test-instance-recreate-consistency.ts b/server/scripts/test-instance-recreate-consistency.ts
+index 1ce7a60a8844ebc4f7f8ae6c589a50f9c07a4e55..4b6c590984056566e845a9dc97533474c3020fe9
+--- a/server/scripts/test-instance-recreate-consistency.ts
++++ b/server/scripts/test-instance-recreate-consistency.ts
+@@ -7,6 +7,7 @@
+ const __dirname = dirname(__filename)
+ 
+ const source = readFileSync(resolve(__dirname, '../src/workers/instanceTaskWorker.ts'), 'utf8')
++const restoreWorkerSource = readFileSync(resolve(__dirname, '../src/workers/restoreTaskWorker.ts'), 'utf8')
+ const portMappingsSource = readFileSync(resolve(__dirname, '../src/db/port-mappings.ts'), 'utf8')
+ 
+ function indexOfOrThrow(sourceText: string, pattern: string, label: string): number {
+@@ -127,4 +128,36 @@
+   'clone failure cleanup must delete the failed DB clone before rolling back reserved host resources'
+ )
+ 
++const restoreCatchSection = section(
++  restoreWorkerSource,
++  '    } catch (err) {',
++  '    } finally {'
++)
++const checkOriginalIndex = indexOfOrThrow(
++  restoreCatchSection,
++  'const originalExists = await instanceExists(client, task.originalIncusId)',
++  'original Incus existence check before restore temp cleanup'
++)
++const preserveUniqueTempIndex = indexOfOrThrow(
++  restoreCatchSection,
++  'if (!originalExists)',
++  'unique restored temp preservation branch'
++)
++const deleteRestoreTempIndex = indexOfOrThrow(
++  restoreCatchSection,
++  'await deleteInstance(client, task.tempInstanceName)',
++  'restore temp delete'
++)
++
++assert.ok(
++  checkOriginalIndex < preserveUniqueTempIndex && preserveUniqueTempIndex < deleteRestoreTempIndex,
++  'restore failure cleanup must check actual Incus original existence and preserve temp before any delete path'
++)
++assert.ok(
++  restoreCatchSection.includes("progress: 'manual_intervention'") &&
++    restoreCatchSection.includes('已保留临时实例') &&
++    restoreCatchSection.includes('需要人工介入'),
++  'restore failure after original deletion must keep the temp instance and mark the failed task for manual intervention'
++)
++
+ console.log('instance recreate consistency checks passed')
+diff --git a/server/src/workers/restoreTaskWorker.ts b/server/src/workers/restoreTaskWorker.ts
+index 917d6aaabdd67c627e968d5af0f8b390040ffb38..03457ec4bcbc765a8801862dc76905f7faebe108
+--- a/server/src/workers/restoreTaskWorker.ts
++++ b/server/src/workers/restoreTaskWorker.ts
+@@ -9,7 +9,8 @@
+ import { getBackupExportStream } from '../lib/incus/incus-backups.js'
+ import {
+     restoreFromStream,
+-    renameInstance
++    renameInstance,
++    instanceExists
+ } from '../lib/incus/incus-restore.js'
+ import {
+     stopInstance,
+@@ -412,8 +413,10 @@
+     } catch (err) {
+         const errorMessage = err instanceof Error ? err.message : String(err)
+         console.error(`[RestoreWorker] Task ${taskId} failed:`, errorMessage)
++        let manualInterventionReason: string | null = null
+ 
+-        // 尝试清理临时实例
++        // 只有确认 Incus 中的原实例仍存在，才允许清理临时副本。
++        // 原实例已不存在或无法确认时，临时实例可能是唯一数据副本，必须保留供人工恢复。
+         if (task.tempInstanceName) {
+             try {
+                 const host = await prisma.host.findUnique({ where: { id: task.hostId } })
+@@ -424,14 +427,21 @@
+                         certPath: host.certPath,
+                         keyPath: host.keyPath
+                     })
+-                    const { instanceExists } = await import('../lib/incus/incus-restore.js')
++                    const originalExists = await instanceExists(client, task.originalIncusId)
+                     const tempExists = await instanceExists(client, task.tempInstanceName)
+-                    if (tempExists) {
++                    if (!originalExists) {
++                        manualInterventionReason = `Incus 原实例 ${task.originalIncusId} 已不存在或无法确认，已保留临时实例 ${task.tempInstanceName}，需要人工介入恢复`
++                        console.error(`[RestoreWorker] Task ${taskId}: ${manualInterventionReason}`)
++                    } else if (tempExists) {
+                         await deleteInstance(client, task.tempInstanceName)
+                         console.log(`[RestoreWorker] Task ${taskId}: 已清理临时实例 ${task.tempInstanceName}`)
+                     }
++                } else {
++                    manualInterventionReason = `无法确认 Incus 原实例 ${task.originalIncusId} 是否存在，已保留临时实例 ${task.tempInstanceName}，需要人工介入核查`
++                    console.error(`[RestoreWorker] Task ${taskId}: ${manualInterventionReason}`)
+                 }
+             } catch (cleanupErr) {
++                manualInterventionReason = `无法安全确认 Incus 原实例 ${task.originalIncusId} 仍存在，已保留临时实例 ${task.tempInstanceName}，需要人工介入核查`
+                 console.warn(`[RestoreWorker] Task ${taskId}: 清理临时实例失败:`, cleanupErr)
+             }
+         }
+@@ -440,7 +450,12 @@
+             where: { id: taskId, status: 'PROCESSING' },
+             data: {
+                 status: 'FAILED',
+-                error: errorMessage,
++                ...(manualInterventionReason
++                    ? {
++                        progress: 'manual_intervention',
++                        error: `${errorMessage}; ${manualInterventionReason}`
++                    }
++                    : { error: errorMessage }),
+                 finishedAt: new Date()
+             }
+         })
+
+codex
+已按 FX-048 完成最小修复，仅修改 [restoreTaskWorker.ts](C:/Users/Administrator/Desktop/payinces/server/src/workers/restoreTaskWorker.ts:413) 和两份指定守卫。清理临时实例前通过 Incus GET 实际检查原实例；只有明确存在才删除临时副本，已不存在或无法确认时均保留临时实例，并将任务标记为 `FAILED`、`progress: manual_intervention`，在 `error` 和日志中记录人工恢复信息。`test:instance-recreate-consistency`、`test:backup-task-race-guards`、server `type-check`、`git diff --check` 均通过。未改 schema/package/caddy-client，未 commit/push/发版；未连接真实 Incus 环境执行破坏性恢复验证。
+diff --git a/server/scripts/test-backup-task-race-guards.ts b/server/scripts/test-backup-task-race-guards.ts
+index f1f77035013117bde93b7b94742ff33f0e0a02ac..9f3998bc51a7111a7fb70968cee5808888d2e182
+--- a/server/scripts/test-backup-task-race-guards.ts
++++ b/server/scripts/test-backup-task-race-guards.ts
+@@ -231,6 +231,26 @@
+   !restoreExecuteSection.includes('id: { not: task.backupId'),
+   'restore worker must not keep the used backup as ready after deleting all original Incus backups'
+ )
++const restoreCatchIndex = restoreExecuteSection.indexOf('    } catch (err) {')
++assert.notEqual(restoreCatchIndex, -1, 'restore worker must retain explicit failure cleanup')
++const restoreCatchSection = restoreExecuteSection.slice(restoreCatchIndex)
++const originalExistsIndex = restoreCatchSection.indexOf('const originalExists = await instanceExists(client, task.originalIncusId)')
++const preserveTempIndex = restoreCatchSection.indexOf('if (!originalExists)')
++const deleteTempIndex = restoreCatchSection.indexOf('await deleteInstance(client, task.tempInstanceName)')
++assert.ok(
++  originalExistsIndex !== -1 &&
++    preserveTempIndex !== -1 &&
++    deleteTempIndex !== -1 &&
++    originalExistsIndex < preserveTempIndex &&
++    preserveTempIndex < deleteTempIndex,
++  'restore cleanup must verify the original in Incus and preserve the only temporary copy after original deletion'
++)
++assert.ok(
++  restoreCatchSection.includes("progress: 'manual_intervention'") &&
++    restoreCatchSection.includes('已保留临时实例') &&
++    restoreCatchSection.includes('需要人工介入'),
++  'restore cleanup must mark retained temporary copies for manual intervention'
++)
+ 
+ const uploadTimeoutSection = section(
+   uploadWorkerSource,
+diff --git a/server/scripts/test-instance-recreate-consistency.ts b/server/scripts/test-instance-recreate-consistency.ts
+index 1ce7a60a8844ebc4f7f8ae6c589a50f9c07a4e55..4b6c590984056566e845a9dc97533474c3020fe9
+--- a/server/scripts/test-instance-recreate-consistency.ts
++++ b/server/scripts/test-instance-recreate-consistency.ts
+@@ -7,6 +7,7 @@
+ const __dirname = dirname(__filename)
+ 
+ const source = readFileSync(resolve(__dirname, '../src/workers/instanceTaskWorker.ts'), 'utf8')
++const restoreWorkerSource = readFileSync(resolve(__dirname, '../src/workers/restoreTaskWorker.ts'), 'utf8')
+ const portMappingsSource = readFileSync(resolve(__dirname, '../src/db/port-mappings.ts'), 'utf8')
+ 
+ function indexOfOrThrow(sourceText: string, pattern: string, label: string): number {
+@@ -127,4 +128,36 @@
+   'clone failure cleanup must delete the failed DB clone before rolling back reserved host resources'
+ )
+ 
++const restoreCatchSection = section(
++  restoreWorkerSource,
++  '    } catch (err) {',
++  '    } finally {'
++)
++const checkOriginalIndex = indexOfOrThrow(
++  restoreCatchSection,
++  'const originalExists = await instanceExists(client, task.originalIncusId)',
++  'original Incus existence check before restore temp cleanup'
++)
++const preserveUniqueTempIndex = indexOfOrThrow(
++  restoreCatchSection,
++  'if (!originalExists)',
++  'unique restored temp preservation branch'
++)
++const deleteRestoreTempIndex = indexOfOrThrow(
++  restoreCatchSection,
++  'await deleteInstance(client, task.tempInstanceName)',
++  'restore temp delete'
++)
++
++assert.ok(
++  checkOriginalIndex < preserveUniqueTempIndex && preserveUniqueTempIndex < deleteRestoreTempIndex,
++  'restore failure cleanup must check actual Incus original existence and preserve temp before any delete path'
++)
++assert.ok(
++  restoreCatchSection.includes("progress: 'manual_intervention'") &&
++    restoreCatchSection.includes('已保留临时实例') &&
++    restoreCatchSection.includes('需要人工介入'),
++  'restore failure after original deletion must keep the temp instance and mark the failed task for manual intervention'
++)
++
+ console.log('instance recreate consistency checks passed')
+diff --git a/server/src/workers/restoreTaskWorker.ts b/server/src/workers/restoreTaskWorker.ts
+index 917d6aaabdd67c627e968d5af0f8b390040ffb38..03457ec4bcbc765a8801862dc76905f7faebe108
+--- a/server/src/workers/restoreTaskWorker.ts
++++ b/server/src/workers/restoreTaskWorker.ts
+@@ -9,7 +9,8 @@
+ import { getBackupExportStream } from '../lib/incus/incus-backups.js'
+ import {
+     restoreFromStream,
+-    renameInstance
++    renameInstance,
++    instanceExists
+ } from '../lib/incus/incus-restore.js'
+ import {
+     stopInstance,
+@@ -412,8 +413,10 @@
+     } catch (err) {
+         const errorMessage = err instanceof Error ? err.message : String(err)
+         console.error(`[RestoreWorker] Task ${taskId} failed:`, errorMessage)
++        let manualInterventionReason: string | null = null
+ 
+-        // 尝试清理临时实例
++        // 只有确认 Incus 中的原实例仍存在，才允许清理临时副本。
++        // 原实例已不存在或无法确认时，临时实例可能是唯一数据副本，必须保留供人工恢复。
+         if (task.tempInstanceName) {
+             try {
+                 const host = await prisma.host.findUnique({ where: { id: task.hostId } })
+@@ -424,14 +427,21 @@
+                         certPath: host.certPath,
+                         keyPath: host.keyPath
+                     })
+-                    const { instanceExists } = await import('../lib/incus/incus-restore.js')
++                    const originalExists = await instanceExists(client, task.originalIncusId)
+                     const tempExists = await instanceExists(client, task.tempInstanceName)
+-                    if (tempExists) {
++                    if (!originalExists) {
++                        manualInterventionReason = `Incus 原实例 ${task.originalIncusId} 已不存在或无法确认，已保留临时实例 ${task.tempInstanceName}，需要人工介入恢复`
++                        console.error(`[RestoreWorker] Task ${taskId}: ${manualInterventionReason}`)
++                    } else if (tempExists) {
+                         await deleteInstance(client, task.tempInstanceName)
+                         console.log(`[RestoreWorker] Task ${taskId}: 已清理临时实例 ${task.tempInstanceName}`)
+                     }
++                } else {
++                    manualInterventionReason = `无法确认 Incus 原实例 ${task.originalIncusId} 是否存在，已保留临时实例 ${task.tempInstanceName}，需要人工介入核查`
++                    console.error(`[RestoreWorker] Task ${taskId}: ${manualInterventionReason}`)
+                 }
+             } catch (cleanupErr) {
++                manualInterventionReason = `无法安全确认 Incus 原实例 ${task.originalIncusId} 仍存在，已保留临时实例 ${task.tempInstanceName}，需要人工介入核查`
+                 console.warn(`[RestoreWorker] Task ${taskId}: 清理临时实例失败:`, cleanupErr)
+             }
+         }
+@@ -440,7 +450,12 @@
+             where: { id: taskId, status: 'PROCESSING' },
+             data: {
+                 status: 'FAILED',
+-                error: errorMessage,
++                ...(manualInterventionReason
++                    ? {
++                        progress: 'manual_intervention',
++                        error: `${errorMessage}; ${manualInterventionReason}`
++                    }
++                    : { error: errorMessage }),
+                 finishedAt: new Date()
+             }
+         })
+
+tokens used
+67,526

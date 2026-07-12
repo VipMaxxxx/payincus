@@ -1,0 +1,1 @@
+已将 `billing-operations.ts` 的购买、续费、升级 Hosting 收入冻结到期统一为精确 `30 × 24` 小时，并抽取 `HOSTING_FREEZE_DAYS = 30` 常量；守卫新增三条路径均使用精确 30 天且禁止 `addMonths` 自然月计算的断言。`pnpm --filter server type-check` 与 `pnpm --filter server test:hosting-balance-guards` 均通过。未 commit、push 或发版。

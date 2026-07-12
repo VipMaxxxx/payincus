@@ -1,0 +1,2672 @@
+OpenAI Codex v0.144.0-alpha.4
+--------
+workdir: C:\Users\Administrator\Desktop\payinces
+model: gpt-5.6-sol
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: high
+reasoning summaries: none
+session id: 019f52e8-20e9-7920-9e82-6d1e00d1cb42
+--------
+user
+你是 PayIncus 实现工程师。先读 AGENTS.md(计费高危,先读代码+守卫;不 commit/push/发版、不大重构)。严格按规格只改 admin-billing.ts 延期日价与守卫(不动升级/退款/续费)。改完跑守卫报告。不要 commit。
+---
+# FX-019a 规格：管理员延期日价用30天基、与全站31天口径分叉(E9 一部分 / BF-1-01 / D-068)
+
+## owner 裁决(BEHAVIOR.md E9)
+延期统一改 31 天基。(E9 的另一半"升级剩余价值按实付封顶"由 FX-019b 单独做,本条只做延期日价口径。)
+
+## 根因
+server/src/routes/admin-billing.ts:796-799、2384-2385 管理员"延期"用本地 calculateDailyPrice = (billingPrice/cycle)/30(30 天基),
+而全站续费/退款/升级都用 31 天基(server/src/lib/billing-calc.ts:CYCLE_DAYS=31)。且双重 toFixed 放大误差。
+→ 同一实例延期 30 天付整月钱只得 30 天、日价比续费高 ~3.3%,口径不一致、用户吃亏。
+
+## 修法（只改 server/src/routes/admin-billing.ts 延期日价计算;不碰 package.json)
+1. 先只读 admin-billing.ts:796-799 的本地 calculateDailyPrice 与 billing-calc.ts 的公共日价函数(31 天基,如 calculateDailyPrice/CYCLE_DAYS)。
+2. 把延期的日价改用公共 billing-calc 的 31 天基口径(复用公共函数,不再本地 /30);只对最终金额做一次两位小数舍入(去掉双重 toFixed 的中间舍入)。
+3. 延期加的时间仍按 days 个自然日(本条只统一"日价口径",不改"加几天"的语义,除非 owner 另有说明——保持 days×24h)。
+4. 不改续费/升级/退款(它们已是 31 天基)。
+
+## 加守卫
+在现有 server/scripts/test-admin-billing-route-id-guards.ts 追加断言:延期日价复用公共 31 天基口径(不再本地 /30)。不改 package.json。
+
+## 验收
+- pnpm --filter server type-check 通过;pnpm --filter server test:admin-billing-route-id-guards、test:financial-reconciliation-guards 通过。
+
+## 交付
+一段话:复用了哪个公共日价函数、如何去双重舍入、守卫结果。不要 commit。
+
+codex
+收到。我会按计费高危流程先只读 `AGENTS.md`、延期相关代码、公共计费函数和两组守卫，再做最小修改；范围仅限 `admin-billing.ts` 与既有守卫文件，不会 commit、push 或发版。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "Get-Content -Raw AGENTS.md; rg -n -C 8 \"calculateDailyPrice|延期|extend|days \\* 24|toFixed\" server/src/routes/admin-billing.ts; Get-Content -Raw server/src/lib/billing-calc.ts; Get-Content -Raw server/scripts/test-admin-billing-route-id-guards.ts; Get-Content -Raw server/scripts/test-financial-reconciliation-guards.ts" in C:\Users\Administrator\Desktop\payinces
+ succeeded in 1018ms:
+# PayIncus / Incudal â€” é¡¹ç›®ç»Ÿä¸€è§„çŸ©ï¼ˆAGENTS.mdï¼‰
+
+> æœ¬æ–‡ä»¶æ˜¯æœ¬ä»“åº“**æ‰€æœ‰ AI agentï¼ˆClaude Codeã€codex ç­‰ï¼‰çš„ç»Ÿä¸€å·¥ä½œè§„èŒƒ**ã€‚
+> `CLAUDE.md` é€šè¿‡ `@AGENTS.md` å¼•ç”¨æœ¬æ–‡ä»¶ â€”â€” Claude Code ä¸Ž codex è¯»åˆ°çš„æ˜¯**åŒä¸€å¥—è§„çŸ©**ï¼Œæ”¹è¿™ä¸€ä¸ªæ–‡ä»¶å³å¯ã€‚
+> æƒå¨è¿ç»´/å‘ç‰ˆäº‹å®žä»¥ä»“åº“æ ¹çš„ `OPERATIONS_HANDOFF.md`ï¼ˆæ“ä½œæ‰‹å†Œï¼‰ä¸Ž `HANDOFF.md`ï¼ˆç‰ˆæœ¬è¯æ®å°è´¦ï¼‰ä¸ºå‡†ã€‚
+
+---
+
+## 0. æ²Ÿé€šè¯­è¨€
+- ä¸Ž owner é»˜è®¤ç”¨**ä¸­æ–‡**æ²Ÿé€šã€‚
+
+## 1. è¿™æ˜¯ä»€ä¹ˆé¡¹ç›®
+**PayIncus**ï¼ˆå†…éƒ¨ä»£å· `incudal`ï¼‰â€”â€”å•†ç”¨ Incusï¼ˆLXC/KVMï¼‰NAT VPS å”®å–ä¸Žäº¤ä»˜å¹³å°ï¼Œ**çº¿ä¸Šè¿è¥ä¸­**ã€‚å½“å‰ç”Ÿäº§ç‰ˆæœ¬ **v1.3.7**ã€‚pnpm monorepoï¼š
+
+| ç›®å½• | æŠ€æœ¯æ ˆ / ä½œç”¨ |
+|------|----------------|
+| `client/` | Vue 3 + Vite SPAã€‚åŒç«¯æž„å»ºï¼ˆ`VITE_APP_ENTRY`ï¼‰â†’ `dist/user`ï¼ˆpay.payincus.comï¼‰+ `dist/admin`ï¼ˆadmin.payincus.comï¼‰ã€‚ä¸¤ç«¯ç‹¬ç«‹æºã€**ä¸å…±äº« cookie åŸŸ**ã€‚ |
+| `server/` | Fastify 5 + Prisma 7 + PostgreSQLï¼Œ~300 TS æ–‡ä»¶ã€~70 è·¯ç”±ã€~15 è°ƒåº¦/workerã€‚æ—  Redisï¼ˆç”¨ PG advisory lockï¼‰ã€‚ä¸‰å¥—é‰´æƒé¢ï¼šWeb çš„ JWT+refresh cookieã€Public API çš„ `pat_`/`poa_` tokenã€host agent çš„ HMACã€‚ |
+| `agent/` | Go å®¿ä¸» agentï¼Œåªè¯»ç›‘æŽ§ï¼ˆå¿ƒè·³/èµ„æº/å®žä¾‹æ€/æµé‡ï¼‰ï¼ŒHMAC ç­¾åï¼Œè‡ªå‡çº§ã€‚ |
+| å…¶å®ƒ | `docs-site/`ï¼ˆVitePressï¼‰ã€`deploy/`ï¼ˆsystemd+Nginxï¼‰ã€`scripts/`ï¼ˆå®‰è£…/æ ¡éªŒ/OTAï¼‰ã€`plugin-templates/`ã€`theme-templates/`ã€‚ |
+
+éƒ¨ç½²ï¼šä¸‰å±‚æ‹†åˆ†ï¼ˆuser / admin / ç§æœ‰åŽç«¯ `127.0.0.1:3001`ï¼‰ï¼Œè£…æœºæ ¹ `/opt/incudal`ï¼ŒåŽŸå­ OTAï¼ˆ`releases/<ver-ts>` + `current` è½¯é“¾ï¼‰+ è‡ªåŠ¨å›žæ»šã€‚
+
+---
+
+## 2. ðŸ”´ ç¡¬è§„çŸ©ï¼ˆä¸å¯åå•†ï¼Œè¿åå³äº‹æ•…ï¼‰
+
+1. **ä¸ç¢°ç”Ÿäº§**ï¼šæœªç» owner æ˜Žç¡®è¦æ±‚ï¼Œ**ç»ä¸** OTAã€å‘å¸ƒã€pushã€æ‰“ tagã€æ”¹ç”Ÿäº§çŽ¯å¢ƒã€‚
+2. **ä¸åšç ´åæ€§ git**ï¼šæœªç» owner æ˜Žç¡®è¦æ±‚ï¼Œ**ç»ä¸** `git reset`ã€`git checkout --`ã€å¼ºåˆ¶åˆ é™¤ã€æ¸…ç†æœªè·Ÿè¸ªæ–‡ä»¶ã€`git commit`/`git push`ã€‚
+3. **é«˜å±è·¯å¾„å…ˆè¯»åŽå†™**ï¼šæ”¹åŠ¨ä»¥ä¸‹ä»»ä¸€é¢†åŸŸï¼Œ**å¿…é¡»å…ˆè¯»ç›¸å…³ä»£ç  + å¯¹åº”å®ˆå«æµ‹è¯•**å†åŠ¨æ‰‹ï¼š
+   > é‰´æƒ Â· æ”¯ä»˜ Â· æƒé™ Â· é£ŽæŽ§ Â· èµ„æºäº¤ä»˜ Â· å…‘æ¢æµç¨‹ Â· å®žä¾‹åˆ›å»º Â· OTA
+4. **æ”¹åŠ¨æœ€å°åŒ–**ï¼šä¿® bug / å‘ç‰ˆæœŸé—´**ä¸åšå¤§èŒƒå›´é‡æž„**ï¼Œåªæ”¹å¿…è¦çš„ã€‚
+5. **ç»ä¸æ³„å¯†**ï¼šä»»ä½• commitã€handoffã€æ€»ç»“ã€æˆªå›¾ä¸­éƒ½**ä¸å¾—**å‡ºçŽ°å‡­è¯ / token / cookie / å¯†é’¥ã€‚
+6. **æœ¬åœ°è¿‡ â‰  ç”Ÿäº§éªŒè¯**ï¼šæœ¬åœ°é€šè¿‡ã€GitHub Actionsã€Release èµ„äº§ã€OTAã€çº¿ä¸Šå®žè¯æ˜¯**åˆ†å¼€çš„è¯æ®**ï¼Œä¸å¯æ··ä¸ºä¸€è°ˆã€‚
+7. **æ¯æ¬¡æ”¹åŠ¨å¿…é¡»è¿‡å¯¹åº”å®ˆå«**ï¼ˆè§ Â§4ï¼‰ï¼Œå¦åˆ™è§†ä¸º**æœªå®Œæˆ**ã€‚
+8. `RUN_DB_CHECKS=0 bash scripts/apply-online-update.sh <ver>` ä¼š**è·³è¿‡ DB/æ”¯ä»˜å°±ç»ªæ ¡éªŒ**ï¼Œä»…åœ¨ owner æ˜Žç¡®æ‰¹å‡†æ—¶ä½¿ç”¨ã€‚
+
+---
+
+## 3. æœ¬åœ°æ€Žä¹ˆè·‘
+
+- **çŽ¯å¢ƒ**ï¼šNode â‰¥ 20ã€pnpm 9.14.2ã€æœ¬åœ° PostgreSQL 16ã€‚
+- **è£…ä¾èµ–**ï¼š`pnpm install`
+- **ä¸€æŠŠèµ·å…¨éƒ¨ï¼ˆserver + user + adminï¼‰**ï¼š`pnpm dev`
+- **åˆ†å¼€èµ·**ï¼š
+  - åŽç«¯ï¼š`NODE_ENV=development JWT_SECRET=dev-secret-12345678 HOST=127.0.0.1 PORT=3001 pnpm --filter server exec tsx watch src/app.ts`
+  - ç”¨æˆ·å‰ç«¯ï¼š`pnpm dev:user`
+  - ç®¡ç†å‰ç«¯ï¼š`pnpm dev:admin`
+- **ç«¯å£**ï¼šåŽç«¯ API **3001** Â· ç”¨æˆ·å‰ç«¯ **3000** Â· ç®¡ç†å‰ç«¯ **3002**ï¼ˆå‰ç«¯ dev ç» proxy æ‰“åˆ° 3001ï¼‰ã€‚
+
+---
+
+## 4. ðŸ›¡ï¸ å®ˆå«æµ‹è¯•çºªå¾‹ï¼ˆæœ¬ä»“åº“çš„å‘½é—¨ï¼‰
+
+`server/package.json` é‡Œæœ‰ **200+ ä¸ªç‹¬ç«‹ `test-*-guards.ts`**ã€‚å®ƒä»¬æŠŠå…³é”®ä¸šåŠ¡/å‰ç«¯ç»“æž„â€œé’‰æ­»â€ï¼Œ`pnpm test` ä¼šè·‘å…¨å¥—ï¼ˆclient+server type-check + å…¨éƒ¨å®ˆå«ï¼‰ã€‚**ä»»ä½•æ”¹åŠ¨å¿…é¡»è®©ç›¸å…³å®ˆå«é€šè¿‡ã€‚**
+
+- **å…¨é‡**ï¼ˆæ…¢ï¼Œå‘ç‰ˆå‰è·‘ï¼‰ï¼š`pnpm test`
+- **å•ä¸ª**ï¼š`pnpm --filter server test:<guard-name>`
+- **å‰ç«¯æœ€å¸¸ç”¨ä¸‰ä¸ª**ï¼š
+  - `test:frontend-route-guards` â€”â€” è·¯ç”± / **è¡¨æ ¼å¸ƒå±€** / `@click` è·¯å¾„æ–­è¨€
+  - `test:frontend-dist-boundary-guards` â€”â€” åŒç«¯ dist è¾¹ç•Œ
+  - `test:frontend-i18n-keys` â€”â€” i18n key å®Œæ•´æ€§
+- **Go agent**ï¼š`pnpm test:agent`
+
+### âš ï¸ è¡¨æ ¼å¸ƒå±€å®ˆå«ï¼ˆæœ€å®¹æ˜“è¸©é›·ï¼‰
+ä¸€æ‰¹è¡¨è¢«å®ˆå«**é”å®š**ä¸ºâ€œ**ç§»åŠ¨å¡ + PC å®šå®½è¡¨ï¼ˆ`table-fixed` / `overflow-hidden`ï¼‰ï¼Œç»ä¸æ¨ªå‘æ»šåŠ¨**â€ï¼Œå¹¶**åå‘ç¦æ­¢** `overflow-x-auto` / `min-w-[...]` / åŽ»æŽ‰ `table-fixed`ã€‚
+- æƒ³ä¿®â€œå®½è¡¨æŒ¤åŽ‹â€æ—¶ï¼š**å…ˆåˆ¤æ–­è¯¥è¡¨æ˜¯å¦åœ¨å®ˆå«æ¸…å•é‡Œ**ã€‚é”å®šè¡¨**åªèƒ½åœ¨ `table-fixed` å†…å¹³è¡¡åˆ—å®½**ï¼ˆåˆ—å®½ç™¾åˆ†æ¯”åˆè®¡ = 100%ï¼‰+ å…è®¸å•å…ƒæ ¼æ¢è¡Œ + é ç§»åŠ¨å¡åº”å¯¹çª„å±ï¼›**ä¸èƒ½**æ”¹æˆæ¨ªå‘æ»šåŠ¨ã€‚
+- å—é”å®šçš„è¡¨ï¼ˆç”¨æˆ·ç«¯ï¼‰ï¼š`MyPackagesView`ã€`MyHostsView`ã€`TransfersView`ã€`OrdersView`ã€`InvitesView`ã€`FlashSalesView`ã€`HostingWalletView`ã€`InstancesView`ã€`LogsView`ã€`EntertainmentView`ï¼›ï¼ˆç®¡ç†ç«¯ï¼‰`admin/BillingView`ã€`admin/ImagesView`ã€`admin/HelpManageView`ã€`admin/MailView`ã€`admin/PluginCenterView`ï¼›ï¼ˆç»„ä»¶ï¼‰`HostPublicIpv4Tab`ã€`InstanceLogsTab`ã€`ConfigEditModal`ã€‚
+- æ”¹ä»»ä¸€å‰ç«¯æ–‡ä»¶åŽ**å¿…è·‘** `test:frontend-route-guards`ã€‚
+
+---
+
+## 5. æž„å»º / æ ¡éªŒå‘½ä»¤
+
+| ç›®çš„ | å‘½ä»¤ |
+|------|------|
+| æž„å»ºï¼ˆå« dist è¾¹ç•Œå®ˆå«ï¼‰| `pnpm build` |
+| åªæž„å»ºå‰ç«¯ / åŽç«¯ | `pnpm build:client` / `pnpm build:server` |
+| Lintï¼ˆæ£€æŸ¥ / è‡ªåŠ¨ä¿®ï¼‰| `pnpm lint` / `pnpm lint:fix` |
+| ç±»åž‹æ£€æŸ¥ | `pnpm --filter client type-check` Â· `pnpm --filter server type-check` |
+| å…¨å¥—å®ˆå« | `pnpm test` |
+| æ–‡æ¡£ç«™å¼€å‘ / æž„å»º | `pnpm docs:dev` / `pnpm docs:build` |
+
+---
+
+## 6. UI æ”¹åŠ¨çº¦æŸï¼ˆå•è‰²é‡åšè¿›è¡Œä¸­ï¼‰
+
+- **æ–¹å‘**ï¼šè‹¹æžœå¼**çº¯é»‘ç™½å•è‰²**ï¼ˆæµ…è‰²=ç™½åº•é»‘å­—ï¼Œæ·±è‰²=é»‘åº•ç™½å­—ï¼‰ï¼ŒåŽ»äºŒæ¬¡å…ƒ/å‰ç¥¥ç‰©/ç«‹ç»˜ã€‚çŠ¶æ€è‰²**åªä¿ç•™ç»¿/ç¥ç€/çº¢**ä¸‰ç§ï¼ˆè¿è¡Œ/å¾…å¤„ç†/å¤±è´¥ï¼‰ã€‚
+- **çº¢çº¿**ï¼šåªæ”¹**æ ·å¼ / å¸ƒå±€ / æ–‡æ¡ˆå±‚çº§**ï¼Œ**ä¸ç¢°**åŽç«¯æŽ¥å£ã€æƒé™ã€æ”¯ä»˜/è®¢å•/å®žä¾‹åˆ›å»º/OTA ç­‰ä¸šåŠ¡é€»è¾‘ä¸Žè·¯ç”±è¡Œä¸ºâ€”â€”**åŠŸèƒ½ 100% ä¸å˜**ã€‚
+- **é…è‰²èµ° token å±‚**ï¼ˆ`client/tailwind.config.js`ï¼‰ï¼šä¸€å †å½©è‰² ramp å·²æ˜ å°„åˆ°ä¸­æ€§ç°ï¼›`rose â†’ çœŸçº¢`ï¼ˆå±é™©/äºæŸè¯­ä¹‰ï¼‰**ä¿ç•™ä¸å¯ç°åŒ–**ï¼›æ¸¸æˆåŒ–æ¨¡å—ï¼ˆæˆå°±/ç­¾åˆ°/æŠ½å¥–/ç¨€æœ‰åº¦ï¼‰å½©è‰²**åˆ»æ„ä¿ç•™**ã€‚
+- `kawaii-cloud.css` **æ¸è¿›æ”¹é€ ã€ä¸é‡å†™**ï¼›å•é¡µåŽ»è‰²ç”¨é¡µé¢ `<style scoped>`ã€‚
+- åŠ¨æ•ˆå¯ç”¨ **GSAP**ï¼ˆå·²è£… gsap-skillsï¼Œè§ `.claude/skills/`ï¼‰ï¼›å°Šé‡ `prefers-reduced-motion`ã€‚
+
+---
+
+## 7. åä½œæ¨¡åž‹ï¼ˆClaude Code â‡„ codexï¼‰
+
+- **Claude Code = æŠ€æœ¯è´Ÿè´£äºº / é›†æˆæ–¹**ï¼šå®šæ ¹å› ã€åˆ‡ä»»åŠ¡ã€å†™è§„æ ¼ã€å®ˆä¸å˜é‡ã€å®¡ diffã€è·‘å®ˆå«ã€çœŸæœºéªŒè¯ã€ç®¡ gitï¼ˆ**ä»…åœ¨ owner åŒæ„æ—¶** commit / pushï¼‰ã€‚
+- **codex = å®žçŽ°å·¥äºº**ï¼šæŒ‰ Claude ç»™çš„è§„æ ¼å®žçŽ°æ”¹åŠ¨ï¼Œå°¤å…¶**ä½Ž/ä¸­å±ã€è‡ªåŒ…å«ã€å¯å¹¶è¡Œ**çš„å—ã€‚
+- **é£Žé™©åˆ†æ¡£**ï¼šé«˜å±è·¯å¾„ç”± Claude å®šæ ¹å›  + æ”¶ç´§è§„æ ¼ï¼›ä½Ž/ä¸­å± codex å¯ç«¯åˆ°ç«¯ä¿®ã€‚**ä»»ä½•ä¸€æ–¹æ”¹å®Œéƒ½è¦è·‘ç›¸å…³å®ˆå«ï¼ŒClaude ç»Ÿä¸€å®¡æŸ¥åŽæ‰è¿›å…¥ä¸‹ä¸€æ­¥ã€‚**
+- **é¿å…å†²çª**ï¼šåŒä¸€æ‰¹æ–‡ä»¶ä¸€æ¬¡åªè®©ä¸€ä¸ª agent æ”¹ã€‚
+
+---
+
+## 8. ä¸€ä¸ªæ”¹åŠ¨çš„ã€Œå®Œæˆã€å®šä¹‰
+
+1. ç›¸å…³ **type-check** é€šè¿‡ï¼›
+2. ç›¸å…³ **å®ˆå«æµ‹è¯•** é€šè¿‡ï¼›
+3. è‹¥åŠ¨å‰ç«¯ â†’ **åŒç«¯ build** é€šè¿‡ï¼›
+4. **çœŸæœºè·‘è¿‡**å—å½±å“æµç¨‹ï¼ˆä¸æ˜¯åªçœ‹æµ‹è¯•ï¼‰ï¼›
+5. **æŠ¥å‘Š**ï¼šæ”¹äº†å“ªäº›æ–‡ä»¶ / ä¸ºä»€ä¹ˆ / é£Žé™© / æ€Žä¹ˆéªŒè¯çš„ã€‚
+
+ä»¥ä¸Šä»»ä¸€æœªæ»¡è¶³ = **æœªå®Œæˆ**ã€‚
+
+/**
+ * å…¬å…±è®¡è´¹è®¡ç®—æ¨¡å—
+ * æ‰€æœ‰æ¶‰åŠä»·æ ¼ã€æ—¥ä»·ã€å·®ä»·ã€å‰©ä½™ä»·å€¼çš„è®¡ç®—å¿…é¡»ä½¿ç”¨æœ¬æ¨¡å—çš„æ–¹æ³•
+ * ç¡®ä¿å…¨ç³»ç»Ÿè®¡ç®—é€»è¾‘ä¸€è‡´
+ */
+
+// ==================== å‘¨æœŸå¤©æ•°å¸¸é‡ ====================
+
+/**
+ * æ ‡å‡†å‘¨æœŸå¤©æ•°
+ * ç»Ÿä¸€å®šä¹‰ï¼š1ä¸ªæœˆ = 31 å¤©
+ * æœˆä»˜: 31 å¤©
+ * å­£ä»˜: 31 * 3 = 93 å¤©
+ * åŠå¹´ä»˜: 31 * 6 = 186 å¤©
+ * å¹´ä»˜: 31 * 12 = 372 å¤©
+ */
+const CYCLE_DAYS: Record<number, number> = {
+  1: 31,      // æœˆä»˜
+  3: 93,      // å­£ä»˜
+  6: 186,     // åŠå¹´ä»˜
+  12: 372     // å¹´ä»˜
+}
+
+// ==================== åŸºç¡€è®¡ç®—å‡½æ•° ====================
+
+/**
+ * èŽ·å–å‘¨æœŸå¤©æ•°
+ * @param billingCycle è®¡è´¹å‘¨æœŸï¼ˆæœˆæ•°ï¼‰
+ * @returns å‘¨æœŸå¤©æ•°
+ */
+export function getCycleDays(billingCycle: number): number {
+  return CYCLE_DAYS[billingCycle] || (billingCycle * 31)
+}
+
+/**
+ * è®¡ç®—æ—¥ä»·
+ * @param price å‘¨æœŸä»·æ ¼ï¼ˆå…ƒï¼‰
+ * @param billingCycle è®¡è´¹å‘¨æœŸï¼ˆæœˆæ•°ï¼‰
+ * @returns æ—¥ä»·ï¼ˆå…ƒï¼‰
+ */
+export function calculateDailyPrice(price: number, billingCycle: number): number {
+  const cycleDays = getCycleDays(billingCycle)
+  return price / cycleDays
+}
+
+/**
+ * è®¡ç®—æœˆä»·
+ * @param price å‘¨æœŸä»·æ ¼ï¼ˆå…ƒï¼‰
+ * @param billingCycle è®¡è´¹å‘¨æœŸï¼ˆæœˆæ•°ï¼‰
+ * @returns æœˆä»·ï¼ˆå…ƒï¼‰
+ */
+export function calculateMonthlyPrice(price: number, billingCycle: number): number {
+  const cycle = Math.max(billingCycle || 1, 1) // é˜²æ­¢é™¤é›¶
+  return price / cycle
+}
+
+/**
+ * è®¡ç®—å®žé™…æ”¯ä»˜ä»·æ ¼ï¼ˆåº”ç”¨æŠ˜æ‰£åŽï¼‰
+ * @param originalPrice åŽŸä»·ï¼ˆå…ƒï¼‰
+ * @param discountRate æŠ˜æ‰£çŽ‡ï¼ˆ0-1ï¼Œå¦‚ 0.05 è¡¨ç¤º 5% æŠ˜æ‰£ï¼‰
+ * @returns æŠ˜æ‰£åŽä»·æ ¼ï¼ˆå…ƒï¼‰
+ */
+export function calculateDiscountedPrice(originalPrice: number, discountRate: number): number {
+  return Number((originalPrice * (1 - discountRate)).toFixed(2))
+}
+
+/**
+ * è®¡ç®—æŠ˜æ‰£é‡‘é¢
+ * @param originalPrice åŽŸä»·ï¼ˆå…ƒï¼‰
+ * @param discountRate æŠ˜æ‰£çŽ‡ï¼ˆ0-1ï¼‰
+ * @returns æŠ˜æ‰£é‡‘é¢ï¼ˆå…ƒï¼‰
+ */
+export function calculateDiscountAmount(originalPrice: number, discountRate: number): number {
+  return Number((originalPrice * discountRate).toFixed(2))
+}
+
+// ==================== å‰©ä½™å¤©æ•°è®¡ç®— ====================
+
+/**
+ * è®¡ç®—å‰©ä½™å¤©æ•°ï¼ˆå‘ä¸Šå–æ•´ï¼‰
+ * @param expiresAt åˆ°æœŸæ—¶é—´
+ * @param now å½“å‰æ—¶é—´ï¼ˆå¯é€‰ï¼Œé»˜è®¤ä¸ºå½“å‰ï¼‰
+ * @returns å‰©ä½™å¤©æ•°ï¼ˆ>=0ï¼‰
+ */
+export function calculateRemainingDays(expiresAt: Date, now: Date = new Date()): number {
+  const expiresDate = new Date(expiresAt)
+  const remainingMs = expiresDate.getTime() - now.getTime()
+  return Math.max(0, Math.ceil(remainingMs / (24 * 60 * 60 * 1000)))
+}
+
+/**
+ * è®¡ç®—å‰©ä½™å¤©æ•°ï¼ˆç²¾ç¡®åˆ°å°æ•°ï¼‰
+ * @param expiresAt åˆ°æœŸæ—¶é—´
+ * @param now å½“å‰æ—¶é—´ï¼ˆå¯é€‰ï¼‰
+ * @returns å‰©ä½™å¤©æ•°ï¼ˆç²¾ç¡®ï¼‰
+ */
+export function calculateRemainingDaysPrecise(expiresAt: Date, now: Date = new Date()): number {
+  const expiresDate = new Date(expiresAt)
+  const remainingMs = expiresDate.getTime() - now.getTime()
+  return Math.max(0, remainingMs / (24 * 60 * 60 * 1000))
+}
+
+// ==================== å‰©ä½™ä»·å€¼è®¡ç®— ====================
+
+/**
+ * è®¡ç®—å‰©ä½™ä»·å€¼
+ * å…¬å¼: æ—¥ä»· Ã— å‰©ä½™å¤©æ•°
+ * 
+ * @param price å‘¨æœŸä»·æ ¼ï¼ˆå…ƒï¼ŒåŽŸä»·ï¼‰
+ * @param billingCycle è®¡è´¹å‘¨æœŸï¼ˆæœˆæ•°ï¼‰
+ * @param remainingDays å‰©ä½™å¤©æ•°
+ * @param discountRate æŠ˜æ‰£çŽ‡ï¼ˆ0-1ï¼Œå¯é€‰ï¼‰
+ * @returns å‰©ä½™ä»·å€¼ï¼ˆå…ƒï¼‰
+ */
+export function calculateRemainingValue(
+  price: number,
+  billingCycle: number,
+  remainingDays: number,
+  discountRate: number = 0
+): number {
+  // ä½¿ç”¨æŠ˜æ‰£åŽçš„ä»·æ ¼è®¡ç®—å‰©ä½™ä»·å€¼
+  const effectivePrice = discountRate > 0
+    ? calculateDiscountedPrice(price, discountRate)
+    : price
+  const dailyPrice = calculateDailyPrice(effectivePrice, billingCycle)
+  return Number((dailyPrice * remainingDays).toFixed(2))
+}
+
+/**
+ * è®¡ç®—å®‰å…¨çš„å‰©ä½™ä»·å€¼é€€æ¬¾é‡‘é¢
+ * ç¡®ä¿é€€æ¬¾é‡‘é¢ä¸è¶…è¿‡å®žé™…æ”¯ä»˜é‡‘é¢
+ * 
+ * @param price å‘¨æœŸä»·æ ¼ï¼ˆå…ƒï¼ŒåŽŸä»·ï¼‰
+ * @param billingCycle è®¡è´¹å‘¨æœŸï¼ˆæœˆæ•°ï¼‰
+ * @param remainingDays å‰©ä½™å¤©æ•°
+ * @param discountRate æŠ˜æ‰£çŽ‡ï¼ˆ0-1ï¼‰
+ * @param maxRefundable æœ€å¤§å¯é€€æ¬¾é‡‘é¢ï¼ˆå¯é€‰ï¼Œç”¨äºŽé™åˆ¶ï¼‰
+ * @returns å®‰å…¨çš„é€€æ¬¾é‡‘é¢ï¼ˆå…ƒï¼‰
+ */
+export function calculateSafeRefundAmount(
+  price: number,
+  billingCycle: number,
+  remainingDays: number,
+  discountRate: number = 0,
+  maxRefundable?: number
+): number {
+  const effectivePrice = discountRate > 0
+    ? calculateDiscountedPrice(price, discountRate)
+    : price
+
+  // è®¡ç®—å‰©ä½™ä»·å€¼
+  const cycleDays = getCycleDays(billingCycle)
+  const remainingRatio = Math.min(remainingDays / cycleDays, 1) // æ¯”ä¾‹ä¸èƒ½è¶…è¿‡ 1
+  const refundAmount = Number((effectivePrice * remainingRatio).toFixed(2))
+
+  // å¦‚æžœæä¾›äº†æœ€å¤§å¯é€€æ¬¾é‡‘é¢ï¼Œå–è¾ƒå°å€¼
+  if (maxRefundable !== undefined) {
+    return Math.min(refundAmount, maxRefundable)
+  }
+
+  return refundAmount
+}
+
+// ==================== å·®ä»·è®¡ç®— ====================
+
+/**
+ * è®¡ç®—æ–¹æ¡ˆåˆ‡æ¢å·®ä»·
+ * å…¬å¼: (æ–°æ–¹æ¡ˆæ—¥ä»· - æ—§æ–¹æ¡ˆæ—¥ä»·) Ã— å‰©ä½™å¤©æ•°
+ * 
+ * é‡è¦ï¼š
+ * - å¦‚æžœç”¨æˆ·åŽŸæœ¬ç”¨ä¼˜æƒ ç è´­ä¹°ï¼Œå‰©ä½™ä»·å€¼åº”è¯¥ç”¨æŠ˜æ‰£åŽä»·æ ¼è®¡ç®—
+ * - æ–°æ–¹æ¡ˆè´¹ç”¨ä¹Ÿåº”è¯¥ç”¨æŠ˜æ‰£åŽä»·æ ¼è®¡ç®—
+ * - ç¡®ä¿å…¬å¹³æ€§ï¼šç”¨æˆ·å®žé™…æ”¯ä»˜äº†å¤šå°‘ï¼Œå‰©ä½™ä»·å€¼å°±æŒ‰æ¯”ä¾‹é€€å¤šå°‘
+ * 
+ * @param oldPrice æ—§æ–¹æ¡ˆå‘¨æœŸä»·æ ¼ï¼ˆå…ƒï¼‰
+ * @param oldBillingCycle æ—§æ–¹æ¡ˆè®¡è´¹å‘¨æœŸ
+ * @param newPrice æ–°æ–¹æ¡ˆå‘¨æœŸä»·æ ¼ï¼ˆå…ƒï¼‰
+ * @param newBillingCycle æ–°æ–¹æ¡ˆè®¡è´¹å‘¨æœŸ
+ * @param remainingDays å‰©ä½™å¤©æ•°
+ * @param discountRate æŠ˜æ‰£çŽ‡ï¼ˆ0-1ï¼Œåº”ç”¨äºŽæ–°æ—§æ–¹æ¡ˆï¼‰
+ * @returns å·®ä»·ï¼ˆæ­£æ•°=è¡¥äº¤ï¼Œè´Ÿæ•°=é€€æ¬¾ï¼‰
+ */
+export function calculatePriceDiff(
+  oldPrice: number,
+  oldBillingCycle: number,
+  newPrice: number,
+  newBillingCycle: number,
+  remainingDays: number,
+  discountRate: number = 0
+): number {
+  // åº”ç”¨æŠ˜æ‰£åŽçš„å®žé™…ä»·æ ¼
+  const actualOldPrice = discountRate > 0
+    ? calculateDiscountedPrice(oldPrice, discountRate)
+    : oldPrice
+  const actualNewPrice = discountRate > 0
+    ? calculateDiscountedPrice(newPrice, discountRate)
+    : newPrice
+
+  // è®¡ç®—æ—¥ä»·
+  const oldDailyPrice = calculateDailyPrice(actualOldPrice, oldBillingCycle)
+  const newDailyPrice = calculateDailyPrice(actualNewPrice, newBillingCycle)
+
+  // å·®ä»· = (æ–°æ—¥ä»· - æ—§æ—¥ä»·) Ã— å‰©ä½™å¤©æ•°
+  const priceDiff = (newDailyPrice - oldDailyPrice) * remainingDays
+
+  // æœ€ä½Žé‡‘é¢é—¨æ§›ï¼šä½ŽäºŽ 0.01 å…ƒæŒ‰ 0 å¤„ç†
+  return Math.abs(priceDiff) < 0.01 ? 0 : Number(priceDiff.toFixed(2))
+}
+
+/**
+ * è®¡ç®—å®Œæ•´çš„æ–¹æ¡ˆåˆ‡æ¢ç»“æžœ
+ * åŒ…å«æ‰€æœ‰è®¡ç®—ç»†èŠ‚ï¼Œä¾›å‰ç«¯å±•ç¤ºå’ŒåŽç«¯å¤„ç†
+ */
+export interface PlanChangeCalcResult {
+  /** æ—§æ–¹æ¡ˆæ—¥ä»·ï¼ˆå…ƒï¼‰ */
+  oldDailyPrice: number
+  /** æ–°æ–¹æ¡ˆæ—¥ä»·ï¼ˆå…ƒï¼‰ */
+  newDailyPrice: number
+  /** å‰©ä½™ä»·å€¼ï¼ˆå…ƒï¼ŒæŠ˜æ‰£åŽï¼‰ */
+  remainingValue: number
+  /** æ–°æ–¹æ¡ˆè´¹ç”¨ï¼ˆå…ƒï¼ŒæŠ˜æ‰£åŽï¼‰ */
+  newPlanCost: number
+  /** æŠ˜æ‰£é‡‘é¢ï¼ˆå…ƒï¼‰ */
+  discountAmount: number
+  /** å·®ä»·ï¼ˆå…ƒï¼Œæ­£æ•°=è¡¥äº¤ï¼Œè´Ÿæ•°=é€€æ¬¾ï¼‰ */
+  priceDiff: number
+  /** æ˜¯å¦å‡çº§ */
+  isUpgrade: boolean
+}
+
+export function calculatePlanChangeDetails(
+  oldPrice: number,
+  oldBillingCycle: number,
+  newPrice: number,
+  newBillingCycle: number,
+  remainingDays: number,
+  discountRate: number = 0
+): PlanChangeCalcResult {
+  // è®¡ç®—æŠ˜æ‰£åŽçš„ä»·æ ¼
+  const actualOldPrice = discountRate > 0
+    ? calculateDiscountedPrice(oldPrice, discountRate)
+    : oldPrice
+  const actualNewPrice = discountRate > 0
+    ? calculateDiscountedPrice(newPrice, discountRate)
+    : newPrice
+
+  // è®¡ç®—æ—¥ä»·
+  const oldDailyPrice = calculateDailyPrice(actualOldPrice, oldBillingCycle)
+  const newDailyPrice = calculateDailyPrice(actualNewPrice, newBillingCycle)
+
+  // å‰©ä½™ä»·å€¼ = æ—§æ—¥ä»· Ã— å‰©ä½™å¤©æ•°
+  const remainingValue = Number((oldDailyPrice * remainingDays).toFixed(2))
+
+  // æ–°æ–¹æ¡ˆè´¹ç”¨ = æ–°æ—¥ä»· Ã— å‰©ä½™å¤©æ•°
+  const newPlanCost = Number((newDailyPrice * remainingDays).toFixed(2))
+
+  // æŠ˜æ‰£é‡‘é¢ï¼ˆåŸºäºŽæ–°æ–¹æ¡ˆåŽŸä»·ï¼‰
+  const discountAmount = discountRate > 0
+    ? Number(((newPrice / getCycleDays(newBillingCycle)) * remainingDays * discountRate).toFixed(2))
+    : 0
+
+  // å·®ä»·
+  const priceDiff = Number((newPlanCost - remainingValue).toFixed(2))
+  const finalPriceDiff = Math.abs(priceDiff) < 0.01 ? 0 : priceDiff
+
+  return {
+    oldDailyPrice: Number(oldDailyPrice.toFixed(4)),
+    newDailyPrice: Number(newDailyPrice.toFixed(4)),
+    remainingValue,
+    newPlanCost,
+    discountAmount,
+    priceDiff: finalPriceDiff,
+    isUpgrade: newDailyPrice > oldDailyPrice
+  }
+}
+
+// ==================== ç»­è´¹è®¡ç®— ====================
+
+/**
+ * è®¡ç®—ç»­è´¹é‡‘é¢
+ * @param monthlyPrice æœˆä»·ï¼ˆå…ƒï¼‰
+ * @param months ç»­è´¹æœˆæ•°
+ * @param discountRate æŠ˜æ‰£çŽ‡ï¼ˆ0-1ï¼‰
+ * @returns { originalAmount, discountAmount, finalAmount }
+ */
+export function calculateRenewAmount(
+  monthlyPrice: number,
+  months: number,
+  discountRate: number = 0
+): { originalAmount: number; discountAmount: number; finalAmount: number } {
+  const originalAmount = Number((monthlyPrice * months).toFixed(2))
+  const discountAmount = discountRate > 0
+    ? Number((originalAmount * discountRate).toFixed(2))
+    : 0
+  const finalAmount = Number((originalAmount - discountAmount).toFixed(2))
+
+  return { originalAmount, discountAmount, finalAmount }
+}
+
+// ==================== è¾…åŠ©å‡½æ•° ====================
+
+/**
+ * æ·»åŠ æœˆä»½åˆ°æ—¥æœŸ
+ * ç»Ÿä¸€æŒ‰å¤©æ•°è®¡ç®—ï¼š1ä¸ªæœˆ = 31 å¤©
+ * @param date åŸºå‡†æ—¥æœŸ
+ * @param months æœˆæ•°
+ * @returns æ–°æ—¥æœŸ
+ */
+export function addMonths(date: Date, months: number): Date {
+  const daysToAdd = months * 31
+  const result = new Date(date)
+  result.setDate(result.getDate() + daysToAdd)
+  return result
+}
+
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+
+const source = readFileSync(resolve(__dirname, '../src/routes/admin-billing.ts'), 'utf8')
+const manualRefundRoute = source.slice(
+  source.indexOf("app.post('/api/admin/instances/:id/refund'"),
+  source.indexOf('// ==================== ç®¡ç†å‘˜åˆ é™¤å¹¶é€€æ¬¾ ====================')
+)
+const deleteAndRefundRoute = source.slice(
+  source.indexOf("app.post('/api/admin/instances/:id/delete-and-refund'"),
+  source.indexOf('// ==================== ç®¡ç†å‘˜åº”ç”¨AFFä¼˜æƒ ç  ====================')
+)
+
+assert.ok(
+  source.includes('const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\\d*$/') &&
+    source.includes('function parsePositiveRouteId(value: string): number | null') &&
+    source.includes('Number.isSafeInteger(parsed)'),
+  'admin billing routes must define strict positive safe-integer route ID parsing'
+)
+
+assert.equal(
+  source.match(/const instanceId = parsePositiveRouteId\(id\)/g)?.length ?? 0,
+  10,
+  'all admin instance billing routes must strictly validate instance route IDs'
+)
+
+assert.equal(
+  source.match(/const recordId = parsePositiveRouteId\(id\)/g)?.length ?? 0,
+  3,
+  'admin recharge-record refund and sync routes must strictly validate record route IDs'
+)
+
+assert.equal(
+  source.match(/const refundRequestId = parsePositiveRouteId\(id\)/g)?.length ?? 0,
+  1,
+  'admin recharge refund retry route must strictly validate refund request route IDs'
+)
+
+for (const forbiddenPattern of [
+  'parseInt(id, 10)',
+  'isNaN(instanceId)',
+  'isNaN(recordId)',
+  'isNaN(refundRequestId)',
+  'isNaN(newPlanId)'
+] as const) {
+  assert.ok(
+    !source.includes(forbiddenPattern),
+    `admin billing routes must not use loose ID parsing: ${forbiddenPattern}`
+  )
+}
+
+assert.ok(
+  source.includes('!Number.isInteger(days) || days < 1 || days > 365'),
+  'admin manual extension must require integer day values'
+)
+
+assert.ok(
+  source.includes('!Number.isSafeInteger(newPlanId) || newPlanId <= 0'),
+  'admin plan upgrade must require a positive safe-integer target plan ID'
+)
+
+assert.ok(
+  manualRefundRoute.includes(`await db.deductHostingBalance(
+          instance.hostId,
+          amount,
+          instanceId,
+          \`ç®¡ç†å‘˜é€€æ¬¾æ‰£é™¤æ‰˜ç®¡æ”¶å…¥ï¼š\${instance.name}\`,
+          tx
+        )`),
+  'admin manual instance refunds must deduct the actual refund amount from hosted income in the same transaction'
+)
+
+assert.ok(
+  deleteAndRefundRoute.includes(`await db.deductHostingBalance(
+              instance.hostId,
+              refundAmount,
+              instanceId,
+              \`ç®¡ç†å‘˜åˆ é™¤æ‰˜ç®¡å®žä¾‹é€€æ¬¾æ‰£é™¤ï¼š\${instance.name}\`,
+              tx
+            )`),
+  'admin delete-and-refund must deduct the actual refund amount from hosted income in the same transaction'
+)
+
+assert.ok(
+  source.includes('async function assertRechargeRefundProviderSupported(recordId: number): Promise<void>') &&
+    source.includes('provider.type !== PLUGIN_GATEWAY_PROVIDER_TYPE') &&
+    source.includes('å½“å‰å……å€¼æ”¯ä»˜æ¸ é“ä¸æ”¯æŒè‡ªåŠ¨åŽŸè·¯é€€æ¬¾ï¼›è¯·æ”¹ç”¨è®¢å•é€€æ¬¾å®¡æ‰¹æˆ–äººå·¥è°ƒè´¦'),
+  'admin recharge refund must validate provider refund support before creating a refund request'
+)
+
+const refundCapabilityIndex = source.indexOf('await assertRechargeRefundProviderSupported(recordId)')
+const refundCreateIndex = source.indexOf('db.createRechargeRefundRequest({')
+assert.ok(
+  refundCapabilityIndex !== -1 &&
+    refundCreateIndex !== -1 &&
+    refundCapabilityIndex < refundCreateIndex,
+  'admin recharge refund route must run provider capability checks before persisting refund requests'
+)
+
+console.log('admin billing route ID guard tests passed')
+
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import { dirname, resolve } from 'node:path'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+const root = resolve(__dirname, '..')
+const repoRoot = resolve(root, '..')
+
+const schema = readFileSync(resolve(root, 'prisma/schema.prisma'), 'utf8')
+const migration = readFileSync(resolve(root, 'prisma/migrations/20260624214500_add_financial_reconciliation/migration.sql'), 'utf8')
+const refundLifecycleMigration = readFileSync(resolve(root, 'prisma/migrations/20260627093000_add_recharge_refund_reconciliation_item/migration.sql'), 'utf8')
+const adminBillingRoute = readFileSync(resolve(root, 'src/routes/admin-billing.ts'), 'utf8')
+const adminApi = readFileSync(resolve(repoRoot, 'client/src/api/admin.ts'), 'utf8')
+const userApi = readFileSync(resolve(repoRoot, 'client/src/api/index.ts'), 'utf8')
+const billingView = readFileSync(resolve(repoRoot, 'client/src/views/admin/BillingView.vue'), 'utf8')
+const exportRoute = adminBillingRoute.slice(
+  adminBillingRoute.indexOf("'/api/admin/billing/reconciliation/export'"),
+  adminBillingRoute.indexOf('// ==================== ç®¡ç†å‘˜å°åœ/è§£å° ====================')
+)
+
+assert.ok(schema.includes('enum FinancialReconciliationStatus'), 'schema must define reconciliation status enum')
+assert.ok(schema.includes('normal') && schema.includes('discrepancy') && schema.includes('confirmed') && schema.includes('ignored'), 'reconciliation statuses must cover lifecycle')
+assert.ok(schema.includes('enum FinancialReconciliationItemType'), 'schema must define reconciliation item types')
+assert.ok(schema.includes('model FinancialReconciliationRun'), 'schema must define daily reconciliation run')
+assert.ok(schema.includes('model FinancialReconciliationItem'), 'schema must define reconciliation item')
+assert.ok(schema.includes('recharge_refund_lifecycle_issue'), 'schema must support recharge refund lifecycle differences')
+assert.ok(schema.includes('@@unique([date])'), 'one reconciliation run per business date is required')
+assert.ok(schema.includes('@@unique([runId, itemKey])'), 'reconciliation items must be idempotent per run')
+assert.ok(schema.includes('amount          Decimal?'), 'reconciliation item amount must use Decimal')
+
+assert.ok(migration.includes('CREATE TYPE "FinancialReconciliationStatus"'), 'migration must create status enum')
+assert.ok(migration.includes('CREATE TABLE "financial_reconciliation_runs"'), 'migration must create run table')
+assert.ok(migration.includes('CREATE TABLE "financial_reconciliation_items"'), 'migration must create item table')
+assert.ok(migration.includes('financial_reconciliation_runs_date_key'), 'migration must enforce one run per date')
+assert.ok(migration.includes('financial_reconciliation_items_run_id_item_key_key'), 'migration must enforce idempotent items')
+assert.ok(migration.includes('ON DELETE CASCADE'), 'items should be removed with their run')
+assert.ok(migration.includes('ON DELETE SET NULL'), 'handler/user references should preserve reconciliation history')
+assert.ok(refundLifecycleMigration.includes("ADD VALUE 'recharge_refund_lifecycle_issue'"), 'migration must add recharge refund lifecycle item type')
+
+assert.ok(adminBillingRoute.includes("'/api/admin/billing/reconciliation'"), 'view reconciliation route missing')
+assert.ok(adminBillingRoute.includes("'/api/admin/billing/reconciliation/run'"), 'run reconciliation route missing')
+assert.ok(adminBillingRoute.includes("'/api/admin/billing/reconciliation/items/:id'"), 'item handling route missing')
+assert.ok(adminBillingRoute.includes("'/api/admin/billing/reconciliation/export'"), 'CSV export route missing')
+assert.ok(adminBillingRoute.includes('onRequest: [app.authenticate, app.requireAdmin]'), 'reconciliation admin routes must keep the admin guard')
+assert.ok(adminBillingRoute.includes('canViewFinancialReconciliation'), 'read permission entrypoint missing')
+assert.ok(adminBillingRoute.includes('canManageFinancialReconciliation'), 'write permission entrypoint missing')
+assert.ok(adminBillingRoute.includes('FINANCE_READONLY'), 'write routes must preserve read-only finance boundary')
+assert.ok(adminBillingRoute.includes('financialReconciliationRun.upsert'), 'rerun must upsert the daily run')
+assert.ok(adminBillingRoute.includes('financialReconciliationItem.upsert'), 'rerun must upsert stable difference items')
+assert.ok(adminBillingRoute.includes('itemKey'), 'difference detection must use stable item keys')
+assert.ok(adminBillingRoute.includes("status: 'discrepancy'") && adminBillingRoute.includes('deleteMany'), 'rerun must avoid duplicate stale open differences')
+assert.ok(adminBillingRoute.includes('recharge_missing_balance_log'), 'must detect completed recharge without balance log')
+assert.ok(adminBillingRoute.includes('orphan_balance_log'), 'must detect balance log without business source')
+assert.ok(adminBillingRoute.includes('delivered_instance_missing_billing'), 'must detect delivered paid instance without billing')
+assert.ok(adminBillingRoute.includes('approved_adjustment_missing_balance_log'), 'must detect approved adjustment without balance log')
+assert.ok(adminBillingRoute.includes('rechargeRefundRequest.findMany'), 'must include recharge refund requests in daily reconciliation')
+assert.ok(adminBillingRoute.includes('recharge_refund_lifecycle_issue'), 'must detect recharge refund lifecycle issues')
+assert.ok(adminBillingRoute.includes('pending_stale'), 'must detect stale pending recharge refund requests')
+assert.ok(adminBillingRoute.includes('processing_stale'), 'must detect stale processing recharge refund requests')
+assert.ok(adminBillingRoute.includes('missing_failed_refund_restore_log'), 'must detect failed refund requests missing restore balance logs')
+assert.ok(adminBillingRoute.includes("'/api/admin/billing/recharge-refunds'"), 'admin billing must expose original-route refund request list')
+assert.ok(adminBillingRoute.includes('listRechargeRefundRequests'), 'admin refund workbench must use the shared refund request query')
+assert.ok(adminBillingRoute.includes("'/api/admin/billing/recharge-refunds/:id/retry'"), 'admin refund workbench must preserve retry/sync route')
+assert.ok(exportRoute.includes('maskExportIdentifier'), 'CSV export must mask sensitive identifiers')
+assert.ok(exportRoute.includes('text/csv; charset=utf-8'), 'CSV export must return csv content type')
+assert.ok(!exportRoute.includes('callbackData') && !exportRoute.includes('providerConfigSnapshot'), 'reconciliation export must not select raw callback or provider snapshots')
+assert.ok(!exportRoute.includes('adminPassword') && !exportRoute.includes('token'), 'reconciliation export must not expose passwords or tokens')
+
+assert.ok(adminApi.includes('FinancialReconciliationRun'), 'admin API must expose typed reconciliation run')
+assert.ok(adminApi.includes('recharge_refund_lifecycle_issue'), 'admin API must type recharge refund reconciliation differences')
+assert.ok(adminApi.includes('getFinancialReconciliation'), 'admin API must expose reconciliation read')
+assert.ok(adminApi.includes('runFinancialReconciliation'), 'admin API must expose reconciliation run')
+assert.ok(adminApi.includes('updateFinancialReconciliationItem'), 'admin API must expose item handling')
+assert.ok(adminApi.includes('exportFinancialReconciliationCsv'), 'admin API must download CSV with auth')
+assert.ok(adminApi.includes("responseType: 'blob'"), 'CSV download must use authenticated blob request')
+assert.ok(adminApi.includes('RechargeRefundRequest'), 'admin API must expose typed recharge refund requests')
+assert.ok(adminApi.includes('getRechargeRefundRequests'), 'admin API must expose refund workbench list')
+assert.ok(adminApi.includes('createRechargeRefund'), 'admin API must expose original-route refund creation')
+assert.ok(adminApi.includes('retryRechargeRefund'), 'admin API must expose refund retry/sync action')
+assert.ok(!userApi.includes('reconciliation'), 'user API must not expose financial reconciliation')
+
+assert.ok(billingView.includes("'reconciliation'"), 'admin billing UI must include reconciliation tab')
+assert.ok(billingView.includes("'refundRequests'"), 'admin billing UI must include original-route refund tab')
+assert.ok(billingView.includes('refundWorkbenchTitle'), 'admin UI must render original-route refund workbench')
+assert.ok(billingView.includes('loadRefundRequests'), 'admin UI must load original-route refund requests')
+assert.ok(billingView.includes('canCreateOriginalRefund'), 'admin UI must only expose original-route refund creation when supported')
+assert.ok(billingView.includes('openCreateOriginalRefund'), 'admin UI must open original-route refund creation dialog')
+assert.ok(billingView.includes('submitCreateOriginalRefund'), 'admin UI must submit original-route refund creation')
+assert.ok(billingView.includes('retryRechargeRefund'), 'admin UI must retry/sync original-route refunds')
+assert.ok(billingView.includes('æ—¥å¯¹è´¦å·¥ä½œå°'), 'admin UI must render reconciliation workspace')
+assert.ok(billingView.includes('runFinancialReconciliation'), 'admin UI must run reconciliation')
+assert.ok(billingView.includes('saveReconciliationItem'), 'admin UI must handle difference status')
+assert.ok(billingView.includes('exportFinancialReconciliation'), 'admin UI must expose CSV export')
+assert.ok(billingView.includes('å¯¼å‡ºå†…å®¹å·²è„±æ•'), 'admin UI must state export redaction boundary')
+
+console.log('financial reconciliation guards passed')
+
+rg : The term 'rg' is not recognized as the name of a cmdlet, function, script file, or operable program. Check the 
+spelling of the name, or if a path was included, verify that the path is correct and try again.
+At line:2 char:29
++ Get-Content -Raw AGENTS.md; rg -n -C 8 "calculateDailyPrice|延期|extend ...
++                             ~~
+    + CategoryInfo          : ObjectNotFound: (rg:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+
+codex
+已确认公共函数 `calculateDailyPrice(price, billingCycle)` 通过 `getCycleDays` 使用 31 天基，且不做中间舍入。当前环境没有 `rg`，我会用 PowerShell 精确读取 `admin-billing.ts` 的 import、延期路由和现有工作区状态，避免覆盖用户改动。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$path = '"'server/src/routes/admin-billing.ts'
+"'$lines = Get-Content -Encoding UTF8 $path
+$matches = Select-String -Path $path -Pattern '"'calculateDailyPrice|extend|延期|days \\* 24|toFixed'
+"'$matches | ForEach-Object { '"'{0}: {1}' -f "'$_.LineNumber, $_.Line.Trim() }
+'"'--- imports / top ---'
+"'$lines[0..80]
+'"'--- around local helper ---'
+"'$lines[775..815]
+'"'--- around extension route ---'
+"'$lines[2345..2410]
+'"'--- git status ---'
+git status --short
+git diff -- server/src/routes/admin-billing.ts server/scripts/test-admin-billing-route-id-guards.ts" in C:\Users\Administrator\Desktop\payinces
+ succeeded in 901ms:
+199: return new Prisma.Decimal(Number.isFinite(numeric) ? numeric.toFixed(2) : '0.00')
+419: return { amount: Number(amount.toFixed(2)), reason }
+434: return Number(value.toFixed(2))
+438: if (Number.isFinite(parsed) && parsed > 0) return Number(parsed.toFixed(2))
+790: return Number((billingPrice / cycle).toFixed(2))
+796: function calculateDailyPrice(billingPrice: number, billingCycle: number | null): number {
+798: return Number((monthlyPrice / 30).toFixed(2))
+852: class BatchPriceUpdateError extends Error {
+877: return Number(value.toFixed(2))
+1869: amount: Number(payableRechargeAmount.toFixed(2)),
+2342: // ==================== 管理员手动延期 ====================
+2344: // POST /api/admin/instances/:id/extend - 手动延期
+2345: app.post('/api/admin/instances/:id/extend', {
+2352: const { days, reason, freeExtend } = request.body as {
+2355: freeExtend?: boolean  // 是否免费延期
+2360: return reply.status(400).send({ error: '参数无效，延期天数必须在 1-365 之间' })
+2378: // 只有付费实例可以延期
+2380: return reply.status(400).send({ error: '免费实例无需延期' })
+2383: // 计算延期费用（按天价计算）
+2384: const dailyPrice = calculateDailyPrice(Number(instance.billingPrice), instance.billingCycle)
+2385: const extendAmount = freeExtend ? 0 : Number((dailyPrice * days).toFixed(2))
+2391: const newExpiresAt = new Date(baseDate.getTime() + days * 24 * 60 * 60 * 1000)
+2393: // 如果不是免费延期，需要检查用户余额并扣费
+2394: if (!freeExtend && extendAmount > 0) {
+2396: if (userBalance < extendAmount) {
+2397: return reply.status(400).send({ error: `用户余额不足，需要 ${extendAmount} 元，当前余额 ${userBalance} 元` })
+2400: // 扣费并延期
+2418: where: { id: instance.userId, balance: { gte: extendAmount } },
+2419: data: { balance: { decrement: extendAmount } }
+2435: amount: -extendAmount,
+2439: remark: `管理员延期 ${days} 天：${reason || '手动延期'}`
+2463: type: 'renew',  // 使用 renew 类型表示延期
+2464: amount: extendAmount,
+2469: remark: `管理员延期 ${days} 天（操作者: ${admin.username}）`
+2474: // 免费延期
+2491: // 记录免费延期记录
+2496: type: 'renew',  // 使用 renew 类型表示免费延期
+2501: remark: `管理员免费延期 ${days} 天（操作者: ${admin.username}）：${reason || '免费延期'}`
+2510: 'instance.admin_extend',
+2511: `Admin extended instance "${instance.name}" by ${days} days (User: ${instance.user?.username}, Amount: ${extendAmount})`,
+2517: await sendNotification(instance.userId, 'instance_extended', {
+2521: amount: extendAmount
+2526: message: `实例已延期 ${days} 天`,
+2527: amount: extendAmount,
+2538: request.log.error(error, '延期实例失败')
+2539: return reply.status(500).send({ error: '延期实例失败' })
+2585: error: `退款金额超过可退上限，最多可退 ${maxRefundable.toFixed(2)} 元`
+2915: `Admin deleted${databaseOnly ? ' (database only)' : ''} and refunded instance "${instance.name}" (User: ${instance.user?.username}, RefundType: ${refundType}, Amount: ¥${refundAmount.toFixed(2)}): ${reason}`,
+2947: message: `实例已删除${modeText}${refundAmount > 0 ? `，已退款 ¥${refundAmount.toFixed(2)}` : ''}`,
+3121: const roundedNewPrice = Number(newPrice.toFixed(2))
+3171: throw new BatchPriceUpdateError(`用户余额不足，需补交 ¥${priceDiff.toFixed(2)}，当前余额 ¥${userBalance.toFixed(2)}`)
+3211: throw new BatchPriceUpdateError(`用户余额不足，需补交 ¥${priceDiff.toFixed(2)}`)
+3240: ? `管理员调整实例价格，补交差价 ¥${priceDiff.toFixed(2)}`
+3241: : `管理员调整实例价格，退还差价 ¥${Math.abs(priceDiff).toFixed(2)}`
+3256: remark: `价格调整: ¥${oldPrice.toFixed(2)} → ¥${roundedNewPrice.toFixed(2)}`
+3267: `Admin updated instance "${instance.name}" price: ¥${oldPrice.toFixed(2)} → ¥${roundedNewPrice.toFixed(2)}, settle: ${settleBalance}, diff: ¥${priceDiff.toFixed(2)}`,
+3286: ? `价格已更新，已从用户余额扣除 ¥${priceDiff.toFixed(2)}`
+3288: ? `价格已更新，已退还用户 ¥${Math.abs(priceDiff).toFixed(2)}`
+3516: ? `管理员批量调整实例价格，补交差价 ¥${item.priceDiff.toFixed(2)}`
+3517: : `管理员批量调整实例价格，退还差价 ¥${Math.abs(item.priceDiff).toFixed(2)}`
+3531: remark: `批量价格调整: ¥${(item.oldPrice || 0).toFixed(2)} → ¥${item.newPrice.toFixed(2)}`
+3545: `Admin batch updated ${preview.summary.changedCount} instance prices to ¥${newPrice.toFixed(2)}, settle: ${settleBalance}, charge: ¥${preview.summary.totalCharge.toFixed(2)}, refund: ¥${preview.summary.totalRefund.toFixed(2)}`,
+4443: content: `您的充值已到账！\n充值金额：￥${actualAmount.toFixed(2)}\n订单号：${record.orderNo}\n交易号：${tradeNo || 'N/A'}`,
+4555: error: `用户余额不足，需要 ¥${billing.totalPrice.toFixed(2)}，当前余额 ¥${userBalance.toFixed(2)}`
+5074: ? `Admin created paid instance "${name}" for user ${targetUser.username} (Package: ${pkg.name}, Plan: ${selectedPlan.name}, Charged: ${chargeFirstMonth ? `¥${billing!.totalPrice.toFixed(2)}` : 'Free first month'})`
+5088: const formatMemory = (mb: number) => mb >= 1024 ? `${(mb / 1024).toFixed(1)} GB` : `${mb} MB`
+5089: const formatDiskSize = (mb: number) => mb >= 1024 ? `${(mb / 1024).toFixed(0)} GB` : `${mb} MB`
+5103: 扣费：¥${billing!.totalPrice.toFixed(2)}
+5277: monthlyPrice: Number((Number(plan.price) / plan.billingCycle / 100).toFixed(2)),
+5317: ).toFixed(2)),
+5423: error: `用户余额不足，需要 ¥${priceDifference.toFixed(2)}，当前余额 ¥${userBalance.toFixed(2)}`
+5601: `Admin upgraded instance "${instance.name}" plan: ${currentPlan.name} → ${newPlan.name} (User: ${instance.user?.username}, PriceDiff: ¥${priceDifference.toFixed(2)})`,
+5616: message: `方案已升级，补差价 ¥${priceDifference.toFixed(2)}`,
+--- imports / top ---
+/**
+ * 管理员计费相关路由
+ */
+
+import type { FastifyInstance, FastifyReply } from 'fastify'
+import { Prisma, type FinancialReconciliationItemType, type FinancialReconciliationStatus, type InstanceStatus } from '@prisma/client'
+import { prisma } from '../db/prisma.js'
+import * as db from '../db/index.js'
+import { createLog } from '../db/logs.js'
+import { sendNotification } from '../lib/notifier.js'
+import { createEpayClient, type EpayConfig, type EpayConfigV1, type EpayConfigV2, type EpayVersion } from '../lib/epay.js'
+import {
+  buildHeleketConfig,
+  createHeleketClient,
+  extractHeleketStatus,
+  getHeleketInvoiceAmount,
+  getHeleketPaymentState,
+  getHeleketStatusDescription
+} from '../lib/heleket.js'
+import {
+  extractRechargePaymentDisplayInfo,
+  getRechargePayableAmount,
+  mergeHeleketPaymentDetails
+} from '../lib/recharge-payment-details.js'
+import { resolveRechargeProviderConfigSnapshot } from '../lib/recharge-provider-snapshot.js'
+import { createInboxMessage } from '../db/inbox.js'
+import { getDateStringInTimezone, getTodayRange, getThisMonthStart, getLastMonthRange } from '../lib/timezone.js'
+import { validateName, encryptSensitiveData } from '../lib/security.js'
+import { generateIncusConfig, generateRandomPassword } from '../lib/incus-config-generator.js'
+import { apiError, ErrorCode } from '../lib/errors.js'
+import {
+  getSystemImageAvailabilityForHost,
+  isImageCompatibleWithInstanceType,
+  isImageCompatibleWithMemory,
+  isValidSystemImage
+} from '../db/images.js'
+import { sendAdminInstanceCreatedEmail, sendInstanceDestroyRefundEmail } from '../lib/mailer.js'
+import { generateRandomIPv4, generateRandomIPv6 } from '../lib/ip-calculator.js'
+import { validateCommandsOwnership, mergeCommandContents, getImageDistroFromAlias } from '../db/custom-init-commands.js'
+import { customAlphabet } from 'nanoid'
+import { buildInstanceConfig, getIncusClient, createInstance, deleteInstance, startInstance, stopInstance, getInstanceState } from '../lib/incus/index.js'
+import { restoreBandwidth } from '../lib/incus/incus-traffic.js'
+import { calculateCreateBilling, getMaxRefundable } from '../db/billing-operations.js'
+import { shouldSyncInstanceSwapSizeWithPlan } from '../lib/instance-swap.js'
+import { resolveInstanceTrafficLimitForHost } from '../lib/traffic-multiplier.js'
+import { normalizePlanTrafficLimitSpeed } from '../services/traffic-bandwidth.js'
+import { calculateInstanceTrafficStatus } from '../services/traffic-utils.js'
+import type { Host } from '../types/database.js'
+import type { PublicIpv4Assignment } from '../db/public-ipv4.js'
+import { INSTANCE_OPERATION_LOCK_NAMESPACE, USER_BALANCE_LOCK_NAMESPACE, tryAdvisoryTransactionLock } from '../db/advisory-locks.js'
+import { sanitizeObject } from '../lib/log-sanitizer.js'
+import {
+  dispatchPluginGatewayExtension,
+  listEnabledGatewayExtensionTargets
+} from '../lib/plugin-extension-dispatch.js'
+import { recordPlanUpgradeSyncFailure } from '../services/plan-upgrade-sync-repair.js'
+import {
+  networkModeAllowsPortMapping,
+  networkModeNeedsNatIpv4,
+  networkModeNeedsPublicIpv4,
+  networkModeNeedsRoutedIpv6,
+  normalizeNetworkMode
+} from '../lib/network-modes.js'
+import { getExchangeOperationLock } from '../services/exchange-operation-lock.js'
+
+// 自定义 nanoid，只使用小写字母和数字
+const nanoid = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 8)
+const BILLING_RECORD_TYPES = new Set(['newPurchase', 'renew', 'upgrade', 'downgrade', 'refund', 'transfer_fee'])
+const INSTANCE_STATUSES = new Set(['creating', 'running', 'stopped', 'suspended', 'error', 'deleted'])
+const RECHARGE_STATUSES = new Set(['pending', 'paid', 'completed', 'failed', 'cancelled', 'refunded'])
+const RECONCILIATION_ITEM_STATUSES = new Set<FinancialReconciliationStatus>(['discrepancy', 'confirmed', 'ignored'])
+const RECONCILIATION_EXPORT_TYPES = new Set(['orders', 'balance_logs', 'hosting_income', 'adjustments'])
+const BUSINESS_TIMEZONE_OFFSET_MINUTES = 8 * 60
+const FINANCIAL_NOTE_MAX_LENGTH = 500
+const PLUGIN_GATEWAY_PROVIDER_TYPE = 'plugin_gateway'
+const PLUGIN_GATEWAY_PROVIDER_CODE_PATTERN = /^[A-Za-z0-9_.:-]{1,120}$/
+const PLUGIN_GATEWAY_EXTENSION_KEY_PATTERN = /^[a-z][a-z0-9_-]{1,79}$/
+const PLUGIN_GATEWAY_PLUGIN_ID_PATTERN = /^[a-z][a-z0-9]*(?:\.[a-z][a-z0-9-]*){2,}$/
+const EXCHANGE_ADMIN_DELETE_LOCK_REASON = '实例已上架交易所或处于交易锁定中，请先在交易所管理中处理订单、退款或下架'
+const EXCHANGE_ADMIN_BILLING_LOCK_REASON = '实例已上架交易所或处于交易锁定中，不能执行普通计费/状态变更；请先在交易所管理中处理'
+
+--- around local helper ---
+    success: true,
+    status: 'processing',
+    message: pluginResult.message || '插件支付网关退款处理中',
+    refundRequest
+  }
+}
+
+// ==================== 辅助函数 ====================
+
+/**
+ * 计算月均价格
+ */
+function calculateMonthlyPrice(billingPrice: number, billingCycle: number | null): number {
+  const cycle = billingCycle || 1
+  return Number((billingPrice / cycle).toFixed(2))
+}
+
+/**
+ * 计算日均价格
+ */
+function calculateDailyPrice(billingPrice: number, billingCycle: number | null): number {
+  const monthlyPrice = calculateMonthlyPrice(billingPrice, billingCycle)
+  return Number((monthlyPrice / 30).toFixed(2))
+}
+
+const MAX_BATCH_PRICE_UPDATE_INSTANCES = 100
+
+type BatchPriceUpdateItemStatus = 'ready' | 'unchanged' | 'failed'
+
+interface BatchPriceUpdateItem {
+  id: number
+  name: string | null
+  user: { id: number; username: string; balance: number } | null
+  oldPrice: number | null
+  newPrice: number
+  billingCycle: number | null
+  remainingDays: number
+  priceDiff: number
+  discountRate: number
+  status: BatchPriceUpdateItemStatus
+  error?: string
+--- around extension route ---
+    onRequest: [app.authenticate, app.requireAdmin],
+    config: { rateLimit: { max: 10, timeWindow: '1 minute' } }
+  }, async (request, reply) => {
+    try {
+      const admin = request.user!
+      const { id } = request.params as { id: string }
+      const { days, reason, freeExtend } = request.body as {
+        days: number
+        reason?: string
+        freeExtend?: boolean  // 是否免费延期
+      }
+
+      const instanceId = parsePositiveRouteId(id)
+      if (!instanceId || !Number.isInteger(days) || days < 1 || days > 365) {
+        return reply.status(400).send({ error: '参数无效，延期天数必须在 1-365 之间' })
+      }
+
+      const instance = await prisma.instance.findUnique({
+        where: { id: instanceId },
+        include: { user: { select: { id: true, username: true, balance: true } } }
+      })
+
+      if (!instance) {
+        return reply.status(404).send({ error: '实例不存在' })
+      }
+
+      if (instance.status === 'deleted') {
+        return reply.status(400).send({ error: '实例已删除' })
+      }
+
+      if (await rejectAdminBillingExchangeLock(reply, instanceId)) return
+
+      // 只有付费实例可以延期
+      if (!instance.packagePlanId || !instance.billingPrice) {
+        return reply.status(400).send({ error: '免费实例无需延期' })
+      }
+
+      // 计算延期费用（按天价计算）
+      const dailyPrice = calculateDailyPrice(Number(instance.billingPrice), instance.billingCycle)
+      const extendAmount = freeExtend ? 0 : Number((dailyPrice * days).toFixed(2))
+
+      // 计算新的到期时间
+      const baseDate = instance.expiresAt && instance.expiresAt > new Date()
+        ? instance.expiresAt
+        : new Date()
+      const newExpiresAt = new Date(baseDate.getTime() + days * 24 * 60 * 60 * 1000)
+
+      // 如果不是免费延期，需要检查用户余额并扣费
+      if (!freeExtend && extendAmount > 0) {
+        const userBalance = Number(instance.user!.balance)
+        if (userBalance < extendAmount) {
+          return reply.status(400).send({ error: `用户余额不足，需要 ${extendAmount} 元，当前余额 ${userBalance} 元` })
+        }
+
+        // 扣费并延期
+        await prisma.$transaction(async (tx) => {
+          const balanceLocked = await tryAdvisoryTransactionLock(tx, USER_BALANCE_LOCK_NAMESPACE, instance.userId)
+          if (!balanceLocked) {
+            throw new Error('BALANCE_CONFLICT: 用户余额正在处理，请稍后重试')
+          }
+
+          const currentUser = await tx.user.findUnique({
+            where: { id: instance.userId },
+            select: { balance: true }
+          })
+          if (!currentUser) {
+--- git status ---
+ M client/src/components/plugins/PluginFrame.vue
+ M client/src/utils/validation.ts
+ M deploy/incudal-backend.service.example
+ M deploy/incudal-online-rollback@.service.example
+ M deploy/incudal-online-update@.service.example
+ M package.json
+ M scripts/install-panel.sh
+ M scripts/test-install-panel-guards.sh
+ M server/package.json
+ M server/scripts/test-admin-billing-route-id-guards.ts
+ M server/scripts/test-admin-entertainment-route-guards.ts
+ M server/scripts/test-aff-review-ui-guards.ts
+ M server/scripts/test-balance-adjustment-approval-guards.ts
+ M server/scripts/test-billing-expiry-delete.ts
+ M server/scripts/test-billing-expiry-race-guards.ts
+ M server/scripts/test-billing-query-guards.ts
+ M server/scripts/test-capacity-cost-guards.ts
+ M server/scripts/test-hosting-balance-guards.ts
+ M server/scripts/test-instance-billing-route-id-guards.ts
+ M server/scripts/test-log-sanitizer.ts
+ M server/scripts/test-mail-plan-financial-guards.ts
+ M server/scripts/test-mail-renewal-month-guards.ts
+ M server/scripts/test-order-payment-operations-guards.ts
+ M server/scripts/test-plugin-client-boundary-guards.ts
+ M server/scripts/test-system-config-value-guards.ts
+ M server/scripts/test-system-update-guards.ts
+ M server/scripts/test-trust-proxy-config.ts
+ M server/scripts/test-user-destroy-incus-order.ts
+ M server/src/app.ts
+ M server/src/db/aff.ts
+ M server/src/db/balance.ts
+ M server/src/db/billing-operations.ts
+ M server/src/lib/epay.ts
+ M server/src/lib/errors.ts
+ M server/src/lib/heleket.ts
+ M server/src/lib/log-sanitizer.ts
+ M server/src/lib/lottery-notifier.ts
+ M server/src/lib/lsky.ts
+ M server/src/lib/notifier.ts
+ M server/src/lib/outbound-security.ts
+ M server/src/lib/plugin-market-submission-scan.ts
+ M server/src/lib/redirect-validator.ts
+ M server/src/lib/theme-market-submission-scan.ts
+ M server/src/lib/trust-proxy-config.ts
+ M server/src/routes/admin-billing.ts
+ M server/src/routes/admin-capacity-cost.ts
+ M server/src/routes/admin-entertainment.ts
+ M server/src/routes/hosting.ts
+ M server/src/routes/instance-billing.ts
+ M server/src/routes/instance-destroy.ts
+ M server/src/routes/mail.ts
+ M server/src/routes/orders.ts
+ M server/src/routes/system-config.ts
+ M server/src/routes/tickets.ts
+ M server/src/routes/users.ts
+ M server/src/services/billing-scheduler.ts
+ M server/src/services/cranemail.ts
+ M server/src/services/smartermail.ts
+ M server/src/services/system-monitor.ts
+ M server/src/services/traffic-notifier.ts
+?? AGENTS.md
+?? BEHAVIOR.md
+?? CLAUDE.md
+?? DEFECTS.md
+?? EXECUTION.md
+?? EXECUTION_LOG.md
+?? FIX_PLAN.md
+?? MAINTENANCE_PLAN.md
+?? artifacts/
+?? audits/
+?? deploy/incudal-online-task.sh.example
+?? deploy/incudal-ota-chown-wrapper.sh.example
+?? deploy/incudal-systemctl-wrapper.sh.example
+?? server/scripts/test-error-response-guards.ts
+?? server/scripts/test-redirect-validator-guards.ts
+?? server/scripts/test-safe-outbound-fetch-guards.ts
+?? skills-lock.json
+diff --git a/server/scripts/test-admin-billing-route-id-guards.ts b/server/scripts/test-admin-billing-route-id-guards.ts
+index 252eff5..600aa93 100644
+--- a/server/scripts/test-admin-billing-route-id-guards.ts
++++ b/server/scripts/test-admin-billing-route-id-guards.ts
+@@ -7,6 +7,14 @@ const __filename = fileURLToPath(import.meta.url)
+ const __dirname = dirname(__filename)
+ 
+ const source = readFileSync(resolve(__dirname, '../src/routes/admin-billing.ts'), 'utf8')
++const manualRefundRoute = source.slice(
++  source.indexOf("app.post('/api/admin/instances/:id/refund'"),
++  source.indexOf('// ==================== 管理员删除并退款 ====================')
++)
++const deleteAndRefundRoute = source.slice(
++  source.indexOf("app.post('/api/admin/instances/:id/delete-and-refund'"),
++  source.indexOf('// ==================== 管理员应用AFF优惠码 ====================')
++)
+ 
+ assert.ok(
+   source.includes('const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\\d*$/') &&
+@@ -56,6 +64,28 @@ assert.ok(
+   'admin plan upgrade must require a positive safe-integer target plan ID'
+ )
+ 
++assert.ok(
++  manualRefundRoute.includes(`await db.deductHostingBalance(
++          instance.hostId,
++          amount,
++          instanceId,
++          \`管理员退款扣除托管收入：\${instance.name}\`,
++          tx
++        )`),
++  'admin manual instance refunds must deduct the actual refund amount from hosted income in the same transaction'
++)
++
++assert.ok(
++  deleteAndRefundRoute.includes(`await db.deductHostingBalance(
++              instance.hostId,
++              refundAmount,
++              instanceId,
++              \`管理员删除托管实例退款扣除：\${instance.name}\`,
++              tx
++            )`),
++  'admin delete-and-refund must deduct the actual refund amount from hosted income in the same transaction'
++)
++
+ assert.ok(
+   source.includes('async function assertRechargeRefundProviderSupported(recordId: number): Promise<void>') &&
+     source.includes('provider.type !== PLUGIN_GATEWAY_PROVIDER_TYPE') &&
+diff --git a/server/src/routes/admin-billing.ts b/server/src/routes/admin-billing.ts
+index c9b18b0..ced2ec0 100644
+--- a/server/src/routes/admin-billing.ts
++++ b/server/src/routes/admin-billing.ts
+@@ -2637,6 +2637,14 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
+             remark: `管理员退款：${reason}（操作者: ${admin.username}）`
+           }
+         })
++
++        await db.deductHostingBalance(
++          instance.hostId,
++          amount,
++          instanceId,
++          `管理员退款扣除托管收入：${instance.name}`,
++          tx
++        )
+       })
+ 
+       await createLog(
+@@ -2798,6 +2806,14 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
+                 remark: `管理员删除并退款（${refundType === 'full' ? '全额' : '按剩余价值'}）：${reason}（操作者: ${admin.username}）`
+               }
+             })
++
++            await db.deductHostingBalance(
++              instance.hostId,
++              refundAmount,
++              instanceId,
++              `管理员删除托管实例退款扣除：${instance.name}`,
++              tx
++            )
+           })
+         } catch (refundError) {
+           await prisma.instance.updateMany({
+warning: in the working copy of 'server/scripts/test-admin-billing-route-id-guards.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/admin-billing.ts', LF will be replaced by CRLF the next time Git touches it
+
+codex
+发现两份目标文件已有与退款托管收入相关的未提交改动；它们不属于本任务，我会完整保留。延期本地 helper 目前确实先把月均价舍入到两位、再把 `/30` 日价再次舍入；我只会移除这段本地日价 helper、导入公共函数，并在延期金额处保留唯一一次最终 `toFixed(2)`。守卫将以延期路由切片断言公共函数调用、禁止本地 `/30`，不触碰已有断言。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$path = '"'server/src/routes/admin-billing.ts'
+Select-String -Path "'$path -Pattern '"'\\bcalculateMonthlyPrice\\b|\\bcalculateDailyPrice\\b' | ForEach-Object { '{0}: {1}' -f "'$_.LineNumber, $_.Line.Trim() }
+$guard = '"'server/scripts/test-admin-billing-route-id-guards.ts'
+"'$glines = Get-Content -Encoding UTF8 $guard
+$glines[0..85]' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 614ms:
+788: function calculateMonthlyPrice(billingPrice: number, billingCycle: number | null): number {
+796: function calculateDailyPrice(billingPrice: number, billingCycle: number | null): number {
+797: const monthlyPrice = calculateMonthlyPrice(billingPrice, billingCycle)
+2384: const dailyPrice = calculateDailyPrice(Number(instance.billingPrice), instance.billingCycle)
+5314: monthlyPrice: Number(calculateMonthlyPrice(
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+
+const source = readFileSync(resolve(__dirname, '../src/routes/admin-billing.ts'), 'utf8')
+const manualRefundRoute = source.slice(
+  source.indexOf("app.post('/api/admin/instances/:id/refund'"),
+  source.indexOf('// ==================== 管理员删除并退款 ====================')
+)
+const deleteAndRefundRoute = source.slice(
+  source.indexOf("app.post('/api/admin/instances/:id/delete-and-refund'"),
+  source.indexOf('// ==================== 管理员应用AFF优惠码 ====================')
+)
+
+assert.ok(
+  source.includes('const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\\d*$/') &&
+    source.includes('function parsePositiveRouteId(value: string): number | null') &&
+    source.includes('Number.isSafeInteger(parsed)'),
+  'admin billing routes must define strict positive safe-integer route ID parsing'
+)
+
+assert.equal(
+  source.match(/const instanceId = parsePositiveRouteId\(id\)/g)?.length ?? 0,
+  10,
+  'all admin instance billing routes must strictly validate instance route IDs'
+)
+
+assert.equal(
+  source.match(/const recordId = parsePositiveRouteId\(id\)/g)?.length ?? 0,
+  3,
+  'admin recharge-record refund and sync routes must strictly validate record route IDs'
+)
+
+assert.equal(
+  source.match(/const refundRequestId = parsePositiveRouteId\(id\)/g)?.length ?? 0,
+  1,
+  'admin recharge refund retry route must strictly validate refund request route IDs'
+)
+
+for (const forbiddenPattern of [
+  'parseInt(id, 10)',
+  'isNaN(instanceId)',
+  'isNaN(recordId)',
+  'isNaN(refundRequestId)',
+  'isNaN(newPlanId)'
+] as const) {
+  assert.ok(
+    !source.includes(forbiddenPattern),
+    `admin billing routes must not use loose ID parsing: ${forbiddenPattern}`
+  )
+}
+
+assert.ok(
+  source.includes('!Number.isInteger(days) || days < 1 || days > 365'),
+  'admin manual extension must require integer day values'
+)
+
+assert.ok(
+  source.includes('!Number.isSafeInteger(newPlanId) || newPlanId <= 0'),
+  'admin plan upgrade must require a positive safe-integer target plan ID'
+)
+
+assert.ok(
+  manualRefundRoute.includes(`await db.deductHostingBalance(
+          instance.hostId,
+          amount,
+          instanceId,
+          \`管理员退款扣除托管收入：\${instance.name}\`,
+          tx
+        )`),
+  'admin manual instance refunds must deduct the actual refund amount from hosted income in the same transaction'
+)
+
+assert.ok(
+  deleteAndRefundRoute.includes(`await db.deductHostingBalance(
+              instance.hostId,
+              refundAmount,
+              instanceId,
+              \`管理员删除托管实例退款扣除：\${instance.name}\`,
+              tx
+            )`),
+  'admin delete-and-refund must deduct the actual refund amount from hosted income in the same transaction'
+
+apply patch
+patch: completed
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-admin-billing-route-id-guards.ts
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-billing.ts
+diff --git a/server/scripts/test-admin-billing-route-id-guards.ts b/server/scripts/test-admin-billing-route-id-guards.ts
+index 600aa938ed155e95bd19f6a4eb78e4bc52da31e8..cf7ed904d74bc4ec9fbe844fcd0e200df2ef2bf0
+--- a/server/scripts/test-admin-billing-route-id-guards.ts
++++ b/server/scripts/test-admin-billing-route-id-guards.ts
+@@ -15,6 +15,10 @@
+   source.indexOf("app.post('/api/admin/instances/:id/delete-and-refund'"),
+   source.indexOf('// ==================== 管理员应用AFF优惠码 ====================')
+ )
++const manualExtendRoute = source.slice(
++  source.indexOf("app.post('/api/admin/instances/:id/extend'"),
++  source.indexOf('// ==================== 管理员退款 ====================')
++)
+ 
+ assert.ok(
+   source.includes('const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\\d*$/') &&
+@@ -60,6 +64,19 @@
+ )
+ 
+ assert.ok(
++  source.includes("import { calculateDailyPrice } from '../lib/billing-calc.js'") &&
++    manualExtendRoute.includes('const dailyPrice = calculateDailyPrice(Number(instance.billingPrice), instance.billingCycle || 1)') &&
++    manualExtendRoute.includes('const extendAmount = freeExtend ? 0 : Number((dailyPrice * days).toFixed(2))'),
++  'admin manual extension must use the shared 31-day daily price and round only the final amount'
++)
++
++assert.ok(
++  !source.includes('monthlyPrice / 30') &&
++    !manualExtendRoute.includes('dailyPrice.toFixed'),
++  'admin manual extension must not use a local 30-day price or intermediate daily-price rounding'
++)
++
++assert.ok(
+   source.includes('!Number.isSafeInteger(newPlanId) || newPlanId <= 0'),
+   'admin plan upgrade must require a positive safe-integer target plan ID'
+ )
+diff --git a/server/src/routes/admin-billing.ts b/server/src/routes/admin-billing.ts
+index ced2ec0c094dca4fe357f55e82e402b0d6ac2f46..80b768ba0ba10643401d1e33d7524fe0e3777705
+--- a/server/src/routes/admin-billing.ts
++++ b/server/src/routes/admin-billing.ts
+@@ -62,6 +62,7 @@
+   normalizeNetworkMode
+ } from '../lib/network-modes.js'
+ import { getExchangeOperationLock } from '../services/exchange-operation-lock.js'
++import { calculateDailyPrice } from '../lib/billing-calc.js'
+ 
+ // 自定义 nanoid，只使用小写字母和数字
+ const nanoid = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 8)
+@@ -790,14 +791,6 @@
+   return Number((billingPrice / cycle).toFixed(2))
+ }
+ 
+-/**
+- * 计算日均价格
+- */
+-function calculateDailyPrice(billingPrice: number, billingCycle: number | null): number {
+-  const monthlyPrice = calculateMonthlyPrice(billingPrice, billingCycle)
+-  return Number((monthlyPrice / 30).toFixed(2))
+-}
+-
+ const MAX_BATCH_PRICE_UPDATE_INSTANCES = 100
+ 
+ type BatchPriceUpdateItemStatus = 'ready' | 'unchanged' | 'failed'
+@@ -2381,7 +2374,7 @@
+       }
+ 
+       // 计算延期费用（按天价计算）
+-      const dailyPrice = calculateDailyPrice(Number(instance.billingPrice), instance.billingCycle)
++      const dailyPrice = calculateDailyPrice(Number(instance.billingPrice), instance.billingCycle || 1)
+       const extendAmount = freeExtend ? 0 : Number((dailyPrice * days).toFixed(2))
+ 
+       // 计算新的到期时间
+
+diff --git a/server/scripts/test-admin-billing-route-id-guards.ts b/server/scripts/test-admin-billing-route-id-guards.ts
+index 600aa938ed155e95bd19f6a4eb78e4bc52da31e8..cf7ed904d74bc4ec9fbe844fcd0e200df2ef2bf0
+--- a/server/scripts/test-admin-billing-route-id-guards.ts
++++ b/server/scripts/test-admin-billing-route-id-guards.ts
+@@ -15,6 +15,10 @@
+   source.indexOf("app.post('/api/admin/instances/:id/delete-and-refund'"),
+   source.indexOf('// ==================== 管理员应用AFF优惠码 ====================')
+ )
++const manualExtendRoute = source.slice(
++  source.indexOf("app.post('/api/admin/instances/:id/extend'"),
++  source.indexOf('// ==================== 管理员退款 ====================')
++)
+ 
+ assert.ok(
+   source.includes('const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\\d*$/') &&
+@@ -60,6 +64,19 @@
+ )
+ 
+ assert.ok(
++  source.includes("import { calculateDailyPrice } from '../lib/billing-calc.js'") &&
++    manualExtendRoute.includes('const dailyPrice = calculateDailyPrice(Number(instance.billingPrice), instance.billingCycle || 1)') &&
++    manualExtendRoute.includes('const extendAmount = freeExtend ? 0 : Number((dailyPrice * days).toFixed(2))'),
++  'admin manual extension must use the shared 31-day daily price and round only the final amount'
++)
++
++assert.ok(
++  !source.includes('monthlyPrice / 30') &&
++    !manualExtendRoute.includes('dailyPrice.toFixed'),
++  'admin manual extension must not use a local 30-day price or intermediate daily-price rounding'
++)
++
++assert.ok(
+   source.includes('!Number.isSafeInteger(newPlanId) || newPlanId <= 0'),
+   'admin plan upgrade must require a positive safe-integer target plan ID'
+ )
+diff --git a/server/src/routes/admin-billing.ts b/server/src/routes/admin-billing.ts
+index ced2ec0c094dca4fe357f55e82e402b0d6ac2f46..80b768ba0ba10643401d1e33d7524fe0e3777705
+--- a/server/src/routes/admin-billing.ts
++++ b/server/src/routes/admin-billing.ts
+@@ -62,6 +62,7 @@
+   normalizeNetworkMode
+ } from '../lib/network-modes.js'
+ import { getExchangeOperationLock } from '../services/exchange-operation-lock.js'
++import { calculateDailyPrice } from '../lib/billing-calc.js'
+ 
+ // 自定义 nanoid，只使用小写字母和数字
+ const nanoid = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 8)
+@@ -790,14 +791,6 @@
+   return Number((billingPrice / cycle).toFixed(2))
+ }
+ 
+-/**
+- * 计算日均价格
+- */
+-function calculateDailyPrice(billingPrice: number, billingCycle: number | null): number {
+-  const monthlyPrice = calculateMonthlyPrice(billingPrice, billingCycle)
+-  return Number((monthlyPrice / 30).toFixed(2))
+-}
+-
+ const MAX_BATCH_PRICE_UPDATE_INSTANCES = 100
+ 
+ type BatchPriceUpdateItemStatus = 'ready' | 'unchanged' | 'failed'
+@@ -2381,7 +2374,7 @@
+       }
+ 
+       // 计算延期费用（按天价计算）
+-      const dailyPrice = calculateDailyPrice(Number(instance.billingPrice), instance.billingCycle)
++      const dailyPrice = calculateDailyPrice(Number(instance.billingPrice), instance.billingCycle || 1)
+       const extendAmount = freeExtend ? 0 : Number((dailyPrice * days).toFixed(2))
+ 
+       // 计算新的到期时间
+
+codex
+最小改动已落下：公共 `calculateDailyPrice` 接收周期价和计费周期，延期金额仍是 `dailyPrice × days` 后仅最终舍入一次；`days × 24h` 未改。现在先审查目标 diff，随后按验收顺序运行 type-check 和两组守卫。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'git diff -- server/src/routes/admin-billing.ts server/scripts/test-admin-billing-route-id-guards.ts
+$path = '"'server/src/routes/admin-billing.ts'
+Select-String -Path "'$path -Pattern '"'\\bcalculateDailyPrice\\b|monthlyPrice / 30|days \\* 24 \\* 60 \\* 60 \\* 1000' | ForEach-Object { '{0}: {1}' -f "'$_.LineNumber, $_.Line.Trim() }' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 692ms:
+diff --git a/server/scripts/test-admin-billing-route-id-guards.ts b/server/scripts/test-admin-billing-route-id-guards.ts
+index 252eff5..cf7ed90 100644
+--- a/server/scripts/test-admin-billing-route-id-guards.ts
++++ b/server/scripts/test-admin-billing-route-id-guards.ts
+@@ -7,6 +7,18 @@ const __filename = fileURLToPath(import.meta.url)
+ const __dirname = dirname(__filename)
+ 
+ const source = readFileSync(resolve(__dirname, '../src/routes/admin-billing.ts'), 'utf8')
++const manualRefundRoute = source.slice(
++  source.indexOf("app.post('/api/admin/instances/:id/refund'"),
++  source.indexOf('// ==================== 管理员删除并退款 ====================')
++)
++const deleteAndRefundRoute = source.slice(
++  source.indexOf("app.post('/api/admin/instances/:id/delete-and-refund'"),
++  source.indexOf('// ==================== 管理员应用AFF优惠码 ====================')
++)
++const manualExtendRoute = source.slice(
++  source.indexOf("app.post('/api/admin/instances/:id/extend'"),
++  source.indexOf('// ==================== 管理员退款 ====================')
++)
+ 
+ assert.ok(
+   source.includes('const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\\d*$/') &&
+@@ -51,11 +63,46 @@ assert.ok(
+   'admin manual extension must require integer day values'
+ )
+ 
++assert.ok(
++  source.includes("import { calculateDailyPrice } from '../lib/billing-calc.js'") &&
++    manualExtendRoute.includes('const dailyPrice = calculateDailyPrice(Number(instance.billingPrice), instance.billingCycle || 1)') &&
++    manualExtendRoute.includes('const extendAmount = freeExtend ? 0 : Number((dailyPrice * days).toFixed(2))'),
++  'admin manual extension must use the shared 31-day daily price and round only the final amount'
++)
++
++assert.ok(
++  !source.includes('monthlyPrice / 30') &&
++    !manualExtendRoute.includes('dailyPrice.toFixed'),
++  'admin manual extension must not use a local 30-day price or intermediate daily-price rounding'
++)
++
+ assert.ok(
+   source.includes('!Number.isSafeInteger(newPlanId) || newPlanId <= 0'),
+   'admin plan upgrade must require a positive safe-integer target plan ID'
+ )
+ 
++assert.ok(
++  manualRefundRoute.includes(`await db.deductHostingBalance(
++          instance.hostId,
++          amount,
++          instanceId,
++          \`管理员退款扣除托管收入：\${instance.name}\`,
++          tx
++        )`),
++  'admin manual instance refunds must deduct the actual refund amount from hosted income in the same transaction'
++)
++
++assert.ok(
++  deleteAndRefundRoute.includes(`await db.deductHostingBalance(
++              instance.hostId,
++              refundAmount,
++              instanceId,
++              \`管理员删除托管实例退款扣除：\${instance.name}\`,
++              tx
++            )`),
++  'admin delete-and-refund must deduct the actual refund amount from hosted income in the same transaction'
++)
++
+ assert.ok(
+   source.includes('async function assertRechargeRefundProviderSupported(recordId: number): Promise<void>') &&
+     source.includes('provider.type !== PLUGIN_GATEWAY_PROVIDER_TYPE') &&
+diff --git a/server/src/routes/admin-billing.ts b/server/src/routes/admin-billing.ts
+index c9b18b0..80b768b 100644
+--- a/server/src/routes/admin-billing.ts
++++ b/server/src/routes/admin-billing.ts
+@@ -62,6 +62,7 @@ import {
+   normalizeNetworkMode
+ } from '../lib/network-modes.js'
+ import { getExchangeOperationLock } from '../services/exchange-operation-lock.js'
++import { calculateDailyPrice } from '../lib/billing-calc.js'
+ 
+ // 自定义 nanoid，只使用小写字母和数字
+ const nanoid = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 8)
+@@ -790,14 +791,6 @@ function calculateMonthlyPrice(billingPrice: number, billingCycle: number | null
+   return Number((billingPrice / cycle).toFixed(2))
+ }
+ 
+-/**
+- * 计算日均价格
+- */
+-function calculateDailyPrice(billingPrice: number, billingCycle: number | null): number {
+-  const monthlyPrice = calculateMonthlyPrice(billingPrice, billingCycle)
+-  return Number((monthlyPrice / 30).toFixed(2))
+-}
+-
+ const MAX_BATCH_PRICE_UPDATE_INSTANCES = 100
+ 
+ type BatchPriceUpdateItemStatus = 'ready' | 'unchanged' | 'failed'
+@@ -2381,7 +2374,7 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
+       }
+ 
+       // 计算延期费用（按天价计算）
+-      const dailyPrice = calculateDailyPrice(Number(instance.billingPrice), instance.billingCycle)
++      const dailyPrice = calculateDailyPrice(Number(instance.billingPrice), instance.billingCycle || 1)
+       const extendAmount = freeExtend ? 0 : Number((dailyPrice * days).toFixed(2))
+ 
+       // 计算新的到期时间
+@@ -2637,6 +2630,14 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
+             remark: `管理员退款：${reason}（操作者: ${admin.username}）`
+           }
+         })
++
++        await db.deductHostingBalance(
++          instance.hostId,
++          amount,
++          instanceId,
++          `管理员退款扣除托管收入：${instance.name}`,
++          tx
++        )
+       })
+ 
+       await createLog(
+@@ -2798,6 +2799,14 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
+                 remark: `管理员删除并退款（${refundType === 'full' ? '全额' : '按剩余价值'}）：${reason}（操作者: ${admin.username}）`
+               }
+             })
++
++            await db.deductHostingBalance(
++              instance.hostId,
++              refundAmount,
++              instanceId,
++              `管理员删除托管实例退款扣除：${instance.name}`,
++              tx
++            )
+           })
+         } catch (refundError) {
+           await prisma.instance.updateMany({
+65: import { calculateDailyPrice } from '../lib/billing-calc.js'
+2377: const dailyPrice = calculateDailyPrice(Number(instance.billingPrice), instance.billingCycle || 1)
+2384: const newExpiresAt = new Date(baseDate.getTime() + days * 24 * 60 * 60 * 1000)
+warning: in the working copy of 'server/scripts/test-admin-billing-route-id-guards.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/admin-billing.ts', LF will be replaced by CRLF the next time Git touches it
+
+diff --git a/server/scripts/test-admin-billing-route-id-guards.ts b/server/scripts/test-admin-billing-route-id-guards.ts
+index 600aa938ed155e95bd19f6a4eb78e4bc52da31e8..cf7ed904d74bc4ec9fbe844fcd0e200df2ef2bf0
+--- a/server/scripts/test-admin-billing-route-id-guards.ts
++++ b/server/scripts/test-admin-billing-route-id-guards.ts
+@@ -15,6 +15,10 @@
+   source.indexOf("app.post('/api/admin/instances/:id/delete-and-refund'"),
+   source.indexOf('// ==================== 管理员应用AFF优惠码 ====================')
+ )
++const manualExtendRoute = source.slice(
++  source.indexOf("app.post('/api/admin/instances/:id/extend'"),
++  source.indexOf('// ==================== 管理员退款 ====================')
++)
+ 
+ assert.ok(
+   source.includes('const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\\d*$/') &&
+@@ -60,6 +64,19 @@
+ )
+ 
+ assert.ok(
++  source.includes("import { calculateDailyPrice } from '../lib/billing-calc.js'") &&
++    manualExtendRoute.includes('const dailyPrice = calculateDailyPrice(Number(instance.billingPrice), instance.billingCycle || 1)') &&
++    manualExtendRoute.includes('const extendAmount = freeExtend ? 0 : Number((dailyPrice * days).toFixed(2))'),
++  'admin manual extension must use the shared 31-day daily price and round only the final amount'
++)
++
++assert.ok(
++  !source.includes('monthlyPrice / 30') &&
++    !manualExtendRoute.includes('dailyPrice.toFixed'),
++  'admin manual extension must not use a local 30-day price or intermediate daily-price rounding'
++)
++
++assert.ok(
+   source.includes('!Number.isSafeInteger(newPlanId) || newPlanId <= 0'),
+   'admin plan upgrade must require a positive safe-integer target plan ID'
+ )
+diff --git a/server/src/routes/admin-billing.ts b/server/src/routes/admin-billing.ts
+index ced2ec0c094dca4fe357f55e82e402b0d6ac2f46..80b768ba0ba10643401d1e33d7524fe0e3777705
+--- a/server/src/routes/admin-billing.ts
++++ b/server/src/routes/admin-billing.ts
+@@ -62,6 +62,7 @@
+   normalizeNetworkMode
+ } from '../lib/network-modes.js'
+ import { getExchangeOperationLock } from '../services/exchange-operation-lock.js'
++import { calculateDailyPrice } from '../lib/billing-calc.js'
+ 
+ // 自定义 nanoid，只使用小写字母和数字
+ const nanoid = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 8)
+@@ -790,14 +791,6 @@
+   return Number((billingPrice / cycle).toFixed(2))
+ }
+ 
+-/**
+- * 计算日均价格
+- */
+-function calculateDailyPrice(billingPrice: number, billingCycle: number | null): number {
+-  const monthlyPrice = calculateMonthlyPrice(billingPrice, billingCycle)
+-  return Number((monthlyPrice / 30).toFixed(2))
+-}
+-
+ const MAX_BATCH_PRICE_UPDATE_INSTANCES = 100
+ 
+ type BatchPriceUpdateItemStatus = 'ready' | 'unchanged' | 'failed'
+@@ -2381,7 +2374,7 @@
+       }
+ 
+       // 计算延期费用（按天价计算）
+-      const dailyPrice = calculateDailyPrice(Number(instance.billingPrice), instance.billingCycle)
++      const dailyPrice = calculateDailyPrice(Number(instance.billingPrice), instance.billingCycle || 1)
+       const extendAmount = freeExtend ? 0 : Number((dailyPrice * days).toFixed(2))
+ 
+       // 计算新的到期时间
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'pnpm --filter server type-check' in C:\Users\Administrator\Desktop\payinces
+diff --git a/server/scripts/test-admin-billing-route-id-guards.ts b/server/scripts/test-admin-billing-route-id-guards.ts
+index 600aa938ed155e95bd19f6a4eb78e4bc52da31e8..cf7ed904d74bc4ec9fbe844fcd0e200df2ef2bf0
+--- a/server/scripts/test-admin-billing-route-id-guards.ts
++++ b/server/scripts/test-admin-billing-route-id-guards.ts
+@@ -15,6 +15,10 @@
+   source.indexOf("app.post('/api/admin/instances/:id/delete-and-refund'"),
+   source.indexOf('// ==================== 管理员应用AFF优惠码 ====================')
+ )
++const manualExtendRoute = source.slice(
++  source.indexOf("app.post('/api/admin/instances/:id/extend'"),
++  source.indexOf('// ==================== 管理员退款 ====================')
++)
+ 
+ assert.ok(
+   source.includes('const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\\d*$/') &&
+@@ -60,6 +64,19 @@
+ )
+ 
+ assert.ok(
++  source.includes("import { calculateDailyPrice } from '../lib/billing-calc.js'") &&
++    manualExtendRoute.includes('const dailyPrice = calculateDailyPrice(Number(instance.billingPrice), instance.billingCycle || 1)') &&
++    manualExtendRoute.includes('const extendAmount = freeExtend ? 0 : Number((dailyPrice * days).toFixed(2))'),
++  'admin manual extension must use the shared 31-day daily price and round only the final amount'
++)
++
++assert.ok(
++  !source.includes('monthlyPrice / 30') &&
++    !manualExtendRoute.includes('dailyPrice.toFixed'),
++  'admin manual extension must not use a local 30-day price or intermediate daily-price rounding'
++)
++
++assert.ok(
+   source.includes('!Number.isSafeInteger(newPlanId) || newPlanId <= 0'),
+   'admin plan upgrade must require a positive safe-integer target plan ID'
+ )
+diff --git a/server/src/routes/admin-billing.ts b/server/src/routes/admin-billing.ts
+index ced2ec0c094dca4fe357f55e82e402b0d6ac2f46..80b768ba0ba10643401d1e33d7524fe0e3777705
+--- a/server/src/routes/admin-billing.ts
++++ b/server/src/routes/admin-billing.ts
+@@ -62,6 +62,7 @@
+   normalizeNetworkMode
+ } from '../lib/network-modes.js'
+ import { getExchangeOperationLock } from '../services/exchange-operation-lock.js'
++import { calculateDailyPrice } from '../lib/billing-calc.js'
+ 
+ // 自定义 nanoid，只使用小写字母和数字
+ const nanoid = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 8)
+@@ -790,14 +791,6 @@
+   return Number((billingPrice / cycle).toFixed(2))
+ }
+ 
+-/**
+- * 计算日均价格
+- */
+-function calculateDailyPrice(billingPrice: number, billingCycle: number | null): number {
+-  const monthlyPrice = calculateMonthlyPrice(billingPrice, billingCycle)
+-  return Number((monthlyPrice / 30).toFixed(2))
+-}
+-
+ const MAX_BATCH_PRICE_UPDATE_INSTANCES = 100
+ 
+ type BatchPriceUpdateItemStatus = 'ready' | 'unchanged' | 'failed'
+@@ -2381,7 +2374,7 @@
+       }
+ 
+       // 计算延期费用（按天价计算）
+-      const dailyPrice = calculateDailyPrice(Number(instance.billingPrice), instance.billingCycle)
++      const dailyPrice = calculateDailyPrice(Number(instance.billingPrice), instance.billingCycle || 1)
+       const extendAmount = freeExtend ? 0 : Number((dailyPrice * days).toFixed(2))
+ 
+       // 计算新的到期时间
+
+codex
+type-check 仍在运行，我会等待结果；结束后立即跑指定的两项守卫。
+diff --git a/server/scripts/test-admin-billing-route-id-guards.ts b/server/scripts/test-admin-billing-route-id-guards.ts
+index 600aa938ed155e95bd19f6a4eb78e4bc52da31e8..cf7ed904d74bc4ec9fbe844fcd0e200df2ef2bf0
+--- a/server/scripts/test-admin-billing-route-id-guards.ts
++++ b/server/scripts/test-admin-billing-route-id-guards.ts
+@@ -15,6 +15,10 @@
+   source.indexOf("app.post('/api/admin/instances/:id/delete-and-refund'"),
+   source.indexOf('// ==================== 管理员应用AFF优惠码 ====================')
+ )
++const manualExtendRoute = source.slice(
++  source.indexOf("app.post('/api/admin/instances/:id/extend'"),
++  source.indexOf('// ==================== 管理员退款 ====================')
++)
+ 
+ assert.ok(
+   source.includes('const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\\d*$/') &&
+@@ -60,6 +64,19 @@
+ )
+ 
+ assert.ok(
++  source.includes("import { calculateDailyPrice } from '../lib/billing-calc.js'") &&
++    manualExtendRoute.includes('const dailyPrice = calculateDailyPrice(Number(instance.billingPrice), instance.billingCycle || 1)') &&
++    manualExtendRoute.includes('const extendAmount = freeExtend ? 0 : Number((dailyPrice * days).toFixed(2))'),
++  'admin manual extension must use the shared 31-day daily price and round only the final amount'
++)
++
++assert.ok(
++  !source.includes('monthlyPrice / 30') &&
++    !manualExtendRoute.includes('dailyPrice.toFixed'),
++  'admin manual extension must not use a local 30-day price or intermediate daily-price rounding'
++)
++
++assert.ok(
+   source.includes('!Number.isSafeInteger(newPlanId) || newPlanId <= 0'),
+   'admin plan upgrade must require a positive safe-integer target plan ID'
+ )
+diff --git a/server/src/routes/admin-billing.ts b/server/src/routes/admin-billing.ts
+index ced2ec0c094dca4fe357f55e82e402b0d6ac2f46..80b768ba0ba10643401d1e33d7524fe0e3777705
+--- a/server/src/routes/admin-billing.ts
++++ b/server/src/routes/admin-billing.ts
+@@ -62,6 +62,7 @@
+   normalizeNetworkMode
+ } from '../lib/network-modes.js'
+ import { getExchangeOperationLock } from '../services/exchange-operation-lock.js'
++import { calculateDailyPrice } from '../lib/billing-calc.js'
+ 
+ // 自定义 nanoid，只使用小写字母和数字
+ const nanoid = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 8)
+@@ -790,14 +791,6 @@
+   return Number((billingPrice / cycle).toFixed(2))
+ }
+ 
+-/**
+- * 计算日均价格
+- */
+-function calculateDailyPrice(billingPrice: number, billingCycle: number | null): number {
+-  const monthlyPrice = calculateMonthlyPrice(billingPrice, billingCycle)
+-  return Number((monthlyPrice / 30).toFixed(2))
+-}
+-
+ const MAX_BATCH_PRICE_UPDATE_INSTANCES = 100
+ 
+ type BatchPriceUpdateItemStatus = 'ready' | 'unchanged' | 'failed'
+@@ -2381,7 +2374,7 @@
+       }
+ 
+       // 计算延期费用（按天价计算）
+-      const dailyPrice = calculateDailyPrice(Number(instance.billingPrice), instance.billingCycle)
++      const dailyPrice = calculateDailyPrice(Number(instance.billingPrice), instance.billingCycle || 1)
+       const extendAmount = freeExtend ? 0 : Number((dailyPrice * days).toFixed(2))
+ 
+       // 计算新的到期时间
+
+diff --git a/server/scripts/test-admin-billing-route-id-guards.ts b/server/scripts/test-admin-billing-route-id-guards.ts
+index 600aa938ed155e95bd19f6a4eb78e4bc52da31e8..cf7ed904d74bc4ec9fbe844fcd0e200df2ef2bf0
+--- a/server/scripts/test-admin-billing-route-id-guards.ts
++++ b/server/scripts/test-admin-billing-route-id-guards.ts
+@@ -15,6 +15,10 @@
+   source.indexOf("app.post('/api/admin/instances/:id/delete-and-refund'"),
+   source.indexOf('// ==================== 管理员应用AFF优惠码 ====================')
+ )
++const manualExtendRoute = source.slice(
++  source.indexOf("app.post('/api/admin/instances/:id/extend'"),
++  source.indexOf('// ==================== 管理员退款 ====================')
++)
+ 
+ assert.ok(
+   source.includes('const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\\d*$/') &&
+@@ -60,6 +64,19 @@
+ )
+ 
+ assert.ok(
++  source.includes("import { calculateDailyPrice } from '../lib/billing-calc.js'") &&
++    manualExtendRoute.includes('const dailyPrice = calculateDailyPrice(Number(instance.billingPrice), instance.billingCycle || 1)') &&
++    manualExtendRoute.includes('const extendAmount = freeExtend ? 0 : Number((dailyPrice * days).toFixed(2))'),
++  'admin manual extension must use the shared 31-day daily price and round only the final amount'
++)
++
++assert.ok(
++  !source.includes('monthlyPrice / 30') &&
++    !manualExtendRoute.includes('dailyPrice.toFixed'),
++  'admin manual extension must not use a local 30-day price or intermediate daily-price rounding'
++)
++
++assert.ok(
+   source.includes('!Number.isSafeInteger(newPlanId) || newPlanId <= 0'),
+   'admin plan upgrade must require a positive safe-integer target plan ID'
+ )
+diff --git a/server/src/routes/admin-billing.ts b/server/src/routes/admin-billing.ts
+index ced2ec0c094dca4fe357f55e82e402b0d6ac2f46..80b768ba0ba10643401d1e33d7524fe0e3777705
+--- a/server/src/routes/admin-billing.ts
++++ b/server/src/routes/admin-billing.ts
+@@ -62,6 +62,7 @@
+   normalizeNetworkMode
+ } from '../lib/network-modes.js'
+ import { getExchangeOperationLock } from '../services/exchange-operation-lock.js'
++import { calculateDailyPrice } from '../lib/billing-calc.js'
+ 
+ // 自定义 nanoid，只使用小写字母和数字
+ const nanoid = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 8)
+@@ -790,14 +791,6 @@
+   return Number((billingPrice / cycle).toFixed(2))
+ }
+ 
+-/**
+- * 计算日均价格
+- */
+-function calculateDailyPrice(billingPrice: number, billingCycle: number | null): number {
+-  const monthlyPrice = calculateMonthlyPrice(billingPrice, billingCycle)
+-  return Number((monthlyPrice / 30).toFixed(2))
+-}
+-
+ const MAX_BATCH_PRICE_UPDATE_INSTANCES = 100
+ 
+ type BatchPriceUpdateItemStatus = 'ready' | 'unchanged' | 'failed'
+@@ -2381,7 +2374,7 @@
+       }
+ 
+       // 计算延期费用（按天价计算）
+-      const dailyPrice = calculateDailyPrice(Number(instance.billingPrice), instance.billingCycle)
++      const dailyPrice = calculateDailyPrice(Number(instance.billingPrice), instance.billingCycle || 1)
+       const extendAmount = freeExtend ? 0 : Number((dailyPrice * days).toFixed(2))
+ 
+       // 计算新的到期时间
+
+diff --git a/server/scripts/test-admin-billing-route-id-guards.ts b/server/scripts/test-admin-billing-route-id-guards.ts
+index 600aa938ed155e95bd19f6a4eb78e4bc52da31e8..cf7ed904d74bc4ec9fbe844fcd0e200df2ef2bf0
+--- a/server/scripts/test-admin-billing-route-id-guards.ts
++++ b/server/scripts/test-admin-billing-route-id-guards.ts
+@@ -15,6 +15,10 @@
+   source.indexOf("app.post('/api/admin/instances/:id/delete-and-refund'"),
+   source.indexOf('// ==================== 管理员应用AFF优惠码 ====================')
+ )
++const manualExtendRoute = source.slice(
++  source.indexOf("app.post('/api/admin/instances/:id/extend'"),
++  source.indexOf('// ==================== 管理员退款 ====================')
++)
+ 
+ assert.ok(
+   source.includes('const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\\d*$/') &&
+@@ -60,6 +64,19 @@
+ )
+ 
+ assert.ok(
++  source.includes("import { calculateDailyPrice } from '../lib/billing-calc.js'") &&
++    manualExtendRoute.includes('const dailyPrice = calculateDailyPrice(Number(instance.billingPrice), instance.billingCycle || 1)') &&
++    manualExtendRoute.includes('const extendAmount = freeExtend ? 0 : Number((dailyPrice * days).toFixed(2))'),
++  'admin manual extension must use the shared 31-day daily price and round only the final amount'
++)
++
++assert.ok(
++  !source.includes('monthlyPrice / 30') &&
++    !manualExtendRoute.includes('dailyPrice.toFixed'),
++  'admin manual extension must not use a local 30-day price or intermediate daily-price rounding'
++)
++
++assert.ok(
+   source.includes('!Number.isSafeInteger(newPlanId) || newPlanId <= 0'),
+   'admin plan upgrade must require a positive safe-integer target plan ID'
+ )
+diff --git a/server/src/routes/admin-billing.ts b/server/src/routes/admin-billing.ts
+index ced2ec0c094dca4fe357f55e82e402b0d6ac2f46..80b768ba0ba10643401d1e33d7524fe0e3777705
+--- a/server/src/routes/admin-billing.ts
++++ b/server/src/routes/admin-billing.ts
+@@ -62,6 +62,7 @@
+   normalizeNetworkMode
+ } from '../lib/network-modes.js'
+ import { getExchangeOperationLock } from '../services/exchange-operation-lock.js'
++import { calculateDailyPrice } from '../lib/billing-calc.js'
+ 
+ // 自定义 nanoid，只使用小写字母和数字
+ const nanoid = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 8)
+@@ -790,14 +791,6 @@
+   return Number((billingPrice / cycle).toFixed(2))
+ }
+ 
+-/**
+- * 计算日均价格
+- */
+-function calculateDailyPrice(billingPrice: number, billingCycle: number | null): number {
+-  const monthlyPrice = calculateMonthlyPrice(billingPrice, billingCycle)
+-  return Number((monthlyPrice / 30).toFixed(2))
+-}
+-
+ const MAX_BATCH_PRICE_UPDATE_INSTANCES = 100
+ 
+ type BatchPriceUpdateItemStatus = 'ready' | 'unchanged' | 'failed'
+@@ -2381,7 +2374,7 @@
+       }
+ 
+       // 计算延期费用（按天价计算）
+-      const dailyPrice = calculateDailyPrice(Number(instance.billingPrice), instance.billingCycle)
++      const dailyPrice = calculateDailyPrice(Number(instance.billingPrice), instance.billingCycle || 1)
+       const extendAmount = freeExtend ? 0 : Number((dailyPrice * days).toFixed(2))
+ 
+       // 计算新的到期时间
+
+diff --git a/server/scripts/test-admin-billing-route-id-guards.ts b/server/scripts/test-admin-billing-route-id-guards.ts
+index 600aa938ed155e95bd19f6a4eb78e4bc52da31e8..cf7ed904d74bc4ec9fbe844fcd0e200df2ef2bf0
+--- a/server/scripts/test-admin-billing-route-id-guards.ts
++++ b/server/scripts/test-admin-billing-route-id-guards.ts
+@@ -15,6 +15,10 @@
+   source.indexOf("app.post('/api/admin/instances/:id/delete-and-refund'"),
+   source.indexOf('// ==================== 管理员应用AFF优惠码 ====================')
+ )
++const manualExtendRoute = source.slice(
++  source.indexOf("app.post('/api/admin/instances/:id/extend'"),
++  source.indexOf('// ==================== 管理员退款 ====================')
++)
+ 
+ assert.ok(
+   source.includes('const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\\d*$/') &&
+@@ -60,6 +64,19 @@
+ )
+ 
+ assert.ok(
++  source.includes("import { calculateDailyPrice } from '../lib/billing-calc.js'") &&
++    manualExtendRoute.includes('const dailyPrice = calculateDailyPrice(Number(instance.billingPrice), instance.billingCycle || 1)') &&
++    manualExtendRoute.includes('const extendAmount = freeExtend ? 0 : Number((dailyPrice * days).toFixed(2))'),
++  'admin manual extension must use the shared 31-day daily price and round only the final amount'
++)
++
++assert.ok(
++  !source.includes('monthlyPrice / 30') &&
++    !manualExtendRoute.includes('dailyPrice.toFixed'),
++  'admin manual extension must not use a local 30-day price or intermediate daily-price rounding'
++)
++
++assert.ok(
+   source.includes('!Number.isSafeInteger(newPlanId) || newPlanId <= 0'),
+   'admin plan upgrade must require a positive safe-integer target plan ID'
+ )
+diff --git a/server/src/routes/admin-billing.ts b/server/src/routes/admin-billing.ts
+index ced2ec0c094dca4fe357f55e82e402b0d6ac2f46..80b768ba0ba10643401d1e33d7524fe0e3777705
+--- a/server/src/routes/admin-billing.ts
++++ b/server/src/routes/admin-billing.ts
+@@ -62,6 +62,7 @@
+   normalizeNetworkMode
+ } from '../lib/network-modes.js'
+ import { getExchangeOperationLock } from '../services/exchange-operation-lock.js'
++import { calculateDailyPrice } from '../lib/billing-calc.js'
+ 
+ // 自定义 nanoid，只使用小写字母和数字
+ const nanoid = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 8)
+@@ -790,14 +791,6 @@
+   return Number((billingPrice / cycle).toFixed(2))
+ }
+ 
+-/**
+- * 计算日均价格
+- */
+-function calculateDailyPrice(billingPrice: number, billingCycle: number | null): number {
+-  const monthlyPrice = calculateMonthlyPrice(billingPrice, billingCycle)
+-  return Number((monthlyPrice / 30).toFixed(2))
+-}
+-
+ const MAX_BATCH_PRICE_UPDATE_INSTANCES = 100
+ 
+ type BatchPriceUpdateItemStatus = 'ready' | 'unchanged' | 'failed'
+@@ -2381,7 +2374,7 @@
+       }
+ 
+       // 计算延期费用（按天价计算）
+-      const dailyPrice = calculateDailyPrice(Number(instance.billingPrice), instance.billingCycle)
++      const dailyPrice = calculateDailyPrice(Number(instance.billingPrice), instance.billingCycle || 1)
+       const extendAmount = freeExtend ? 0 : Number((dailyPrice * days).toFixed(2))
+ 
+       // 计算新的到期时间
+
+diff --git a/server/scripts/test-admin-billing-route-id-guards.ts b/server/scripts/test-admin-billing-route-id-guards.ts
+index 600aa938ed155e95bd19f6a4eb78e4bc52da31e8..cf7ed904d74bc4ec9fbe844fcd0e200df2ef2bf0
+--- a/server/scripts/test-admin-billing-route-id-guards.ts
++++ b/server/scripts/test-admin-billing-route-id-guards.ts
+@@ -15,6 +15,10 @@
+   source.indexOf("app.post('/api/admin/instances/:id/delete-and-refund'"),
+   source.indexOf('// ==================== 管理员应用AFF优惠码 ====================')
+ )
++const manualExtendRoute = source.slice(
++  source.indexOf("app.post('/api/admin/instances/:id/extend'"),
++  source.indexOf('// ==================== 管理员退款 ====================')
++)
+ 
+ assert.ok(
+   source.includes('const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\\d*$/') &&
+@@ -60,6 +64,19 @@
+ )
+ 
+ assert.ok(
++  source.includes("import { calculateDailyPrice } from '../lib/billing-calc.js'") &&
++    manualExtendRoute.includes('const dailyPrice = calculateDailyPrice(Number(instance.billingPrice), instance.billingCycle || 1)') &&
++    manualExtendRoute.includes('const extendAmount = freeExtend ? 0 : Number((dailyPrice * days).toFixed(2))'),
++  'admin manual extension must use the shared 31-day daily price and round only the final amount'
++)
++
++assert.ok(
++  !source.includes('monthlyPrice / 30') &&
++    !manualExtendRoute.includes('dailyPrice.toFixed'),
++  'admin manual extension must not use a local 30-day price or intermediate daily-price rounding'
++)
++
++assert.ok(
+   source.includes('!Number.isSafeInteger(newPlanId) || newPlanId <= 0'),
+   'admin plan upgrade must require a positive safe-integer target plan ID'
+ )
+diff --git a/server/src/routes/admin-billing.ts b/server/src/routes/admin-billing.ts
+index ced2ec0c094dca4fe357f55e82e402b0d6ac2f46..80b768ba0ba10643401d1e33d7524fe0e3777705
+--- a/server/src/routes/admin-billing.ts
++++ b/server/src/routes/admin-billing.ts
+@@ -62,6 +62,7 @@
+   normalizeNetworkMode
+ } from '../lib/network-modes.js'
+ import { getExchangeOperationLock } from '../services/exchange-operation-lock.js'
++import { calculateDailyPrice } from '../lib/billing-calc.js'
+ 
+ // 自定义 nanoid，只使用小写字母和数字
+ const nanoid = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 8)
+@@ -790,14 +791,6 @@
+   return Number((billingPrice / cycle).toFixed(2))
+ }
+ 
+-/**
+- * 计算日均价格
+- */
+-function calculateDailyPrice(billingPrice: number, billingCycle: number | null): number {
+-  const monthlyPrice = calculateMonthlyPrice(billingPrice, billingCycle)
+-  return Number((monthlyPrice / 30).toFixed(2))
+-}
+-
+ const MAX_BATCH_PRICE_UPDATE_INSTANCES = 100
+ 
+ type BatchPriceUpdateItemStatus = 'ready' | 'unchanged' | 'failed'
+@@ -2381,7 +2374,7 @@
+       }
+ 
+       // 计算延期费用（按天价计算）
+-      const dailyPrice = calculateDailyPrice(Number(instance.billingPrice), instance.billingCycle)
++      const dailyPrice = calculateDailyPrice(Number(instance.billingPrice), instance.billingCycle || 1)
+       const extendAmount = freeExtend ? 0 : Number((dailyPrice * days).toFixed(2))
+ 
+       // 计算新的到期时间
+
+diff --git a/server/scripts/test-admin-billing-route-id-guards.ts b/server/scripts/test-admin-billing-route-id-guards.ts
+index 600aa938ed155e95bd19f6a4eb78e4bc52da31e8..cf7ed904d74bc4ec9fbe844fcd0e200df2ef2bf0
+--- a/server/scripts/test-admin-billing-route-id-guards.ts
++++ b/server/scripts/test-admin-billing-route-id-guards.ts
+@@ -15,6 +15,10 @@
+   source.indexOf("app.post('/api/admin/instances/:id/delete-and-refund'"),
+   source.indexOf('// ==================== 管理员应用AFF优惠码 ====================')
+ )
++const manualExtendRoute = source.slice(
++  source.indexOf("app.post('/api/admin/instances/:id/extend'"),
++  source.indexOf('// ==================== 管理员退款 ====================')
++)
+ 
+ assert.ok(
+   source.includes('const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\\d*$/') &&
+@@ -60,6 +64,19 @@
+ )
+ 
+ assert.ok(
++  source.includes("import { calculateDailyPrice } from '../lib/billing-calc.js'") &&
++    manualExtendRoute.includes('const dailyPrice = calculateDailyPrice(Number(instance.billingPrice), instance.billingCycle || 1)') &&
++    manualExtendRoute.includes('const extendAmount = freeExtend ? 0 : Number((dailyPrice * days).toFixed(2))'),
++  'admin manual extension must use the shared 31-day daily price and round only the final amount'
++)
++
++assert.ok(
++  !source.includes('monthlyPrice / 30') &&
++    !manualExtendRoute.includes('dailyPrice.toFixed'),
++  'admin manual extension must not use a local 30-day price or intermediate daily-price rounding'
++)
++
++assert.ok(
+   source.includes('!Number.isSafeInteger(newPlanId) || newPlanId <= 0'),
+   'admin plan upgrade must require a positive safe-integer target plan ID'
+ )
+diff --git a/server/src/routes/admin-billing.ts b/server/src/routes/admin-billing.ts
+index ced2ec0c094dca4fe357f55e82e402b0d6ac2f46..80b768ba0ba10643401d1e33d7524fe0e3777705
+--- a/server/src/routes/admin-billing.ts
++++ b/server/src/routes/admin-billing.ts
+@@ -62,6 +62,7 @@
+   normalizeNetworkMode
+ } from '../lib/network-modes.js'
+ import { getExchangeOperationLock } from '../services/exchange-operation-lock.js'
++import { calculateDailyPrice } from '../lib/billing-calc.js'
+ 
+ // 自定义 nanoid，只使用小写字母和数字
+ const nanoid = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 8)
+@@ -790,14 +791,6 @@
+   return Number((billingPrice / cycle).toFixed(2))
+ }
+ 
+-/**
+- * 计算日均价格
+- */
+-function calculateDailyPrice(billingPrice: number, billingCycle: number | null): number {
+-  const monthlyPrice = calculateMonthlyPrice(billingPrice, billingCycle)
+-  return Number((monthlyPrice / 30).toFixed(2))
+-}
+-
+ const MAX_BATCH_PRICE_UPDATE_INSTANCES = 100
+ 
+ type BatchPriceUpdateItemStatus = 'ready' | 'unchanged' | 'failed'
+@@ -2381,7 +2374,7 @@
+       }
+ 
+       // 计算延期费用（按天价计算）
+-      const dailyPrice = calculateDailyPrice(Number(instance.billingPrice), instance.billingCycle)
++      const dailyPrice = calculateDailyPrice(Number(instance.billingPrice), instance.billingCycle || 1)
+       const extendAmount = freeExtend ? 0 : Number((dailyPrice * days).toFixed(2))
+ 
+       // 计算新的到期时间
+
+diff --git a/server/scripts/test-admin-billing-route-id-guards.ts b/server/scripts/test-admin-billing-route-id-guards.ts
+index 600aa938ed155e95bd19f6a4eb78e4bc52da31e8..cf7ed904d74bc4ec9fbe844fcd0e200df2ef2bf0
+--- a/server/scripts/test-admin-billing-route-id-guards.ts
++++ b/server/scripts/test-admin-billing-route-id-guards.ts
+@@ -15,6 +15,10 @@
+   source.indexOf("app.post('/api/admin/instances/:id/delete-and-refund'"),
+   source.indexOf('// ==================== 管理员应用AFF优惠码 ====================')
+ )
++const manualExtendRoute = source.slice(
++  source.indexOf("app.post('/api/admin/instances/:id/extend'"),
++  source.indexOf('// ==================== 管理员退款 ====================')
++)
+ 
+ assert.ok(
+   source.includes('const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\\d*$/') &&
+@@ -60,6 +64,19 @@
+ )
+ 
+ assert.ok(
++  source.includes("import { calculateDailyPrice } from '../lib/billing-calc.js'") &&
++    manualExtendRoute.includes('const dailyPrice = calculateDailyPrice(Number(instance.billingPrice), instance.billingCycle || 1)') &&
++    manualExtendRoute.includes('const extendAmount = freeExtend ? 0 : Number((dailyPrice * days).toFixed(2))'),
++  'admin manual extension must use the shared 31-day daily price and round only the final amount'
++)
++
++assert.ok(
++  !source.includes('monthlyPrice / 30') &&
++    !manualExtendRoute.includes('dailyPrice.toFixed'),
++  'admin manual extension must not use a local 30-day price or intermediate daily-price rounding'
++)
++
++assert.ok(
+   source.includes('!Number.isSafeInteger(newPlanId) || newPlanId <= 0'),
+   'admin plan upgrade must require a positive safe-integer target plan ID'
+ )
+diff --git a/server/src/routes/admin-billing.ts b/server/src/routes/admin-billing.ts
+index ced2ec0c094dca4fe357f55e82e402b0d6ac2f46..80b768ba0ba10643401d1e33d7524fe0e3777705
+--- a/server/src/routes/admin-billing.ts
++++ b/server/src/routes/admin-billing.ts
+@@ -62,6 +62,7 @@
+   normalizeNetworkMode
+ } from '../lib/network-modes.js'
+ import { getExchangeOperationLock } from '../services/exchange-operation-lock.js'
++import { calculateDailyPrice } from '../lib/billing-calc.js'
+ 
+ // 自定义 nanoid，只使用小写字母和数字
+ const nanoid = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 8)
+@@ -790,14 +791,6 @@
+   return Number((billingPrice / cycle).toFixed(2))
+ }
+ 
+-/**
+- * 计算日均价格
+- */
+-function calculateDailyPrice(billingPrice: number, billingCycle: number | null): number {
+-  const monthlyPrice = calculateMonthlyPrice(billingPrice, billingCycle)
+-  return Number((monthlyPrice / 30).toFixed(2))
+-}
+-
+ const MAX_BATCH_PRICE_UPDATE_INSTANCES = 100
+ 
+ type BatchPriceUpdateItemStatus = 'ready' | 'unchanged' | 'failed'
+@@ -2381,7 +2374,7 @@
+       }
+ 
+       // 计算延期费用（按天价计算）
+-      const dailyPrice = calculateDailyPrice(Number(instance.billingPrice), instance.billingCycle)
++      const dailyPrice = calculateDailyPrice(Number(instance.billingPrice), instance.billingCycle || 1)
+       const extendAmount = freeExtend ? 0 : Number((dailyPrice * days).toFixed(2))
+ 
+       // 计算新的到期时间
+
+diff --git a/server/scripts/test-admin-billing-route-id-guards.ts b/server/scripts/test-admin-billing-route-id-guards.ts
+index 600aa938ed155e95bd19f6a4eb78e4bc52da31e8..cf7ed904d74bc4ec9fbe844fcd0e200df2ef2bf0
+--- a/server/scripts/test-admin-billing-route-id-guards.ts
++++ b/server/scripts/test-admin-billing-route-id-guards.ts
+@@ -15,6 +15,10 @@
+   source.indexOf("app.post('/api/admin/instances/:id/delete-and-refund'"),
+   source.indexOf('// ==================== 管理员应用AFF优惠码 ====================')
+ )
++const manualExtendRoute = source.slice(
++  source.indexOf("app.post('/api/admin/instances/:id/extend'"),
++  source.indexOf('// ==================== 管理员退款 ====================')
++)
+ 
+ assert.ok(
+   source.includes('const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\\d*$/') &&
+@@ -60,6 +64,19 @@
+ )
+ 
+ assert.ok(
++  source.includes("import { calculateDailyPrice } from '../lib/billing-calc.js'") &&
++    manualExtendRoute.includes('const dailyPrice = calculateDailyPrice(Number(instance.billingPrice), instance.billingCycle || 1)') &&
++    manualExtendRoute.includes('const extendAmount = freeExtend ? 0 : Number((dailyPrice * days).toFixed(2))'),
++  'admin manual extension must use the shared 31-day daily price and round only the final amount'
++)
++
++assert.ok(
++  !source.includes('monthlyPrice / 30') &&
++    !manualExtendRoute.includes('dailyPrice.toFixed'),
++  'admin manual extension must not use a local 30-day price or intermediate daily-price rounding'
++)
++
++assert.ok(
+   source.includes('!Number.isSafeInteger(newPlanId) || newPlanId <= 0'),
+   'admin plan upgrade must require a positive safe-integer target plan ID'
+ )
+diff --git a/server/src/routes/admin-billing.ts b/server/src/routes/admin-billing.ts
+index ced2ec0c094dca4fe357f55e82e402b0d6ac2f46..80b768ba0ba10643401d1e33d7524fe0e3777705
+--- a/server/src/routes/admin-billing.ts
++++ b/server/src/routes/admin-billing.ts
+@@ -62,6 +62,7 @@
+   normalizeNetworkMode
+ } from '../lib/network-modes.js'
+ import { getExchangeOperationLock } from '../services/exchange-operation-lock.js'
++import { calculateDailyPrice } from '../lib/billing-calc.js'
+ 
+ // 自定义 nanoid，只使用小写字母和数字
+ const nanoid = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 8)
+@@ -790,14 +791,6 @@
+   return Number((billingPrice / cycle).toFixed(2))
+ }
+ 
+-/**
+- * 计算日均价格
+- */
+-function calculateDailyPrice(billingPrice: number, billingCycle: number | null): number {
+-  const monthlyPrice = calculateMonthlyPrice(billingPrice, billingCycle)
+-  return Number((monthlyPrice / 30).toFixed(2))
+-}
+-
+ const MAX_BATCH_PRICE_UPDATE_INSTANCES = 100
+ 
+ type BatchPriceUpdateItemStatus = 'ready' | 'unchanged' | 'failed'
+@@ -2381,7 +2374,7 @@
+       }
+ 
+       // 计算延期费用（按天价计算）
+-      const dailyPrice = calculateDailyPrice(Number(instance.billingPrice), instance.billingCycle)
++      const dailyPrice = calculateDailyPrice(Number(instance.billingPrice), instance.billingCycle || 1)
+       const extendAmount = freeExtend ? 0 : Number((dailyPrice * days).toFixed(2))
+ 
+       // 计算新的到期时间
+
+diff --git a/server/scripts/test-admin-billing-route-id-guards.ts b/server/scripts/test-admin-billing-route-id-guards.ts
+index 600aa938ed155e95bd19f6a4eb78e4bc52da31e8..cf7ed904d74bc4ec9fbe844fcd0e200df2ef2bf0
+--- a/server/scripts/test-admin-billing-route-id-guards.ts
++++ b/server/scripts/test-admin-billing-route-id-guards.ts
+@@ -15,6 +15,10 @@
+   source.indexOf("app.post('/api/admin/instances/:id/delete-and-refund'"),
+   source.indexOf('// ==================== 管理员应用AFF优惠码 ====================')
+ )
++const manualExtendRoute = source.slice(
++  source.indexOf("app.post('/api/admin/instances/:id/extend'"),
++  source.indexOf('// ==================== 管理员退款 ====================')
++)
+ 
+ assert.ok(
+   source.includes('const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\\d*$/') &&
+@@ -60,6 +64,19 @@
+ )
+ 
+ assert.ok(
++  source.includes("import { calculateDailyPrice } from '../lib/billing-calc.js'") &&
++    manualExtendRoute.includes('const dailyPrice = calculateDailyPrice(Number(instance.billingPrice), instance.billingCycle || 1)') &&
++    manualExtendRoute.includes('const extendAmount = freeExtend ? 0 : Number((dailyPrice * days).toFixed(2))'),
++  'admin manual extension must use the shared 31-day daily price and round only the final amount'
++)
++
++assert.ok(
++  !source.includes('monthlyPrice / 30') &&
++    !manualExtendRoute.includes('dailyPrice.toFixed'),
++  'admin manual extension must not use a local 30-day price or intermediate daily-price rounding'
++)
++
++assert.ok(
+   source.includes('!Number.isSafeInteger(newPlanId) || newPlanId <= 0'),
+   'admin plan upgrade must require a positive safe-integer target plan ID'
+ )
+diff --git a/server/src/routes/admin-billing.ts b/server/src/routes/admin-billing.ts
+index ced2ec0c094dca4fe357f55e82e402b0d6ac2f46..80b768ba0ba10643401d1e33d7524fe0e3777705
+--- a/server/src/routes/admin-billing.ts
++++ b/server/src/routes/admin-billing.ts
+@@ -62,6 +62,7 @@
+   normalizeNetworkMode
+ } from '../lib/network-modes.js'
+ import { getExchangeOperationLock } from '../services/exchange-operation-lock.js'
++import { calculateDailyPrice } from '../lib/billing-calc.js'
+ 
+ // 自定义 nanoid，只使用小写字母和数字
+ const nanoid = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 8)
+@@ -790,14 +791,6 @@
+   return Number((billingPrice / cycle).toFixed(2))
+ }
+ 
+-/**
+- * 计算日均价格
+- */
+-function calculateDailyPrice(billingPrice: number, billingCycle: number | null): number {
+-  const monthlyPrice = calculateMonthlyPrice(billingPrice, billingCycle)
+-  return Number((monthlyPrice / 30).toFixed(2))
+-}
+-
+ const MAX_BATCH_PRICE_UPDATE_INSTANCES = 100
+ 
+ type BatchPriceUpdateItemStatus = 'ready' | 'unchanged' | 'failed'
+@@ -2381,7 +2374,7 @@
+       }
+ 
+       // 计算延期费用（按天价计算）
+-      const dailyPrice = calculateDailyPrice(Number(instance.billingPrice), instance.billingCycle)
++      const dailyPrice = calculateDailyPrice(Number(instance.billingPrice), instance.billingCycle || 1)
+       const extendAmount = freeExtend ? 0 : Number((dailyPrice * days).toFixed(2))
+ 
+       // 计算新的到期时间
+
+ succeeded in 38637ms:
+
+> server@1.3.7 type-check C:\Users\Administrator\Desktop\payinces\server
+> tsc --noEmit
+
+
+diff --git a/server/scripts/test-admin-billing-route-id-guards.ts b/server/scripts/test-admin-billing-route-id-guards.ts
+index 600aa938ed155e95bd19f6a4eb78e4bc52da31e8..cf7ed904d74bc4ec9fbe844fcd0e200df2ef2bf0
+--- a/server/scripts/test-admin-billing-route-id-guards.ts
++++ b/server/scripts/test-admin-billing-route-id-guards.ts
+@@ -15,6 +15,10 @@
+   source.indexOf("app.post('/api/admin/instances/:id/delete-and-refund'"),
+   source.indexOf('// ==================== 管理员应用AFF优惠码 ====================')
+ )
++const manualExtendRoute = source.slice(
++  source.indexOf("app.post('/api/admin/instances/:id/extend'"),
++  source.indexOf('// ==================== 管理员退款 ====================')
++)
+ 
+ assert.ok(
+   source.includes('const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\\d*$/') &&
+@@ -60,6 +64,19 @@
+ )
+ 
+ assert.ok(
++  source.includes("import { calculateDailyPrice } from '../lib/billing-calc.js'") &&
++    manualExtendRoute.includes('const dailyPrice = calculateDailyPrice(Number(instance.billingPrice), instance.billingCycle || 1)') &&
++    manualExtendRoute.includes('const extendAmount = freeExtend ? 0 : Number((dailyPrice * days).toFixed(2))'),
++  'admin manual extension must use the shared 31-day daily price and round only the final amount'
++)
++
++assert.ok(
++  !source.includes('monthlyPrice / 30') &&
++    !manualExtendRoute.includes('dailyPrice.toFixed'),
++  'admin manual extension must not use a local 30-day price or intermediate daily-price rounding'
++)
++
++assert.ok(
+   source.includes('!Number.isSafeInteger(newPlanId) || newPlanId <= 0'),
+   'admin plan upgrade must require a positive safe-integer target plan ID'
+ )
+diff --git a/server/src/routes/admin-billing.ts b/server/src/routes/admin-billing.ts
+index ced2ec0c094dca4fe357f55e82e402b0d6ac2f46..80b768ba0ba10643401d1e33d7524fe0e3777705
+--- a/server/src/routes/admin-billing.ts
++++ b/server/src/routes/admin-billing.ts
+@@ -62,6 +62,7 @@
+   normalizeNetworkMode
+ } from '../lib/network-modes.js'
+ import { getExchangeOperationLock } from '../services/exchange-operation-lock.js'
++import { calculateDailyPrice } from '../lib/billing-calc.js'
+ 
+ // 自定义 nanoid，只使用小写字母和数字
+ const nanoid = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 8)
+@@ -790,14 +791,6 @@
+   return Number((billingPrice / cycle).toFixed(2))
+ }
+ 
+-/**
+- * 计算日均价格
+- */
+-function calculateDailyPrice(billingPrice: number, billingCycle: number | null): number {
+-  const monthlyPrice = calculateMonthlyPrice(billingPrice, billingCycle)
+-  return Number((monthlyPrice / 30).toFixed(2))
+-}
+-
+ const MAX_BATCH_PRICE_UPDATE_INSTANCES = 100
+ 
+ type BatchPriceUpdateItemStatus = 'ready' | 'unchanged' | 'failed'
+@@ -2381,7 +2374,7 @@
+       }
+ 
+       // 计算延期费用（按天价计算）
+-      const dailyPrice = calculateDailyPrice(Number(instance.billingPrice), instance.billingCycle)
++      const dailyPrice = calculateDailyPrice(Number(instance.billingPrice), instance.billingCycle || 1)
+       const extendAmount = freeExtend ? 0 : Number((dailyPrice * days).toFixed(2))
+ 
+       // 计算新的到期时间
+
+codex
+server type-check 已通过。接下来并行运行 `test:admin-billing-route-id-guards` 与 `test:financial-reconciliation-guards`，两项都只做本地验证。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'pnpm --filter server test:admin-billing-route-id-guards' in C:\Users\Administrator\Desktop\payinces
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'pnpm --filter server test:financial-reconciliation-guards' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 1412ms:
+
+> server@1.3.7 test:financial-reconciliation-guards C:\Users\Administrator\Desktop\payinces\server
+> node --import tsx scripts/test-financial-reconciliation-guards.ts
+
+financial reconciliation guards passed
+
+ succeeded in 1428ms:
+
+> server@1.3.7 test:admin-billing-route-id-guards C:\Users\Administrator\Desktop\payinces\server
+> node --import tsx scripts/test-admin-billing-route-id-guards.ts
+
+admin billing route ID guard tests passed
+
+diff --git a/server/scripts/test-admin-billing-route-id-guards.ts b/server/scripts/test-admin-billing-route-id-guards.ts
+index 600aa938ed155e95bd19f6a4eb78e4bc52da31e8..cf7ed904d74bc4ec9fbe844fcd0e200df2ef2bf0
+--- a/server/scripts/test-admin-billing-route-id-guards.ts
++++ b/server/scripts/test-admin-billing-route-id-guards.ts
+@@ -15,6 +15,10 @@
+   source.indexOf("app.post('/api/admin/instances/:id/delete-and-refund'"),
+   source.indexOf('// ==================== 管理员应用AFF优惠码 ====================')
+ )
++const manualExtendRoute = source.slice(
++  source.indexOf("app.post('/api/admin/instances/:id/extend'"),
++  source.indexOf('// ==================== 管理员退款 ====================')
++)
+ 
+ assert.ok(
+   source.includes('const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\\d*$/') &&
+@@ -60,6 +64,19 @@
+ )
+ 
+ assert.ok(
++  source.includes("import { calculateDailyPrice } from '../lib/billing-calc.js'") &&
++    manualExtendRoute.includes('const dailyPrice = calculateDailyPrice(Number(instance.billingPrice), instance.billingCycle || 1)') &&
++    manualExtendRoute.includes('const extendAmount = freeExtend ? 0 : Number((dailyPrice * days).toFixed(2))'),
++  'admin manual extension must use the shared 31-day daily price and round only the final amount'
++)
++
++assert.ok(
++  !source.includes('monthlyPrice / 30') &&
++    !manualExtendRoute.includes('dailyPrice.toFixed'),
++  'admin manual extension must not use a local 30-day price or intermediate daily-price rounding'
++)
++
++assert.ok(
+   source.includes('!Number.isSafeInteger(newPlanId) || newPlanId <= 0'),
+   'admin plan upgrade must require a positive safe-integer target plan ID'
+ )
+diff --git a/server/src/routes/admin-billing.ts b/server/src/routes/admin-billing.ts
+index ced2ec0c094dca4fe357f55e82e402b0d6ac2f46..80b768ba0ba10643401d1e33d7524fe0e3777705
+--- a/server/src/routes/admin-billing.ts
++++ b/server/src/routes/admin-billing.ts
+@@ -62,6 +62,7 @@
+   normalizeNetworkMode
+ } from '../lib/network-modes.js'
+ import { getExchangeOperationLock } from '../services/exchange-operation-lock.js'
++import { calculateDailyPrice } from '../lib/billing-calc.js'
+ 
+ // 自定义 nanoid，只使用小写字母和数字
+ const nanoid = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 8)
+@@ -790,14 +791,6 @@
+   return Number((billingPrice / cycle).toFixed(2))
+ }
+ 
+-/**
+- * 计算日均价格
+- */
+-function calculateDailyPrice(billingPrice: number, billingCycle: number | null): number {
+-  const monthlyPrice = calculateMonthlyPrice(billingPrice, billingCycle)
+-  return Number((monthlyPrice / 30).toFixed(2))
+-}
+-
+ const MAX_BATCH_PRICE_UPDATE_INSTANCES = 100
+ 
+ type BatchPriceUpdateItemStatus = 'ready' | 'unchanged' | 'failed'
+@@ -2381,7 +2374,7 @@
+       }
+ 
+       // 计算延期费用（按天价计算）
+-      const dailyPrice = calculateDailyPrice(Number(instance.billingPrice), instance.billingCycle)
++      const dailyPrice = calculateDailyPrice(Number(instance.billingPrice), instance.billingCycle || 1)
+       const extendAmount = freeExtend ? 0 : Number((dailyPrice * days).toFixed(2))
+ 
+       // 计算新的到期时间
+
+codex
+两项指定守卫均已通过。最后做一次目标文件 whitespace/diff 核验，并确认延期仍按自然日 `days × 24h`、没有改到续费/升级/退款逻辑；随后给出简短交付报告。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'git diff --check -- server/src/routes/admin-billing.ts server/scripts/test-admin-billing-route-id-guards.ts
+$files = @('"'server/src/routes/admin-billing.ts','server/scripts/test-admin-billing-route-id-guards.ts')
+foreach ("'$file in $files) {
+  "--- $file ---"
+  Select-String -Path $file -Pattern "billing-calc|manualExtendRoute|shared 31-day|monthlyPrice / 30|days '"\\* 24 \\* 60 \\* 60 \\* 1000\" | ForEach-Object { '{0}: {1}' -f "'$_.LineNumber, $_.Line.Trim() }
+}
+'"'--- status (target files) ---'
+git status --short -- server/src/routes/admin-billing.ts server/scripts/test-admin-billing-route-id-guards.ts" in C:\Users\Administrator\Desktop\payinces
+ succeeded in 695ms:
+--- server/src/routes/admin-billing.ts ---
+65: import { calculateDailyPrice } from '../lib/billing-calc.js'
+2384: const newExpiresAt = new Date(baseDate.getTime() + days * 24 * 60 * 60 * 1000)
+--- server/scripts/test-admin-billing-route-id-guards.ts ---
+18: const manualExtendRoute = source.slice(
+67: source.includes("import { calculateDailyPrice } from '../lib/billing-calc.js'") &&
+68: manualExtendRoute.includes('const dailyPrice = calculateDailyPrice(Number(instance.billingPrice), instance.billingCycle || 1)') &&
+69: manualExtendRoute.includes('const extendAmount = freeExtend ? 0 : Number((dailyPrice * days).toFixed(2))'),
+70: 'admin manual extension must use the shared 31-day daily price and round only the final amount'
+74: !source.includes('monthlyPrice / 30') &&
+75: !manualExtendRoute.includes('dailyPrice.toFixed'),
+--- status (target files) ---
+ M server/scripts/test-admin-billing-route-id-guards.ts
+ M server/src/routes/admin-billing.ts
+warning: in the working copy of 'server/scripts/test-admin-billing-route-id-guards.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/routes/admin-billing.ts', LF will be replaced by CRLF the next time Git touches it
+
+diff --git a/server/scripts/test-admin-billing-route-id-guards.ts b/server/scripts/test-admin-billing-route-id-guards.ts
+index 600aa938ed155e95bd19f6a4eb78e4bc52da31e8..cf7ed904d74bc4ec9fbe844fcd0e200df2ef2bf0
+--- a/server/scripts/test-admin-billing-route-id-guards.ts
++++ b/server/scripts/test-admin-billing-route-id-guards.ts
+@@ -15,6 +15,10 @@
+   source.indexOf("app.post('/api/admin/instances/:id/delete-and-refund'"),
+   source.indexOf('// ==================== 管理员应用AFF优惠码 ====================')
+ )
++const manualExtendRoute = source.slice(
++  source.indexOf("app.post('/api/admin/instances/:id/extend'"),
++  source.indexOf('// ==================== 管理员退款 ====================')
++)
+ 
+ assert.ok(
+   source.includes('const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\\d*$/') &&
+@@ -60,6 +64,19 @@
+ )
+ 
+ assert.ok(
++  source.includes("import { calculateDailyPrice } from '../lib/billing-calc.js'") &&
++    manualExtendRoute.includes('const dailyPrice = calculateDailyPrice(Number(instance.billingPrice), instance.billingCycle || 1)') &&
++    manualExtendRoute.includes('const extendAmount = freeExtend ? 0 : Number((dailyPrice * days).toFixed(2))'),
++  'admin manual extension must use the shared 31-day daily price and round only the final amount'
++)
++
++assert.ok(
++  !source.includes('monthlyPrice / 30') &&
++    !manualExtendRoute.includes('dailyPrice.toFixed'),
++  'admin manual extension must not use a local 30-day price or intermediate daily-price rounding'
++)
++
++assert.ok(
+   source.includes('!Number.isSafeInteger(newPlanId) || newPlanId <= 0'),
+   'admin plan upgrade must require a positive safe-integer target plan ID'
+ )
+diff --git a/server/src/routes/admin-billing.ts b/server/src/routes/admin-billing.ts
+index ced2ec0c094dca4fe357f55e82e402b0d6ac2f46..80b768ba0ba10643401d1e33d7524fe0e3777705
+--- a/server/src/routes/admin-billing.ts
++++ b/server/src/routes/admin-billing.ts
+@@ -62,6 +62,7 @@
+   normalizeNetworkMode
+ } from '../lib/network-modes.js'
+ import { getExchangeOperationLock } from '../services/exchange-operation-lock.js'
++import { calculateDailyPrice } from '../lib/billing-calc.js'
+ 
+ // 自定义 nanoid，只使用小写字母和数字
+ const nanoid = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 8)
+@@ -790,14 +791,6 @@
+   return Number((billingPrice / cycle).toFixed(2))
+ }
+ 
+-/**
+- * 计算日均价格
+- */
+-function calculateDailyPrice(billingPrice: number, billingCycle: number | null): number {
+-  const monthlyPrice = calculateMonthlyPrice(billingPrice, billingCycle)
+-  return Number((monthlyPrice / 30).toFixed(2))
+-}
+-
+ const MAX_BATCH_PRICE_UPDATE_INSTANCES = 100
+ 
+ type BatchPriceUpdateItemStatus = 'ready' | 'unchanged' | 'failed'
+@@ -2381,7 +2374,7 @@
+       }
+ 
+       // 计算延期费用（按天价计算）
+-      const dailyPrice = calculateDailyPrice(Number(instance.billingPrice), instance.billingCycle)
++      const dailyPrice = calculateDailyPrice(Number(instance.billingPrice), instance.billingCycle || 1)
+       const extendAmount = freeExtend ? 0 : Number((dailyPrice * days).toFixed(2))
+ 
+       // 计算新的到期时间
+
+codex
+已在 [admin-billing.ts](C:/Users/Administrator/Desktop/payinces/server/src/routes/admin-billing.ts:65) 复用公共 `calculateDailyPrice`（31 天基），移除本地 `/30` 及日价中间舍入，仅对 `dailyPrice × days` 的最终金额执行一次两位小数舍入；延期仍保持 `days × 24h`，未改续费、升级、退款逻辑。已在既有守卫追加公共函数与舍入断言。`server type-check`、`test:admin-billing-route-id-guards`、`test:financial-reconciliation-guards` 均通过；未 commit、push 或发版，目标文件原有未提交改动已保留。
+diff --git a/server/scripts/test-admin-billing-route-id-guards.ts b/server/scripts/test-admin-billing-route-id-guards.ts
+index 600aa938ed155e95bd19f6a4eb78e4bc52da31e8..cf7ed904d74bc4ec9fbe844fcd0e200df2ef2bf0
+--- a/server/scripts/test-admin-billing-route-id-guards.ts
++++ b/server/scripts/test-admin-billing-route-id-guards.ts
+@@ -15,6 +15,10 @@
+   source.indexOf("app.post('/api/admin/instances/:id/delete-and-refund'"),
+   source.indexOf('// ==================== 管理员应用AFF优惠码 ====================')
+ )
++const manualExtendRoute = source.slice(
++  source.indexOf("app.post('/api/admin/instances/:id/extend'"),
++  source.indexOf('// ==================== 管理员退款 ====================')
++)
+ 
+ assert.ok(
+   source.includes('const POSITIVE_ROUTE_ID_PATTERN = /^[1-9]\\d*$/') &&
+@@ -60,6 +64,19 @@
+ )
+ 
+ assert.ok(
++  source.includes("import { calculateDailyPrice } from '../lib/billing-calc.js'") &&
++    manualExtendRoute.includes('const dailyPrice = calculateDailyPrice(Number(instance.billingPrice), instance.billingCycle || 1)') &&
++    manualExtendRoute.includes('const extendAmount = freeExtend ? 0 : Number((dailyPrice * days).toFixed(2))'),
++  'admin manual extension must use the shared 31-day daily price and round only the final amount'
++)
++
++assert.ok(
++  !source.includes('monthlyPrice / 30') &&
++    !manualExtendRoute.includes('dailyPrice.toFixed'),
++  'admin manual extension must not use a local 30-day price or intermediate daily-price rounding'
++)
++
++assert.ok(
+   source.includes('!Number.isSafeInteger(newPlanId) || newPlanId <= 0'),
+   'admin plan upgrade must require a positive safe-integer target plan ID'
+ )
+diff --git a/server/src/routes/admin-billing.ts b/server/src/routes/admin-billing.ts
+index ced2ec0c094dca4fe357f55e82e402b0d6ac2f46..80b768ba0ba10643401d1e33d7524fe0e3777705
+--- a/server/src/routes/admin-billing.ts
++++ b/server/src/routes/admin-billing.ts
+@@ -62,6 +62,7 @@
+   normalizeNetworkMode
+ } from '../lib/network-modes.js'
+ import { getExchangeOperationLock } from '../services/exchange-operation-lock.js'
++import { calculateDailyPrice } from '../lib/billing-calc.js'
+ 
+ // 自定义 nanoid，只使用小写字母和数字
+ const nanoid = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 8)
+@@ -790,14 +791,6 @@
+   return Number((billingPrice / cycle).toFixed(2))
+ }
+ 
+-/**
+- * 计算日均价格
+- */
+-function calculateDailyPrice(billingPrice: number, billingCycle: number | null): number {
+-  const monthlyPrice = calculateMonthlyPrice(billingPrice, billingCycle)
+-  return Number((monthlyPrice / 30).toFixed(2))
+-}
+-
+ const MAX_BATCH_PRICE_UPDATE_INSTANCES = 100
+ 
+ type BatchPriceUpdateItemStatus = 'ready' | 'unchanged' | 'failed'
+@@ -2381,7 +2374,7 @@
+       }
+ 
+       // 计算延期费用（按天价计算）
+-      const dailyPrice = calculateDailyPrice(Number(instance.billingPrice), instance.billingCycle)
++      const dailyPrice = calculateDailyPrice(Number(instance.billingPrice), instance.billingCycle || 1)
+       const extendAmount = freeExtend ? 0 : Number((dailyPrice * days).toFixed(2))
+ 
+       // 计算新的到期时间
+
+tokens used
+45,118

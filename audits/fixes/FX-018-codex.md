@@ -1,0 +1,1 @@
+已完成 FX-018，仅修改 `server/src/routes/mail.ts` 与对应守卫。年付判定使用 `MailPlan.billingCycle`（`yearly` = 12 个月）；续费报价前及事务扣款前均校验月份必须为套餐周期整数倍，年付非 12 倍数返回 400「年付套餐只能按年续费」，月付仍限制 1–12 月，价格公式未改。`server type-check`、`test:mail-renewal-month-guards`、`test:mail-plan-financial-guards` 均通过；未 commit、push 或发版。

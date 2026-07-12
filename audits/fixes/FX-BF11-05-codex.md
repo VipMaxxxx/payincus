@@ -1,0 +1,1 @@
+已完成 BF-11-05：通过 `manual | scheduler` 触发源区分路径，管理员调用默认 `manual`，调度器显式传入 `scheduler`；每日/单工单上限与冷却仅在调度器路径执行，调度器审计日志带来源标记并单独参与计数，手动回复不受限、不计入自动额度，其它权限、安全与置信度风控保持不变。修改了 `ai-ticket-context.ts`、自动回复调度器及对应守卫；本工单未改前端、routes、schema、package。`server type-check`、`test:ai-ticket-context-guards`、`test:ticket-query-guards` 均通过，未 commit/push/发版。

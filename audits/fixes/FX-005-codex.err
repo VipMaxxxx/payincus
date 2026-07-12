@@ -1,0 +1,4093 @@
+OpenAI Codex v0.144.0-alpha.4
+--------
+workdir: C:\Users\Administrator\Desktop\payinces
+model: gpt-5.6-sol
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: high
+reasoning summaries: none
+session id: 019f52a5-bac9-79a0-b3de-c5971b6bfe71
+--------
+user
+你是 PayIncus 仓库实现工程师。先读仓库根 AGENTS.md(不 commit/push/发版、不大重构、表格布局守卫红线)。严格按规格修,只改规格允许的文件,改完跑守卫报告。不要 commit。
+---
+# FX-005 规格：日志脱敏覆盖不足(P1 / D-053 / M25-02)
+
+## 根因
+server/src/lib/log-sanitizer.ts 的 TOKEN_PATTERNS 只匹配 JWT 与窄 Bearer([A-Za-z0-9_-]),
+识别不了:裸 pat_/poa_(Public API token)、Basic 认证、URL 查询串里的密钥、含特殊字符的 Bearer;
+且 sanitizeObject 递归 depth>10 时原样返回 obj(可能把深层未脱敏对象整体漏出)。
+
+## 修法（只改 server/src/lib/log-sanitizer.ts）
+1. 扩展 TOKEN_PATTERNS(sanitizeTokensInString 用),新增覆盖:
+   - PayIncus API token:pat_ / poa_ 开头。先 grep 本仓库 token 生成处(找 api-tokens/public-api 里生成 pat_/poa_ 的代码)确认字符集与长度,按其实际格式写正则(如 /\b(?:pat|poa)_[A-Za-z0-9]{16,}\b/g);拿不准就用安全宽匹配 /\b(?:pat|poa)_[A-Za-z0-9_-]{12,}\b/g。
+   - Basic 认证:/Basic\s+[A-Za-z0-9+/=]{8,}/gi。
+   - 放宽 Bearer 字符集含 . + / = ~ :(覆盖不透明 token 与 JWT):/Bearer\s+[A-Za-z0-9._~+/=:-]+/gi。
+   - URL 查询串密钥值:对敏感 query key(token、secret、key、sign、signature、access_token、refresh_token、api_key、apikey、apiKey、password、pwd、assetToken、agentSecret、code)脱敏其值:形如 /([?&](?:token|secret|...大小写不敏感...)=)[^&#\s]+/gi → 替换成 '$1[REDACTED]'。
+   保留原 JWT 规则不变。
+2. sanitizeObject depth>10:不再 `return obj`,改为返回脱敏占位(如 '[REDACTED_TRUNCATED]' as unknown as T),避免深层原样漏出。
+3. 可顺带给 SENSITIVE_FIELDS 补几个明显漏项:'assetToken'、'agentSecret'、'pat'、'poa'(仅补字段名,不改结构)。
+
+## 加守卫（改现有 server/scripts/test-log-sanitizer.ts,勿动 package.json）
+新增断言:sanitizeTokensInString 能脱敏 'pat_'+长串、'poa_'+长串、'Basic dXNlcjpwYXNz'、'Bearer a.b+c/d=='、'https://x/cb?token=SECRET123&x=1'(token 值被替换);sanitizeObject 在 depth>10 不返回原始密钥。
+
+## 不许动
+- 不改 logSerializers/createSafeLogger 的调用方与 Fastify 配置。不做大重构。
+
+## 验收
+- pnpm --filter server type-check 通过;pnpm --filter server test:log-sanitizer 通过。
+
+## 交付
+一段话:改了哪些正则/分支、pat_/poa_ 实际格式来源、守卫结果。不要 commit。
+
+codex
+我会先按仓库规矩读取根 `AGENTS.md`，再定位 `pat_`/`poa_` 的生成格式和现有脱敏守卫；只修改规格允许的两个文件，随后运行 server type-check 与 `test:log-sanitizer`，不 commit。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Content -Raw AGENTS.md' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 773ms:
+# PayIncus / Incudal â€” é¡¹ç›®ç»Ÿä¸€è§„çŸ©ï¼ˆAGENTS.mdï¼‰
+
+> æœ¬æ–‡ä»¶æ˜¯æœ¬ä»“åº“**æ‰€æœ‰ AI agentï¼ˆClaude Codeã€codex ç­‰ï¼‰çš„ç»Ÿä¸€å·¥ä½œè§„èŒƒ**ã€‚
+> `CLAUDE.md` é€šè¿‡ `@AGENTS.md` å¼•ç”¨æœ¬æ–‡ä»¶ â€”â€” Claude Code ä¸Ž codex è¯»åˆ°çš„æ˜¯**åŒä¸€å¥—è§„çŸ©**ï¼Œæ”¹è¿™ä¸€ä¸ªæ–‡ä»¶å³å¯ã€‚
+> æƒå¨è¿ç»´/å‘ç‰ˆäº‹å®žä»¥ä»“åº“æ ¹çš„ `OPERATIONS_HANDOFF.md`ï¼ˆæ“ä½œæ‰‹å†Œï¼‰ä¸Ž `HANDOFF.md`ï¼ˆç‰ˆæœ¬è¯æ®å°è´¦ï¼‰ä¸ºå‡†ã€‚
+
+---
+
+## 0. æ²Ÿé€šè¯­è¨€
+- ä¸Ž owner é»˜è®¤ç”¨**ä¸­æ–‡**æ²Ÿé€šã€‚
+
+## 1. è¿™æ˜¯ä»€ä¹ˆé¡¹ç›®
+**PayIncus**ï¼ˆå†…éƒ¨ä»£å· `incudal`ï¼‰â€”â€”å•†ç”¨ Incusï¼ˆLXC/KVMï¼‰NAT VPS å”®å–ä¸Žäº¤ä»˜å¹³å°ï¼Œ**çº¿ä¸Šè¿è¥ä¸­**ã€‚å½“å‰ç”Ÿäº§ç‰ˆæœ¬ **v1.3.7**ã€‚pnpm monorepoï¼š
+
+| ç›®å½• | æŠ€æœ¯æ ˆ / ä½œç”¨ |
+|------|----------------|
+| `client/` | Vue 3 + Vite SPAã€‚åŒç«¯æž„å»ºï¼ˆ`VITE_APP_ENTRY`ï¼‰â†’ `dist/user`ï¼ˆpay.payincus.comï¼‰+ `dist/admin`ï¼ˆadmin.payincus.comï¼‰ã€‚ä¸¤ç«¯ç‹¬ç«‹æºã€**ä¸å…±äº« cookie åŸŸ**ã€‚ |
+| `server/` | Fastify 5 + Prisma 7 + PostgreSQLï¼Œ~300 TS æ–‡ä»¶ã€~70 è·¯ç”±ã€~15 è°ƒåº¦/workerã€‚æ—  Redisï¼ˆç”¨ PG advisory lockï¼‰ã€‚ä¸‰å¥—é‰´æƒé¢ï¼šWeb çš„ JWT+refresh cookieã€Public API çš„ `pat_`/`poa_` tokenã€host agent çš„ HMACã€‚ |
+| `agent/` | Go å®¿ä¸» agentï¼Œåªè¯»ç›‘æŽ§ï¼ˆå¿ƒè·³/èµ„æº/å®žä¾‹æ€/æµé‡ï¼‰ï¼ŒHMAC ç­¾åï¼Œè‡ªå‡çº§ã€‚ |
+| å…¶å®ƒ | `docs-site/`ï¼ˆVitePressï¼‰ã€`deploy/`ï¼ˆsystemd+Nginxï¼‰ã€`scripts/`ï¼ˆå®‰è£…/æ ¡éªŒ/OTAï¼‰ã€`plugin-templates/`ã€`theme-templates/`ã€‚ |
+
+éƒ¨ç½²ï¼šä¸‰å±‚æ‹†åˆ†ï¼ˆuser / admin / ç§æœ‰åŽç«¯ `127.0.0.1:3001`ï¼‰ï¼Œè£…æœºæ ¹ `/opt/incudal`ï¼ŒåŽŸå­ OTAï¼ˆ`releases/<ver-ts>` + `current` è½¯é“¾ï¼‰+ è‡ªåŠ¨å›žæ»šã€‚
+
+---
+
+## 2. ðŸ”´ ç¡¬è§„çŸ©ï¼ˆä¸å¯åå•†ï¼Œè¿åå³äº‹æ•…ï¼‰
+
+1. **ä¸ç¢°ç”Ÿäº§**ï¼šæœªç» owner æ˜Žç¡®è¦æ±‚ï¼Œ**ç»ä¸** OTAã€å‘å¸ƒã€pushã€æ‰“ tagã€æ”¹ç”Ÿäº§çŽ¯å¢ƒã€‚
+2. **ä¸åšç ´åæ€§ git**ï¼šæœªç» owner æ˜Žç¡®è¦æ±‚ï¼Œ**ç»ä¸** `git reset`ã€`git checkout --`ã€å¼ºåˆ¶åˆ é™¤ã€æ¸…ç†æœªè·Ÿè¸ªæ–‡ä»¶ã€`git commit`/`git push`ã€‚
+3. **é«˜å±è·¯å¾„å…ˆè¯»åŽå†™**ï¼šæ”¹åŠ¨ä»¥ä¸‹ä»»ä¸€é¢†åŸŸï¼Œ**å¿…é¡»å…ˆè¯»ç›¸å…³ä»£ç  + å¯¹åº”å®ˆå«æµ‹è¯•**å†åŠ¨æ‰‹ï¼š
+   > é‰´æƒ Â· æ”¯ä»˜ Â· æƒé™ Â· é£ŽæŽ§ Â· èµ„æºäº¤ä»˜ Â· å…‘æ¢æµç¨‹ Â· å®žä¾‹åˆ›å»º Â· OTA
+4. **æ”¹åŠ¨æœ€å°åŒ–**ï¼šä¿® bug / å‘ç‰ˆæœŸé—´**ä¸åšå¤§èŒƒå›´é‡æž„**ï¼Œåªæ”¹å¿…è¦çš„ã€‚
+5. **ç»ä¸æ³„å¯†**ï¼šä»»ä½• commitã€handoffã€æ€»ç»“ã€æˆªå›¾ä¸­éƒ½**ä¸å¾—**å‡ºçŽ°å‡­è¯ / token / cookie / å¯†é’¥ã€‚
+6. **æœ¬åœ°è¿‡ â‰  ç”Ÿäº§éªŒè¯**ï¼šæœ¬åœ°é€šè¿‡ã€GitHub Actionsã€Release èµ„äº§ã€OTAã€çº¿ä¸Šå®žè¯æ˜¯**åˆ†å¼€çš„è¯æ®**ï¼Œä¸å¯æ··ä¸ºä¸€è°ˆã€‚
+7. **æ¯æ¬¡æ”¹åŠ¨å¿…é¡»è¿‡å¯¹åº”å®ˆå«**ï¼ˆè§ Â§4ï¼‰ï¼Œå¦åˆ™è§†ä¸º**æœªå®Œæˆ**ã€‚
+8. `RUN_DB_CHECKS=0 bash scripts/apply-online-update.sh <ver>` ä¼š**è·³è¿‡ DB/æ”¯ä»˜å°±ç»ªæ ¡éªŒ**ï¼Œä»…åœ¨ owner æ˜Žç¡®æ‰¹å‡†æ—¶ä½¿ç”¨ã€‚
+
+---
+
+## 3. æœ¬åœ°æ€Žä¹ˆè·‘
+
+- **çŽ¯å¢ƒ**ï¼šNode â‰¥ 20ã€pnpm 9.14.2ã€æœ¬åœ° PostgreSQL 16ã€‚
+- **è£…ä¾èµ–**ï¼š`pnpm install`
+- **ä¸€æŠŠèµ·å…¨éƒ¨ï¼ˆserver + user + adminï¼‰**ï¼š`pnpm dev`
+- **åˆ†å¼€èµ·**ï¼š
+  - åŽç«¯ï¼š`NODE_ENV=development JWT_SECRET=dev-secret-12345678 HOST=127.0.0.1 PORT=3001 pnpm --filter server exec tsx watch src/app.ts`
+  - ç”¨æˆ·å‰ç«¯ï¼š`pnpm dev:user`
+  - ç®¡ç†å‰ç«¯ï¼š`pnpm dev:admin`
+- **ç«¯å£**ï¼šåŽç«¯ API **3001** Â· ç”¨æˆ·å‰ç«¯ **3000** Â· ç®¡ç†å‰ç«¯ **3002**ï¼ˆå‰ç«¯ dev ç» proxy æ‰“åˆ° 3001ï¼‰ã€‚
+
+---
+
+## 4. ðŸ›¡ï¸ å®ˆå«æµ‹è¯•çºªå¾‹ï¼ˆæœ¬ä»“åº“çš„å‘½é—¨ï¼‰
+
+`server/package.json` é‡Œæœ‰ **200+ ä¸ªç‹¬ç«‹ `test-*-guards.ts`**ã€‚å®ƒä»¬æŠŠå…³é”®ä¸šåŠ¡/å‰ç«¯ç»“æž„â€œé’‰æ­»â€ï¼Œ`pnpm test` ä¼šè·‘å…¨å¥—ï¼ˆclient+server type-check + å…¨éƒ¨å®ˆå«ï¼‰ã€‚**ä»»ä½•æ”¹åŠ¨å¿…é¡»è®©ç›¸å…³å®ˆå«é€šè¿‡ã€‚**
+
+- **å…¨é‡**ï¼ˆæ…¢ï¼Œå‘ç‰ˆå‰è·‘ï¼‰ï¼š`pnpm test`
+- **å•ä¸ª**ï¼š`pnpm --filter server test:<guard-name>`
+- **å‰ç«¯æœ€å¸¸ç”¨ä¸‰ä¸ª**ï¼š
+  - `test:frontend-route-guards` â€”â€” è·¯ç”± / **è¡¨æ ¼å¸ƒå±€** / `@click` è·¯å¾„æ–­è¨€
+  - `test:frontend-dist-boundary-guards` â€”â€” åŒç«¯ dist è¾¹ç•Œ
+  - `test:frontend-i18n-keys` â€”â€” i18n key å®Œæ•´æ€§
+- **Go agent**ï¼š`pnpm test:agent`
+
+### âš ï¸ è¡¨æ ¼å¸ƒå±€å®ˆå«ï¼ˆæœ€å®¹æ˜“è¸©é›·ï¼‰
+ä¸€æ‰¹è¡¨è¢«å®ˆå«**é”å®š**ä¸ºâ€œ**ç§»åŠ¨å¡ + PC å®šå®½è¡¨ï¼ˆ`table-fixed` / `overflow-hidden`ï¼‰ï¼Œç»ä¸æ¨ªå‘æ»šåŠ¨**â€ï¼Œå¹¶**åå‘ç¦æ­¢** `overflow-x-auto` / `min-w-[...]` / åŽ»æŽ‰ `table-fixed`ã€‚
+- æƒ³ä¿®â€œå®½è¡¨æŒ¤åŽ‹â€æ—¶ï¼š**å…ˆåˆ¤æ–­è¯¥è¡¨æ˜¯å¦åœ¨å®ˆå«æ¸…å•é‡Œ**ã€‚é”å®šè¡¨**åªèƒ½åœ¨ `table-fixed` å†…å¹³è¡¡åˆ—å®½**ï¼ˆåˆ—å®½ç™¾åˆ†æ¯”åˆè®¡ = 100%ï¼‰+ å…è®¸å•å…ƒæ ¼æ¢è¡Œ + é ç§»åŠ¨å¡åº”å¯¹çª„å±ï¼›**ä¸èƒ½**æ”¹æˆæ¨ªå‘æ»šåŠ¨ã€‚
+- å—é”å®šçš„è¡¨ï¼ˆç”¨æˆ·ç«¯ï¼‰ï¼š`MyPackagesView`ã€`MyHostsView`ã€`TransfersView`ã€`OrdersView`ã€`InvitesView`ã€`FlashSalesView`ã€`HostingWalletView`ã€`InstancesView`ã€`LogsView`ã€`EntertainmentView`ï¼›ï¼ˆç®¡ç†ç«¯ï¼‰`admin/BillingView`ã€`admin/ImagesView`ã€`admin/HelpManageView`ã€`admin/MailView`ã€`admin/PluginCenterView`ï¼›ï¼ˆç»„ä»¶ï¼‰`HostPublicIpv4Tab`ã€`InstanceLogsTab`ã€`ConfigEditModal`ã€‚
+- æ”¹ä»»ä¸€å‰ç«¯æ–‡ä»¶åŽ**å¿…è·‘** `test:frontend-route-guards`ã€‚
+
+---
+
+## 5. æž„å»º / æ ¡éªŒå‘½ä»¤
+
+| ç›®çš„ | å‘½ä»¤ |
+|------|------|
+| æž„å»ºï¼ˆå« dist è¾¹ç•Œå®ˆå«ï¼‰| `pnpm build` |
+| åªæž„å»ºå‰ç«¯ / åŽç«¯ | `pnpm build:client` / `pnpm build:server` |
+| Lintï¼ˆæ£€æŸ¥ / è‡ªåŠ¨ä¿®ï¼‰| `pnpm lint` / `pnpm lint:fix` |
+| ç±»åž‹æ£€æŸ¥ | `pnpm --filter client type-check` Â· `pnpm --filter server type-check` |
+| å…¨å¥—å®ˆå« | `pnpm test` |
+| æ–‡æ¡£ç«™å¼€å‘ / æž„å»º | `pnpm docs:dev` / `pnpm docs:build` |
+
+---
+
+## 6. UI æ”¹åŠ¨çº¦æŸï¼ˆå•è‰²é‡åšè¿›è¡Œä¸­ï¼‰
+
+- **æ–¹å‘**ï¼šè‹¹æžœå¼**çº¯é»‘ç™½å•è‰²**ï¼ˆæµ…è‰²=ç™½åº•é»‘å­—ï¼Œæ·±è‰²=é»‘åº•ç™½å­—ï¼‰ï¼ŒåŽ»äºŒæ¬¡å…ƒ/å‰ç¥¥ç‰©/ç«‹ç»˜ã€‚çŠ¶æ€è‰²**åªä¿ç•™ç»¿/ç¥ç€/çº¢**ä¸‰ç§ï¼ˆè¿è¡Œ/å¾…å¤„ç†/å¤±è´¥ï¼‰ã€‚
+- **çº¢çº¿**ï¼šåªæ”¹**æ ·å¼ / å¸ƒå±€ / æ–‡æ¡ˆå±‚çº§**ï¼Œ**ä¸ç¢°**åŽç«¯æŽ¥å£ã€æƒé™ã€æ”¯ä»˜/è®¢å•/å®žä¾‹åˆ›å»º/OTA ç­‰ä¸šåŠ¡é€»è¾‘ä¸Žè·¯ç”±è¡Œä¸ºâ€”â€”**åŠŸèƒ½ 100% ä¸å˜**ã€‚
+- **é…è‰²èµ° token å±‚**ï¼ˆ`client/tailwind.config.js`ï¼‰ï¼šä¸€å †å½©è‰² ramp å·²æ˜ å°„åˆ°ä¸­æ€§ç°ï¼›`rose â†’ çœŸçº¢`ï¼ˆå±é™©/äºæŸè¯­ä¹‰ï¼‰**ä¿ç•™ä¸å¯ç°åŒ–**ï¼›æ¸¸æˆåŒ–æ¨¡å—ï¼ˆæˆå°±/ç­¾åˆ°/æŠ½å¥–/ç¨€æœ‰åº¦ï¼‰å½©è‰²**åˆ»æ„ä¿ç•™**ã€‚
+- `kawaii-cloud.css` **æ¸è¿›æ”¹é€ ã€ä¸é‡å†™**ï¼›å•é¡µåŽ»è‰²ç”¨é¡µé¢ `<style scoped>`ã€‚
+- åŠ¨æ•ˆå¯ç”¨ **GSAP**ï¼ˆå·²è£… gsap-skillsï¼Œè§ `.claude/skills/`ï¼‰ï¼›å°Šé‡ `prefers-reduced-motion`ã€‚
+
+---
+
+## 7. åä½œæ¨¡åž‹ï¼ˆClaude Code â‡„ codexï¼‰
+
+- **Claude Code = æŠ€æœ¯è´Ÿè´£äºº / é›†æˆæ–¹**ï¼šå®šæ ¹å› ã€åˆ‡ä»»åŠ¡ã€å†™è§„æ ¼ã€å®ˆä¸å˜é‡ã€å®¡ diffã€è·‘å®ˆå«ã€çœŸæœºéªŒè¯ã€ç®¡ gitï¼ˆ**ä»…åœ¨ owner åŒæ„æ—¶** commit / pushï¼‰ã€‚
+- **codex = å®žçŽ°å·¥äºº**ï¼šæŒ‰ Claude ç»™çš„è§„æ ¼å®žçŽ°æ”¹åŠ¨ï¼Œå°¤å…¶**ä½Ž/ä¸­å±ã€è‡ªåŒ…å«ã€å¯å¹¶è¡Œ**çš„å—ã€‚
+- **é£Žé™©åˆ†æ¡£**ï¼šé«˜å±è·¯å¾„ç”± Claude å®šæ ¹å›  + æ”¶ç´§è§„æ ¼ï¼›ä½Ž/ä¸­å± codex å¯ç«¯åˆ°ç«¯ä¿®ã€‚**ä»»ä½•ä¸€æ–¹æ”¹å®Œéƒ½è¦è·‘ç›¸å…³å®ˆå«ï¼ŒClaude ç»Ÿä¸€å®¡æŸ¥åŽæ‰è¿›å…¥ä¸‹ä¸€æ­¥ã€‚**
+- **é¿å…å†²çª**ï¼šåŒä¸€æ‰¹æ–‡ä»¶ä¸€æ¬¡åªè®©ä¸€ä¸ª agent æ”¹ã€‚
+
+---
+
+## 8. ä¸€ä¸ªæ”¹åŠ¨çš„ã€Œå®Œæˆã€å®šä¹‰
+
+1. ç›¸å…³ **type-check** é€šè¿‡ï¼›
+2. ç›¸å…³ **å®ˆå«æµ‹è¯•** é€šè¿‡ï¼›
+3. è‹¥åŠ¨å‰ç«¯ â†’ **åŒç«¯ build** é€šè¿‡ï¼›
+4. **çœŸæœºè·‘è¿‡**å—å½±å“æµç¨‹ï¼ˆä¸æ˜¯åªçœ‹æµ‹è¯•ï¼‰ï¼›
+5. **æŠ¥å‘Š**ï¼šæ”¹äº†å“ªäº›æ–‡ä»¶ / ä¸ºä»€ä¹ˆ / é£Žé™© / æ€Žä¹ˆéªŒè¯çš„ã€‚
+
+ä»¥ä¸Šä»»ä¸€æœªæ»¡è¶³ = **æœªå®Œæˆ**ã€‚
+
+
+codex
+已确认仓库硬规矩。现在先读现有脱敏实现与守卫，并从 Public API token 生成代码核实前缀后的真实字符集和长度；这一步完成前不改代码。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'rg -n --glob "*.ts" "pat_|poa_|TOKEN_PATTERNS|sanitizeTokensInString|sanitizeObject" server/src server/scripts' in C:\Users\Administrator\Desktop\payinces
+2026-07-11T19:27:12.971066Z ERROR codex_core::tools::router: error=Exit code: 1
+Wall time: 0.8 seconds
+Output:
+rg : The term 'rg' is not recognized as the name of a cmdlet, function, script file, or operable program. Check the 
+spelling of the name, or if a path was included, verify that the path is correct and try again.
+At line:2 char:1
++ rg -n --glob "*.ts" "pat_|poa_|TOKEN_PATTERNS|sanitizeTokensInString| ...
++ ~~
+    + CategoryInfo          : ObjectNotFound: (rg:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+
+ exited 1 in 824ms:
+rg : The term 'rg' is not recognized as the name of a cmdlet, function, script file, or operable program. Check the 
+spelling of the name, or if a path was included, verify that the path is correct and try again.
+At line:2 char:1
++ rg -n --glob "*.ts" "pat_|poa_|TOKEN_PATTERNS|sanitizeTokensInString| ...
++ ~~
+    + CategoryInfo          : ObjectNotFound: (rg:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "Get-ChildItem server\\src,server\\scripts -Recurse -Filter *.ts | Select-String -Pattern 'pat_|poa_|TOKEN_PATTERNS|sanitizeTokensInString|sanitizeObject' | Select-Object Path,LineNumber,Line" in C:\Users\Administrator\Desktop\payinces
+ succeeded in 1685ms:
+
+Path                                                                                LineNumber Line                    
+----                                                                                ---------- ----                    
+C:\Users\Administrator\Desktop\payinces\server\src\lib\log-sanitizer.ts                      8  * 2. 手动调用 sanitizeOb...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\log-sanitizer.ts                     86 const TOKEN_PATTERNS = [
+C:\Users\Administrator\Desktop\payinces\server\src\lib\log-sanitizer.ts                    105 export function sanit...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\log-sanitizer.ts                    107     for (const patter...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\log-sanitizer.ts                    117 export function sanit...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\log-sanitizer.ts                    127         return saniti...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\log-sanitizer.ts                    132         return obj.ma...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\log-sanitizer.ts                    142                 resul...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\log-sanitizer.ts                    144                 resul...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\log-sanitizer.ts                    174             sanitized...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\log-sanitizer.ts                    191             message: ...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\log-sanitizer.ts                    192             stack: er...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\log-sanitizer.ts                    209             logger.in...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\log-sanitizer.ts                    212             logger.wa...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\log-sanitizer.ts                    215             logger.er...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\log-sanitizer.ts                    218             logger.de...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\lottery-notifier.ts                   7 import { sanitizeToke...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\lottery-notifier.ts                  55   const sanitized = s...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\lsky.ts                               2 import { sanitizeToke...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\lsky.ts                             117   return sanitizeToke...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\lsky.ts                             447       errorMessage: s...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\notifier.ts                          11 import { sanitizeToke...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\notifier.ts                         970   const sanitized = s...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\oauth-provider.ts                     9 export const OAUTH_AC...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\public-api-auth.ts                    7 export const PUBLIC_A...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\public-api-auth.ts                    8 export const OAUTH_AC...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\public-api-openapi.ts              2202             token: { ...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\public-api-openapi.ts              2223             access_to...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\risk-audit.ts                         1 import { sanitizeToke...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\risk-audit.ts                       315   return maskIpv6(mas...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-billing.ts                  51 import { sanitizeObje...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-billing.ts                 546       metadata: sanit...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-billing.ts                 751     providerMetadata:...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-billing.ts                4149           pluginMetad...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-billing.ts                4252         callbackPaylo...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-billing.ts                4274           queryResult...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-billing.ts                4338           request.log...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-delivery.ts                 14 import { sanitizeToke...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-delivery.ts                101       lastError: task...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-sla-alerts.ts                6 import { sanitizeToke...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-sla-alerts.ts              163   const note = saniti...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-sla-alerts.ts              319     title: sanitizeTo...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-sla-alerts.ts              320     message: sanitize...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-sla-alerts.ts              492       message: saniti...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-sla-alerts.ts              514       message: saniti...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-sla-alerts.ts              529       message: saniti...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-sla-alerts.ts              544       message: saniti...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\admin-sla-alerts.ts              559       message: saniti...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\oauth.ts                          30 import { sanitizeObje...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\oauth.ts                         437         fastify.log.e...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\oauth.ts                         457         throw new Err...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\recharge.ts                       48 import { sanitizeObje...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\recharge.ts                      708       metadata: sanit...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\recharge.ts                     1968           pluginMetad...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\recharge.ts                     2215         callbackPaylo...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\recharge.ts                     2265           queryResult...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\recharge.ts                     2414           request.log...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\recharge.ts                     2579             { orderNo...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\recharge.ts                     3165       request.log.war...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\recharge.ts                     3254       pluginMetadata:...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\recharge.ts                     3255       callbackData: s...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\recharge.ts                     3556       request.log.war...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\recharge.ts                     3626         request.log.w...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\recharge.ts                     3635           { orderNo, ...
+C:\Users\Administrator\Desktop\payinces\server\src\scripts\lsky-production-proof.ts          7 import { sanitizeToke...
+C:\Users\Administrator\Desktop\payinces\server\src\scripts\lsky-production-proof.ts         21   return sanitizeToke...
+C:\Users\Administrator\Desktop\payinces\server\src\services\cranemail.ts                     7 import { sanitizeObje...
+C:\Users\Administrator\Desktop\payinces\server\src\services\cranemail.ts                    38   console.log('[Crane...
+C:\Users\Administrator\Desktop\payinces\server\src\services\cranemail.ts                    71   console.log('[Crane...
+C:\Users\Administrator\Desktop\payinces\server\src\services\cranemail.ts                    76       ? Object.entrie...
+C:\Users\Administrator\Desktop\payinces\server\src\services\cranemail.ts                    84     const sanitizedEr...
+C:\Users\Administrator\Desktop\payinces\server\src\services\plan-upgrade-sync-re...          6 import { sanitizeToke...
+C:\Users\Administrator\Desktop\payinces\server\src\services\plan-upgrade-sync-re...         48   return sanitizeToke...
+C:\Users\Administrator\Desktop\payinces\server\src\services\smartermail.ts                   9 import { sanitizeToke...
+C:\Users\Administrator\Desktop\payinces\server\src\services\smartermail.ts                  51     throw new Error(s...
+C:\Users\Administrator\Desktop\payinces\server\src\services\smartermail.ts                  84     const error = san...
+C:\Users\Administrator\Desktop\payinces\server\src\services\traffic-notifier.ts             10 import { sanitizeToke...
+C:\Users\Administrator\Desktop\payinces\server\src\services\traffic-notifier.ts             54     const sanitized =...
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-delivery-center-guar...         67   routeSource.include...
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-log-sanitizer.ts                 5 import { sanitizeObje...
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-log-sanitizer.ts                13 const sanitized = san...
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-log-sanitizer.ts               103 assert.equal(sanitize...
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-log-sanitizer.ts               149   rechargeSource.incl...
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-log-sanitizer.ts               150     adminBillingSourc...
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-lsky-production-proo...         47     scriptSource.incl...
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-mail-source-outbound...         62   smarterMailSource.i...
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-notification-fetch-g...         22   notifierSource.incl...
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-notification-fetch-g...         52   trafficNotifierSour...
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-notification-fetch-g...         78   lotteryNotifierSour...
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-oauth-outbound-guard.ts         66   oauthSource.include...
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-oauth-provider-guard...        131     openapi.includes(...
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-oauth-provider-guard...        217     developmentDocs.i...
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-public-api-sdk-guard...        289     sdkDocs.includes(...
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-public-api-sdk-guard...        290     sdkDocs.includes(...
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-public-api-sdk-guard...        352     sdkDocs.includes(...
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-public-api-token-gua...         39   auth.includes("PUBL...
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-public-api-token-gua...        117     developmentDocs.i...
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-recharge-query-resul...         36     source.includes('...
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-recharge-query-resul...         37       source.includes...
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-recharge-query-resul...         53   userVerifyRoute.inc...
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-recharge-query-resul...         54     userVerifyRoute.i...
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-recharge-query-resul...         58   adminSyncRoute.incl...
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-recharge-query-resul...         59     adminSyncRoute.in...
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-sla-alert-guards.ts             63   routeSource.include...
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-ticket-image-securit...         62     lskySource.includ...
+
+
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$files = @('"'server/src/lib/log-sanitizer.ts','server/scripts/test-log-sanitizer.ts','server/src/lib/public-api-auth.ts','server/src/lib/oauth-provider.ts','server/scripts/test-public-api-token-guards.ts'); foreach ("'$file in $files) { Write-Output "FILE: $file"; Get-Content -Raw $file }; Get-ChildItem server'"\\src -Recurse -Filter *.ts | Select-String -Pattern 'PUBLIC_API_TOKEN_PREFIX|OAUTH_ACCESS_TOKEN_PREFIX|randomBytes\\(' | Select-Object Path,LineNumber,Line" in C:\Users\Administrator\Desktop\payinces
+ succeeded in 1152ms:
+FILE: server/src/lib/log-sanitizer.ts
+/**
+ * æ—¥å¿—æ•æ„Ÿä¿¡æ¯è¿‡æ»¤å™¨
+ * 
+ * ç”¨äºŽè¿‡æ»¤æ—¥å¿—ä¸­çš„æ•æ„Ÿä¿¡æ¯ï¼Œé˜²æ­¢å¯†ç ã€Token ç­‰æ³„éœ²åˆ°æ—¥å¿—ä¸­
+ * 
+ * ä½¿ç”¨æ–¹å¼ï¼š
+ * 1. åœ¨ Fastify é…ç½®ä¸­ä½¿ç”¨ serializers
+ * 2. æ‰‹åŠ¨è°ƒç”¨ sanitizeObject è¿‡æ»¤å¯¹è±¡ä¸­çš„æ•æ„Ÿå­—æ®µ
+ */
+
+// éœ€è¦è¿‡æ»¤çš„æ•æ„Ÿå­—æ®µååˆ—è¡¨ï¼ˆä¸åŒºåˆ†å¤§å°å†™ï¼‰
+const SENSITIVE_FIELDS = [
+    'password',
+    'adminPassword',
+    'smtpPassword',
+    'mailPassword',
+    'newPassword',
+    'oldPassword',
+    'currentPassword',
+    'confirmPassword',
+    'token',
+    'botToken',
+    'bot_token',
+    'telegramBotToken',
+    'telegram_bot_token',
+    'sign',
+    'signature',
+    'accessToken',
+    'refreshToken',
+    'access_token',
+    'refresh_token',
+    'id_token',
+    'accesstoken',
+    'refreshtoken',
+    'authorization',
+    'cookie',
+    'secret',
+    'jwtSecret',
+    'apiKey',
+    'apiSecret',
+    'api_key',
+    'api_secret',
+    'key',
+    'merchantPrivateKey',
+    'merchant_private_key',
+    'webhookSecret',
+    'webhook_secret',
+    'webhookUrl',
+    'webhook_url',
+    'discordWebhookUrl',
+    'discord_webhook_url',
+    'x-signature',
+    'privateKey',
+    'clientSecret',
+    'private_key',
+    'client_secret',
+    'totpCode',
+    'recoveryCode',
+    'twoFactorSecret',
+    'encryptedSecret',
+    'backupCode',
+    'totp_code',
+    'recovery_code',
+    'two_factor_secret',
+    'encrypted_secret',
+    'backup_code',
+    'otp',
+    'pin',
+    'creditCard',
+    'cardNumber',
+    'cvv',
+    'ssn',
+    'x-auth-token',
+    'x-api-key',
+    'chatId',
+    'chat_id',
+]
+
+// ç¼–è¯‘æ­£åˆ™è¡¨è¾¾å¼ï¼Œç”¨äºŽæ›´å¿«åŒ¹é…
+const SENSITIVE_FIELD_PATTERN = new RegExp(
+    `^(${SENSITIVE_FIELDS.join('|')})$`,
+    'i'
+)
+
+// Token æ¨¡å¼åŒ¹é…ï¼ˆç”¨äºŽæ£€æµ‹å€¼ä¸­åŒ…å«çš„ tokenï¼‰
+const TOKEN_PATTERNS = [
+    /eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g,  // JWT
+    /Bearer\s+[A-Za-z0-9_-]+/gi,  // Bearer token
+]
+
+// æ›¿æ¢å€¼
+const REDACTED = '[REDACTED]'
+const REDACTED_JWT = '[REDACTED_JWT]'
+
+/**
+ * æ£€æŸ¥å­—æ®µåæ˜¯å¦ä¸ºæ•æ„Ÿå­—æ®µ
+ */
+export function isSensitiveField(fieldName: string): boolean {
+    return SENSITIVE_FIELD_PATTERN.test(fieldName)
+}
+
+/**
+ * è¿‡æ»¤å­—ç¬¦ä¸²ä¸­çš„ Token
+ */
+export function sanitizeTokensInString(value: string): string {
+    let result = value
+    for (const pattern of TOKEN_PATTERNS) {
+        result = result.replace(pattern, REDACTED_JWT)
+    }
+    return result
+}
+
+/**
+ * è¿‡æ»¤å¯¹è±¡ä¸­çš„æ•æ„Ÿä¿¡æ¯
+ * é€’å½’å¤„ç†åµŒå¥—å¯¹è±¡
+ */
+export function sanitizeObject<T>(obj: T, depth = 0): T {
+    // é˜²æ­¢æ— é™é€’å½’
+    if (depth > 10) return obj
+
+    if (obj === null || obj === undefined) {
+        return obj
+    }
+
+    // å¤„ç†å­—ç¬¦ä¸²
+    if (typeof obj === 'string') {
+        return sanitizeTokensInString(obj) as unknown as T
+    }
+
+    // å¤„ç†æ•°ç»„
+    if (Array.isArray(obj)) {
+        return obj.map(item => sanitizeObject(item, depth + 1)) as unknown as T
+    }
+
+    // å¤„ç†å¯¹è±¡
+    if (typeof obj === 'object') {
+        const result: Record<string, unknown> = {}
+        for (const [key, value] of Object.entries(obj)) {
+            if (isSensitiveField(key)) {
+                result[key] = REDACTED
+            } else if (typeof value === 'string') {
+                result[key] = sanitizeTokensInString(value)
+            } else if (typeof value === 'object' && value !== null) {
+                result[key] = sanitizeObject(value, depth + 1)
+            } else {
+                result[key] = value
+            }
+        }
+        return result as T
+    }
+
+    return obj
+}
+
+/**
+ * Pino åºåˆ—åŒ–å™¨é…ç½®
+ * ç”¨äºŽ Fastify logger çš„ serializers é…ç½®
+ * 
+ * æ³¨æ„ï¼šç”±äºŽ Fastify çš„ç±»åž‹å®šä¹‰é™åˆ¶ï¼Œæˆ‘ä»¬ä½¿ç”¨ any ç±»åž‹
+ * å¹¶åœ¨è¿è¡Œæ—¶å®‰å…¨è¿‡æ»¤
+ */
+export const logSerializers = {
+    // è¿‡æ»¤è¯·æ±‚ä½“ä¸­çš„æ•æ„Ÿä¿¡æ¯
+    req: (req: any) => {
+        const sanitized: Record<string, unknown> = {
+            method: req.method,
+            url: req.url,
+            hostname: req.hostname,
+            remoteAddress: req.ip || req.remoteAddress,
+        }
+
+        // è¿‡æ»¤è¯·æ±‚å¤´ä¸­çš„æ•æ„Ÿä¿¡æ¯
+        if (req.headers) {
+            sanitized.headers = sanitizeObject(req.headers)
+        }
+
+        return sanitized
+    },
+
+    // è¿‡æ»¤å“åº”ä¸­çš„æ•æ„Ÿä¿¡æ¯
+    res: (res: any) => {
+        return {
+            statusCode: res.statusCode,
+        }
+    },
+
+    // è¿‡æ»¤é”™è¯¯ä¿¡æ¯ä¸­çš„æ•æ„Ÿä¿¡æ¯
+    err: (err: any) => {
+        return {
+            type: err.constructor?.name || 'Error',
+            message: sanitizeTokensInString(String(err.message || '')),
+            stack: err.stack ? sanitizeTokensInString(String(err.stack)) : '',
+        }
+    }
+} as const
+
+/**
+ * åˆ›å»ºå®‰å…¨çš„æ—¥å¿—è®°å½•å™¨åŒ…è£…
+ * è‡ªåŠ¨è¿‡æ»¤ä¼ å…¥çš„å¯¹è±¡ä¸­çš„æ•æ„Ÿä¿¡æ¯
+ */
+export function createSafeLogger(logger: {
+    info: (obj: unknown, msg?: string) => void
+    warn: (obj: unknown, msg?: string) => void
+    error: (obj: unknown, msg?: string) => void
+    debug: (obj: unknown, msg?: string) => void
+}) {
+    return {
+        info: (obj: unknown, msg?: string) => {
+            logger.info(sanitizeObject(obj), msg)
+        },
+        warn: (obj: unknown, msg?: string) => {
+            logger.warn(sanitizeObject(obj), msg)
+        },
+        error: (obj: unknown, msg?: string) => {
+            logger.error(sanitizeObject(obj), msg)
+        },
+        debug: (obj: unknown, msg?: string) => {
+            logger.debug(sanitizeObject(obj), msg)
+        }
+    }
+}
+
+FILE: server/scripts/test-log-sanitizer.ts
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { sanitizeObject, sanitizeTokensInString, isSensitiveField } from '../src/lib/log-sanitizer.js'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+
+const redacted = '[REDACTED]'
+const redactedJwt = '[REDACTED_JWT]'
+
+const sanitized = sanitizeObject({
+  username: 'alice',
+  password: 'plain-password',
+  adminPassword: 'admin-password',
+  smtpPassword: 'smtp-password',
+  mailPassword: 'mail-password',
+  newPassword: 'new-password',
+  accessToken: 'access-token',
+  refreshToken: 'refresh-token',
+  botToken: 'telegram-bot-token',
+  webhookUrl: 'https://discord.com/api/webhooks/secret',
+  chatId: '123456',
+  sign: 'payment-sign',
+  signature: 'payment-signature',
+  access_token: 'oauth-access-token',
+  refresh_token: 'oauth-refresh-token',
+  id_token: 'oauth-id-token',
+  authorization: 'Bearer opaque-token',
+  cookie: 'refreshToken=secret-cookie',
+  nested: {
+    clientSecret: 'client-secret',
+    client_secret: 'snake-client-secret',
+    apiKey: 'api-key',
+    api_key: 'snake-api-key',
+    key: 'gateway-key',
+    merchantPrivateKey: 'merchant-private-key',
+    merchant_private_key: 'snake-merchant-private-key',
+    webhookSecret: 'webhook-secret',
+    webhook_secret: 'snake-webhook-secret',
+    'x-signature': 'webhook-signature',
+    privateKey: 'private-key',
+    private_key: 'snake-private-key',
+    totpCode: '123456',
+    totp_code: '654321',
+    note: 'keep-me'
+  },
+  items: [
+    {
+      backupCode: 'backup-code',
+      backup_code: 'snake-backup-code',
+      safe: 'value'
+    }
+  ],
+  message: 'user supplied Bearer opaque-token and jwt eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.signature'
+})
+
+assert.equal(sanitized.username, 'alice')
+assert.equal(sanitized.password, redacted)
+assert.equal(sanitized.adminPassword, redacted)
+assert.equal(sanitized.smtpPassword, redacted)
+assert.equal(sanitized.mailPassword, redacted)
+assert.equal(sanitized.newPassword, redacted)
+assert.equal(sanitized.accessToken, redacted)
+assert.equal(sanitized.refreshToken, redacted)
+assert.equal(sanitized.botToken, redacted)
+assert.equal(sanitized.webhookUrl, redacted)
+assert.equal(sanitized.chatId, redacted)
+assert.equal(sanitized.sign, redacted)
+assert.equal(sanitized.signature, redacted)
+assert.equal(sanitized.access_token, redacted)
+assert.equal(sanitized.refresh_token, redacted)
+assert.equal(sanitized.id_token, redacted)
+assert.equal(sanitized.authorization, redacted)
+assert.equal(sanitized.cookie, redacted)
+
+assert.equal(sanitized.nested.clientSecret, redacted)
+assert.equal(sanitized.nested.client_secret, redacted)
+assert.equal(sanitized.nested.apiKey, redacted)
+assert.equal(sanitized.nested.api_key, redacted)
+assert.equal(sanitized.nested.key, redacted)
+assert.equal(sanitized.nested.merchantPrivateKey, redacted)
+assert.equal(sanitized.nested.merchant_private_key, redacted)
+assert.equal(sanitized.nested.webhookSecret, redacted)
+assert.equal(sanitized.nested.webhook_secret, redacted)
+assert.equal(sanitized.nested['x-signature'], redacted)
+assert.equal(sanitized.nested.privateKey, redacted)
+assert.equal(sanitized.nested.private_key, redacted)
+assert.equal(sanitized.nested.totpCode, redacted)
+assert.equal(sanitized.nested.totp_code, redacted)
+assert.equal(sanitized.nested.note, 'keep-me')
+
+assert.equal(sanitized.items[0].backupCode, redacted)
+assert.equal(sanitized.items[0].backup_code, redacted)
+assert.equal(sanitized.items[0].safe, 'value')
+
+assert.equal(
+  sanitized.message,
+  `user supplied ${redactedJwt} and jwt ${redactedJwt}`
+)
+
+assert.equal(sanitizeTokensInString('Authorization: Bearer opaque-token'), `Authorization: ${redactedJwt}`)
+assert.equal(isSensitiveField('access_token'), true)
+assert.equal(isSensitiveField('client_secret'), true)
+assert.equal(isSensitiveField('signature'), true)
+assert.equal(isSensitiveField('x-signature'), true)
+assert.equal(isSensitiveField('botToken'), true)
+assert.equal(isSensitiveField('webhookUrl'), true)
+assert.equal(isSensitiveField('smtpPassword'), true)
+assert.equal(isSensitiveField('chatId'), true)
+assert.equal(isSensitiveField('username'), false)
+
+const authSource = readFileSync(resolve(__dirname, '../src/routes/auth.ts'), 'utf8')
+const usersSource = readFileSync(resolve(__dirname, '../src/routes/users.ts'), 'utf8')
+const rechargeSource = readFileSync(resolve(__dirname, '../src/routes/recharge.ts'), 'utf8')
+const adminBillingSource = readFileSync(resolve(__dirname, '../src/routes/admin-billing.ts'), 'utf8')
+assert.equal(
+  authSource.includes('[send-verification-code]'),
+  false,
+  'registration verification route must not write raw email or mail-provider details to console logs'
+)
+assert.equal(
+  authSource.includes('Sent login alert email to ${user.email}'),
+  false,
+  'login alert success logs must not include the user email address'
+)
+assert.equal(
+  usersSource.includes('Sent ban notification email to ${user.email}'),
+  false,
+  'admin ban notification logs must not include the target user email address'
+)
+assert.equal(
+  usersSource.includes('email: ${user.email') || usersSource.includes('email: ${user.email ||'),
+  false,
+  'admin user status/delete logs must not include the target user email address'
+)
+assert.equal(
+  rechargeSource.includes('request.log.warn({ orderNo, queryResult },'),
+  false,
+  'recharge active verification must not log raw Heleket query results'
+)
+assert.equal(
+  adminBillingSource.includes('request.log.warn({ orderNo: record.orderNo, queryResult },'),
+  false,
+  'admin recharge sync must not log raw Heleket query results'
+)
+assert.ok(
+  rechargeSource.includes('queryResult: sanitizeObject(queryResult)') &&
+    adminBillingSource.includes('queryResult: sanitizeObject(queryResult)'),
+  'Heleket invalid-amount logs must sanitize queryResult before writing logs'
+)
+
+console.log('log sanitizer tests passed')
+
+FILE: server/src/lib/public-api-auth.ts
+import { createHash, randomBytes, timingSafeEqual } from 'crypto'
+import type { FastifyReply, FastifyRequest } from 'fastify'
+import type { PublicApiToken, User } from '@prisma/client'
+import { prisma } from '../db/prisma.js'
+import { createLog, LogModule, LogResult } from '../db/logs.js'
+
+export const PUBLIC_API_TOKEN_PREFIX = 'pat_'
+export const OAUTH_ACCESS_TOKEN_PREFIX = 'poa_'
+export const PUBLIC_API_TOKEN_PREFIX_LENGTH = 16
+export const PUBLIC_API_TOKEN_MAX_NAME_LENGTH = 80
+export const PUBLIC_API_TOKEN_MAX_SCOPES = 24
+
+export const PUBLIC_API_SCOPES = [
+  'profile:read',
+  'profile:write',
+  'balance:read',
+  'balance:write',
+  'billing:read',
+  'products:read',
+  'services:read',
+  'services:operate',
+  'services:billing',
+  'orders:read',
+  'tickets:read',
+  'tickets:write',
+  'notifications:read',
+  'notifications:send',
+  'plugins:action'
+] as const
+
+export type PublicApiScope = (typeof PUBLIC_API_SCOPES)[number]
+
+export interface PublicApiScopeMetadata {
+  scope: PublicApiScope
+  title: string
+  description: string
+  risk: 'low' | 'medium' | 'high'
+  access: 'read' | 'write' | 'operate'
+  resources: string[]
+  implemented: boolean
+  notes: string[]
+}
+
+export const PUBLIC_API_SCOPE_METADATA: Record<PublicApiScope, PublicApiScopeMetadata> = {
+  'profile:read': {
+    scope: 'profile:read',
+    title: 'è¯»å–ä¸ªäººèµ„æ–™',
+    description: 'è¯»å–å½“å‰æŽˆæƒç”¨æˆ·çš„åŸºç¡€èµ„æ–™æ‘˜è¦ã€‚',
+    risk: 'low',
+    access: 'read',
+    resources: ['/api/v1/me'],
+    implemented: true,
+    notes: ['åªè¿”å›ž token æ‰€å±žç”¨æˆ·è‡ªå·±çš„èµ„æ–™å­—æ®µã€‚']
+  },
+  'profile:write': {
+    scope: 'profile:write',
+    title: 'æ›´æ–°ä¸ªäººèµ„æ–™',
+    description: 'æ›´æ–°å½“å‰æŽˆæƒç”¨æˆ·çš„ä½Žé£Žé™©å±•ç¤ºèµ„æ–™å­—æ®µã€‚',
+    risk: 'medium',
+    access: 'write',
+    resources: ['/api/v1/me'],
+    implemented: true,
+    notes: ['ä»…å…è®¸æ›´æ–° avatarStyleï¼›é‚®ç®±ã€å¯†ç ã€è§’è‰²ã€çŠ¶æ€ã€ä½™é¢å’Œ 2FA è®¾ç½®ä¸å¯å†™ã€‚']
+  },
+  'balance:read': {
+    scope: 'balance:read',
+    title: 'è¯»å–ä½™é¢',
+    description: 'è¯»å–å½“å‰æŽˆæƒç”¨æˆ·çš„è´¦æˆ·ä½™é¢å’Œå®‰å…¨ä½™é¢æµæ°´ã€‚',
+    risk: 'medium',
+    access: 'read',
+    resources: ['/api/v1/balance', '/api/v1/balance/logs'],
+    implemented: true,
+    notes: ['ä¸æš´éœ²æ”¯ä»˜ provider payloadã€è°ƒè´¦å¯¹è±¡ã€æ‰˜ç®¡ä½™é¢ã€AFF ä½™é¢æˆ–å…¶ä»–ç”¨æˆ·æ•°æ®ã€‚']
+  },
+  'balance:write': {
+    scope: 'balance:write',
+    title: 'æäº¤ä½™é¢è°ƒæ•´ç”³è¯·',
+    description: 'æäº¤å¹¶è¯»å–å½“å‰æŽˆæƒç”¨æˆ·è‡ªå·±çš„å¾…å®¡æ‰¹ä½™é¢è°ƒæ•´ç”³è¯·ã€‚',
+    risk: 'high',
+    access: 'write',
+    resources: ['/api/v1/balance/adjustment-requests'],
+    implemented: true,
+    notes: ['ä¸ä¼šç›´æŽ¥ä¿®æ”¹ä½™é¢ã€ä½™é¢æµæ°´ã€æ”¯ä»˜è®°å½•æˆ–å……å€¼è®¢å•ã€‚']
+  },
+  'billing:read': {
+    scope: 'billing:read',
+    title: 'è¯»å–è´¦å•',
+    description: 'è¯»å–å½“å‰æŽˆæƒç”¨æˆ·çš„æœåŠ¡è´¦å•è®°å½•ã€‚',
+    risk: 'medium',
+    access: 'read',
+    resources: ['/api/v1/billing-records', '/api/v1/billing-records/:id'],
+    implemented: true,
+    notes: ['ä»…è¿”å›žè´¦å•æ‘˜è¦ï¼›ä¸è¿”å›ž provider payload å’Œå†…éƒ¨å¯¹è´¦æ•°æ®ã€‚']
+  },
+  'products:read': {
+    scope: 'products:read',
+    title: 'è¯»å–äº§å“ç›®å½•',
+    description: 'è¯»å–å·²å¯ç”¨çš„å…¬å¼€äº§å“å’Œå¥—é¤ç›®å½•ã€‚',
+    risk: 'low',
+    access: 'read',
+    resources: ['/api/v1/products'],
+    implemented: true,
+    notes: ['ä»…è¿”å›žå·²å¯ç”¨çš„å¥—é¤å’Œæ–¹æ¡ˆã€‚']
+  },
+  'services:read': {
+    scope: 'services:read',
+    title: 'è¯»å–æœåŠ¡',
+    description: 'è¯»å–å½“å‰æŽˆæƒç”¨æˆ·çš„æœåŠ¡æ‘˜è¦å’Œå®‰å…¨å…³è”ä¿¡æ¯ã€‚',
+    risk: 'medium',
+    access: 'read',
+    resources: ['/api/v1/services', '/api/v1/services/:id'],
+    implemented: true,
+    notes: ['ä¸æš´éœ² root å¯†ç ã€Incus IDã€èŠ‚ç‚¹å†…éƒ¨é…ç½®æˆ–é«˜æƒé™è¿žæŽ¥ææ–™ã€‚']
+  },
+  'services:operate': {
+    scope: 'services:operate',
+    title: 'æœåŠ¡ç”µæºæ“ä½œ',
+    description: 'ä¸ºå½“å‰æŽˆæƒç”¨æˆ·çš„æœåŠ¡æŽ’é˜Ÿã€æŸ¥è¯¢å’Œå–æ¶ˆå—æŽ§ç”µæºä»»åŠ¡ã€‚',
+    risk: 'high',
+    access: 'operate',
+    resources: ['/api/v1/services/:id/actions', '/api/v1/services/:id/tasks/:taskId'],
+    implemented: true,
+    notes: ['ä»…å…è®¸ startã€stopã€restartï¼›ä¸å¼€æ”¾åˆ›å»ºã€æš‚åœã€ç»­è´¹ã€é‡è£…ã€åˆ é™¤ã€è¿ç§»å’Œäº¤ä»˜æ“ä½œã€‚']
+  },
+  'services:billing': {
+    scope: 'services:billing',
+    title: 'æœåŠ¡è®¡è´¹æ“ä½œ',
+    description: 'é€šè¿‡å†…éƒ¨è®¡è´¹çŠ¶æ€æœºä¸ºå½“å‰æŽˆæƒç”¨æˆ·çš„æœåŠ¡ç»­è´¹ã€‚',
+    risk: 'high',
+    access: 'write',
+    resources: ['/api/v1/services/:id/renew'],
+    implemented: true,
+    notes: ['ä»…å…è®¸ç»­è´¹ï¼›ä½™é¢æ‰£å‡ã€è´¦å•è®°å½•ã€æ‰˜ç®¡æ”¶ç›Šå’Œè¿‡æœŸæœåŠ¡è§£å°ç”±å†…éƒ¨ç»­è´¹äº‹åŠ¡å¤„ç†ã€‚']
+  },
+  'orders:read': {
+    scope: 'orders:read',
+    title: 'è¯»å–è®¢å•',
+    description: 'è¯»å–å½“å‰æŽˆæƒç”¨æˆ·çš„å……å€¼å’Œå®žä¾‹è´¦å•è®¢å•ã€‚',
+    risk: 'medium',
+    access: 'read',
+    resources: ['/api/v1/orders', '/api/v1/orders/:id'],
+    implemented: true,
+    notes: ['ä¸æš´éœ²æ”¯ä»˜å›žè°ƒã€provider é…ç½®å¿«ç…§ã€åŽŸå§‹æŸ¥è¯¢ç»“æžœæˆ–å®Œæ•´äº¤æ˜“å·ã€‚']
+  },
+  'tickets:read': {
+    scope: 'tickets:read',
+    title: 'è¯»å–å·¥å•',
+    description: 'è¯»å–å½“å‰æŽˆæƒç”¨æˆ·çš„å·¥å•ã€æ¶ˆæ¯å’Œå®‰å…¨é™„ä»¶å…ƒæ•°æ®ã€‚',
+    risk: 'medium',
+    access: 'read',
+    resources: ['/api/v1/tickets', '/api/v1/tickets/:id'],
+    implemented: true,
+    notes: ['ä¸æš´éœ²å†…éƒ¨å¤‡æ³¨ã€å­˜å‚¨ provider ID å’Œå…¶ä»–ç”¨æˆ·å·¥å•ã€‚']
+  },
+  'tickets:write': {
+    scope: 'tickets:write',
+    title: 'å†™å…¥å·¥å•',
+    description: 'åˆ›å»ºå·¥å•ã€æ·»åŠ å…¬å¼€å›žå¤ã€ä¸Šä¼ å—æŽ§å›¾ç‰‡é™„ä»¶ï¼Œå¹¶å…³é—­æˆ–é‡æ–°æ‰“å¼€è‡ªå·±çš„å·¥å•ã€‚',
+    risk: 'high',
+    access: 'write',
+    resources: ['/api/v1/tickets', '/api/v1/tickets/:id/replies', '/api/v1/tickets/:id/status'],
+    implemented: true,
+    notes: ['ä¸å…è®¸å†…éƒ¨å¤‡æ³¨ã€ä»»æ„çŠ¶æ€ã€ä¼˜å…ˆçº§/åˆ†ç±»è¦†ç›–ã€å¤„ç†äººå˜æ›´æˆ–è·¨ç”¨æˆ·å†™å…¥ã€‚']
+  },
+  'notifications:read': {
+    scope: 'notifications:read',
+    title: 'è¯»å–é€šçŸ¥',
+    description: 'è¯»å–å½“å‰æŽˆæƒç”¨æˆ·çš„ç«™å†…é€šçŸ¥å’Œæœªè¯»æ•°é‡ã€‚',
+    risk: 'low',
+    access: 'read',
+    resources: ['/api/v1/notifications', '/api/v1/notifications/unread-count'],
+    implemented: true,
+    notes: ['ä¸æš´éœ²æ¸ é“é…ç½®ã€å¤–éƒ¨æŠ•é€’æ—¥å¿—ã€åŽŸå§‹äº‹ä»¶ payloadã€å¹¿æ’­ç›®æ ‡æˆ–å…¶ä»–ç”¨æˆ·æ¶ˆæ¯ã€‚']
+  },
+  'notifications:send': {
+    scope: 'notifications:send',
+    title: 'å‘é€è‡ªæœ‰é€šçŸ¥',
+    description: 'å‘å½“å‰æŽˆæƒç”¨æˆ·è‡ªå·±å‘é€çŸ­å†…å®¹ã€å—æŽ§æ¨¡æ¿é€šçŸ¥ã€‚',
+    risk: 'medium',
+    access: 'write',
+    resources: ['/api/v1/notifications'],
+    implemented: true,
+    notes: ['ä»…å…è®¸è‡ªæœ‰é€šçŸ¥ã€å¹³å°æ¨¡æ¿å’Œå·²å¯ç”¨æ‰©å±•å£°æ˜Žçš„æ¨¡æ¿ï¼›ä¸å…è®¸å¹¿æ’­ã€HTMLã€ä»»æ„æ¸ é“æˆ–è¦†ç›–å†…éƒ¨äº‹ä»¶ç±»åž‹ã€‚']
+  },
+  'plugins:action': {
+    scope: 'plugins:action',
+    title: 'æ‰©å±•åŠ¨ä½œè°ƒç”¨',
+    description: 'å‘çŽ°å¹¶è°ƒç”¨å·²å¯ç”¨æ‰©å±•å£°æ˜Žçš„å…¬å¼€ webhook actionã€‚',
+    risk: 'high',
+    access: 'operate',
+    resources: ['/api/v1/plugins', '/api/v1/plugins/:pluginId/actions', '/api/v1/plugins/:pluginId/actions/:action'],
+    implemented: true,
+    notes: ['ä¸æš´éœ² webhook URLã€å¯†é’¥ã€é…ç½®å€¼ã€æœåŠ¡æ‰©å±• hook æˆ–ç½‘å…³æ‰©å±• hookã€‚']
+  }
+}
+
+export function listPublicApiScopeMetadata(scopes: readonly PublicApiScope[] = PUBLIC_API_SCOPES): PublicApiScopeMetadata[] {
+  return scopes.map(scope => PUBLIC_API_SCOPE_METADATA[scope])
+}
+
+export interface AuthenticatedPublicApiToken {
+  id: number
+  source: 'api_token' | 'oauth_access_token'
+  userId: number
+  name: string
+  tokenPrefix: string
+  scopes: PublicApiScope[]
+  user: {
+    id: number
+    username: string
+    email: string | null
+    role: 'admin' | 'user'
+    status: string
+    avatarStyle: string
+    avatarBadgeId: string | null
+  }
+}
+
+type PublicApiTokenWithUser = PublicApiToken & {
+  user: Pick<User, 'id' | 'username' | 'email' | 'role' | 'status' | 'avatarStyle' | 'avatarBadgeId'>
+}
+
+type OAuthAccessTokenWithUserAndApp = NonNullable<Awaited<ReturnType<typeof prisma.oAuthAccessToken.findUnique>>> & {
+  user: Pick<User, 'id' | 'username' | 'email' | 'role' | 'status' | 'avatarStyle' | 'avatarBadgeId'>
+  app: { name: string; clientId: string; enabled: boolean }
+}
+
+function safeTimingEqual(a: string, b: string): boolean {
+  const aBuffer = Buffer.from(a)
+  const bBuffer = Buffer.from(b)
+  if (aBuffer.length !== bBuffer.length) return false
+  return timingSafeEqual(aBuffer, bBuffer)
+}
+
+export function generatePublicApiToken(): string {
+  return `${PUBLIC_API_TOKEN_PREFIX}${randomBytes(32).toString('base64url')}`
+}
+
+export function hashPublicApiToken(token: string): string {
+  return createHash('sha256').update(token).digest('hex')
+}
+
+export function getPublicApiTokenPrefix(token: string): string {
+  return token.slice(0, PUBLIC_API_TOKEN_PREFIX_LENGTH)
+}
+
+export function normalizePublicApiTokenName(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  if (!trimmed || trimmed.length > PUBLIC_API_TOKEN_MAX_NAME_LENGTH) return null
+  return trimmed
+}
+
+export function normalizePublicApiScopes(value: unknown): PublicApiScope[] | null {
+  if (!Array.isArray(value) || value.length === 0 || value.length > PUBLIC_API_TOKEN_MAX_SCOPES) {
+    return null
+  }
+
+  const allowedScopes = new Set<string>(PUBLIC_API_SCOPES)
+  const scopes = Array.from(new Set(value.map(scope => typeof scope === 'string' ? scope.trim() : '')))
+    .filter((scope): scope is PublicApiScope => allowedScopes.has(scope))
+
+  return scopes.length === value.length ? scopes : null
+}
+
+export function readPublicApiBearerToken(request: FastifyRequest): string | null {
+  const auth = request.headers.authorization
+  if (!auth?.startsWith('Bearer ')) return null
+
+  const token = auth.slice('Bearer '.length).trim()
+  const isPublicApiToken = token.startsWith(PUBLIC_API_TOKEN_PREFIX)
+  const isOAuthAccessToken = token.startsWith(OAUTH_ACCESS_TOKEN_PREFIX)
+  if ((!isPublicApiToken && !isOAuthAccessToken) || token.length < 32) {
+    return null
+  }
+  return token
+}
+
+function serializeScopes(value: unknown): PublicApiScope[] {
+  const normalized = normalizePublicApiScopes(value)
+  return normalized ?? []
+}
+
+function serializeAuthenticatedToken(token: PublicApiTokenWithUser): AuthenticatedPublicApiToken {
+  return {
+    id: token.id,
+    source: 'api_token',
+    userId: token.userId,
+    name: token.name,
+    tokenPrefix: token.tokenPrefix,
+    scopes: serializeScopes(token.scopes),
+    user: {
+      id: token.user.id,
+      username: token.user.username,
+      email: token.user.email,
+      role: token.user.role as 'admin' | 'user',
+      status: token.user.status,
+      avatarStyle: token.user.avatarStyle,
+      avatarBadgeId: token.user.avatarBadgeId
+    }
+  }
+}
+
+function serializeAuthenticatedOAuthToken(token: OAuthAccessTokenWithUserAndApp): AuthenticatedPublicApiToken {
+  return {
+    id: token.id,
+    source: 'oauth_access_token',
+    userId: token.userId,
+    name: `OAuth app ${token.app.name}`,
+    tokenPrefix: token.tokenPrefix,
+    scopes: serializeScopes(token.scopes),
+    user: {
+      id: token.user.id,
+      username: token.user.username,
+      email: token.user.email,
+      role: token.user.role as 'admin' | 'user',
+      status: token.user.status,
+      avatarStyle: token.user.avatarStyle,
+      avatarBadgeId: token.user.avatarBadgeId
+    }
+  }
+}
+
+export async function authenticatePublicApiRequest(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  requiredScope: PublicApiScope
+): Promise<AuthenticatedPublicApiToken | null> {
+  const rawToken = readPublicApiBearerToken(request)
+  if (!rawToken) {
+    reply.code(401).send({ error: 'Unauthorized', code: 'PUBLIC_API_TOKEN_REQUIRED' })
+    return null
+  }
+
+  if (rawToken.startsWith(OAUTH_ACCESS_TOKEN_PREFIX)) {
+    const tokenHash = hashPublicApiToken(rawToken)
+    const tokenPrefix = getPublicApiTokenPrefix(rawToken)
+    const token = await prisma.oAuthAccessToken.findUnique({
+      where: { tokenHash },
+      include: {
+        app: { select: { name: true, clientId: true, enabled: true } },
+        user: {
+          select: {
+            id: true,
+            username: true,
+            email: true,
+            role: true,
+            status: true,
+            avatarStyle: true,
+            avatarBadgeId: true
+          }
+        }
+      }
+    })
+
+    if (!token || !safeTimingEqual(token.tokenHash, tokenHash) || token.tokenPrefix !== tokenPrefix) {
+      reply.code(401).send({ error: 'Unauthorized', code: 'PUBLIC_API_TOKEN_INVALID' })
+      return null
+    }
+
+    if (!token.app.enabled) {
+      reply.code(401).send({ error: 'OAuth app disabled', code: 'OAUTH_APP_DISABLED' })
+      return null
+    }
+
+    if (token.revokedAt) {
+      reply.code(401).send({ error: 'Token revoked', code: 'PUBLIC_API_TOKEN_REVOKED' })
+      return null
+    }
+
+    if (token.expiresAt.getTime() <= Date.now()) {
+      reply.code(401).send({ error: 'Token expired', code: 'PUBLIC_API_TOKEN_EXPIRED' })
+      return null
+    }
+
+    if (token.user.status !== 'active') {
+      reply.code(401).send({ error: 'Account banned', code: 'ACCOUNT_BANNED' })
+      return null
+    }
+
+    const scopes = serializeScopes(token.scopes)
+    if (!scopes.includes(requiredScope)) {
+      await createLog(
+        token.userId,
+        LogModule.SECURITY,
+        'oauth_provider.token_scope_denied',
+        `OAuth app "${token.app.name}" missing required scope "${requiredScope}"`,
+        LogResult.FAILED
+      )
+      reply.code(403).send({ error: 'Missing required API scope', code: 'PUBLIC_API_SCOPE_REQUIRED' })
+      return null
+    }
+
+    await prisma.oAuthAccessToken.update({
+      where: { id: token.id },
+      data: { lastUsedAt: new Date() }
+    })
+
+    return serializeAuthenticatedOAuthToken(token)
+  }
+
+  const tokenHash = hashPublicApiToken(rawToken)
+  const tokenPrefix = getPublicApiTokenPrefix(rawToken)
+  const token = await prisma.publicApiToken.findUnique({
+    where: { tokenHash },
+    include: {
+      user: {
+        select: {
+          id: true,
+          username: true,
+          email: true,
+          role: true,
+          status: true,
+          avatarStyle: true,
+          avatarBadgeId: true
+        }
+      }
+    }
+  })
+
+  if (!token || !safeTimingEqual(token.tokenHash, tokenHash) || token.tokenPrefix !== tokenPrefix) {
+    reply.code(401).send({ error: 'Unauthorized', code: 'PUBLIC_API_TOKEN_INVALID' })
+    return null
+  }
+
+  if (token.revokedAt) {
+    reply.code(401).send({ error: 'Token revoked', code: 'PUBLIC_API_TOKEN_REVOKED' })
+    return null
+  }
+
+  if (token.expiresAt && token.expiresAt.getTime() <= Date.now()) {
+    reply.code(401).send({ error: 'Token expired', code: 'PUBLIC_API_TOKEN_EXPIRED' })
+    return null
+  }
+
+  if (token.user.status !== 'active') {
+    reply.code(401).send({ error: 'Account banned', code: 'ACCOUNT_BANNED' })
+    return null
+  }
+
+  const scopes = serializeScopes(token.scopes)
+  if (!scopes.includes(requiredScope)) {
+    await createLog(
+      token.userId,
+      LogModule.SECURITY,
+      'public_api.token_scope_denied',
+      `Public API token "${token.name}" missing required scope "${requiredScope}"`,
+      LogResult.FAILED
+    )
+    reply.code(403).send({ error: 'Missing required API scope', code: 'PUBLIC_API_SCOPE_REQUIRED' })
+    return null
+  }
+
+  await prisma.publicApiToken.update({
+    where: { id: token.id },
+    data: { lastUsedAt: new Date() }
+  })
+
+  return serializeAuthenticatedToken(token)
+}
+
+FILE: server/src/lib/oauth-provider.ts
+import { createHash, randomBytes, timingSafeEqual } from 'crypto'
+import type { OAuthAccessToken, OAuthClientApp, OAuthGrant, Prisma, User } from '@prisma/client'
+import { prisma } from '../db/prisma.js'
+import { PUBLIC_API_SCOPES, type PublicApiScope } from './public-api-auth.js'
+
+export const OAUTH_CLIENT_ID_PREFIX = 'pocli_'
+export const OAUTH_CLIENT_SECRET_PREFIX = 'posec_'
+export const OAUTH_AUTHORIZATION_CODE_PREFIX = 'poc_'
+export const OAUTH_ACCESS_TOKEN_PREFIX = 'poa_'
+export const OAUTH_REFRESH_TOKEN_PREFIX = 'por_'
+export const OAUTH_ACCESS_TOKEN_PREFIX_LENGTH = 16
+export const OAUTH_REFRESH_TOKEN_PREFIX_LENGTH = 16
+export const OAUTH_AUTHORIZATION_CODE_TTL_SECONDS = 10 * 60
+export const OAUTH_ACCESS_TOKEN_TTL_SECONDS = 60 * 60
+export const OAUTH_REFRESH_TOKEN_TTL_SECONDS = 30 * 24 * 60 * 60
+
+export interface SerializedOAuthClientApp {
+  id: number
+  name: string
+  clientId: string
+  redirectUris: string[]
+  scopes: PublicApiScope[]
+  enabled: boolean
+  createdByUserId: number
+  createdByUsername: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+type OAuthClientAppWithCreator = OAuthClientApp & {
+  createdBy?: Pick<User, 'username'> | null
+}
+
+type OAuthGrantWithApp = OAuthGrant & {
+  app: Pick<OAuthClientApp, 'id' | 'name' | 'clientId' | 'enabled'>
+}
+
+type OAuthGrantWithAppAndUser = OAuthGrant & {
+  app: Pick<OAuthClientApp, 'id' | 'name' | 'clientId' | 'enabled'>
+  user: Pick<User, 'id' | 'username' | 'email' | 'role' | 'status'>
+}
+
+export interface SerializedOAuthAuthorization {
+  id: number
+  app: {
+    id: number
+    name: string
+    clientId: string
+    enabled: boolean
+  }
+  scopes: PublicApiScope[]
+  active: boolean
+  lastAuthorizedAt: string
+  revokedAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface SerializedAdminOAuthAuthorization extends SerializedOAuthAuthorization {
+  user: {
+    id: number
+    username: string
+    email: string | null
+    role: string
+    status: string
+  }
+  tokenStats: {
+    activeAccessTokens: number
+    activeRefreshTokens: number
+  }
+}
+
+export type AdminOAuthAuthorizationStatusFilter = 'all' | 'active' | 'revoked' | 'disabled'
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value)
+}
+
+function safeTimingEqual(a: string, b: string): boolean {
+  const aBuffer = Buffer.from(a)
+  const bBuffer = Buffer.from(b)
+  if (aBuffer.length !== bBuffer.length) return false
+  return timingSafeEqual(aBuffer, bBuffer)
+}
+
+export function hashOAuthSecret(value: string): string {
+  return createHash('sha256').update(value).digest('hex')
+}
+
+export function generateOAuthClientId(): string {
+  return `${OAUTH_CLIENT_ID_PREFIX}${randomBytes(18).toString('base64url')}`
+}
+
+export function generateOAuthClientSecret(): string {
+  return `${OAUTH_CLIENT_SECRET_PREFIX}${randomBytes(32).toString('base64url')}`
+}
+
+export function generateOAuthAuthorizationCode(): string {
+  return `${OAUTH_AUTHORIZATION_CODE_PREFIX}${randomBytes(32).toString('base64url')}`
+}
+
+export function generateOAuthAccessToken(): string {
+  return `${OAUTH_ACCESS_TOKEN_PREFIX}${randomBytes(32).toString('base64url')}`
+}
+
+export function generateOAuthRefreshToken(): string {
+  return `${OAUTH_REFRESH_TOKEN_PREFIX}${randomBytes(32).toString('base64url')}`
+}
+
+export function getOAuthAccessTokenPrefix(token: string): string {
+  return token.slice(0, OAUTH_ACCESS_TOKEN_PREFIX_LENGTH)
+}
+
+export function getOAuthRefreshTokenPrefix(token: string): string {
+  return token.slice(0, OAUTH_REFRESH_TOKEN_PREFIX_LENGTH)
+}
+
+export function normalizeOAuthAppName(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  return trimmed && trimmed.length <= 120 ? trimmed : null
+}
+
+export function normalizeOAuthRedirectUris(value: unknown): string[] | null {
+  if (!Array.isArray(value) || value.length === 0 || value.length > 20) return null
+  const normalized: string[] = []
+  for (const item of value) {
+    if (typeof item !== 'string') return null
+    const trimmed = item.trim()
+    if (!trimmed || trimmed.length > 500) return null
+    try {
+      const parsed = new URL(trimmed)
+      const isLocalHttp = parsed.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(parsed.hostname)
+      if (parsed.protocol !== 'https:' && !isLocalHttp) return null
+      parsed.hash = ''
+      normalized.push(parsed.toString())
+    } catch {
+      return null
+    }
+  }
+  return Array.from(new Set(normalized))
+}
+
+export function normalizeOAuthScopes(value: unknown): PublicApiScope[] | null {
+  const raw = typeof value === 'string'
+    ? value.split(/\s+/)
+    : Array.isArray(value)
+      ? value
+      : null
+  if (!raw || raw.length === 0 || raw.length > 24) return null
+  const allowed = new Set<string>(PUBLIC_API_SCOPES)
+  const scopes = Array.from(new Set(raw.map(item => typeof item === 'string' ? item.trim() : '').filter(Boolean)))
+  if (scopes.length === 0 || scopes.some(scope => !allowed.has(scope))) return null
+  return scopes as PublicApiScope[]
+}
+
+function serializeScopes(value: unknown): PublicApiScope[] {
+  return normalizeOAuthScopes(value) ?? []
+}
+
+export function serializeOAuthClientApp(app: OAuthClientAppWithCreator): SerializedOAuthClientApp {
+  return {
+    id: app.id,
+    name: app.name,
+    clientId: app.clientId,
+    redirectUris: Array.isArray(app.redirectUris) ? app.redirectUris.filter((item): item is string => typeof item === 'string') : [],
+    scopes: serializeScopes(app.scopes),
+    enabled: app.enabled,
+    createdByUserId: app.createdByUserId,
+    createdByUsername: app.createdBy?.username || null,
+    createdAt: app.createdAt.toISOString(),
+    updatedAt: app.updatedAt.toISOString()
+  }
+}
+
+export function serializeOAuthAuthorization(grant: OAuthGrantWithApp): SerializedOAuthAuthorization {
+  return {
+    id: grant.id,
+    app: {
+      id: grant.app.id,
+      name: grant.app.name,
+      clientId: grant.app.clientId,
+      enabled: grant.app.enabled
+    },
+    scopes: serializeScopes(grant.scopes),
+    active: !grant.revokedAt && grant.app.enabled,
+    lastAuthorizedAt: grant.lastAuthorizedAt.toISOString(),
+    revokedAt: grant.revokedAt?.toISOString() ?? null,
+    createdAt: grant.createdAt.toISOString(),
+    updatedAt: grant.updatedAt.toISOString()
+  }
+}
+
+export function serializeAdminOAuthAuthorization(
+  grant: OAuthGrantWithAppAndUser,
+  tokenStats: { activeAccessTokens: number; activeRefreshTokens: number }
+): SerializedAdminOAuthAuthorization {
+  return {
+    ...serializeOAuthAuthorization(grant),
+    user: {
+      id: grant.user.id,
+      username: grant.user.username,
+      email: grant.user.email,
+      role: grant.user.role,
+      status: grant.user.status
+    },
+    tokenStats
+  }
+}
+
+export async function listOAuthClientApps() {
+  return await prisma.oAuthClientApp.findMany({
+    orderBy: { createdAt: 'desc' },
+    include: { createdBy: { select: { username: true } } }
+  })
+}
+
+export async function listAdminOAuthAuthorizations(input: {
+  appId?: number | null
+  user?: string | null
+  status?: AdminOAuthAuthorizationStatusFilter
+  page?: number
+  pageSize?: number
+}) {
+  const page = Math.max(1, Number.isInteger(input.page) ? input.page! : 1)
+  const pageSize = Math.min(100, Math.max(1, Number.isInteger(input.pageSize) ? input.pageSize! : 20))
+  const where: Prisma.OAuthGrantWhereInput = {}
+
+  if (input.appId) {
+    where.appId = input.appId
+  }
+
+  const userSearch = input.user?.trim()
+  if (userSearch) {
+    const numericUserId = /^[1-9]\d*$/.test(userSearch) ? Number(userSearch) : null
+    where.user = {
+      OR: [
+        ...(numericUserId ? [{ id: numericUserId }] : []),
+        { username: { contains: userSearch, mode: 'insensitive' } },
+        { email: { contains: userSearch, mode: 'insensitive' } }
+      ]
+    }
+  }
+
+  if (input.status === 'active') {
+    where.revokedAt = null
+    where.app = { enabled: true }
+  } else if (input.status === 'revoked') {
+    where.revokedAt = { not: null }
+  } else if (input.status === 'disabled') {
+    where.revokedAt = null
+    where.app = { enabled: false }
+  }
+
+  const [total, grants] = await Promise.all([
+    prisma.oAuthGrant.count({ where }),
+    prisma.oAuthGrant.findMany({
+      where,
+      orderBy: [{ lastAuthorizedAt: 'desc' }, { id: 'desc' }],
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+      include: {
+        app: { select: { id: true, name: true, clientId: true, enabled: true } },
+        user: { select: { id: true, username: true, email: true, role: true, status: true } }
+      }
+    })
+  ])
+
+  const now = new Date()
+  const stats = await Promise.all(grants.map(async grant => {
+    const [activeAccessTokens, activeRefreshTokens] = await Promise.all([
+      prisma.oAuthAccessToken.count({
+        where: { grantId: grant.id, revokedAt: null, expiresAt: { gt: now } }
+      }),
+      prisma.oAuthRefreshToken.count({
+        where: { grantId: grant.id, revokedAt: null, expiresAt: { gt: now } }
+      })
+    ])
+    return { grantId: grant.id, activeAccessTokens, activeRefreshTokens }
+  }))
+  const statMap = new Map(stats.map(item => [item.grantId, item]))
+
+  return {
+    authorizations: grants.map(grant => serializeAdminOAuthAuthorization(grant, statMap.get(grant.id) || {
+      activeAccessTokens: 0,
+      activeRefreshTokens: 0
+    })),
+    total,
+    page,
+    pageSize,
+    totalPages: Math.max(1, Math.ceil(total / pageSize))
+  }
+}
+
+export async function createOAuthClientApp(input: {
+  name: string
+  redirectUris: string[]
+  scopes: PublicApiScope[]
+  enabled: boolean
+  createdByUserId: number
+}) {
+  const clientId = generateOAuthClientId()
+  const clientSecret = generateOAuthClientSecret()
+  const app = await prisma.oAuthClientApp.create({
+    data: {
+      name: input.name,
+      clientId,
+      clientSecretHash: hashOAuthSecret(clientSecret),
+      redirectUris: input.redirectUris,
+      scopes: input.scopes,
+      enabled: input.enabled,
+      createdByUserId: input.createdByUserId
+    },
+    include: { createdBy: { select: { username: true } } }
+  })
+  return { app, clientSecret }
+}
+
+export async function updateOAuthClientApp(id: number, input: {
+  name: string
+  redirectUris: string[]
+  scopes: PublicApiScope[]
+  enabled: boolean
+}) {
+  return await prisma.oAuthClientApp.update({
+    where: { id },
+    data: {
+      name: input.name,
+      redirectUris: input.redirectUris,
+      scopes: input.scopes,
+      enabled: input.enabled
+    },
+    include: { createdBy: { select: { username: true } } }
+  })
+}
+
+export async function rotateOAuthClientSecret(id: number) {
+  const clientSecret = generateOAuthClientSecret()
+  const app = await prisma.oAuthClientApp.update({
+    where: { id },
+    data: { clientSecretHash: hashOAuthSecret(clientSecret) },
+    include: { createdBy: { select: { username: true } } }
+  })
+  return { app, clientSecret }
+}
+
+export async function deleteOAuthClientApp(id: number) {
+  await prisma.oAuthClientApp.delete({ where: { id } })
+}
+
+export async function prepareOAuthAuthorizationRequest(input: {
+  clientId: string
+  redirectUri: string
+  scopes: PublicApiScope[]
+  userId: number
+}) {
+  const app = await prisma.oAuthClientApp.findUnique({ where: { clientId: input.clientId } })
+  if (!app || !app.enabled) throw new Error('OAuth app is disabled or missing')
+  const redirectUris = normalizeOAuthRedirectUris(app.redirectUris)
+  if (!redirectUris?.includes(input.redirectUri)) throw new Error('redirect_uri is not registered for this OAuth app')
+  const appScopes = new Set(serializeScopes(app.scopes))
+  if (input.scopes.some(scope => !appScopes.has(scope))) throw new Error('Requested scope exceeds OAuth app grant')
+  const grant = await prisma.oAuthGrant.findUnique({
+    where: { appId_userId: { appId: app.id, userId: input.userId } }
+  })
+  const grantedScopes = grant && !grant.revokedAt ? serializeScopes(grant.scopes) : []
+  const consentRequired = input.scopes.some(scope => !grantedScopes.includes(scope))
+  return {
+    app,
+    requestedScopes: input.scopes,
+    existingGrant: grant,
+    consentRequired
+  }
+}
+
+export async function createOAuthAuthorizationCode(input: {
+  clientId: string
+  redirectUri: string
+  scopes: PublicApiScope[]
+  userId: number
+  state?: string | null
+}) {
+  const prepared = await prepareOAuthAuthorizationRequest(input)
+  const app = prepared.app
+
+  const code = generateOAuthAuthorizationCode()
+  const expiresAt = new Date(Date.now() + OAUTH_AUTHORIZATION_CODE_TTL_SECONDS * 1000)
+  await prisma.$transaction(async tx => {
+    await tx.oAuthGrant.upsert({
+      where: { appId_userId: { appId: app.id, userId: input.userId } },
+      update: {
+        scopes: input.scopes,
+        revokedAt: null,
+        lastAuthorizedAt: new Date()
+      },
+      create: {
+        appId: app.id,
+        userId: input.userId,
+        scopes: input.scopes
+      }
+    })
+    await tx.oAuthAuthorizationCode.create({
+      data: {
+        appId: app.id,
+        userId: input.userId,
+        codeHash: hashOAuthSecret(code),
+        redirectUri: input.redirectUri,
+        scopes: input.scopes,
+        expiresAt
+      }
+    })
+  })
+
+  const redirect = new URL(input.redirectUri)
+  redirect.searchParams.set('code', code)
+  if (input.state) redirect.searchParams.set('state', input.state)
+
+  return {
+    redirectTo: redirect.toString(),
+    expiresIn: OAUTH_AUTHORIZATION_CODE_TTL_SECONDS
+  }
+}
+
+export async function exchangeOAuthAuthorizationCode(input: {
+  clientId: string
+  clientSecret: string
+  code: string
+  redirectUri: string
+}) {
+  const app = await prisma.oAuthClientApp.findUnique({ where: { clientId: input.clientId } })
+  if (!app || !app.enabled || !safeTimingEqual(app.clientSecretHash, hashOAuthSecret(input.clientSecret))) {
+    throw new Error('Invalid OAuth client credentials')
+  }
+
+  const codeHash = hashOAuthSecret(input.code)
+  const accessTokenRaw = generateOAuthAccessToken()
+  const refreshTokenRaw = generateOAuthRefreshToken()
+  const accessTokenHash = hashOAuthSecret(accessTokenRaw)
+  const refreshTokenHash = hashOAuthSecret(refreshTokenRaw)
+  const accessTokenExpiresAt = new Date(Date.now() + OAUTH_ACCESS_TOKEN_TTL_SECONDS * 1000)
+  const refreshTokenExpiresAt = new Date(Date.now() + OAUTH_REFRESH_TOKEN_TTL_SECONDS * 1000)
+
+  const result = await prisma.$transaction(async tx => {
+    const authorizationCode = await tx.oAuthAuthorizationCode.findUnique({ where: { codeHash } })
+    if (!authorizationCode || authorizationCode.appId !== app.id) throw new Error('Invalid authorization code')
+    if (authorizationCode.usedAt) throw new Error('Authorization code has already been used')
+    if (authorizationCode.expiresAt.getTime() <= Date.now()) throw new Error('Authorization code has expired')
+    if (authorizationCode.redirectUri !== input.redirectUri) throw new Error('redirect_uri does not match authorization request')
+
+    await tx.oAuthAuthorizationCode.update({
+      where: { id: authorizationCode.id },
+      data: { usedAt: new Date() }
+    })
+
+    const grant = await tx.oAuthGrant.findUnique({
+      where: { appId_userId: { appId: app.id, userId: authorizationCode.userId } }
+    })
+    if (!grant || grant.revokedAt) throw new Error('OAuth authorization has been revoked')
+
+    const accessToken = await tx.oAuthAccessToken.create({
+      data: {
+        appId: app.id,
+        userId: authorizationCode.userId,
+        grantId: grant.id,
+        tokenPrefix: getOAuthAccessTokenPrefix(accessTokenRaw),
+        tokenHash: accessTokenHash,
+        scopes: serializeScopes(authorizationCode.scopes),
+        expiresAt: accessTokenExpiresAt
+      }
+    })
+    const refreshToken = await tx.oAuthRefreshToken.create({
+      data: {
+        appId: app.id,
+        userId: authorizationCode.userId,
+        grantId: grant.id,
+        tokenPrefix: getOAuthRefreshTokenPrefix(refreshTokenRaw),
+        tokenHash: refreshTokenHash,
+        scopes: serializeScopes(authorizationCode.scopes),
+        expiresAt: refreshTokenExpiresAt
+      }
+    })
+
+    return { authorizationCode, accessToken, refreshToken }
+  })
+
+  return {
+    accessToken: accessTokenRaw,
+    refreshToken: refreshTokenRaw,
+    tokenType: 'Bearer' as const,
+    expiresIn: OAUTH_ACCESS_TOKEN_TTL_SECONDS,
+    refreshExpiresIn: OAUTH_REFRESH_TOKEN_TTL_SECONDS,
+    scope: serializeScopes(result.accessToken.scopes).join(' '),
+    accessTokenRecord: result.accessToken
+  }
+}
+
+export async function exchangeOAuthRefreshToken(input: {
+  clientId: string
+  clientSecret: string
+  refreshToken: string
+}) {
+  const app = await prisma.oAuthClientApp.findUnique({ where: { clientId: input.clientId } })
+  if (!app || !app.enabled || !safeTimingEqual(app.clientSecretHash, hashOAuthSecret(input.clientSecret))) {
+    throw new Error('Invalid OAuth client credentials')
+  }
+
+  const refreshTokenHash = hashOAuthSecret(input.refreshToken)
+  const accessTokenRaw = generateOAuthAccessToken()
+  const nextRefreshTokenRaw = generateOAuthRefreshToken()
+  const accessTokenHash = hashOAuthSecret(accessTokenRaw)
+  const nextRefreshTokenHash = hashOAuthSecret(nextRefreshTokenRaw)
+  const accessTokenExpiresAt = new Date(Date.now() + OAUTH_ACCESS_TOKEN_TTL_SECONDS * 1000)
+  const refreshTokenExpiresAt = new Date(Date.now() + OAUTH_REFRESH_TOKEN_TTL_SECONDS * 1000)
+
+  const result = await prisma.$transaction(async tx => {
+    const refreshToken = await tx.oAuthRefreshToken.findUnique({
+      where: { tokenHash: refreshTokenHash },
+      include: {
+        user: { select: { status: true } },
+        grant: true
+      }
+    })
+    if (!refreshToken || refreshToken.appId !== app.id) throw new Error('Invalid refresh token')
+    if (refreshToken.revokedAt) throw new Error('Refresh token has been revoked')
+    if (refreshToken.expiresAt.getTime() <= Date.now()) throw new Error('Refresh token has expired')
+    if (refreshToken.user.status !== 'active') throw new Error('Account is not active')
+    if (!refreshToken.grant || refreshToken.grant.revokedAt) throw new Error('OAuth authorization has been revoked')
+
+    await tx.oAuthRefreshToken.update({
+      where: { id: refreshToken.id },
+      data: {
+        revokedAt: new Date(),
+        lastUsedAt: new Date()
+      }
+    })
+
+    const scopes = serializeScopes(refreshToken.scopes)
+    const accessToken = await tx.oAuthAccessToken.create({
+      data: {
+        appId: app.id,
+        userId: refreshToken.userId,
+        grantId: refreshToken.grantId,
+        tokenPrefix: getOAuthAccessTokenPrefix(accessTokenRaw),
+        tokenHash: accessTokenHash,
+        scopes,
+        expiresAt: accessTokenExpiresAt
+      }
+    })
+    const nextRefreshToken = await tx.oAuthRefreshToken.create({
+      data: {
+        appId: app.id,
+        userId: refreshToken.userId,
+        grantId: refreshToken.grantId,
+        tokenPrefix: getOAuthRefreshTokenPrefix(nextRefreshTokenRaw),
+        tokenHash: nextRefreshTokenHash,
+        scopes,
+        expiresAt: refreshTokenExpiresAt
+      }
+    })
+    return { accessToken, refreshToken: nextRefreshToken }
+  })
+
+  return {
+    accessToken: accessTokenRaw,
+    refreshToken: nextRefreshTokenRaw,
+    tokenType: 'Bearer' as const,
+    expiresIn: OAUTH_ACCESS_TOKEN_TTL_SECONDS,
+    refreshExpiresIn: OAUTH_REFRESH_TOKEN_TTL_SECONDS,
+    scope: serializeScopes(result.accessToken.scopes).join(' '),
+    accessTokenRecord: result.accessToken
+  }
+}
+
+export async function revokeOAuthAccessToken(rawToken: string): Promise<OAuthAccessToken | null> {
+  const tokenHash = hashOAuthSecret(rawToken)
+  const token = await prisma.oAuthAccessToken.findUnique({ where: { tokenHash } })
+  if (!token) return null
+  if (token.revokedAt) return token
+  return await prisma.oAuthAccessToken.update({
+    where: { id: token.id },
+    data: { revokedAt: new Date() }
+  })
+}
+
+export async function revokeOAuthToken(rawToken: string): Promise<{ userId: number } | null> {
+  const tokenHash = hashOAuthSecret(rawToken)
+  const accessToken = await revokeOAuthAccessToken(rawToken)
+  if (accessToken) return { userId: accessToken.userId }
+  const refreshToken = await prisma.oAuthRefreshToken.findUnique({ where: { tokenHash } })
+  if (!refreshToken) return null
+  if (refreshToken.revokedAt) return { userId: refreshToken.userId }
+  const revoked = await prisma.oAuthRefreshToken.update({
+    where: { id: refreshToken.id },
+    data: { revokedAt: new Date() }
+  })
+  return { userId: revoked.userId }
+}
+
+export async function listOAuthAuthorizations(userId: number) {
+  return await prisma.oAuthGrant.findMany({
+    where: { userId },
+    orderBy: { lastAuthorizedAt: 'desc' },
+    include: {
+      app: { select: { id: true, name: true, clientId: true, enabled: true } }
+    }
+  })
+}
+
+export async function revokeOAuthAuthorization(userId: number, grantId: number) {
+  return await prisma.$transaction(async tx => {
+    const grant = await tx.oAuthGrant.findFirst({
+      where: { id: grantId, userId },
+      include: { app: { select: { id: true, name: true, clientId: true, enabled: true } } }
+    })
+    if (!grant) return null
+    const revokedAt = new Date()
+    const revokedGrant = await tx.oAuthGrant.update({
+      where: { id: grant.id },
+      data: { revokedAt },
+      include: { app: { select: { id: true, name: true, clientId: true, enabled: true } } }
+    })
+    await tx.oAuthAccessToken.updateMany({
+      where: { grantId: grant.id, revokedAt: null },
+      data: { revokedAt }
+    })
+    await tx.oAuthRefreshToken.updateMany({
+      where: { grantId: grant.id, revokedAt: null },
+      data: { revokedAt }
+    })
+    return revokedGrant
+  })
+}
+
+export async function revokeOAuthAuthorizationById(grantId: number) {
+  return await prisma.$transaction(async tx => {
+    const grant = await tx.oAuthGrant.findUnique({
+      where: { id: grantId },
+      include: {
+        app: { select: { id: true, name: true, clientId: true, enabled: true } },
+        user: { select: { id: true, username: true, email: true, role: true, status: true } }
+      }
+    })
+    if (!grant) return null
+    const revokedAt = new Date()
+    const revokedGrant = await tx.oAuthGrant.update({
+      where: { id: grant.id },
+      data: { revokedAt },
+      include: {
+        app: { select: { id: true, name: true, clientId: true, enabled: true } },
+        user: { select: { id: true, username: true, email: true, role: true, status: true } }
+      }
+    })
+    await tx.oAuthAccessToken.updateMany({
+      where: { grantId: grant.id, revokedAt: null },
+      data: { revokedAt }
+    })
+    await tx.oAuthRefreshToken.updateMany({
+      where: { grantId: grant.id, revokedAt: null },
+      data: { revokedAt }
+    })
+    return revokedGrant
+  })
+}
+
+export function readOAuthProviderRequestBody(body: unknown): Record<string, unknown> {
+  return isRecord(body) ? body : {}
+}
+
+FILE: server/scripts/test-public-api-token-guards.ts
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+
+const repoRoot = resolve(import.meta.dirname, '../..')
+
+function read(path: string): string {
+  return readFileSync(resolve(repoRoot, path), 'utf8')
+}
+
+const schema = read('server/prisma/schema.prisma')
+const migration = read('server/prisma/migrations/20260626100000_add_public_api_tokens/migration.sql')
+const auth = read('server/src/lib/public-api-auth.ts')
+const apiTokenRoutes = read('server/src/routes/api-tokens.ts')
+const publicApiRoutes = read('server/src/routes/public-api.ts')
+const app = read('server/src/app.ts')
+const clientApi = read('client/src/api/index.ts')
+const clientTypes = read('client/src/types/api.ts')
+const developmentDocs = read('docs-site/docs/plugins/development.md')
+const platformPlan = read('docs-site/docs/plugins/platform-plan.md')
+const rootPackage = read('package.json')
+const serverPackage = read('server/package.json')
+
+assert.ok(
+  schema.includes('model PublicApiToken') &&
+    schema.includes('tokenHash   String    @unique @map("token_hash")') &&
+    schema.includes('scopes      Json      @default("[]")') &&
+    schema.includes('revokedAt   DateTime? @map("revoked_at")') &&
+    schema.includes('publicApiTokens      PublicApiToken[]') &&
+    migration.includes('CREATE TABLE "public_api_tokens"') &&
+    migration.includes('"token_hash" TEXT NOT NULL') &&
+    migration.includes('"scopes" JSONB NOT NULL DEFAULT') &&
+    migration.includes('public_api_tokens_token_hash_key') &&
+    migration.includes('REFERENCES "users"("id") ON DELETE CASCADE'),
+  'public API tokens must have a persisted model, migration, hashed token storage, scopes, revocation, expiry, and user ownership'
+)
+
+assert.ok(
+  auth.includes("PUBLIC_API_TOKEN_PREFIX = 'pat_'") &&
+    auth.includes('randomBytes(32)') &&
+    auth.includes('hashPublicApiToken') &&
+    auth.includes("createHash('sha256')") &&
+    auth.includes('timingSafeEqual') &&
+    auth.includes('readPublicApiBearerToken') &&
+    auth.includes('authenticatePublicApiRequest') &&
+    auth.includes('PUBLIC_API_SCOPES') &&
+    auth.includes("'profile:read'") &&
+    auth.includes("'profile:write'") &&
+    auth.includes("'balance:read'") &&
+    auth.includes("'balance:write'") &&
+    auth.includes("'billing:read'") &&
+    auth.includes("'products:read'") &&
+    auth.includes("'services:read'") &&
+    auth.includes("'services:operate'") &&
+    auth.includes("'services:billing'") &&
+    auth.includes("'orders:read'") &&
+    auth.includes("'tickets:read'") &&
+    auth.includes("'tickets:write'") &&
+    auth.includes("'notifications:read'") &&
+    auth.includes("'notifications:send'") &&
+    auth.includes("'plugins:action'") &&
+    auth.includes('PUBLIC_API_SCOPE_REQUIRED') &&
+    auth.includes('lastUsedAt: new Date()') &&
+    auth.includes('public_api.token_scope_denied'),
+  'public API auth must generate one-time tokens, store only SHA256 hashes, validate bearer tokens, require scopes, and audit denied scope use'
+)
+
+assert.ok(
+  apiTokenRoutes.includes("fastify.get('/',") &&
+    apiTokenRoutes.includes("fastify.post<{") &&
+    apiTokenRoutes.includes("fastify.delete<{") &&
+    apiTokenRoutes.includes('onRequest: [fastify.authenticate]') &&
+    apiTokenRoutes.includes('generatePublicApiToken()') &&
+    apiTokenRoutes.includes('token: rawToken') &&
+    apiTokenRoutes.includes('tokenHash') &&
+    apiTokenRoutes.includes('revokedAt: new Date()') &&
+    apiTokenRoutes.includes('public_api.token_create') &&
+    apiTokenRoutes.includes('public_api.token_revoke'),
+  'authenticated users must be able to list, create one-time-visible, and revoke their own public API tokens with audit logs'
+)
+
+assert.ok(
+  publicApiRoutes.includes("fastify.get('/me'") &&
+    publicApiRoutes.includes("authenticatePublicApiRequest(request, reply, 'profile:read')") &&
+    publicApiRoutes.includes("fastify.patch<{ Body: PublicApiUpdateProfileBody }>('/me'") &&
+    publicApiRoutes.includes("authenticatePublicApiRequest(request, reply, 'profile:write')") &&
+    publicApiRoutes.includes('public_api.me_read') &&
+    publicApiRoutes.includes('public_api.me_update') &&
+    publicApiRoutes.includes('tokenId') &&
+    publicApiRoutes.includes('scopes'),
+  '/api/v1/me must be protected by public API token auth and profile read/write scopes'
+)
+
+assert.ok(
+  app.includes("import apiTokenRoutes from './routes/api-tokens.js'") &&
+    app.includes("import publicApiRoutes from './routes/public-api.js'") &&
+    app.includes("await fastify.register(apiTokenRoutes, { prefix: '/api/api-tokens' })") &&
+    app.includes("await fastify.register(publicApiRoutes, { prefix: '/api/v1' })"),
+  'public API token management and /api/v1 routes must be registered'
+)
+
+assert.ok(
+  clientTypes.includes('export type PublicApiScope') &&
+    clientTypes.includes('export interface PublicApiToken') &&
+    clientTypes.includes('CreatePublicApiTokenRequest') &&
+    clientTypes.includes('CreatePublicApiTokenResponse') &&
+    clientApi.includes('apiTokens:') &&
+    clientApi.includes("http.get('/api-tokens')") &&
+    clientApi.includes("http.post('/api-tokens', data)") &&
+    clientApi.includes("http.delete(`/api-tokens/${id}`)"),
+  'client API types and wrappers must expose public API token management'
+)
+
+assert.ok(
+  developmentDocs.includes('## å…¬å…± API ä¸Ž API Token') &&
+    developmentDocs.includes('POST /api/api-tokens') &&
+    developmentDocs.includes('Authorization: Bearer pat_') &&
+    developmentDocs.includes('GET /api/v1/me') &&
+    developmentDocs.includes('PATCH /api/v1/me') &&
+    developmentDocs.includes('profile:read') &&
+    developmentDocs.includes('profile:write') &&
+    platformPlan.includes('/api/v1 å…¬å…± API é¦–ç‰ˆ') &&
+    platformPlan.includes('API token/scope åŸºç¡€èƒ½åŠ›é¦–ç‰ˆ') &&
+    platformPlan.includes('OpenAPI 3.1 åŸºç¡€å¥‘çº¦é¦–ç‰ˆ') &&
+    platformPlan.includes('èµ„æº API åªè¯»é¦–ç‰ˆ'),
+  'extension platform docs must document the public API token foundation and remaining API work'
+)
+
+assert.ok(
+  serverPackage.includes('"test:public-api-token-guards"') &&
+    rootPackage.includes('pnpm --filter server test:public-api-token-guards'),
+  'public API token guard must be wired into package scripts'
+)
+
+console.log('public API token guard tests passed')
+
+
+Path                                                                             LineNumber Line                       
+----                                                                             ---------- ----                       
+C:\Users\Administrator\Desktop\payinces\server\src\db\gift-cards.ts                      62   const encoded = crypto...
+C:\Users\Administrator\Desktop\payinces\server\src\db\gift-cards.ts                      67   return crypto.randomBy...
+C:\Users\Administrator\Desktop\payinces\server\src\db\redeem-codes.ts                    59   const randomPart = cry...
+C:\Users\Administrator\Desktop\payinces\server\src\db\redeem-codes.ts                   116   const batchId = crypto...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\agent-auth.ts                     72   return `agt_${randomBy...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\agent-auth.ts                     76   return `ias_${randomBy...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\host-agent-credentials.ts        110   return `${agentInstall...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\ip-calculator.ts                 161         const bytes = ra...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\ip-calculator.ts                 204         const bytes = ra...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\oauth-provider.ts                  9 export const OAUTH_ACCES...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\oauth-provider.ts                 11 export const OAUTH_ACCES...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\oauth-provider.ts                 91   return `${OAUTH_CLIENT...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\oauth-provider.ts                 95   return `${OAUTH_CLIENT...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\oauth-provider.ts                 99   return `${OAUTH_AUTHOR...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\oauth-provider.ts                103   return `${OAUTH_ACCESS...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\oauth-provider.ts                107   return `${OAUTH_REFRES...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\oauth-provider.ts                111   return token.slice(0, ...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\public-api-auth.ts                 7 export const PUBLIC_API_...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\public-api-auth.ts                 8 export const OAUTH_ACCES...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\public-api-auth.ts                 9 export const PUBLIC_API_...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\public-api-auth.ts               236   return `${PUBLIC_API_T...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\public-api-auth.ts               244   return token.slice(0, ...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\public-api-auth.ts               271   const isPublicApiToken...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\public-api-auth.ts               272   const isOAuthAccessTok...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\public-api-auth.ts               335   if (rawToken.startsWit...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\security.ts                      626     const token = `rt_${...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\security.ts                     1047     const iv = crypto.ra...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\security.ts                     1283     const nonce = crypto...
+C:\Users\Administrator\Desktop\payinces\server\src\lib\security.ts                     1589     const nonce = crypto...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\hosts.ts                     3895     const randomBytes = ...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\ssh-keys.ts                   213     const randomSuffix =...
+C:\Users\Administrator\Desktop\payinces\server\src\routes\telegram.ts                   866     const token = random...
+C:\Users\Administrator\Desktop\payinces\server\src\scripts\lsky-production-pr...        187   const suffix = crypto....
+
+
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$path='"'server/src/lib/public-api-auth.ts'; "'$lines=Get-Content $path; for($i=225;$i -le 245;$i++){ '"'{0,4}: {1}' -f ("'$i+1),$lines[$i] }; $path='"'server/src/lib/oauth-provider.ts'; "'$lines=Get-Content $path; for($i=0;$i -le 115;$i++){ if($i -le 15 -or ($i -ge 85 -and $i -le 112)){ '"'{0,4}: {1}' -f ("'$i+1),$lines[$i] } }; $path='"'server/scripts/test-log-sanitizer.ts'; "'$lines=Get-Content $path; for($i=0;$i -lt $lines.Length;$i++){ '"'{0,4}: {1}' -f ("'$i+1),$lines[$i] }' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 691ms:
+ 226: }
+ 227: 
+ 228: function safeTimingEqual(a: string, b: string): boolean {
+ 229:   const aBuffer = Buffer.from(a)
+ 230:   const bBuffer = Buffer.from(b)
+ 231:   if (aBuffer.length !== bBuffer.length) return false
+ 232:   return timingSafeEqual(aBuffer, bBuffer)
+ 233: }
+ 234: 
+ 235: export function generatePublicApiToken(): string {
+ 236:   return `${PUBLIC_API_TOKEN_PREFIX}${randomBytes(32).toString('base64url')}`
+ 237: }
+ 238: 
+ 239: export function hashPublicApiToken(token: string): string {
+ 240:   return createHash('sha256').update(token).digest('hex')
+ 241: }
+ 242: 
+ 243: export function getPublicApiTokenPrefix(token: string): string {
+ 244:   return token.slice(0, PUBLIC_API_TOKEN_PREFIX_LENGTH)
+ 245: }
+ 246: 
+   1: import { createHash, randomBytes, timingSafeEqual } from 'crypto'
+   2: import type { OAuthAccessToken, OAuthClientApp, OAuthGrant, Prisma, User } from '@prisma/client'
+   3: import { prisma } from '../db/prisma.js'
+   4: import { PUBLIC_API_SCOPES, type PublicApiScope } from './public-api-auth.js'
+   5: 
+   6: export const OAUTH_CLIENT_ID_PREFIX = 'pocli_'
+   7: export const OAUTH_CLIENT_SECRET_PREFIX = 'posec_'
+   8: export const OAUTH_AUTHORIZATION_CODE_PREFIX = 'poc_'
+   9: export const OAUTH_ACCESS_TOKEN_PREFIX = 'poa_'
+  10: export const OAUTH_REFRESH_TOKEN_PREFIX = 'por_'
+  11: export const OAUTH_ACCESS_TOKEN_PREFIX_LENGTH = 16
+  12: export const OAUTH_REFRESH_TOKEN_PREFIX_LENGTH = 16
+  13: export const OAUTH_AUTHORIZATION_CODE_TTL_SECONDS = 10 * 60
+  14: export const OAUTH_ACCESS_TOKEN_TTL_SECONDS = 60 * 60
+  15: export const OAUTH_REFRESH_TOKEN_TTL_SECONDS = 30 * 24 * 60 * 60
+  16: 
+  86: export function hashOAuthSecret(value: string): string {
+  87:   return createHash('sha256').update(value).digest('hex')
+  88: }
+  89: 
+  90: export function generateOAuthClientId(): string {
+  91:   return `${OAUTH_CLIENT_ID_PREFIX}${randomBytes(18).toString('base64url')}`
+  92: }
+  93: 
+  94: export function generateOAuthClientSecret(): string {
+  95:   return `${OAUTH_CLIENT_SECRET_PREFIX}${randomBytes(32).toString('base64url')}`
+  96: }
+  97: 
+  98: export function generateOAuthAuthorizationCode(): string {
+  99:   return `${OAUTH_AUTHORIZATION_CODE_PREFIX}${randomBytes(32).toString('base64url')}`
+ 100: }
+ 101: 
+ 102: export function generateOAuthAccessToken(): string {
+ 103:   return `${OAUTH_ACCESS_TOKEN_PREFIX}${randomBytes(32).toString('base64url')}`
+ 104: }
+ 105: 
+ 106: export function generateOAuthRefreshToken(): string {
+ 107:   return `${OAUTH_REFRESH_TOKEN_PREFIX}${randomBytes(32).toString('base64url')}`
+ 108: }
+ 109: 
+ 110: export function getOAuthAccessTokenPrefix(token: string): string {
+ 111:   return token.slice(0, OAUTH_ACCESS_TOKEN_PREFIX_LENGTH)
+ 112: }
+ 113: 
+   1: import assert from 'node:assert/strict'
+   2: import { readFileSync } from 'node:fs'
+   3: import { dirname, resolve } from 'node:path'
+   4: import { fileURLToPath } from 'node:url'
+   5: import { sanitizeObject, sanitizeTokensInString, isSensitiveField } from '../src/lib/log-sanitizer.js'
+   6: 
+   7: const __filename = fileURLToPath(import.meta.url)
+   8: const __dirname = dirname(__filename)
+   9: 
+  10: const redacted = '[REDACTED]'
+  11: const redactedJwt = '[REDACTED_JWT]'
+  12: 
+  13: const sanitized = sanitizeObject({
+  14:   username: 'alice',
+  15:   password: 'plain-password',
+  16:   adminPassword: 'admin-password',
+  17:   smtpPassword: 'smtp-password',
+  18:   mailPassword: 'mail-password',
+  19:   newPassword: 'new-password',
+  20:   accessToken: 'access-token',
+  21:   refreshToken: 'refresh-token',
+  22:   botToken: 'telegram-bot-token',
+  23:   webhookUrl: 'https://discord.com/api/webhooks/secret',
+  24:   chatId: '123456',
+  25:   sign: 'payment-sign',
+  26:   signature: 'payment-signature',
+  27:   access_token: 'oauth-access-token',
+  28:   refresh_token: 'oauth-refresh-token',
+  29:   id_token: 'oauth-id-token',
+  30:   authorization: 'Bearer opaque-token',
+  31:   cookie: 'refreshToken=secret-cookie',
+  32:   nested: {
+  33:     clientSecret: 'client-secret',
+  34:     client_secret: 'snake-client-secret',
+  35:     apiKey: 'api-key',
+  36:     api_key: 'snake-api-key',
+  37:     key: 'gateway-key',
+  38:     merchantPrivateKey: 'merchant-private-key',
+  39:     merchant_private_key: 'snake-merchant-private-key',
+  40:     webhookSecret: 'webhook-secret',
+  41:     webhook_secret: 'snake-webhook-secret',
+  42:     'x-signature': 'webhook-signature',
+  43:     privateKey: 'private-key',
+  44:     private_key: 'snake-private-key',
+  45:     totpCode: '123456',
+  46:     totp_code: '654321',
+  47:     note: 'keep-me'
+  48:   },
+  49:   items: [
+  50:     {
+  51:       backupCode: 'backup-code',
+  52:       backup_code: 'snake-backup-code',
+  53:       safe: 'value'
+  54:     }
+  55:   ],
+  56:   message: 'user supplied Bearer opaque-token and jwt eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.signature'
+  57: })
+  58: 
+  59: assert.equal(sanitized.username, 'alice')
+  60: assert.equal(sanitized.password, redacted)
+  61: assert.equal(sanitized.adminPassword, redacted)
+  62: assert.equal(sanitized.smtpPassword, redacted)
+  63: assert.equal(sanitized.mailPassword, redacted)
+  64: assert.equal(sanitized.newPassword, redacted)
+  65: assert.equal(sanitized.accessToken, redacted)
+  66: assert.equal(sanitized.refreshToken, redacted)
+  67: assert.equal(sanitized.botToken, redacted)
+  68: assert.equal(sanitized.webhookUrl, redacted)
+  69: assert.equal(sanitized.chatId, redacted)
+  70: assert.equal(sanitized.sign, redacted)
+  71: assert.equal(sanitized.signature, redacted)
+  72: assert.equal(sanitized.access_token, redacted)
+  73: assert.equal(sanitized.refresh_token, redacted)
+  74: assert.equal(sanitized.id_token, redacted)
+  75: assert.equal(sanitized.authorization, redacted)
+  76: assert.equal(sanitized.cookie, redacted)
+  77: 
+  78: assert.equal(sanitized.nested.clientSecret, redacted)
+  79: assert.equal(sanitized.nested.client_secret, redacted)
+  80: assert.equal(sanitized.nested.apiKey, redacted)
+  81: assert.equal(sanitized.nested.api_key, redacted)
+  82: assert.equal(sanitized.nested.key, redacted)
+  83: assert.equal(sanitized.nested.merchantPrivateKey, redacted)
+  84: assert.equal(sanitized.nested.merchant_private_key, redacted)
+  85: assert.equal(sanitized.nested.webhookSecret, redacted)
+  86: assert.equal(sanitized.nested.webhook_secret, redacted)
+  87: assert.equal(sanitized.nested['x-signature'], redacted)
+  88: assert.equal(sanitized.nested.privateKey, redacted)
+  89: assert.equal(sanitized.nested.private_key, redacted)
+  90: assert.equal(sanitized.nested.totpCode, redacted)
+  91: assert.equal(sanitized.nested.totp_code, redacted)
+  92: assert.equal(sanitized.nested.note, 'keep-me')
+  93: 
+  94: assert.equal(sanitized.items[0].backupCode, redacted)
+  95: assert.equal(sanitized.items[0].backup_code, redacted)
+  96: assert.equal(sanitized.items[0].safe, 'value')
+  97: 
+  98: assert.equal(
+  99:   sanitized.message,
+ 100:   `user supplied ${redactedJwt} and jwt ${redactedJwt}`
+ 101: )
+ 102: 
+ 103: assert.equal(sanitizeTokensInString('Authorization: Bearer opaque-token'), `Authorization: ${redactedJwt}`)
+ 104: assert.equal(isSensitiveField('access_token'), true)
+ 105: assert.equal(isSensitiveField('client_secret'), true)
+ 106: assert.equal(isSensitiveField('signature'), true)
+ 107: assert.equal(isSensitiveField('x-signature'), true)
+ 108: assert.equal(isSensitiveField('botToken'), true)
+ 109: assert.equal(isSensitiveField('webhookUrl'), true)
+ 110: assert.equal(isSensitiveField('smtpPassword'), true)
+ 111: assert.equal(isSensitiveField('chatId'), true)
+ 112: assert.equal(isSensitiveField('username'), false)
+ 113: 
+ 114: const authSource = readFileSync(resolve(__dirname, '../src/routes/auth.ts'), 'utf8')
+ 115: const usersSource = readFileSync(resolve(__dirname, '../src/routes/users.ts'), 'utf8')
+ 116: const rechargeSource = readFileSync(resolve(__dirname, '../src/routes/recharge.ts'), 'utf8')
+ 117: const adminBillingSource = readFileSync(resolve(__dirname, '../src/routes/admin-billing.ts'), 'utf8')
+ 118: assert.equal(
+ 119:   authSource.includes('[send-verification-code]'),
+ 120:   false,
+ 121:   'registration verification route must not write raw email or mail-provider details to console logs'
+ 122: )
+ 123: assert.equal(
+ 124:   authSource.includes('Sent login alert email to ${user.email}'),
+ 125:   false,
+ 126:   'login alert success logs must not include the user email address'
+ 127: )
+ 128: assert.equal(
+ 129:   usersSource.includes('Sent ban notification email to ${user.email}'),
+ 130:   false,
+ 131:   'admin ban notification logs must not include the target user email address'
+ 132: )
+ 133: assert.equal(
+ 134:   usersSource.includes('email: ${user.email') || usersSource.includes('email: ${user.email ||'),
+ 135:   false,
+ 136:   'admin user status/delete logs must not include the target user email address'
+ 137: )
+ 138: assert.equal(
+ 139:   rechargeSource.includes('request.log.warn({ orderNo, queryResult },'),
+ 140:   false,
+ 141:   'recharge active verification must not log raw Heleket query results'
+ 142: )
+ 143: assert.equal(
+ 144:   adminBillingSource.includes('request.log.warn({ orderNo: record.orderNo, queryResult },'),
+ 145:   false,
+ 146:   'admin recharge sync must not log raw Heleket query results'
+ 147: )
+ 148: assert.ok(
+ 149:   rechargeSource.includes('queryResult: sanitizeObject(queryResult)') &&
+ 150:     adminBillingSource.includes('queryResult: sanitizeObject(queryResult)'),
+ 151:   'Heleket invalid-amount logs must sanitize queryResult before writing logs'
+ 152: )
+ 153: 
+ 154: console.log('log sanitizer tests passed')
+
+codex
+已核实实际格式：`server/src/lib/public-api-auth.ts` 与 `oauth-provider.ts` 都使用 `randomBytes(32).toString('base64url')`，因此 `pat_`/`poa_` 后缀固定为 43 个 Base64URL 字符（`A-Za-z0-9_-`）。我将按该精确格式加规则，并为不同模式保留各自替换值：查询参数值用 `[REDACTED]`，认证/token 文本沿用现有 `[REDACTED_JWT]`。
+2026-07-11T19:28:01.029082Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in C:\Users\Administrator\Desktop\payinces\server\src\lib\log-sanitizer.ts:
+export function sanitizeObject<T>(obj: T, depth = 0): T {
+    // é˜²æ­¢æ— é™é€’å½’
+    if (depth > 10) return obj
+apply patch
+patch: completed
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-log-sanitizer.ts
+C:\Users\Administrator\Desktop\payinces\server\src\lib\log-sanitizer.ts
+diff --git a/server/scripts/test-log-sanitizer.ts b/server/scripts/test-log-sanitizer.ts
+index 9f0d7217470715f03615b7e080091c49b1fcabff..8a1a3725a9f28941c66081bb9fa58ee3cd1b0d75
+--- a/server/scripts/test-log-sanitizer.ts
++++ b/server/scripts/test-log-sanitizer.ts
+@@ -101,6 +101,23 @@
+ )
+ 
+ assert.equal(sanitizeTokensInString('Authorization: Bearer opaque-token'), `Authorization: ${redactedJwt}`)
++assert.equal(sanitizeTokensInString(`pat_${'a'.repeat(43)}`), redactedJwt)
++assert.equal(sanitizeTokensInString(`poa_${'B'.repeat(43)}`), redactedJwt)
++assert.equal(sanitizeTokensInString('Authorization: Basic dXNlcjpwYXNz'), `Authorization: ${redactedJwt}`)
++assert.equal(sanitizeTokensInString('Authorization: Bearer a.b+c/d=='), `Authorization: ${redactedJwt}`)
++assert.equal(
++  sanitizeTokensInString('https://x/cb?token=SECRET123&x=1'),
++  `https://x/cb?token=${redacted}&x=1`
++)
++
++let deeplyNested: Record<string, unknown> = { password: 'must-not-survive' }
++for (let depth = 0; depth < 11; depth += 1) {
++  deeplyNested = { nested: deeplyNested }
++}
++const deeplySanitized = sanitizeObject(deeplyNested)
++assert.equal(JSON.stringify(deeplySanitized).includes('must-not-survive'), false)
++assert.equal(JSON.stringify(deeplySanitized).includes('[REDACTED_TRUNCATED]'), true)
++
+ assert.equal(isSensitiveField('access_token'), true)
+ assert.equal(isSensitiveField('client_secret'), true)
+ assert.equal(isSensitiveField('signature'), true)
+diff --git a/server/src/lib/log-sanitizer.ts b/server/src/lib/log-sanitizer.ts
+index 47923fcbf6dd84b04bb28f759e16c8f0de92c175..62788f9888045ebc1c4684f4760a2ee9ad36bc97
+--- a/server/src/lib/log-sanitizer.ts
++++ b/server/src/lib/log-sanitizer.ts
+@@ -19,6 +19,10 @@
+     'currentPassword',
+     'confirmPassword',
+     'token',
++    'assetToken',
++    'agentSecret',
++    'pat',
++    'poa',
+     'botToken',
+     'bot_token',
+     'telegramBotToken',
+@@ -84,8 +88,14 @@
+ 
+ // Token 模式匹配（用于检测值中包含的 token）
+ const TOKEN_PATTERNS = [
+-    /eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g,  // JWT
+-    /Bearer\s+[A-Za-z0-9_-]+/gi,  // Bearer token
++    { pattern: /eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, replacement: '[REDACTED_JWT]' },  // JWT
++    { pattern: /\b(?:pat|poa)_[A-Za-z0-9_-]{43}\b/g, replacement: '[REDACTED_JWT]' },  // PayIncus API token
++    { pattern: /Basic\s+[A-Za-z0-9+/=]{8,}/gi, replacement: '[REDACTED_JWT]' },  // Basic auth
++    { pattern: /Bearer\s+[A-Za-z0-9._~+/=:-]+/gi, replacement: '[REDACTED_JWT]' },  // Bearer token
++    {
++        pattern: /([?&](?:token|secret|key|sign|signature|access_token|refresh_token|api_key|apikey|apiKey|password|pwd|assetToken|agentSecret|code)=)[^&#\s]+/gi,
++        replacement: '$1[REDACTED]'
++    },  // URL query secrets
+ ]
+ 
+ // 替换值
+@@ -104,8 +114,8 @@
+  */
+ export function sanitizeTokensInString(value: string): string {
+     let result = value
+-    for (const pattern of TOKEN_PATTERNS) {
+-        result = result.replace(pattern, REDACTED_JWT)
++    for (const { pattern, replacement } of TOKEN_PATTERNS) {
++        result = result.replace(pattern, replacement)
+     }
+     return result
+ }
+@@ -116,7 +126,7 @@
+  */
+ export function sanitizeObject<T>(obj: T, depth = 0): T {
+     // 防止无限递归
+-    if (depth > 10) return obj
++    if (depth > 10) return '[REDACTED_TRUNCATED]' as unknown as T
+ 
+     if (obj === null || obj === undefined) {
+         return obj
+
+diff --git a/server/scripts/test-log-sanitizer.ts b/server/scripts/test-log-sanitizer.ts
+index 9f0d7217470715f03615b7e080091c49b1fcabff..8a1a3725a9f28941c66081bb9fa58ee3cd1b0d75
+--- a/server/scripts/test-log-sanitizer.ts
++++ b/server/scripts/test-log-sanitizer.ts
+@@ -101,6 +101,23 @@
+ )
+ 
+ assert.equal(sanitizeTokensInString('Authorization: Bearer opaque-token'), `Authorization: ${redactedJwt}`)
++assert.equal(sanitizeTokensInString(`pat_${'a'.repeat(43)}`), redactedJwt)
++assert.equal(sanitizeTokensInString(`poa_${'B'.repeat(43)}`), redactedJwt)
++assert.equal(sanitizeTokensInString('Authorization: Basic dXNlcjpwYXNz'), `Authorization: ${redactedJwt}`)
++assert.equal(sanitizeTokensInString('Authorization: Bearer a.b+c/d=='), `Authorization: ${redactedJwt}`)
++assert.equal(
++  sanitizeTokensInString('https://x/cb?token=SECRET123&x=1'),
++  `https://x/cb?token=${redacted}&x=1`
++)
++
++let deeplyNested: Record<string, unknown> = { password: 'must-not-survive' }
++for (let depth = 0; depth < 11; depth += 1) {
++  deeplyNested = { nested: deeplyNested }
++}
++const deeplySanitized = sanitizeObject(deeplyNested)
++assert.equal(JSON.stringify(deeplySanitized).includes('must-not-survive'), false)
++assert.equal(JSON.stringify(deeplySanitized).includes('[REDACTED_TRUNCATED]'), true)
++
+ assert.equal(isSensitiveField('access_token'), true)
+ assert.equal(isSensitiveField('client_secret'), true)
+ assert.equal(isSensitiveField('signature'), true)
+diff --git a/server/src/lib/log-sanitizer.ts b/server/src/lib/log-sanitizer.ts
+index 47923fcbf6dd84b04bb28f759e16c8f0de92c175..62788f9888045ebc1c4684f4760a2ee9ad36bc97
+--- a/server/src/lib/log-sanitizer.ts
++++ b/server/src/lib/log-sanitizer.ts
+@@ -19,6 +19,10 @@
+     'currentPassword',
+     'confirmPassword',
+     'token',
++    'assetToken',
++    'agentSecret',
++    'pat',
++    'poa',
+     'botToken',
+     'bot_token',
+     'telegramBotToken',
+@@ -84,8 +88,14 @@
+ 
+ // Token 模式匹配（用于检测值中包含的 token）
+ const TOKEN_PATTERNS = [
+-    /eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g,  // JWT
+-    /Bearer\s+[A-Za-z0-9_-]+/gi,  // Bearer token
++    { pattern: /eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, replacement: '[REDACTED_JWT]' },  // JWT
++    { pattern: /\b(?:pat|poa)_[A-Za-z0-9_-]{43}\b/g, replacement: '[REDACTED_JWT]' },  // PayIncus API token
++    { pattern: /Basic\s+[A-Za-z0-9+/=]{8,}/gi, replacement: '[REDACTED_JWT]' },  // Basic auth
++    { pattern: /Bearer\s+[A-Za-z0-9._~+/=:-]+/gi, replacement: '[REDACTED_JWT]' },  // Bearer token
++    {
++        pattern: /([?&](?:token|secret|key|sign|signature|access_token|refresh_token|api_key|apikey|apiKey|password|pwd|assetToken|agentSecret|code)=)[^&#\s]+/gi,
++        replacement: '$1[REDACTED]'
++    },  // URL query secrets
+ ]
+ 
+ // 替换值
+@@ -104,8 +114,8 @@
+  */
+ export function sanitizeTokensInString(value: string): string {
+     let result = value
+-    for (const pattern of TOKEN_PATTERNS) {
+-        result = result.replace(pattern, REDACTED_JWT)
++    for (const { pattern, replacement } of TOKEN_PATTERNS) {
++        result = result.replace(pattern, replacement)
+     }
+     return result
+ }
+@@ -116,7 +126,7 @@
+  */
+ export function sanitizeObject<T>(obj: T, depth = 0): T {
+     // 防止无限递归
+-    if (depth > 10) return obj
++    if (depth > 10) return '[REDACTED_TRUNCATED]' as unknown as T
+ 
+     if (obj === null || obj === undefined) {
+         return obj
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "git diff -- server/src/lib/log-sanitizer.ts server/scripts/test-log-sanitizer.ts; Select-String -Path server/package.json -Pattern 'test:log-sanitizer' -Context 0,1" in C:\Users\Administrator\Desktop\payinces
+ succeeded in 774ms:
+diff --git a/server/scripts/test-log-sanitizer.ts b/server/scripts/test-log-sanitizer.ts
+index 9f0d721..8a1a372 100644
+--- a/server/scripts/test-log-sanitizer.ts
++++ b/server/scripts/test-log-sanitizer.ts
+@@ -101,6 +101,23 @@ assert.equal(
+ )
+ 
+ assert.equal(sanitizeTokensInString('Authorization: Bearer opaque-token'), `Authorization: ${redactedJwt}`)
++assert.equal(sanitizeTokensInString(`pat_${'a'.repeat(43)}`), redactedJwt)
++assert.equal(sanitizeTokensInString(`poa_${'B'.repeat(43)}`), redactedJwt)
++assert.equal(sanitizeTokensInString('Authorization: Basic dXNlcjpwYXNz'), `Authorization: ${redactedJwt}`)
++assert.equal(sanitizeTokensInString('Authorization: Bearer a.b+c/d=='), `Authorization: ${redactedJwt}`)
++assert.equal(
++  sanitizeTokensInString('https://x/cb?token=SECRET123&x=1'),
++  `https://x/cb?token=${redacted}&x=1`
++)
++
++let deeplyNested: Record<string, unknown> = { password: 'must-not-survive' }
++for (let depth = 0; depth < 11; depth += 1) {
++  deeplyNested = { nested: deeplyNested }
++}
++const deeplySanitized = sanitizeObject(deeplyNested)
++assert.equal(JSON.stringify(deeplySanitized).includes('must-not-survive'), false)
++assert.equal(JSON.stringify(deeplySanitized).includes('[REDACTED_TRUNCATED]'), true)
++
+ assert.equal(isSensitiveField('access_token'), true)
+ assert.equal(isSensitiveField('client_secret'), true)
+ assert.equal(isSensitiveField('signature'), true)
+diff --git a/server/src/lib/log-sanitizer.ts b/server/src/lib/log-sanitizer.ts
+index 47923fc..62788f9 100644
+--- a/server/src/lib/log-sanitizer.ts
++++ b/server/src/lib/log-sanitizer.ts
+@@ -19,6 +19,10 @@ const SENSITIVE_FIELDS = [
+     'currentPassword',
+     'confirmPassword',
+     'token',
++    'assetToken',
++    'agentSecret',
++    'pat',
++    'poa',
+     'botToken',
+     'bot_token',
+     'telegramBotToken',
+@@ -84,8 +88,14 @@ const SENSITIVE_FIELD_PATTERN = new RegExp(
+ 
+ // Token 模式匹配（用于检测值中包含的 token）
+ const TOKEN_PATTERNS = [
+-    /eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g,  // JWT
+-    /Bearer\s+[A-Za-z0-9_-]+/gi,  // Bearer token
++    { pattern: /eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, replacement: '[REDACTED_JWT]' },  // JWT
++    { pattern: /\b(?:pat|poa)_[A-Za-z0-9_-]{43}\b/g, replacement: '[REDACTED_JWT]' },  // PayIncus API token
++    { pattern: /Basic\s+[A-Za-z0-9+/=]{8,}/gi, replacement: '[REDACTED_JWT]' },  // Basic auth
++    { pattern: /Bearer\s+[A-Za-z0-9._~+/=:-]+/gi, replacement: '[REDACTED_JWT]' },  // Bearer token
++    {
++        pattern: /([?&](?:token|secret|key|sign|signature|access_token|refresh_token|api_key|apikey|apiKey|password|pwd|assetToken|agentSecret|code)=)[^&#\s]+/gi,
++        replacement: '$1[REDACTED]'
++    },  // URL query secrets
+ ]
+ 
+ // 替换值
+@@ -104,8 +114,8 @@ export function isSensitiveField(fieldName: string): boolean {
+  */
+ export function sanitizeTokensInString(value: string): string {
+     let result = value
+-    for (const pattern of TOKEN_PATTERNS) {
+-        result = result.replace(pattern, REDACTED_JWT)
++    for (const { pattern, replacement } of TOKEN_PATTERNS) {
++        result = result.replace(pattern, replacement)
+     }
+     return result
+ }
+@@ -116,7 +126,7 @@ export function sanitizeTokensInString(value: string): string {
+  */
+ export function sanitizeObject<T>(obj: T, depth = 0): T {
+     // 防止无限递归
+-    if (depth > 10) return obj
++    if (depth > 10) return '[REDACTED_TRUNCATED]' as unknown as T
+ 
+     if (obj === null || obj === undefined) {
+         return obj
+
+> server\package.json:82:    "test:log-sanitizer": "node --import tsx scripts/test-log-sanitizer.ts",
+  server\package.json:83:    "test:billing-expiry-delete": "node --import tsx scripts/test-billing-expiry-delete.ts",
+
+
+warning: in the working copy of 'server/scripts/test-log-sanitizer.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/lib/log-sanitizer.ts', LF will be replaced by CRLF the next time Git touches it
+
+diff --git a/server/scripts/test-log-sanitizer.ts b/server/scripts/test-log-sanitizer.ts
+index 9f0d7217470715f03615b7e080091c49b1fcabff..8a1a3725a9f28941c66081bb9fa58ee3cd1b0d75
+--- a/server/scripts/test-log-sanitizer.ts
++++ b/server/scripts/test-log-sanitizer.ts
+@@ -101,6 +101,23 @@
+ )
+ 
+ assert.equal(sanitizeTokensInString('Authorization: Bearer opaque-token'), `Authorization: ${redactedJwt}`)
++assert.equal(sanitizeTokensInString(`pat_${'a'.repeat(43)}`), redactedJwt)
++assert.equal(sanitizeTokensInString(`poa_${'B'.repeat(43)}`), redactedJwt)
++assert.equal(sanitizeTokensInString('Authorization: Basic dXNlcjpwYXNz'), `Authorization: ${redactedJwt}`)
++assert.equal(sanitizeTokensInString('Authorization: Bearer a.b+c/d=='), `Authorization: ${redactedJwt}`)
++assert.equal(
++  sanitizeTokensInString('https://x/cb?token=SECRET123&x=1'),
++  `https://x/cb?token=${redacted}&x=1`
++)
++
++let deeplyNested: Record<string, unknown> = { password: 'must-not-survive' }
++for (let depth = 0; depth < 11; depth += 1) {
++  deeplyNested = { nested: deeplyNested }
++}
++const deeplySanitized = sanitizeObject(deeplyNested)
++assert.equal(JSON.stringify(deeplySanitized).includes('must-not-survive'), false)
++assert.equal(JSON.stringify(deeplySanitized).includes('[REDACTED_TRUNCATED]'), true)
++
+ assert.equal(isSensitiveField('access_token'), true)
+ assert.equal(isSensitiveField('client_secret'), true)
+ assert.equal(isSensitiveField('signature'), true)
+diff --git a/server/src/lib/log-sanitizer.ts b/server/src/lib/log-sanitizer.ts
+index 47923fcbf6dd84b04bb28f759e16c8f0de92c175..62788f9888045ebc1c4684f4760a2ee9ad36bc97
+--- a/server/src/lib/log-sanitizer.ts
++++ b/server/src/lib/log-sanitizer.ts
+@@ -19,6 +19,10 @@
+     'currentPassword',
+     'confirmPassword',
+     'token',
++    'assetToken',
++    'agentSecret',
++    'pat',
++    'poa',
+     'botToken',
+     'bot_token',
+     'telegramBotToken',
+@@ -84,8 +88,14 @@
+ 
+ // Token 模式匹配（用于检测值中包含的 token）
+ const TOKEN_PATTERNS = [
+-    /eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g,  // JWT
+-    /Bearer\s+[A-Za-z0-9_-]+/gi,  // Bearer token
++    { pattern: /eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, replacement: '[REDACTED_JWT]' },  // JWT
++    { pattern: /\b(?:pat|poa)_[A-Za-z0-9_-]{43}\b/g, replacement: '[REDACTED_JWT]' },  // PayIncus API token
++    { pattern: /Basic\s+[A-Za-z0-9+/=]{8,}/gi, replacement: '[REDACTED_JWT]' },  // Basic auth
++    { pattern: /Bearer\s+[A-Za-z0-9._~+/=:-]+/gi, replacement: '[REDACTED_JWT]' },  // Bearer token
++    {
++        pattern: /([?&](?:token|secret|key|sign|signature|access_token|refresh_token|api_key|apikey|apiKey|password|pwd|assetToken|agentSecret|code)=)[^&#\s]+/gi,
++        replacement: '$1[REDACTED]'
++    },  // URL query secrets
+ ]
+ 
+ // 替换值
+@@ -104,8 +114,8 @@
+  */
+ export function sanitizeTokensInString(value: string): string {
+     let result = value
+-    for (const pattern of TOKEN_PATTERNS) {
+-        result = result.replace(pattern, REDACTED_JWT)
++    for (const { pattern, replacement } of TOKEN_PATTERNS) {
++        result = result.replace(pattern, replacement)
+     }
+     return result
+ }
+@@ -116,7 +126,7 @@
+  */
+ export function sanitizeObject<T>(obj: T, depth = 0): T {
+     // 防止无限递归
+-    if (depth > 10) return obj
++    if (depth > 10) return '[REDACTED_TRUNCATED]' as unknown as T
+ 
+     if (obj === null || obj === undefined) {
+         return obj
+
+apply patch
+patch: completed
+C:\Users\Administrator\Desktop\payinces\server\src\lib\log-sanitizer.ts
+diff --git a/server/scripts/test-log-sanitizer.ts b/server/scripts/test-log-sanitizer.ts
+index 9f0d7217470715f03615b7e080091c49b1fcabff..8a1a3725a9f28941c66081bb9fa58ee3cd1b0d75
+--- a/server/scripts/test-log-sanitizer.ts
++++ b/server/scripts/test-log-sanitizer.ts
+@@ -101,6 +101,23 @@
+ )
+ 
+ assert.equal(sanitizeTokensInString('Authorization: Bearer opaque-token'), `Authorization: ${redactedJwt}`)
++assert.equal(sanitizeTokensInString(`pat_${'a'.repeat(43)}`), redactedJwt)
++assert.equal(sanitizeTokensInString(`poa_${'B'.repeat(43)}`), redactedJwt)
++assert.equal(sanitizeTokensInString('Authorization: Basic dXNlcjpwYXNz'), `Authorization: ${redactedJwt}`)
++assert.equal(sanitizeTokensInString('Authorization: Bearer a.b+c/d=='), `Authorization: ${redactedJwt}`)
++assert.equal(
++  sanitizeTokensInString('https://x/cb?token=SECRET123&x=1'),
++  `https://x/cb?token=${redacted}&x=1`
++)
++
++let deeplyNested: Record<string, unknown> = { password: 'must-not-survive' }
++for (let depth = 0; depth < 11; depth += 1) {
++  deeplyNested = { nested: deeplyNested }
++}
++const deeplySanitized = sanitizeObject(deeplyNested)
++assert.equal(JSON.stringify(deeplySanitized).includes('must-not-survive'), false)
++assert.equal(JSON.stringify(deeplySanitized).includes('[REDACTED_TRUNCATED]'), true)
++
+ assert.equal(isSensitiveField('access_token'), true)
+ assert.equal(isSensitiveField('client_secret'), true)
+ assert.equal(isSensitiveField('signature'), true)
+diff --git a/server/src/lib/log-sanitizer.ts b/server/src/lib/log-sanitizer.ts
+index 47923fcbf6dd84b04bb28f759e16c8f0de92c175..74ddda408a787b6e8e4d56c53070946caf135d32
+--- a/server/src/lib/log-sanitizer.ts
++++ b/server/src/lib/log-sanitizer.ts
+@@ -19,6 +19,10 @@
+     'currentPassword',
+     'confirmPassword',
+     'token',
++    'assetToken',
++    'agentSecret',
++    'pat',
++    'poa',
+     'botToken',
+     'bot_token',
+     'telegramBotToken',
+@@ -82,15 +86,21 @@
+     'i'
+ )
+ 
++// 替换值
++const REDACTED = '[REDACTED]'
++const REDACTED_JWT = '[REDACTED_JWT]'
++
+ // Token 模式匹配（用于检测值中包含的 token）
+ const TOKEN_PATTERNS = [
+-    /eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g,  // JWT
+-    /Bearer\s+[A-Za-z0-9_-]+/gi,  // Bearer token
++    { pattern: /eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, replacement: REDACTED_JWT },  // JWT
++    { pattern: /\b(?:pat|poa)_[A-Za-z0-9_-]{43}\b/g, replacement: REDACTED_JWT },  // PayIncus API token
++    { pattern: /Basic\s+[A-Za-z0-9+/=]{8,}/gi, replacement: REDACTED_JWT },  // Basic auth
++    { pattern: /Bearer\s+[A-Za-z0-9._~+/=:-]+/gi, replacement: REDACTED_JWT },  // Bearer token
++    {
++        pattern: /([?&](?:token|secret|key|sign|signature|access_token|refresh_token|api_key|apikey|apiKey|password|pwd|assetToken|agentSecret|code)=)[^&#\s]+/gi,
++        replacement: `$1${REDACTED}`
++    },  // URL query secrets
+ ]
+-
+-// 替换值
+-const REDACTED = '[REDACTED]'
+-const REDACTED_JWT = '[REDACTED_JWT]'
+ 
+ /**
+  * 检查字段名是否为敏感字段
+@@ -104,8 +114,8 @@
+  */
+ export function sanitizeTokensInString(value: string): string {
+     let result = value
+-    for (const pattern of TOKEN_PATTERNS) {
+-        result = result.replace(pattern, REDACTED_JWT)
++    for (const { pattern, replacement } of TOKEN_PATTERNS) {
++        result = result.replace(pattern, replacement)
+     }
+     return result
+ }
+@@ -116,7 +126,7 @@
+  */
+ export function sanitizeObject<T>(obj: T, depth = 0): T {
+     // 防止无限递归
+-    if (depth > 10) return obj
++    if (depth > 10) return '[REDACTED_TRUNCATED]' as unknown as T
+ 
+     if (obj === null || obj === undefined) {
+         return obj
+
+diff --git a/server/scripts/test-log-sanitizer.ts b/server/scripts/test-log-sanitizer.ts
+index 9f0d7217470715f03615b7e080091c49b1fcabff..8a1a3725a9f28941c66081bb9fa58ee3cd1b0d75
+--- a/server/scripts/test-log-sanitizer.ts
++++ b/server/scripts/test-log-sanitizer.ts
+@@ -101,6 +101,23 @@
+ )
+ 
+ assert.equal(sanitizeTokensInString('Authorization: Bearer opaque-token'), `Authorization: ${redactedJwt}`)
++assert.equal(sanitizeTokensInString(`pat_${'a'.repeat(43)}`), redactedJwt)
++assert.equal(sanitizeTokensInString(`poa_${'B'.repeat(43)}`), redactedJwt)
++assert.equal(sanitizeTokensInString('Authorization: Basic dXNlcjpwYXNz'), `Authorization: ${redactedJwt}`)
++assert.equal(sanitizeTokensInString('Authorization: Bearer a.b+c/d=='), `Authorization: ${redactedJwt}`)
++assert.equal(
++  sanitizeTokensInString('https://x/cb?token=SECRET123&x=1'),
++  `https://x/cb?token=${redacted}&x=1`
++)
++
++let deeplyNested: Record<string, unknown> = { password: 'must-not-survive' }
++for (let depth = 0; depth < 11; depth += 1) {
++  deeplyNested = { nested: deeplyNested }
++}
++const deeplySanitized = sanitizeObject(deeplyNested)
++assert.equal(JSON.stringify(deeplySanitized).includes('must-not-survive'), false)
++assert.equal(JSON.stringify(deeplySanitized).includes('[REDACTED_TRUNCATED]'), true)
++
+ assert.equal(isSensitiveField('access_token'), true)
+ assert.equal(isSensitiveField('client_secret'), true)
+ assert.equal(isSensitiveField('signature'), true)
+diff --git a/server/src/lib/log-sanitizer.ts b/server/src/lib/log-sanitizer.ts
+index 47923fcbf6dd84b04bb28f759e16c8f0de92c175..74ddda408a787b6e8e4d56c53070946caf135d32
+--- a/server/src/lib/log-sanitizer.ts
++++ b/server/src/lib/log-sanitizer.ts
+@@ -19,6 +19,10 @@
+     'currentPassword',
+     'confirmPassword',
+     'token',
++    'assetToken',
++    'agentSecret',
++    'pat',
++    'poa',
+     'botToken',
+     'bot_token',
+     'telegramBotToken',
+@@ -82,15 +86,21 @@
+     'i'
+ )
+ 
++// 替换值
++const REDACTED = '[REDACTED]'
++const REDACTED_JWT = '[REDACTED_JWT]'
++
+ // Token 模式匹配（用于检测值中包含的 token）
+ const TOKEN_PATTERNS = [
+-    /eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g,  // JWT
+-    /Bearer\s+[A-Za-z0-9_-]+/gi,  // Bearer token
++    { pattern: /eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, replacement: REDACTED_JWT },  // JWT
++    { pattern: /\b(?:pat|poa)_[A-Za-z0-9_-]{43}\b/g, replacement: REDACTED_JWT },  // PayIncus API token
++    { pattern: /Basic\s+[A-Za-z0-9+/=]{8,}/gi, replacement: REDACTED_JWT },  // Basic auth
++    { pattern: /Bearer\s+[A-Za-z0-9._~+/=:-]+/gi, replacement: REDACTED_JWT },  // Bearer token
++    {
++        pattern: /([?&](?:token|secret|key|sign|signature|access_token|refresh_token|api_key|apikey|apiKey|password|pwd|assetToken|agentSecret|code)=)[^&#\s]+/gi,
++        replacement: `$1${REDACTED}`
++    },  // URL query secrets
+ ]
+-
+-// 替换值
+-const REDACTED = '[REDACTED]'
+-const REDACTED_JWT = '[REDACTED_JWT]'
+ 
+ /**
+  * 检查字段名是否为敏感字段
+@@ -104,8 +114,8 @@
+  */
+ export function sanitizeTokensInString(value: string): string {
+     let result = value
+-    for (const pattern of TOKEN_PATTERNS) {
+-        result = result.replace(pattern, REDACTED_JWT)
++    for (const { pattern, replacement } of TOKEN_PATTERNS) {
++        result = result.replace(pattern, replacement)
+     }
+     return result
+ }
+@@ -116,7 +126,7 @@
+  */
+ export function sanitizeObject<T>(obj: T, depth = 0): T {
+     // 防止无限递归
+-    if (depth > 10) return obj
++    if (depth > 10) return '[REDACTED_TRUNCATED]' as unknown as T
+ 
+     if (obj === null || obj === undefined) {
+         return obj
+
+codex
+实现与新增守卫已完成，改动仅限指定两个文件。现在并行运行 `pnpm --filter server type-check` 和 `pnpm --filter server test:log-sanitizer`；若出现问题，只在这两个允许文件内修正。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'pnpm --filter server test:log-sanitizer' in C:\Users\Administrator\Desktop\payinces
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'pnpm --filter server type-check' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 1713ms:
+
+> server@1.3.7 test:log-sanitizer C:\Users\Administrator\Desktop\payinces\server
+> node --import tsx scripts/test-log-sanitizer.ts
+
+log sanitizer tests passed
+
+diff --git a/server/scripts/test-log-sanitizer.ts b/server/scripts/test-log-sanitizer.ts
+index 9f0d7217470715f03615b7e080091c49b1fcabff..8a1a3725a9f28941c66081bb9fa58ee3cd1b0d75
+--- a/server/scripts/test-log-sanitizer.ts
++++ b/server/scripts/test-log-sanitizer.ts
+@@ -101,6 +101,23 @@
+ )
+ 
+ assert.equal(sanitizeTokensInString('Authorization: Bearer opaque-token'), `Authorization: ${redactedJwt}`)
++assert.equal(sanitizeTokensInString(`pat_${'a'.repeat(43)}`), redactedJwt)
++assert.equal(sanitizeTokensInString(`poa_${'B'.repeat(43)}`), redactedJwt)
++assert.equal(sanitizeTokensInString('Authorization: Basic dXNlcjpwYXNz'), `Authorization: ${redactedJwt}`)
++assert.equal(sanitizeTokensInString('Authorization: Bearer a.b+c/d=='), `Authorization: ${redactedJwt}`)
++assert.equal(
++  sanitizeTokensInString('https://x/cb?token=SECRET123&x=1'),
++  `https://x/cb?token=${redacted}&x=1`
++)
++
++let deeplyNested: Record<string, unknown> = { password: 'must-not-survive' }
++for (let depth = 0; depth < 11; depth += 1) {
++  deeplyNested = { nested: deeplyNested }
++}
++const deeplySanitized = sanitizeObject(deeplyNested)
++assert.equal(JSON.stringify(deeplySanitized).includes('must-not-survive'), false)
++assert.equal(JSON.stringify(deeplySanitized).includes('[REDACTED_TRUNCATED]'), true)
++
+ assert.equal(isSensitiveField('access_token'), true)
+ assert.equal(isSensitiveField('client_secret'), true)
+ assert.equal(isSensitiveField('signature'), true)
+diff --git a/server/src/lib/log-sanitizer.ts b/server/src/lib/log-sanitizer.ts
+index 47923fcbf6dd84b04bb28f759e16c8f0de92c175..74ddda408a787b6e8e4d56c53070946caf135d32
+--- a/server/src/lib/log-sanitizer.ts
++++ b/server/src/lib/log-sanitizer.ts
+@@ -19,6 +19,10 @@
+     'currentPassword',
+     'confirmPassword',
+     'token',
++    'assetToken',
++    'agentSecret',
++    'pat',
++    'poa',
+     'botToken',
+     'bot_token',
+     'telegramBotToken',
+@@ -82,15 +86,21 @@
+     'i'
+ )
+ 
++// 替换值
++const REDACTED = '[REDACTED]'
++const REDACTED_JWT = '[REDACTED_JWT]'
++
+ // Token 模式匹配（用于检测值中包含的 token）
+ const TOKEN_PATTERNS = [
+-    /eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g,  // JWT
+-    /Bearer\s+[A-Za-z0-9_-]+/gi,  // Bearer token
++    { pattern: /eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, replacement: REDACTED_JWT },  // JWT
++    { pattern: /\b(?:pat|poa)_[A-Za-z0-9_-]{43}\b/g, replacement: REDACTED_JWT },  // PayIncus API token
++    { pattern: /Basic\s+[A-Za-z0-9+/=]{8,}/gi, replacement: REDACTED_JWT },  // Basic auth
++    { pattern: /Bearer\s+[A-Za-z0-9._~+/=:-]+/gi, replacement: REDACTED_JWT },  // Bearer token
++    {
++        pattern: /([?&](?:token|secret|key|sign|signature|access_token|refresh_token|api_key|apikey|apiKey|password|pwd|assetToken|agentSecret|code)=)[^&#\s]+/gi,
++        replacement: `$1${REDACTED}`
++    },  // URL query secrets
+ ]
+-
+-// 替换值
+-const REDACTED = '[REDACTED]'
+-const REDACTED_JWT = '[REDACTED_JWT]'
+ 
+ /**
+  * 检查字段名是否为敏感字段
+@@ -104,8 +114,8 @@
+  */
+ export function sanitizeTokensInString(value: string): string {
+     let result = value
+-    for (const pattern of TOKEN_PATTERNS) {
+-        result = result.replace(pattern, REDACTED_JWT)
++    for (const { pattern, replacement } of TOKEN_PATTERNS) {
++        result = result.replace(pattern, replacement)
+     }
+     return result
+ }
+@@ -116,7 +126,7 @@
+  */
+ export function sanitizeObject<T>(obj: T, depth = 0): T {
+     // 防止无限递归
+-    if (depth > 10) return obj
++    if (depth > 10) return '[REDACTED_TRUNCATED]' as unknown as T
+ 
+     if (obj === null || obj === undefined) {
+         return obj
+
+codex
+两项验收仍在执行中，当前没有返回失败信息；我会等它们结束后再核对最终 diff 和实际修改文件范围。
+diff --git a/server/scripts/test-log-sanitizer.ts b/server/scripts/test-log-sanitizer.ts
+index 9f0d7217470715f03615b7e080091c49b1fcabff..8a1a3725a9f28941c66081bb9fa58ee3cd1b0d75
+--- a/server/scripts/test-log-sanitizer.ts
++++ b/server/scripts/test-log-sanitizer.ts
+@@ -101,6 +101,23 @@
+ )
+ 
+ assert.equal(sanitizeTokensInString('Authorization: Bearer opaque-token'), `Authorization: ${redactedJwt}`)
++assert.equal(sanitizeTokensInString(`pat_${'a'.repeat(43)}`), redactedJwt)
++assert.equal(sanitizeTokensInString(`poa_${'B'.repeat(43)}`), redactedJwt)
++assert.equal(sanitizeTokensInString('Authorization: Basic dXNlcjpwYXNz'), `Authorization: ${redactedJwt}`)
++assert.equal(sanitizeTokensInString('Authorization: Bearer a.b+c/d=='), `Authorization: ${redactedJwt}`)
++assert.equal(
++  sanitizeTokensInString('https://x/cb?token=SECRET123&x=1'),
++  `https://x/cb?token=${redacted}&x=1`
++)
++
++let deeplyNested: Record<string, unknown> = { password: 'must-not-survive' }
++for (let depth = 0; depth < 11; depth += 1) {
++  deeplyNested = { nested: deeplyNested }
++}
++const deeplySanitized = sanitizeObject(deeplyNested)
++assert.equal(JSON.stringify(deeplySanitized).includes('must-not-survive'), false)
++assert.equal(JSON.stringify(deeplySanitized).includes('[REDACTED_TRUNCATED]'), true)
++
+ assert.equal(isSensitiveField('access_token'), true)
+ assert.equal(isSensitiveField('client_secret'), true)
+ assert.equal(isSensitiveField('signature'), true)
+diff --git a/server/src/lib/log-sanitizer.ts b/server/src/lib/log-sanitizer.ts
+index 47923fcbf6dd84b04bb28f759e16c8f0de92c175..74ddda408a787b6e8e4d56c53070946caf135d32
+--- a/server/src/lib/log-sanitizer.ts
++++ b/server/src/lib/log-sanitizer.ts
+@@ -19,6 +19,10 @@
+     'currentPassword',
+     'confirmPassword',
+     'token',
++    'assetToken',
++    'agentSecret',
++    'pat',
++    'poa',
+     'botToken',
+     'bot_token',
+     'telegramBotToken',
+@@ -82,15 +86,21 @@
+     'i'
+ )
+ 
++// 替换值
++const REDACTED = '[REDACTED]'
++const REDACTED_JWT = '[REDACTED_JWT]'
++
+ // Token 模式匹配（用于检测值中包含的 token）
+ const TOKEN_PATTERNS = [
+-    /eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g,  // JWT
+-    /Bearer\s+[A-Za-z0-9_-]+/gi,  // Bearer token
++    { pattern: /eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, replacement: REDACTED_JWT },  // JWT
++    { pattern: /\b(?:pat|poa)_[A-Za-z0-9_-]{43}\b/g, replacement: REDACTED_JWT },  // PayIncus API token
++    { pattern: /Basic\s+[A-Za-z0-9+/=]{8,}/gi, replacement: REDACTED_JWT },  // Basic auth
++    { pattern: /Bearer\s+[A-Za-z0-9._~+/=:-]+/gi, replacement: REDACTED_JWT },  // Bearer token
++    {
++        pattern: /([?&](?:token|secret|key|sign|signature|access_token|refresh_token|api_key|apikey|apiKey|password|pwd|assetToken|agentSecret|code)=)[^&#\s]+/gi,
++        replacement: `$1${REDACTED}`
++    },  // URL query secrets
+ ]
+-
+-// 替换值
+-const REDACTED = '[REDACTED]'
+-const REDACTED_JWT = '[REDACTED_JWT]'
+ 
+ /**
+  * 检查字段名是否为敏感字段
+@@ -104,8 +114,8 @@
+  */
+ export function sanitizeTokensInString(value: string): string {
+     let result = value
+-    for (const pattern of TOKEN_PATTERNS) {
+-        result = result.replace(pattern, REDACTED_JWT)
++    for (const { pattern, replacement } of TOKEN_PATTERNS) {
++        result = result.replace(pattern, replacement)
+     }
+     return result
+ }
+@@ -116,7 +126,7 @@
+  */
+ export function sanitizeObject<T>(obj: T, depth = 0): T {
+     // 防止无限递归
+-    if (depth > 10) return obj
++    if (depth > 10) return '[REDACTED_TRUNCATED]' as unknown as T
+ 
+     if (obj === null || obj === undefined) {
+         return obj
+
+diff --git a/server/scripts/test-log-sanitizer.ts b/server/scripts/test-log-sanitizer.ts
+index 9f0d7217470715f03615b7e080091c49b1fcabff..8a1a3725a9f28941c66081bb9fa58ee3cd1b0d75
+--- a/server/scripts/test-log-sanitizer.ts
++++ b/server/scripts/test-log-sanitizer.ts
+@@ -101,6 +101,23 @@
+ )
+ 
+ assert.equal(sanitizeTokensInString('Authorization: Bearer opaque-token'), `Authorization: ${redactedJwt}`)
++assert.equal(sanitizeTokensInString(`pat_${'a'.repeat(43)}`), redactedJwt)
++assert.equal(sanitizeTokensInString(`poa_${'B'.repeat(43)}`), redactedJwt)
++assert.equal(sanitizeTokensInString('Authorization: Basic dXNlcjpwYXNz'), `Authorization: ${redactedJwt}`)
++assert.equal(sanitizeTokensInString('Authorization: Bearer a.b+c/d=='), `Authorization: ${redactedJwt}`)
++assert.equal(
++  sanitizeTokensInString('https://x/cb?token=SECRET123&x=1'),
++  `https://x/cb?token=${redacted}&x=1`
++)
++
++let deeplyNested: Record<string, unknown> = { password: 'must-not-survive' }
++for (let depth = 0; depth < 11; depth += 1) {
++  deeplyNested = { nested: deeplyNested }
++}
++const deeplySanitized = sanitizeObject(deeplyNested)
++assert.equal(JSON.stringify(deeplySanitized).includes('must-not-survive'), false)
++assert.equal(JSON.stringify(deeplySanitized).includes('[REDACTED_TRUNCATED]'), true)
++
+ assert.equal(isSensitiveField('access_token'), true)
+ assert.equal(isSensitiveField('client_secret'), true)
+ assert.equal(isSensitiveField('signature'), true)
+diff --git a/server/src/lib/log-sanitizer.ts b/server/src/lib/log-sanitizer.ts
+index 47923fcbf6dd84b04bb28f759e16c8f0de92c175..74ddda408a787b6e8e4d56c53070946caf135d32
+--- a/server/src/lib/log-sanitizer.ts
++++ b/server/src/lib/log-sanitizer.ts
+@@ -19,6 +19,10 @@
+     'currentPassword',
+     'confirmPassword',
+     'token',
++    'assetToken',
++    'agentSecret',
++    'pat',
++    'poa',
+     'botToken',
+     'bot_token',
+     'telegramBotToken',
+@@ -82,15 +86,21 @@
+     'i'
+ )
+ 
++// 替换值
++const REDACTED = '[REDACTED]'
++const REDACTED_JWT = '[REDACTED_JWT]'
++
+ // Token 模式匹配（用于检测值中包含的 token）
+ const TOKEN_PATTERNS = [
+-    /eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g,  // JWT
+-    /Bearer\s+[A-Za-z0-9_-]+/gi,  // Bearer token
++    { pattern: /eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, replacement: REDACTED_JWT },  // JWT
++    { pattern: /\b(?:pat|poa)_[A-Za-z0-9_-]{43}\b/g, replacement: REDACTED_JWT },  // PayIncus API token
++    { pattern: /Basic\s+[A-Za-z0-9+/=]{8,}/gi, replacement: REDACTED_JWT },  // Basic auth
++    { pattern: /Bearer\s+[A-Za-z0-9._~+/=:-]+/gi, replacement: REDACTED_JWT },  // Bearer token
++    {
++        pattern: /([?&](?:token|secret|key|sign|signature|access_token|refresh_token|api_key|apikey|apiKey|password|pwd|assetToken|agentSecret|code)=)[^&#\s]+/gi,
++        replacement: `$1${REDACTED}`
++    },  // URL query secrets
+ ]
+-
+-// 替换值
+-const REDACTED = '[REDACTED]'
+-const REDACTED_JWT = '[REDACTED_JWT]'
+ 
+ /**
+  * 检查字段名是否为敏感字段
+@@ -104,8 +114,8 @@
+  */
+ export function sanitizeTokensInString(value: string): string {
+     let result = value
+-    for (const pattern of TOKEN_PATTERNS) {
+-        result = result.replace(pattern, REDACTED_JWT)
++    for (const { pattern, replacement } of TOKEN_PATTERNS) {
++        result = result.replace(pattern, replacement)
+     }
+     return result
+ }
+@@ -116,7 +126,7 @@
+  */
+ export function sanitizeObject<T>(obj: T, depth = 0): T {
+     // 防止无限递归
+-    if (depth > 10) return obj
++    if (depth > 10) return '[REDACTED_TRUNCATED]' as unknown as T
+ 
+     if (obj === null || obj === undefined) {
+         return obj
+
+diff --git a/server/scripts/test-log-sanitizer.ts b/server/scripts/test-log-sanitizer.ts
+index 9f0d7217470715f03615b7e080091c49b1fcabff..8a1a3725a9f28941c66081bb9fa58ee3cd1b0d75
+--- a/server/scripts/test-log-sanitizer.ts
++++ b/server/scripts/test-log-sanitizer.ts
+@@ -101,6 +101,23 @@
+ )
+ 
+ assert.equal(sanitizeTokensInString('Authorization: Bearer opaque-token'), `Authorization: ${redactedJwt}`)
++assert.equal(sanitizeTokensInString(`pat_${'a'.repeat(43)}`), redactedJwt)
++assert.equal(sanitizeTokensInString(`poa_${'B'.repeat(43)}`), redactedJwt)
++assert.equal(sanitizeTokensInString('Authorization: Basic dXNlcjpwYXNz'), `Authorization: ${redactedJwt}`)
++assert.equal(sanitizeTokensInString('Authorization: Bearer a.b+c/d=='), `Authorization: ${redactedJwt}`)
++assert.equal(
++  sanitizeTokensInString('https://x/cb?token=SECRET123&x=1'),
++  `https://x/cb?token=${redacted}&x=1`
++)
++
++let deeplyNested: Record<string, unknown> = { password: 'must-not-survive' }
++for (let depth = 0; depth < 11; depth += 1) {
++  deeplyNested = { nested: deeplyNested }
++}
++const deeplySanitized = sanitizeObject(deeplyNested)
++assert.equal(JSON.stringify(deeplySanitized).includes('must-not-survive'), false)
++assert.equal(JSON.stringify(deeplySanitized).includes('[REDACTED_TRUNCATED]'), true)
++
+ assert.equal(isSensitiveField('access_token'), true)
+ assert.equal(isSensitiveField('client_secret'), true)
+ assert.equal(isSensitiveField('signature'), true)
+diff --git a/server/src/lib/log-sanitizer.ts b/server/src/lib/log-sanitizer.ts
+index 47923fcbf6dd84b04bb28f759e16c8f0de92c175..74ddda408a787b6e8e4d56c53070946caf135d32
+--- a/server/src/lib/log-sanitizer.ts
++++ b/server/src/lib/log-sanitizer.ts
+@@ -19,6 +19,10 @@
+     'currentPassword',
+     'confirmPassword',
+     'token',
++    'assetToken',
++    'agentSecret',
++    'pat',
++    'poa',
+     'botToken',
+     'bot_token',
+     'telegramBotToken',
+@@ -82,15 +86,21 @@
+     'i'
+ )
+ 
++// 替换值
++const REDACTED = '[REDACTED]'
++const REDACTED_JWT = '[REDACTED_JWT]'
++
+ // Token 模式匹配（用于检测值中包含的 token）
+ const TOKEN_PATTERNS = [
+-    /eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g,  // JWT
+-    /Bearer\s+[A-Za-z0-9_-]+/gi,  // Bearer token
++    { pattern: /eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, replacement: REDACTED_JWT },  // JWT
++    { pattern: /\b(?:pat|poa)_[A-Za-z0-9_-]{43}\b/g, replacement: REDACTED_JWT },  // PayIncus API token
++    { pattern: /Basic\s+[A-Za-z0-9+/=]{8,}/gi, replacement: REDACTED_JWT },  // Basic auth
++    { pattern: /Bearer\s+[A-Za-z0-9._~+/=:-]+/gi, replacement: REDACTED_JWT },  // Bearer token
++    {
++        pattern: /([?&](?:token|secret|key|sign|signature|access_token|refresh_token|api_key|apikey|apiKey|password|pwd|assetToken|agentSecret|code)=)[^&#\s]+/gi,
++        replacement: `$1${REDACTED}`
++    },  // URL query secrets
+ ]
+-
+-// 替换值
+-const REDACTED = '[REDACTED]'
+-const REDACTED_JWT = '[REDACTED_JWT]'
+ 
+ /**
+  * 检查字段名是否为敏感字段
+@@ -104,8 +114,8 @@
+  */
+ export function sanitizeTokensInString(value: string): string {
+     let result = value
+-    for (const pattern of TOKEN_PATTERNS) {
+-        result = result.replace(pattern, REDACTED_JWT)
++    for (const { pattern, replacement } of TOKEN_PATTERNS) {
++        result = result.replace(pattern, replacement)
+     }
+     return result
+ }
+@@ -116,7 +126,7 @@
+  */
+ export function sanitizeObject<T>(obj: T, depth = 0): T {
+     // 防止无限递归
+-    if (depth > 10) return obj
++    if (depth > 10) return '[REDACTED_TRUNCATED]' as unknown as T
+ 
+     if (obj === null || obj === undefined) {
+         return obj
+
+diff --git a/server/scripts/test-log-sanitizer.ts b/server/scripts/test-log-sanitizer.ts
+index 9f0d7217470715f03615b7e080091c49b1fcabff..8a1a3725a9f28941c66081bb9fa58ee3cd1b0d75
+--- a/server/scripts/test-log-sanitizer.ts
++++ b/server/scripts/test-log-sanitizer.ts
+@@ -101,6 +101,23 @@
+ )
+ 
+ assert.equal(sanitizeTokensInString('Authorization: Bearer opaque-token'), `Authorization: ${redactedJwt}`)
++assert.equal(sanitizeTokensInString(`pat_${'a'.repeat(43)}`), redactedJwt)
++assert.equal(sanitizeTokensInString(`poa_${'B'.repeat(43)}`), redactedJwt)
++assert.equal(sanitizeTokensInString('Authorization: Basic dXNlcjpwYXNz'), `Authorization: ${redactedJwt}`)
++assert.equal(sanitizeTokensInString('Authorization: Bearer a.b+c/d=='), `Authorization: ${redactedJwt}`)
++assert.equal(
++  sanitizeTokensInString('https://x/cb?token=SECRET123&x=1'),
++  `https://x/cb?token=${redacted}&x=1`
++)
++
++let deeplyNested: Record<string, unknown> = { password: 'must-not-survive' }
++for (let depth = 0; depth < 11; depth += 1) {
++  deeplyNested = { nested: deeplyNested }
++}
++const deeplySanitized = sanitizeObject(deeplyNested)
++assert.equal(JSON.stringify(deeplySanitized).includes('must-not-survive'), false)
++assert.equal(JSON.stringify(deeplySanitized).includes('[REDACTED_TRUNCATED]'), true)
++
+ assert.equal(isSensitiveField('access_token'), true)
+ assert.equal(isSensitiveField('client_secret'), true)
+ assert.equal(isSensitiveField('signature'), true)
+diff --git a/server/src/lib/log-sanitizer.ts b/server/src/lib/log-sanitizer.ts
+index 47923fcbf6dd84b04bb28f759e16c8f0de92c175..74ddda408a787b6e8e4d56c53070946caf135d32
+--- a/server/src/lib/log-sanitizer.ts
++++ b/server/src/lib/log-sanitizer.ts
+@@ -19,6 +19,10 @@
+     'currentPassword',
+     'confirmPassword',
+     'token',
++    'assetToken',
++    'agentSecret',
++    'pat',
++    'poa',
+     'botToken',
+     'bot_token',
+     'telegramBotToken',
+@@ -82,15 +86,21 @@
+     'i'
+ )
+ 
++// 替换值
++const REDACTED = '[REDACTED]'
++const REDACTED_JWT = '[REDACTED_JWT]'
++
+ // Token 模式匹配（用于检测值中包含的 token）
+ const TOKEN_PATTERNS = [
+-    /eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g,  // JWT
+-    /Bearer\s+[A-Za-z0-9_-]+/gi,  // Bearer token
++    { pattern: /eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, replacement: REDACTED_JWT },  // JWT
++    { pattern: /\b(?:pat|poa)_[A-Za-z0-9_-]{43}\b/g, replacement: REDACTED_JWT },  // PayIncus API token
++    { pattern: /Basic\s+[A-Za-z0-9+/=]{8,}/gi, replacement: REDACTED_JWT },  // Basic auth
++    { pattern: /Bearer\s+[A-Za-z0-9._~+/=:-]+/gi, replacement: REDACTED_JWT },  // Bearer token
++    {
++        pattern: /([?&](?:token|secret|key|sign|signature|access_token|refresh_token|api_key|apikey|apiKey|password|pwd|assetToken|agentSecret|code)=)[^&#\s]+/gi,
++        replacement: `$1${REDACTED}`
++    },  // URL query secrets
+ ]
+-
+-// 替换值
+-const REDACTED = '[REDACTED]'
+-const REDACTED_JWT = '[REDACTED_JWT]'
+ 
+ /**
+  * 检查字段名是否为敏感字段
+@@ -104,8 +114,8 @@
+  */
+ export function sanitizeTokensInString(value: string): string {
+     let result = value
+-    for (const pattern of TOKEN_PATTERNS) {
+-        result = result.replace(pattern, REDACTED_JWT)
++    for (const { pattern, replacement } of TOKEN_PATTERNS) {
++        result = result.replace(pattern, replacement)
+     }
+     return result
+ }
+@@ -116,7 +126,7 @@
+  */
+ export function sanitizeObject<T>(obj: T, depth = 0): T {
+     // 防止无限递归
+-    if (depth > 10) return obj
++    if (depth > 10) return '[REDACTED_TRUNCATED]' as unknown as T
+ 
+     if (obj === null || obj === undefined) {
+         return obj
+
+diff --git a/server/scripts/test-log-sanitizer.ts b/server/scripts/test-log-sanitizer.ts
+index 9f0d7217470715f03615b7e080091c49b1fcabff..8a1a3725a9f28941c66081bb9fa58ee3cd1b0d75
+--- a/server/scripts/test-log-sanitizer.ts
++++ b/server/scripts/test-log-sanitizer.ts
+@@ -101,6 +101,23 @@
+ )
+ 
+ assert.equal(sanitizeTokensInString('Authorization: Bearer opaque-token'), `Authorization: ${redactedJwt}`)
++assert.equal(sanitizeTokensInString(`pat_${'a'.repeat(43)}`), redactedJwt)
++assert.equal(sanitizeTokensInString(`poa_${'B'.repeat(43)}`), redactedJwt)
++assert.equal(sanitizeTokensInString('Authorization: Basic dXNlcjpwYXNz'), `Authorization: ${redactedJwt}`)
++assert.equal(sanitizeTokensInString('Authorization: Bearer a.b+c/d=='), `Authorization: ${redactedJwt}`)
++assert.equal(
++  sanitizeTokensInString('https://x/cb?token=SECRET123&x=1'),
++  `https://x/cb?token=${redacted}&x=1`
++)
++
++let deeplyNested: Record<string, unknown> = { password: 'must-not-survive' }
++for (let depth = 0; depth < 11; depth += 1) {
++  deeplyNested = { nested: deeplyNested }
++}
++const deeplySanitized = sanitizeObject(deeplyNested)
++assert.equal(JSON.stringify(deeplySanitized).includes('must-not-survive'), false)
++assert.equal(JSON.stringify(deeplySanitized).includes('[REDACTED_TRUNCATED]'), true)
++
+ assert.equal(isSensitiveField('access_token'), true)
+ assert.equal(isSensitiveField('client_secret'), true)
+ assert.equal(isSensitiveField('signature'), true)
+diff --git a/server/src/lib/log-sanitizer.ts b/server/src/lib/log-sanitizer.ts
+index 47923fcbf6dd84b04bb28f759e16c8f0de92c175..74ddda408a787b6e8e4d56c53070946caf135d32
+--- a/server/src/lib/log-sanitizer.ts
++++ b/server/src/lib/log-sanitizer.ts
+@@ -19,6 +19,10 @@
+     'currentPassword',
+     'confirmPassword',
+     'token',
++    'assetToken',
++    'agentSecret',
++    'pat',
++    'poa',
+     'botToken',
+     'bot_token',
+     'telegramBotToken',
+@@ -82,15 +86,21 @@
+     'i'
+ )
+ 
++// 替换值
++const REDACTED = '[REDACTED]'
++const REDACTED_JWT = '[REDACTED_JWT]'
++
+ // Token 模式匹配（用于检测值中包含的 token）
+ const TOKEN_PATTERNS = [
+-    /eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g,  // JWT
+-    /Bearer\s+[A-Za-z0-9_-]+/gi,  // Bearer token
++    { pattern: /eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, replacement: REDACTED_JWT },  // JWT
++    { pattern: /\b(?:pat|poa)_[A-Za-z0-9_-]{43}\b/g, replacement: REDACTED_JWT },  // PayIncus API token
++    { pattern: /Basic\s+[A-Za-z0-9+/=]{8,}/gi, replacement: REDACTED_JWT },  // Basic auth
++    { pattern: /Bearer\s+[A-Za-z0-9._~+/=:-]+/gi, replacement: REDACTED_JWT },  // Bearer token
++    {
++        pattern: /([?&](?:token|secret|key|sign|signature|access_token|refresh_token|api_key|apikey|apiKey|password|pwd|assetToken|agentSecret|code)=)[^&#\s]+/gi,
++        replacement: `$1${REDACTED}`
++    },  // URL query secrets
+ ]
+-
+-// 替换值
+-const REDACTED = '[REDACTED]'
+-const REDACTED_JWT = '[REDACTED_JWT]'
+ 
+ /**
+  * 检查字段名是否为敏感字段
+@@ -104,8 +114,8 @@
+  */
+ export function sanitizeTokensInString(value: string): string {
+     let result = value
+-    for (const pattern of TOKEN_PATTERNS) {
+-        result = result.replace(pattern, REDACTED_JWT)
++    for (const { pattern, replacement } of TOKEN_PATTERNS) {
++        result = result.replace(pattern, replacement)
+     }
+     return result
+ }
+@@ -116,7 +126,7 @@
+  */
+ export function sanitizeObject<T>(obj: T, depth = 0): T {
+     // 防止无限递归
+-    if (depth > 10) return obj
++    if (depth > 10) return '[REDACTED_TRUNCATED]' as unknown as T
+ 
+     if (obj === null || obj === undefined) {
+         return obj
+
+diff --git a/server/scripts/test-log-sanitizer.ts b/server/scripts/test-log-sanitizer.ts
+index 9f0d7217470715f03615b7e080091c49b1fcabff..8a1a3725a9f28941c66081bb9fa58ee3cd1b0d75
+--- a/server/scripts/test-log-sanitizer.ts
++++ b/server/scripts/test-log-sanitizer.ts
+@@ -101,6 +101,23 @@
+ )
+ 
+ assert.equal(sanitizeTokensInString('Authorization: Bearer opaque-token'), `Authorization: ${redactedJwt}`)
++assert.equal(sanitizeTokensInString(`pat_${'a'.repeat(43)}`), redactedJwt)
++assert.equal(sanitizeTokensInString(`poa_${'B'.repeat(43)}`), redactedJwt)
++assert.equal(sanitizeTokensInString('Authorization: Basic dXNlcjpwYXNz'), `Authorization: ${redactedJwt}`)
++assert.equal(sanitizeTokensInString('Authorization: Bearer a.b+c/d=='), `Authorization: ${redactedJwt}`)
++assert.equal(
++  sanitizeTokensInString('https://x/cb?token=SECRET123&x=1'),
++  `https://x/cb?token=${redacted}&x=1`
++)
++
++let deeplyNested: Record<string, unknown> = { password: 'must-not-survive' }
++for (let depth = 0; depth < 11; depth += 1) {
++  deeplyNested = { nested: deeplyNested }
++}
++const deeplySanitized = sanitizeObject(deeplyNested)
++assert.equal(JSON.stringify(deeplySanitized).includes('must-not-survive'), false)
++assert.equal(JSON.stringify(deeplySanitized).includes('[REDACTED_TRUNCATED]'), true)
++
+ assert.equal(isSensitiveField('access_token'), true)
+ assert.equal(isSensitiveField('client_secret'), true)
+ assert.equal(isSensitiveField('signature'), true)
+diff --git a/server/src/lib/log-sanitizer.ts b/server/src/lib/log-sanitizer.ts
+index 47923fcbf6dd84b04bb28f759e16c8f0de92c175..74ddda408a787b6e8e4d56c53070946caf135d32
+--- a/server/src/lib/log-sanitizer.ts
++++ b/server/src/lib/log-sanitizer.ts
+@@ -19,6 +19,10 @@
+     'currentPassword',
+     'confirmPassword',
+     'token',
++    'assetToken',
++    'agentSecret',
++    'pat',
++    'poa',
+     'botToken',
+     'bot_token',
+     'telegramBotToken',
+@@ -82,15 +86,21 @@
+     'i'
+ )
+ 
++// 替换值
++const REDACTED = '[REDACTED]'
++const REDACTED_JWT = '[REDACTED_JWT]'
++
+ // Token 模式匹配（用于检测值中包含的 token）
+ const TOKEN_PATTERNS = [
+-    /eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g,  // JWT
+-    /Bearer\s+[A-Za-z0-9_-]+/gi,  // Bearer token
++    { pattern: /eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, replacement: REDACTED_JWT },  // JWT
++    { pattern: /\b(?:pat|poa)_[A-Za-z0-9_-]{43}\b/g, replacement: REDACTED_JWT },  // PayIncus API token
++    { pattern: /Basic\s+[A-Za-z0-9+/=]{8,}/gi, replacement: REDACTED_JWT },  // Basic auth
++    { pattern: /Bearer\s+[A-Za-z0-9._~+/=:-]+/gi, replacement: REDACTED_JWT },  // Bearer token
++    {
++        pattern: /([?&](?:token|secret|key|sign|signature|access_token|refresh_token|api_key|apikey|apiKey|password|pwd|assetToken|agentSecret|code)=)[^&#\s]+/gi,
++        replacement: `$1${REDACTED}`
++    },  // URL query secrets
+ ]
+-
+-// 替换值
+-const REDACTED = '[REDACTED]'
+-const REDACTED_JWT = '[REDACTED_JWT]'
+ 
+ /**
+  * 检查字段名是否为敏感字段
+@@ -104,8 +114,8 @@
+  */
+ export function sanitizeTokensInString(value: string): string {
+     let result = value
+-    for (const pattern of TOKEN_PATTERNS) {
+-        result = result.replace(pattern, REDACTED_JWT)
++    for (const { pattern, replacement } of TOKEN_PATTERNS) {
++        result = result.replace(pattern, replacement)
+     }
+     return result
+ }
+@@ -116,7 +126,7 @@
+  */
+ export function sanitizeObject<T>(obj: T, depth = 0): T {
+     // 防止无限递归
+-    if (depth > 10) return obj
++    if (depth > 10) return '[REDACTED_TRUNCATED]' as unknown as T
+ 
+     if (obj === null || obj === undefined) {
+         return obj
+
+diff --git a/server/scripts/test-log-sanitizer.ts b/server/scripts/test-log-sanitizer.ts
+index 9f0d7217470715f03615b7e080091c49b1fcabff..8a1a3725a9f28941c66081bb9fa58ee3cd1b0d75
+--- a/server/scripts/test-log-sanitizer.ts
++++ b/server/scripts/test-log-sanitizer.ts
+@@ -101,6 +101,23 @@
+ )
+ 
+ assert.equal(sanitizeTokensInString('Authorization: Bearer opaque-token'), `Authorization: ${redactedJwt}`)
++assert.equal(sanitizeTokensInString(`pat_${'a'.repeat(43)}`), redactedJwt)
++assert.equal(sanitizeTokensInString(`poa_${'B'.repeat(43)}`), redactedJwt)
++assert.equal(sanitizeTokensInString('Authorization: Basic dXNlcjpwYXNz'), `Authorization: ${redactedJwt}`)
++assert.equal(sanitizeTokensInString('Authorization: Bearer a.b+c/d=='), `Authorization: ${redactedJwt}`)
++assert.equal(
++  sanitizeTokensInString('https://x/cb?token=SECRET123&x=1'),
++  `https://x/cb?token=${redacted}&x=1`
++)
++
++let deeplyNested: Record<string, unknown> = { password: 'must-not-survive' }
++for (let depth = 0; depth < 11; depth += 1) {
++  deeplyNested = { nested: deeplyNested }
++}
++const deeplySanitized = sanitizeObject(deeplyNested)
++assert.equal(JSON.stringify(deeplySanitized).includes('must-not-survive'), false)
++assert.equal(JSON.stringify(deeplySanitized).includes('[REDACTED_TRUNCATED]'), true)
++
+ assert.equal(isSensitiveField('access_token'), true)
+ assert.equal(isSensitiveField('client_secret'), true)
+ assert.equal(isSensitiveField('signature'), true)
+diff --git a/server/src/lib/log-sanitizer.ts b/server/src/lib/log-sanitizer.ts
+index 47923fcbf6dd84b04bb28f759e16c8f0de92c175..74ddda408a787b6e8e4d56c53070946caf135d32
+--- a/server/src/lib/log-sanitizer.ts
++++ b/server/src/lib/log-sanitizer.ts
+@@ -19,6 +19,10 @@
+     'currentPassword',
+     'confirmPassword',
+     'token',
++    'assetToken',
++    'agentSecret',
++    'pat',
++    'poa',
+     'botToken',
+     'bot_token',
+     'telegramBotToken',
+@@ -82,15 +86,21 @@
+     'i'
+ )
+ 
++// 替换值
++const REDACTED = '[REDACTED]'
++const REDACTED_JWT = '[REDACTED_JWT]'
++
+ // Token 模式匹配（用于检测值中包含的 token）
+ const TOKEN_PATTERNS = [
+-    /eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g,  // JWT
+-    /Bearer\s+[A-Za-z0-9_-]+/gi,  // Bearer token
++    { pattern: /eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, replacement: REDACTED_JWT },  // JWT
++    { pattern: /\b(?:pat|poa)_[A-Za-z0-9_-]{43}\b/g, replacement: REDACTED_JWT },  // PayIncus API token
++    { pattern: /Basic\s+[A-Za-z0-9+/=]{8,}/gi, replacement: REDACTED_JWT },  // Basic auth
++    { pattern: /Bearer\s+[A-Za-z0-9._~+/=:-]+/gi, replacement: REDACTED_JWT },  // Bearer token
++    {
++        pattern: /([?&](?:token|secret|key|sign|signature|access_token|refresh_token|api_key|apikey|apiKey|password|pwd|assetToken|agentSecret|code)=)[^&#\s]+/gi,
++        replacement: `$1${REDACTED}`
++    },  // URL query secrets
+ ]
+-
+-// 替换值
+-const REDACTED = '[REDACTED]'
+-const REDACTED_JWT = '[REDACTED_JWT]'
+ 
+ /**
+  * 检查字段名是否为敏感字段
+@@ -104,8 +114,8 @@
+  */
+ export function sanitizeTokensInString(value: string): string {
+     let result = value
+-    for (const pattern of TOKEN_PATTERNS) {
+-        result = result.replace(pattern, REDACTED_JWT)
++    for (const { pattern, replacement } of TOKEN_PATTERNS) {
++        result = result.replace(pattern, replacement)
+     }
+     return result
+ }
+@@ -116,7 +126,7 @@
+  */
+ export function sanitizeObject<T>(obj: T, depth = 0): T {
+     // 防止无限递归
+-    if (depth > 10) return obj
++    if (depth > 10) return '[REDACTED_TRUNCATED]' as unknown as T
+ 
+     if (obj === null || obj === undefined) {
+         return obj
+
+diff --git a/server/scripts/test-log-sanitizer.ts b/server/scripts/test-log-sanitizer.ts
+index 9f0d7217470715f03615b7e080091c49b1fcabff..8a1a3725a9f28941c66081bb9fa58ee3cd1b0d75
+--- a/server/scripts/test-log-sanitizer.ts
++++ b/server/scripts/test-log-sanitizer.ts
+@@ -101,6 +101,23 @@
+ )
+ 
+ assert.equal(sanitizeTokensInString('Authorization: Bearer opaque-token'), `Authorization: ${redactedJwt}`)
++assert.equal(sanitizeTokensInString(`pat_${'a'.repeat(43)}`), redactedJwt)
++assert.equal(sanitizeTokensInString(`poa_${'B'.repeat(43)}`), redactedJwt)
++assert.equal(sanitizeTokensInString('Authorization: Basic dXNlcjpwYXNz'), `Authorization: ${redactedJwt}`)
++assert.equal(sanitizeTokensInString('Authorization: Bearer a.b+c/d=='), `Authorization: ${redactedJwt}`)
++assert.equal(
++  sanitizeTokensInString('https://x/cb?token=SECRET123&x=1'),
++  `https://x/cb?token=${redacted}&x=1`
++)
++
++let deeplyNested: Record<string, unknown> = { password: 'must-not-survive' }
++for (let depth = 0; depth < 11; depth += 1) {
++  deeplyNested = { nested: deeplyNested }
++}
++const deeplySanitized = sanitizeObject(deeplyNested)
++assert.equal(JSON.stringify(deeplySanitized).includes('must-not-survive'), false)
++assert.equal(JSON.stringify(deeplySanitized).includes('[REDACTED_TRUNCATED]'), true)
++
+ assert.equal(isSensitiveField('access_token'), true)
+ assert.equal(isSensitiveField('client_secret'), true)
+ assert.equal(isSensitiveField('signature'), true)
+diff --git a/server/src/lib/log-sanitizer.ts b/server/src/lib/log-sanitizer.ts
+index 47923fcbf6dd84b04bb28f759e16c8f0de92c175..74ddda408a787b6e8e4d56c53070946caf135d32
+--- a/server/src/lib/log-sanitizer.ts
++++ b/server/src/lib/log-sanitizer.ts
+@@ -19,6 +19,10 @@
+     'currentPassword',
+     'confirmPassword',
+     'token',
++    'assetToken',
++    'agentSecret',
++    'pat',
++    'poa',
+     'botToken',
+     'bot_token',
+     'telegramBotToken',
+@@ -82,15 +86,21 @@
+     'i'
+ )
+ 
++// 替换值
++const REDACTED = '[REDACTED]'
++const REDACTED_JWT = '[REDACTED_JWT]'
++
+ // Token 模式匹配（用于检测值中包含的 token）
+ const TOKEN_PATTERNS = [
+-    /eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g,  // JWT
+-    /Bearer\s+[A-Za-z0-9_-]+/gi,  // Bearer token
++    { pattern: /eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, replacement: REDACTED_JWT },  // JWT
++    { pattern: /\b(?:pat|poa)_[A-Za-z0-9_-]{43}\b/g, replacement: REDACTED_JWT },  // PayIncus API token
++    { pattern: /Basic\s+[A-Za-z0-9+/=]{8,}/gi, replacement: REDACTED_JWT },  // Basic auth
++    { pattern: /Bearer\s+[A-Za-z0-9._~+/=:-]+/gi, replacement: REDACTED_JWT },  // Bearer token
++    {
++        pattern: /([?&](?:token|secret|key|sign|signature|access_token|refresh_token|api_key|apikey|apiKey|password|pwd|assetToken|agentSecret|code)=)[^&#\s]+/gi,
++        replacement: `$1${REDACTED}`
++    },  // URL query secrets
+ ]
+-
+-// 替换值
+-const REDACTED = '[REDACTED]'
+-const REDACTED_JWT = '[REDACTED_JWT]'
+ 
+ /**
+  * 检查字段名是否为敏感字段
+@@ -104,8 +114,8 @@
+  */
+ export function sanitizeTokensInString(value: string): string {
+     let result = value
+-    for (const pattern of TOKEN_PATTERNS) {
+-        result = result.replace(pattern, REDACTED_JWT)
++    for (const { pattern, replacement } of TOKEN_PATTERNS) {
++        result = result.replace(pattern, replacement)
+     }
+     return result
+ }
+@@ -116,7 +126,7 @@
+  */
+ export function sanitizeObject<T>(obj: T, depth = 0): T {
+     // 防止无限递归
+-    if (depth > 10) return obj
++    if (depth > 10) return '[REDACTED_TRUNCATED]' as unknown as T
+ 
+     if (obj === null || obj === undefined) {
+         return obj
+
+diff --git a/server/scripts/test-log-sanitizer.ts b/server/scripts/test-log-sanitizer.ts
+index 9f0d7217470715f03615b7e080091c49b1fcabff..8a1a3725a9f28941c66081bb9fa58ee3cd1b0d75
+--- a/server/scripts/test-log-sanitizer.ts
++++ b/server/scripts/test-log-sanitizer.ts
+@@ -101,6 +101,23 @@
+ )
+ 
+ assert.equal(sanitizeTokensInString('Authorization: Bearer opaque-token'), `Authorization: ${redactedJwt}`)
++assert.equal(sanitizeTokensInString(`pat_${'a'.repeat(43)}`), redactedJwt)
++assert.equal(sanitizeTokensInString(`poa_${'B'.repeat(43)}`), redactedJwt)
++assert.equal(sanitizeTokensInString('Authorization: Basic dXNlcjpwYXNz'), `Authorization: ${redactedJwt}`)
++assert.equal(sanitizeTokensInString('Authorization: Bearer a.b+c/d=='), `Authorization: ${redactedJwt}`)
++assert.equal(
++  sanitizeTokensInString('https://x/cb?token=SECRET123&x=1'),
++  `https://x/cb?token=${redacted}&x=1`
++)
++
++let deeplyNested: Record<string, unknown> = { password: 'must-not-survive' }
++for (let depth = 0; depth < 11; depth += 1) {
++  deeplyNested = { nested: deeplyNested }
++}
++const deeplySanitized = sanitizeObject(deeplyNested)
++assert.equal(JSON.stringify(deeplySanitized).includes('must-not-survive'), false)
++assert.equal(JSON.stringify(deeplySanitized).includes('[REDACTED_TRUNCATED]'), true)
++
+ assert.equal(isSensitiveField('access_token'), true)
+ assert.equal(isSensitiveField('client_secret'), true)
+ assert.equal(isSensitiveField('signature'), true)
+diff --git a/server/src/lib/log-sanitizer.ts b/server/src/lib/log-sanitizer.ts
+index 47923fcbf6dd84b04bb28f759e16c8f0de92c175..74ddda408a787b6e8e4d56c53070946caf135d32
+--- a/server/src/lib/log-sanitizer.ts
++++ b/server/src/lib/log-sanitizer.ts
+@@ -19,6 +19,10 @@
+     'currentPassword',
+     'confirmPassword',
+     'token',
++    'assetToken',
++    'agentSecret',
++    'pat',
++    'poa',
+     'botToken',
+     'bot_token',
+     'telegramBotToken',
+@@ -82,15 +86,21 @@
+     'i'
+ )
+ 
++// 替换值
++const REDACTED = '[REDACTED]'
++const REDACTED_JWT = '[REDACTED_JWT]'
++
+ // Token 模式匹配（用于检测值中包含的 token）
+ const TOKEN_PATTERNS = [
+-    /eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g,  // JWT
+-    /Bearer\s+[A-Za-z0-9_-]+/gi,  // Bearer token
++    { pattern: /eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, replacement: REDACTED_JWT },  // JWT
++    { pattern: /\b(?:pat|poa)_[A-Za-z0-9_-]{43}\b/g, replacement: REDACTED_JWT },  // PayIncus API token
++    { pattern: /Basic\s+[A-Za-z0-9+/=]{8,}/gi, replacement: REDACTED_JWT },  // Basic auth
++    { pattern: /Bearer\s+[A-Za-z0-9._~+/=:-]+/gi, replacement: REDACTED_JWT },  // Bearer token
++    {
++        pattern: /([?&](?:token|secret|key|sign|signature|access_token|refresh_token|api_key|apikey|apiKey|password|pwd|assetToken|agentSecret|code)=)[^&#\s]+/gi,
++        replacement: `$1${REDACTED}`
++    },  // URL query secrets
+ ]
+-
+-// 替换值
+-const REDACTED = '[REDACTED]'
+-const REDACTED_JWT = '[REDACTED_JWT]'
+ 
+ /**
+  * 检查字段名是否为敏感字段
+@@ -104,8 +114,8 @@
+  */
+ export function sanitizeTokensInString(value: string): string {
+     let result = value
+-    for (const pattern of TOKEN_PATTERNS) {
+-        result = result.replace(pattern, REDACTED_JWT)
++    for (const { pattern, replacement } of TOKEN_PATTERNS) {
++        result = result.replace(pattern, replacement)
+     }
+     return result
+ }
+@@ -116,7 +126,7 @@
+  */
+ export function sanitizeObject<T>(obj: T, depth = 0): T {
+     // 防止无限递归
+-    if (depth > 10) return obj
++    if (depth > 10) return '[REDACTED_TRUNCATED]' as unknown as T
+ 
+     if (obj === null || obj === undefined) {
+         return obj
+
+diff --git a/server/scripts/test-log-sanitizer.ts b/server/scripts/test-log-sanitizer.ts
+index 9f0d7217470715f03615b7e080091c49b1fcabff..8a1a3725a9f28941c66081bb9fa58ee3cd1b0d75
+--- a/server/scripts/test-log-sanitizer.ts
++++ b/server/scripts/test-log-sanitizer.ts
+@@ -101,6 +101,23 @@
+ )
+ 
+ assert.equal(sanitizeTokensInString('Authorization: Bearer opaque-token'), `Authorization: ${redactedJwt}`)
++assert.equal(sanitizeTokensInString(`pat_${'a'.repeat(43)}`), redactedJwt)
++assert.equal(sanitizeTokensInString(`poa_${'B'.repeat(43)}`), redactedJwt)
++assert.equal(sanitizeTokensInString('Authorization: Basic dXNlcjpwYXNz'), `Authorization: ${redactedJwt}`)
++assert.equal(sanitizeTokensInString('Authorization: Bearer a.b+c/d=='), `Authorization: ${redactedJwt}`)
++assert.equal(
++  sanitizeTokensInString('https://x/cb?token=SECRET123&x=1'),
++  `https://x/cb?token=${redacted}&x=1`
++)
++
++let deeplyNested: Record<string, unknown> = { password: 'must-not-survive' }
++for (let depth = 0; depth < 11; depth += 1) {
++  deeplyNested = { nested: deeplyNested }
++}
++const deeplySanitized = sanitizeObject(deeplyNested)
++assert.equal(JSON.stringify(deeplySanitized).includes('must-not-survive'), false)
++assert.equal(JSON.stringify(deeplySanitized).includes('[REDACTED_TRUNCATED]'), true)
++
+ assert.equal(isSensitiveField('access_token'), true)
+ assert.equal(isSensitiveField('client_secret'), true)
+ assert.equal(isSensitiveField('signature'), true)
+diff --git a/server/src/lib/log-sanitizer.ts b/server/src/lib/log-sanitizer.ts
+index 47923fcbf6dd84b04bb28f759e16c8f0de92c175..74ddda408a787b6e8e4d56c53070946caf135d32
+--- a/server/src/lib/log-sanitizer.ts
++++ b/server/src/lib/log-sanitizer.ts
+@@ -19,6 +19,10 @@
+     'currentPassword',
+     'confirmPassword',
+     'token',
++    'assetToken',
++    'agentSecret',
++    'pat',
++    'poa',
+     'botToken',
+     'bot_token',
+     'telegramBotToken',
+@@ -82,15 +86,21 @@
+     'i'
+ )
+ 
++// 替换值
++const REDACTED = '[REDACTED]'
++const REDACTED_JWT = '[REDACTED_JWT]'
++
+ // Token 模式匹配（用于检测值中包含的 token）
+ const TOKEN_PATTERNS = [
+-    /eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g,  // JWT
+-    /Bearer\s+[A-Za-z0-9_-]+/gi,  // Bearer token
++    { pattern: /eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, replacement: REDACTED_JWT },  // JWT
++    { pattern: /\b(?:pat|poa)_[A-Za-z0-9_-]{43}\b/g, replacement: REDACTED_JWT },  // PayIncus API token
++    { pattern: /Basic\s+[A-Za-z0-9+/=]{8,}/gi, replacement: REDACTED_JWT },  // Basic auth
++    { pattern: /Bearer\s+[A-Za-z0-9._~+/=:-]+/gi, replacement: REDACTED_JWT },  // Bearer token
++    {
++        pattern: /([?&](?:token|secret|key|sign|signature|access_token|refresh_token|api_key|apikey|apiKey|password|pwd|assetToken|agentSecret|code)=)[^&#\s]+/gi,
++        replacement: `$1${REDACTED}`
++    },  // URL query secrets
+ ]
+-
+-// 替换值
+-const REDACTED = '[REDACTED]'
+-const REDACTED_JWT = '[REDACTED_JWT]'
+ 
+ /**
+  * 检查字段名是否为敏感字段
+@@ -104,8 +114,8 @@
+  */
+ export function sanitizeTokensInString(value: string): string {
+     let result = value
+-    for (const pattern of TOKEN_PATTERNS) {
+-        result = result.replace(pattern, REDACTED_JWT)
++    for (const { pattern, replacement } of TOKEN_PATTERNS) {
++        result = result.replace(pattern, replacement)
+     }
+     return result
+ }
+@@ -116,7 +126,7 @@
+  */
+ export function sanitizeObject<T>(obj: T, depth = 0): T {
+     // 防止无限递归
+-    if (depth > 10) return obj
++    if (depth > 10) return '[REDACTED_TRUNCATED]' as unknown as T
+ 
+     if (obj === null || obj === undefined) {
+         return obj
+
+ succeeded in 37719ms:
+
+> server@1.3.7 type-check C:\Users\Administrator\Desktop\payinces\server
+> tsc --noEmit
+
+
+diff --git a/server/scripts/test-log-sanitizer.ts b/server/scripts/test-log-sanitizer.ts
+index 9f0d7217470715f03615b7e080091c49b1fcabff..8a1a3725a9f28941c66081bb9fa58ee3cd1b0d75
+--- a/server/scripts/test-log-sanitizer.ts
++++ b/server/scripts/test-log-sanitizer.ts
+@@ -101,6 +101,23 @@
+ )
+ 
+ assert.equal(sanitizeTokensInString('Authorization: Bearer opaque-token'), `Authorization: ${redactedJwt}`)
++assert.equal(sanitizeTokensInString(`pat_${'a'.repeat(43)}`), redactedJwt)
++assert.equal(sanitizeTokensInString(`poa_${'B'.repeat(43)}`), redactedJwt)
++assert.equal(sanitizeTokensInString('Authorization: Basic dXNlcjpwYXNz'), `Authorization: ${redactedJwt}`)
++assert.equal(sanitizeTokensInString('Authorization: Bearer a.b+c/d=='), `Authorization: ${redactedJwt}`)
++assert.equal(
++  sanitizeTokensInString('https://x/cb?token=SECRET123&x=1'),
++  `https://x/cb?token=${redacted}&x=1`
++)
++
++let deeplyNested: Record<string, unknown> = { password: 'must-not-survive' }
++for (let depth = 0; depth < 11; depth += 1) {
++  deeplyNested = { nested: deeplyNested }
++}
++const deeplySanitized = sanitizeObject(deeplyNested)
++assert.equal(JSON.stringify(deeplySanitized).includes('must-not-survive'), false)
++assert.equal(JSON.stringify(deeplySanitized).includes('[REDACTED_TRUNCATED]'), true)
++
+ assert.equal(isSensitiveField('access_token'), true)
+ assert.equal(isSensitiveField('client_secret'), true)
+ assert.equal(isSensitiveField('signature'), true)
+diff --git a/server/src/lib/log-sanitizer.ts b/server/src/lib/log-sanitizer.ts
+index 47923fcbf6dd84b04bb28f759e16c8f0de92c175..74ddda408a787b6e8e4d56c53070946caf135d32
+--- a/server/src/lib/log-sanitizer.ts
++++ b/server/src/lib/log-sanitizer.ts
+@@ -19,6 +19,10 @@
+     'currentPassword',
+     'confirmPassword',
+     'token',
++    'assetToken',
++    'agentSecret',
++    'pat',
++    'poa',
+     'botToken',
+     'bot_token',
+     'telegramBotToken',
+@@ -82,15 +86,21 @@
+     'i'
+ )
+ 
++// 替换值
++const REDACTED = '[REDACTED]'
++const REDACTED_JWT = '[REDACTED_JWT]'
++
+ // Token 模式匹配（用于检测值中包含的 token）
+ const TOKEN_PATTERNS = [
+-    /eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g,  // JWT
+-    /Bearer\s+[A-Za-z0-9_-]+/gi,  // Bearer token
++    { pattern: /eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, replacement: REDACTED_JWT },  // JWT
++    { pattern: /\b(?:pat|poa)_[A-Za-z0-9_-]{43}\b/g, replacement: REDACTED_JWT },  // PayIncus API token
++    { pattern: /Basic\s+[A-Za-z0-9+/=]{8,}/gi, replacement: REDACTED_JWT },  // Basic auth
++    { pattern: /Bearer\s+[A-Za-z0-9._~+/=:-]+/gi, replacement: REDACTED_JWT },  // Bearer token
++    {
++        pattern: /([?&](?:token|secret|key|sign|signature|access_token|refresh_token|api_key|apikey|apiKey|password|pwd|assetToken|agentSecret|code)=)[^&#\s]+/gi,
++        replacement: `$1${REDACTED}`
++    },  // URL query secrets
+ ]
+-
+-// 替换值
+-const REDACTED = '[REDACTED]'
+-const REDACTED_JWT = '[REDACTED_JWT]'
+ 
+ /**
+  * 检查字段名是否为敏感字段
+@@ -104,8 +114,8 @@
+  */
+ export function sanitizeTokensInString(value: string): string {
+     let result = value
+-    for (const pattern of TOKEN_PATTERNS) {
+-        result = result.replace(pattern, REDACTED_JWT)
++    for (const { pattern, replacement } of TOKEN_PATTERNS) {
++        result = result.replace(pattern, replacement)
+     }
+     return result
+ }
+@@ -116,7 +126,7 @@
+  */
+ export function sanitizeObject<T>(obj: T, depth = 0): T {
+     // 防止无限递归
+-    if (depth > 10) return obj
++    if (depth > 10) return '[REDACTED_TRUNCATED]' as unknown as T
+ 
+     if (obj === null || obj === undefined) {
+         return obj
+
+codex
+两项验收均已通过。最后做只读收尾检查：确认 diff 无空白错误、此次修改只落在规格允许的两个文件，并复核未发生 commit。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'git diff --check -- server/src/lib/log-sanitizer.ts server/scripts/test-log-sanitizer.ts; git status --short; git diff --stat -- server/src/lib/log-sanitizer.ts server/scripts/test-log-sanitizer.ts' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 817ms:
+ M client/src/components/plugins/PluginFrame.vue
+ M client/src/utils/validation.ts
+ M package.json
+ M server/package.json
+ M server/scripts/test-log-sanitizer.ts
+ M server/scripts/test-plugin-client-boundary-guards.ts
+ M server/src/db/balance.ts
+ M server/src/lib/log-sanitizer.ts
+ M server/src/lib/redirect-validator.ts
+?? AGENTS.md
+?? BEHAVIOR.md
+?? CLAUDE.md
+?? DEFECTS.md
+?? EXECUTION.md
+?? EXECUTION_LOG.md
+?? FIX_PLAN.md
+?? MAINTENANCE_PLAN.md
+?? artifacts/
+?? audits/
+?? server/scripts/test-redirect-validator-guards.ts
+?? skills-lock.json
+ server/scripts/test-log-sanitizer.ts | 17 +++++++++++++++++
+ server/src/lib/log-sanitizer.ts      | 28 +++++++++++++++++++---------
+ 2 files changed, 36 insertions(+), 9 deletions(-)
+warning: in the working copy of 'server/scripts/test-log-sanitizer.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/lib/log-sanitizer.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/scripts/test-log-sanitizer.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'server/src/lib/log-sanitizer.ts', LF will be replaced by CRLF the next time Git touches it
+
+diff --git a/server/scripts/test-log-sanitizer.ts b/server/scripts/test-log-sanitizer.ts
+index 9f0d7217470715f03615b7e080091c49b1fcabff..8a1a3725a9f28941c66081bb9fa58ee3cd1b0d75
+--- a/server/scripts/test-log-sanitizer.ts
++++ b/server/scripts/test-log-sanitizer.ts
+@@ -101,6 +101,23 @@
+ )
+ 
+ assert.equal(sanitizeTokensInString('Authorization: Bearer opaque-token'), `Authorization: ${redactedJwt}`)
++assert.equal(sanitizeTokensInString(`pat_${'a'.repeat(43)}`), redactedJwt)
++assert.equal(sanitizeTokensInString(`poa_${'B'.repeat(43)}`), redactedJwt)
++assert.equal(sanitizeTokensInString('Authorization: Basic dXNlcjpwYXNz'), `Authorization: ${redactedJwt}`)
++assert.equal(sanitizeTokensInString('Authorization: Bearer a.b+c/d=='), `Authorization: ${redactedJwt}`)
++assert.equal(
++  sanitizeTokensInString('https://x/cb?token=SECRET123&x=1'),
++  `https://x/cb?token=${redacted}&x=1`
++)
++
++let deeplyNested: Record<string, unknown> = { password: 'must-not-survive' }
++for (let depth = 0; depth < 11; depth += 1) {
++  deeplyNested = { nested: deeplyNested }
++}
++const deeplySanitized = sanitizeObject(deeplyNested)
++assert.equal(JSON.stringify(deeplySanitized).includes('must-not-survive'), false)
++assert.equal(JSON.stringify(deeplySanitized).includes('[REDACTED_TRUNCATED]'), true)
++
+ assert.equal(isSensitiveField('access_token'), true)
+ assert.equal(isSensitiveField('client_secret'), true)
+ assert.equal(isSensitiveField('signature'), true)
+diff --git a/server/src/lib/log-sanitizer.ts b/server/src/lib/log-sanitizer.ts
+index 47923fcbf6dd84b04bb28f759e16c8f0de92c175..74ddda408a787b6e8e4d56c53070946caf135d32
+--- a/server/src/lib/log-sanitizer.ts
++++ b/server/src/lib/log-sanitizer.ts
+@@ -19,6 +19,10 @@
+     'currentPassword',
+     'confirmPassword',
+     'token',
++    'assetToken',
++    'agentSecret',
++    'pat',
++    'poa',
+     'botToken',
+     'bot_token',
+     'telegramBotToken',
+@@ -82,15 +86,21 @@
+     'i'
+ )
+ 
++// 替换值
++const REDACTED = '[REDACTED]'
++const REDACTED_JWT = '[REDACTED_JWT]'
++
+ // Token 模式匹配（用于检测值中包含的 token）
+ const TOKEN_PATTERNS = [
+-    /eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g,  // JWT
+-    /Bearer\s+[A-Za-z0-9_-]+/gi,  // Bearer token
++    { pattern: /eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, replacement: REDACTED_JWT },  // JWT
++    { pattern: /\b(?:pat|poa)_[A-Za-z0-9_-]{43}\b/g, replacement: REDACTED_JWT },  // PayIncus API token
++    { pattern: /Basic\s+[A-Za-z0-9+/=]{8,}/gi, replacement: REDACTED_JWT },  // Basic auth
++    { pattern: /Bearer\s+[A-Za-z0-9._~+/=:-]+/gi, replacement: REDACTED_JWT },  // Bearer token
++    {
++        pattern: /([?&](?:token|secret|key|sign|signature|access_token|refresh_token|api_key|apikey|apiKey|password|pwd|assetToken|agentSecret|code)=)[^&#\s]+/gi,
++        replacement: `$1${REDACTED}`
++    },  // URL query secrets
+ ]
+-
+-// 替换值
+-const REDACTED = '[REDACTED]'
+-const REDACTED_JWT = '[REDACTED_JWT]'
+ 
+ /**
+  * 检查字段名是否为敏感字段
+@@ -104,8 +114,8 @@
+  */
+ export function sanitizeTokensInString(value: string): string {
+     let result = value
+-    for (const pattern of TOKEN_PATTERNS) {
+-        result = result.replace(pattern, REDACTED_JWT)
++    for (const { pattern, replacement } of TOKEN_PATTERNS) {
++        result = result.replace(pattern, replacement)
+     }
+     return result
+ }
+@@ -116,7 +126,7 @@
+  */
+ export function sanitizeObject<T>(obj: T, depth = 0): T {
+     // 防止无限递归
+-    if (depth > 10) return obj
++    if (depth > 10) return '[REDACTED_TRUNCATED]' as unknown as T
+ 
+     if (obj === null || obj === undefined) {
+         return obj
+
+codex
+已仅修改 `server/src/lib/log-sanitizer.ts` 与现有守卫 `server/scripts/test-log-sanitizer.ts`：新增固定 43 位 Base64URL 后缀的 `pat_`/`poa_`、Basic、宽字符 Bearer、敏感 URL query 脱敏规则，补充 `assetToken`、`agentSecret`、`pat`、`poa` 字段，并将递归深度超限改为 `[REDACTED_TRUNCATED]`；实际 token 格式来源于 `public-api-auth.ts` 和 `oauth-provider.ts` 的 `randomBytes(32).toString('base64url')`。`pnpm --filter server type-check` 与 `pnpm --filter server test:log-sanitizer` 均通过，`git diff --check` 通过，未 commit。
+diff --git a/server/scripts/test-log-sanitizer.ts b/server/scripts/test-log-sanitizer.ts
+index 9f0d7217470715f03615b7e080091c49b1fcabff..8a1a3725a9f28941c66081bb9fa58ee3cd1b0d75
+--- a/server/scripts/test-log-sanitizer.ts
++++ b/server/scripts/test-log-sanitizer.ts
+@@ -101,6 +101,23 @@
+ )
+ 
+ assert.equal(sanitizeTokensInString('Authorization: Bearer opaque-token'), `Authorization: ${redactedJwt}`)
++assert.equal(sanitizeTokensInString(`pat_${'a'.repeat(43)}`), redactedJwt)
++assert.equal(sanitizeTokensInString(`poa_${'B'.repeat(43)}`), redactedJwt)
++assert.equal(sanitizeTokensInString('Authorization: Basic dXNlcjpwYXNz'), `Authorization: ${redactedJwt}`)
++assert.equal(sanitizeTokensInString('Authorization: Bearer a.b+c/d=='), `Authorization: ${redactedJwt}`)
++assert.equal(
++  sanitizeTokensInString('https://x/cb?token=SECRET123&x=1'),
++  `https://x/cb?token=${redacted}&x=1`
++)
++
++let deeplyNested: Record<string, unknown> = { password: 'must-not-survive' }
++for (let depth = 0; depth < 11; depth += 1) {
++  deeplyNested = { nested: deeplyNested }
++}
++const deeplySanitized = sanitizeObject(deeplyNested)
++assert.equal(JSON.stringify(deeplySanitized).includes('must-not-survive'), false)
++assert.equal(JSON.stringify(deeplySanitized).includes('[REDACTED_TRUNCATED]'), true)
++
+ assert.equal(isSensitiveField('access_token'), true)
+ assert.equal(isSensitiveField('client_secret'), true)
+ assert.equal(isSensitiveField('signature'), true)
+diff --git a/server/src/lib/log-sanitizer.ts b/server/src/lib/log-sanitizer.ts
+index 47923fcbf6dd84b04bb28f759e16c8f0de92c175..74ddda408a787b6e8e4d56c53070946caf135d32
+--- a/server/src/lib/log-sanitizer.ts
++++ b/server/src/lib/log-sanitizer.ts
+@@ -19,6 +19,10 @@
+     'currentPassword',
+     'confirmPassword',
+     'token',
++    'assetToken',
++    'agentSecret',
++    'pat',
++    'poa',
+     'botToken',
+     'bot_token',
+     'telegramBotToken',
+@@ -82,15 +86,21 @@
+     'i'
+ )
+ 
++// 替换值
++const REDACTED = '[REDACTED]'
++const REDACTED_JWT = '[REDACTED_JWT]'
++
+ // Token 模式匹配（用于检测值中包含的 token）
+ const TOKEN_PATTERNS = [
+-    /eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g,  // JWT
+-    /Bearer\s+[A-Za-z0-9_-]+/gi,  // Bearer token
++    { pattern: /eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, replacement: REDACTED_JWT },  // JWT
++    { pattern: /\b(?:pat|poa)_[A-Za-z0-9_-]{43}\b/g, replacement: REDACTED_JWT },  // PayIncus API token
++    { pattern: /Basic\s+[A-Za-z0-9+/=]{8,}/gi, replacement: REDACTED_JWT },  // Basic auth
++    { pattern: /Bearer\s+[A-Za-z0-9._~+/=:-]+/gi, replacement: REDACTED_JWT },  // Bearer token
++    {
++        pattern: /([?&](?:token|secret|key|sign|signature|access_token|refresh_token|api_key|apikey|apiKey|password|pwd|assetToken|agentSecret|code)=)[^&#\s]+/gi,
++        replacement: `$1${REDACTED}`
++    },  // URL query secrets
+ ]
+-
+-// 替换值
+-const REDACTED = '[REDACTED]'
+-const REDACTED_JWT = '[REDACTED_JWT]'
+ 
+ /**
+  * 检查字段名是否为敏感字段
+@@ -104,8 +114,8 @@
+  */
+ export function sanitizeTokensInString(value: string): string {
+     let result = value
+-    for (const pattern of TOKEN_PATTERNS) {
+-        result = result.replace(pattern, REDACTED_JWT)
++    for (const { pattern, replacement } of TOKEN_PATTERNS) {
++        result = result.replace(pattern, replacement)
+     }
+     return result
+ }
+@@ -116,7 +126,7 @@
+  */
+ export function sanitizeObject<T>(obj: T, depth = 0): T {
+     // 防止无限递归
+-    if (depth > 10) return obj
++    if (depth > 10) return '[REDACTED_TRUNCATED]' as unknown as T
+ 
+     if (obj === null || obj === undefined) {
+         return obj
+
+tokens used
+76,209

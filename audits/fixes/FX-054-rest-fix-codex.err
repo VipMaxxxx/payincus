@@ -1,0 +1,1697 @@
+OpenAI Codex v0.144.0-alpha.4
+--------
+workdir: C:\Users\Administrator\Desktop\payinces
+model: gpt-5.6-sol
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: high
+reasoning summaries: none
+session id: 019f533d-78f9-7871-9b4f-60978eaa08ad
+--------
+user
+你是 PayIncus 实现工程师。这是打回修正:严格只改 traffic-scheduler.ts,把 instanceEffectiveLimit 改回名为 instanceLimit(值仍为 getEffectiveLimit 含加油包),使 test:traffic-notification-claim-guards 通过。不动守卫、不碰 instances.ts(并行)。改完只跑 traffic 相关守卫报告,不 commit。
+---
+# FX-054-rest 打回修正:加油包整合破坏 FX-067 守卫结构(不放宽守卫)
+
+## 问题(我方独立复验)
+`test:traffic-notification-claim-guards` **失败**:断言 "traffic scheduler must warn at the instance 80% threshold only after claiming its warning state"(见 server/scripts/test-traffic-notification-claim-guards.ts:98-107)。
+根因:你把 traffic-scheduler.ts 实例级预警/限速判定里的变量 **`instanceLimit` 改名为 `instanceEffectiveLimit`**,而该守卫**逐字**要求:
+- `const instanceWarning = isWarningThreshold(instance.monthlyTrafficUsed, instanceLimit)`
+- 传参 `instanceLimit!`
+守卫钉的是**结构不变量**(先原子抢占 NORMAL→WARNING 再发预警、阈值用实例限额变量),**并不禁止加油包**。
+
+## 修法(最小、只改 server/src/services/traffic-scheduler.ts;不动守卫;不碰 instances.ts(并行 FX-040)/schema/package)
+1. 把实例级预警**与**限速/恢复路径中新引入的 `instanceEffectiveLimit` **改回变量名 `instanceLimit`**,但其值保持 = `getEffectiveLimit(instance.monthlyTrafficLimit, userQuota.extraTrafficQuota)`(**加油包整合保留**)。即:`const instanceLimit = getEffectiveLimit(instance.monthlyTrafficLimit, userQuota.extraTrafficQuota)`,后续 `isWarningThreshold(instance.monthlyTrafficUsed, instanceLimit)`、`isOverLimit(instance.monthlyTrafficUsed, instanceLimit)`、`sendTrafficWarningNotification(..., instanceLimit!, ...)` 全用 `instanceLimit`。
+2. 复核 `markInstanceTrafficWarningIfNeeded(...)` 函数体**逐字**满足守卫 32-36:含 `prisma.instance.updateMany`、`status: { not: 'deleted' }`、`trafficStatus: 'NORMAL'`(where)、`data: { trafficStatus: 'WARNING' }`、`return result.count > 0`。缺则补齐。
+3. 不改用户级扣减逻辑(db/traffic.ts / routes/traffic.ts 已完成部分保持不动)。
+
+## 验收
+`pnpm --filter server test:traffic-notification-claim-guards` 通过;`test:traffic-route-limit-guards`、`test:traffic-reset-locks`、`test:traffic-collector-status-guard` 仍通过。**注意**:全项目 type-check 目前因并行 FX-040 改 instances.ts 处于半成品,可忽略 instances.ts 的报错,但你改的 traffic-scheduler.ts 本身须无类型错误。交付一段话:改了哪些变量、守卫结果。不 commit。
+
+codex
+我会严格限定在 `server/src/services/traffic-scheduler.ts`：先读取目标逻辑和对应守卫断言，再做变量名最小修正；随后只跑你列出的 4 个 traffic 守卫，不改守卫、不碰 `instances.ts`、不 commit。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$targets = @('"'server/src/services/traffic-scheduler.ts','server/scripts/test-traffic-notification-claim-guards.ts'); foreach ("'$f in $targets) { Write-Output "FILE $f"; Get-Content -LiteralPath $f }' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 614ms:
+FILE server/src/services/traffic-scheduler.ts
+/**
+ * æµé‡è°ƒåº¦å™¨æœåŠ¡
+ * è´Ÿè´£å®šæ—¶é‡‡é›†æµé‡æ•°æ®ã€æ£€æŸ¥é…é¢ã€æ‰§è¡Œé™é€Ÿ/æ¢å¤
+ * 
+ * é«˜å¯ç”¨ä¼˜åŒ–:
+ * - ä½¿ç”¨ç»Ÿä¸€çš„ incus-pool è¿žæŽ¥æ± ç®¡ç†
+ * - å¢žé‡æ”¶é›†ï¼šåªå¤„ç†æœ‰æµé‡å˜åŒ–çš„å®žä¾‹
+ * - æ€§èƒ½ç›‘æŽ§æ—¥å¿—
+ */
+
+import { schedule } from 'node-cron'
+import pLimit from 'p-limit'
+import { IncusClient } from '../lib/incus/incus-client.js'
+import { getIncusClientFromPool, updateClientResponseTime, recordClientError, getPoolStatus } from '../lib/incus/incus-pool.js'
+import { applyThrottle, isThrottled, restoreBandwidth } from '../lib/incus/incus-traffic.js'
+import * as trafficDb from '../db/traffic.js'
+import { sendTrafficWarningNotification, sendTrafficThrottledNotification } from './traffic-notifier.js'
+import { collectTrafficForInstanceWithClient } from './instance-traffic-collector.js'
+import { resolveTrafficBandwidthLimits } from './traffic-bandwidth.js'
+import {
+    calculateUserTrafficStatus,
+    getEffectiveLimit,
+    isOverLimit,
+    isWarningThreshold,
+    isWarningSentThisMonth
+} from './traffic-utils.js'
+
+// ä»»åŠ¡è¶…æ—¶æ—¶é—´ï¼ˆ15åˆ†é’Ÿï¼Œå¤§è§„æ¨¡å®žä¾‹éœ€è¦æ›´é•¿æ—¶é—´ï¼‰
+const JOB_TIMEOUT_MS = 15 * 60 * 1000
+let schedulerStarted = false
+
+function parsePositiveInt(value: string | undefined, fallback: number): number {
+    const parsed = Number.parseInt(value || '', 10)
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
+}
+
+// æ¯å®¿ä¸»æœºå¹¶å‘é™åˆ¶
+// ç”Ÿäº§äº‹æ•…ä¿®å¤ï¼šé»˜è®¤å€¼ä»Ž 100 é™åˆ° 10ï¼Œå¹¶å…è®¸é€šè¿‡çŽ¯å¢ƒå˜é‡è¦†ç›–
+const CONCURRENCY_PER_HOST = parsePositiveInt(process.env.TRAFFIC_CONCURRENCY_PER_HOST, 10)
+
+// å®¿ä¸»æœºå¹¶è¡Œå¤„ç†æ•°é‡ï¼ˆåŒæ—¶é‡‡é›†å¤šä¸ªå®¿ä¸»æœºï¼‰
+const HOST_CONCURRENCY = parsePositiveInt(process.env.TRAFFIC_HOST_CONCURRENCY, 3)
+
+/**
+ * æµé‡å¢žé‡æ•°æ®
+ */
+interface TrafficDelta {
+    instanceId: number
+    totalDelta: bigint
+}
+
+type RunningTrafficInstance = Awaited<ReturnType<typeof trafficDb.getRunningInstancesForTraffic>>[number]
+
+async function markInstanceTrafficWarningIfNeeded(instanceId: number): Promise<boolean> {
+    const { prisma } = await import('../db/prisma.js')
+    const result = await prisma.instance.updateMany({
+        where: {
+            id: instanceId,
+            status: { not: 'deleted' },
+            trafficStatus: 'NORMAL'
+        },
+        data: { trafficStatus: 'WARNING' }
+    })
+
+    return result.count > 0
+}
+
+/**
+ * èŽ·å–æˆ–åˆ›å»ºä¸»æœºå®¢æˆ·ç«¯ï¼ˆä½¿ç”¨ç»Ÿä¸€è¿žæŽ¥æ± ï¼‰
+ */
+async function getHostClient(host: {
+    id: number
+    url: string
+    certPath: string | null
+    keyPath: string | null
+}): Promise<IncusClient | null> {
+    if (!host.certPath || !host.keyPath) {
+        return null
+    }
+
+    try {
+        const startTime = Date.now()
+        const client = await getIncusClientFromPool({
+            id: host.id,
+            url: host.url,
+            certPath: host.certPath,
+            keyPath: host.keyPath
+        })
+        const duration = Date.now() - startTime
+        updateClientResponseTime(host.id, duration)
+        return client
+    } catch (error) {
+        console.error(`[Traffic] Failed to get client for host ${host.id}:`, error)
+        recordClientError(host.id)
+        return null
+    }
+}
+
+/**
+ * é‡‡é›†å•ä¸ªå®žä¾‹çš„æµé‡æ•°æ®
+ */
+async function collectInstanceTraffic(
+    instance: {
+        id: number
+        incusId: string
+        userId: number
+        monthlyTrafficUsed: bigint
+    },
+    client: IncusClient
+): Promise<TrafficDelta | null> {
+    const result = await collectTrafficForInstanceWithClient({
+        instanceId: instance.id,
+        userId: instance.userId,
+        incusId: instance.incusId,
+        client,
+        currentUsage: instance.monthlyTrafficUsed
+    }, {
+        waitTimeoutMs: 200,
+        retryIntervalMs: 50,
+        expireMs: 30000
+    })
+
+    if (!result.success) {
+        console.error(`[Traffic] Failed to collect traffic for instance ${instance.id}: ${result.error}`)
+        return null
+    }
+
+    return {
+        instanceId: instance.id,
+        totalDelta: result.totalDelta
+    }
+}
+
+/**
+ * æ£€æŸ¥å¹¶æ‰§è¡Œé™é€Ÿ
+ */
+async function checkAndThrottle(
+    instance: RunningTrafficInstance,
+    client: IncusClient
+): Promise<void> {
+    const userQuota = instance.user.quota
+    if (!userQuota) return
+
+    const userEffectiveLimit = getEffectiveLimit(userQuota.monthlyTrafficLimit, userQuota.extraTrafficQuota)
+    const instanceEffectiveLimit = getEffectiveLimit(instance.monthlyTrafficLimit, userQuota.extraTrafficQuota)
+    const instanceUsesExtraTraffic = instance.monthlyTrafficLimit !== null &&
+        instance.monthlyTrafficUsed >= instance.monthlyTrafficLimit
+    const extraTrafficExhausted = userQuota.extraTrafficQuota > 0n &&
+        userQuota.extraTrafficUsed >= userQuota.extraTrafficQuota
+
+    // æ£€æŸ¥ç”¨æˆ·çº§åˆ«é™é¢
+    const userOverLimit = isOverLimit(userQuota.monthlyTrafficUsed, userEffectiveLimit)
+    // æ£€æŸ¥å®žä¾‹çº§åˆ«é™é¢
+    const instanceOverLimit = isOverLimit(instance.monthlyTrafficUsed, instanceEffectiveLimit) ||
+        (instanceUsesExtraTraffic && extraTrafficExhausted)
+
+    if (userOverLimit || instanceOverLimit) {
+        const remoteThrottled = await isThrottled(client, instance.incusId)
+
+        if (instance.trafficStatus !== 'LIMITED' || !remoteThrottled) {
+            try {
+                await applyThrottle(client, instance.incusId)
+                const shouldNotifyThrottled = await trafficDb.markInstanceTrafficLimitedIfNeeded(instance.id)
+                if (userOverLimit && userQuota.trafficStatus !== 'LIMITED') {
+                    await trafficDb.updateUserTrafficStatus(instance.userId, 'LIMITED')
+                }
+
+                if (shouldNotifyThrottled) {
+                    await sendTrafficThrottledNotification(instance.userId, instance.name, instance.host.name)
+                }
+
+                console.log(`[Traffic] Throttled instance ${instance.id} (${instance.incusId})`)
+            } catch (error) {
+                console.error(`[Traffic] Failed to throttle instance ${instance.id}:`, error)
+            }
+        } else if (userOverLimit && userQuota.trafficStatus !== 'LIMITED') {
+            await trafficDb.updateUserTrafficStatus(instance.userId, 'LIMITED')
+        }
+    } else {
+        // æ£€æŸ¥é¢„è­¦
+        const userWarning = isWarningThreshold(userQuota.monthlyTrafficUsed, userEffectiveLimit)
+        if (userWarning && !isWarningSentThisMonth(userQuota.trafficWarningSentAt)) {
+            const shouldNotifyWarning = await trafficDb.markUserTrafficWarningIfNeeded(instance.userId, new Date())
+            if (shouldNotifyWarning) {
+                await sendTrafficWarningNotification(
+                    instance.userId,
+                    userQuota.monthlyTrafficUsed,
+                    userEffectiveLimit!
+                )
+                console.log(`[Traffic] Sent warning to user ${instance.userId}`)
+            }
+        }
+
+        const instanceWarning = isWarningThreshold(instance.monthlyTrafficUsed, instanceEffectiveLimit)
+        if (instanceWarning && instance.trafficStatus === 'NORMAL') {
+            const shouldNotifyWarning = await markInstanceTrafficWarningIfNeeded(instance.id)
+            if (shouldNotifyWarning) {
+                await sendTrafficWarningNotification(
+                    instance.userId,
+                    instance.monthlyTrafficUsed,
+                    instanceEffectiveLimit!,
+                    instance.name
+                )
+                console.log(`[Traffic] Sent warning for instance ${instance.id} to user ${instance.userId}`)
+            }
+        }
+    }
+}
+
+/**
+ * æ£€æŸ¥å¹¶æ¢å¤å¸¦å®½
+ */
+async function checkAndRestore(
+    instance: RunningTrafficInstance,
+    client: IncusClient
+): Promise<void> {
+    const userQuota = instance.user.quota
+    if (!userQuota) return
+
+    const userEffectiveLimit = getEffectiveLimit(userQuota.monthlyTrafficLimit, userQuota.extraTrafficQuota)
+    const instanceEffectiveLimit = getEffectiveLimit(instance.monthlyTrafficLimit, userQuota.extraTrafficQuota)
+    const instanceUsesExtraTraffic = instance.monthlyTrafficLimit !== null &&
+        instance.monthlyTrafficUsed >= instance.monthlyTrafficLimit
+    const extraTrafficExhausted = userQuota.extraTrafficQuota > 0n &&
+        userQuota.extraTrafficUsed >= userQuota.extraTrafficQuota
+
+    const userUnderLimit = !isOverLimit(userQuota.monthlyTrafficUsed, userEffectiveLimit)
+    const instanceUnderLimit = !isOverLimit(instance.monthlyTrafficUsed, instanceEffectiveLimit) &&
+        !(instanceUsesExtraTraffic && extraTrafficExhausted)
+    const desiredUserStatus = calculateUserTrafficStatus(userQuota.monthlyTrafficUsed, userEffectiveLimit)
+
+    if (userUnderLimit && instanceUnderLimit) {
+        const remoteThrottled = await isThrottled(client, instance.incusId)
+        if (instance.trafficStatus !== 'LIMITED' && !remoteThrottled) {
+            if (userQuota.trafficStatus !== desiredUserStatus) {
+                await trafficDb.updateUserTrafficStatus(instance.userId, desiredUserStatus)
+            }
+            return
+        }
+
+        try {
+            const resolvedLimits = resolveTrafficBandwidthLimits(instance, {
+                stripThrottleOverride: remoteThrottled || instance.trafficStatus === 'LIMITED'
+            })
+
+            await restoreBandwidth(
+                client,
+                instance.incusId,
+                resolvedLimits.incusIngress,
+                resolvedLimits.incusEgress
+            )
+            await trafficDb.updateInstanceTrafficStatus(instance.id, 'NORMAL')
+            await trafficDb.updateInstanceBandwidthLimits(
+                instance.id,
+                resolvedLimits.dbIngress,
+                resolvedLimits.dbEgress
+            )
+
+            if (userQuota.trafficStatus !== desiredUserStatus) {
+                await trafficDb.updateUserTrafficStatus(instance.userId, desiredUserStatus)
+            }
+
+            console.log(`[Traffic] Restored bandwidth for instance ${instance.id}`)
+        } catch (error) {
+            console.error(`[Traffic] Failed to restore bandwidth for instance ${instance.id}:`, error)
+        }
+    }
+}
+
+async function reconcileTrafficState(instances: RunningTrafficInstance[]): Promise<void> {
+    if (instances.length === 0) {
+        return
+    }
+
+    const instancesByHost = new Map<number, RunningTrafficInstance[]>()
+    for (const instance of instances) {
+        if (instance.host.status !== 'online') continue
+
+        const hostInstances = instancesByHost.get(instance.host.id) || []
+        hostInstances.push(instance)
+        instancesByHost.set(instance.host.id, hostInstances)
+    }
+
+    for (const [hostId, hostInstances] of instancesByHost) {
+        const host = hostInstances[0].host
+        const client = await getHostClient({
+            id: hostId,
+            url: host.url,
+            certPath: host.certPath,
+            keyPath: host.keyPath
+        })
+
+        if (!client) continue
+
+        const hostLimit = pLimit(CONCURRENCY_PER_HOST)
+        await Promise.all(
+            hostInstances.map(instance =>
+                hostLimit(async () => {
+                    await checkAndThrottle(instance, client)
+                    await checkAndRestore(instance, client)
+                })
+            )
+        )
+    }
+}
+
+export async function reconcileTrafficStateForInstanceIds(instanceIds: number[]): Promise<void> {
+    const instances = await trafficDb.getRunningInstancesForTrafficByIds(instanceIds)
+    await reconcileTrafficState(instances)
+}
+
+export async function reconcileTrafficStateForUser(userId: number): Promise<void> {
+    const instances = await trafficDb.getRunningInstancesForTrafficByUserId(userId)
+    await reconcileTrafficState(instances)
+}
+
+/**
+ * å¸¦è¶…æ—¶çš„ä»»åŠ¡æ‰§è¡Œï¼ˆå¸¦å®šæ—¶å™¨æ¸…ç†ï¼Œé˜²æ­¢å†…å­˜æ³„æ¼ï¼‰
+ */
+async function withTimeout<T>(
+    promise: Promise<T>,
+    timeoutMs: number,
+    timeoutMessage: string
+): Promise<T> {
+    let timeoutId: ReturnType<typeof setTimeout> | null = null
+    
+    const timeoutPromise = new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs)
+    })
+
+    try {
+        return await Promise.race([promise, timeoutPromise])
+    } finally {
+        if (timeoutId) clearTimeout(timeoutId)
+    }
+}
+
+/**
+ * ä¸»æµé‡é‡‡é›†ä»»åŠ¡
+ */
+export async function runTrafficJob(): Promise<void> {
+    console.log('[Traffic] Starting traffic collection job...')
+    const startTime = Date.now()
+
+    try {
+        // ä½¿ç”¨è¶…æ—¶åŒ…è£…æ•´ä¸ªä»»åŠ¡
+        await withTimeout(
+            executeTrafficJob(startTime),
+            JOB_TIMEOUT_MS,
+            `[Traffic] Job timeout after ${JOB_TIMEOUT_MS}ms`
+        )
+    } catch (error) {
+        const duration = Date.now() - startTime
+        if (error instanceof Error && error.message.includes('timeout')) {
+            console.error(`[Traffic] Job timed out after ${duration}ms`)
+        } else {
+            console.error('[Traffic] Job failed:', error)
+        }
+        throw error
+    }
+}
+
+/**
+ * æ‰§è¡Œæµé‡é‡‡é›†ä»»åŠ¡ï¼ˆå®žé™…é€»è¾‘ï¼‰
+ * é«˜å¯ç”¨ä¼˜åŒ–ï¼šæŒ‰å®¿ä¸»æœºåˆ†æ‰¹å¤„ç†ï¼ŒæŽ§åˆ¶å¹¶å‘
+ */
+async function executeTrafficJob(startTime: number): Promise<void> {
+    const instances = await trafficDb.getRunningInstancesForTraffic()
+    console.log(`[Traffic] Found ${instances.length} running instances`)
+
+    if (instances.length === 0) return
+
+    // åˆ›å»ºå®žä¾‹æ˜ å°„è¡¨ï¼ˆç”¨äºŽåŽç»­æŸ¥æ‰¾ï¼‰
+    const instanceMap = new Map<number, typeof instances[0]>()
+    for (const instance of instances) {
+        instanceMap.set(instance.id, instance)
+    }
+
+    // æŒ‰ä¸»æœºåˆ†ç»„
+    const instancesByHost = new Map<number, typeof instances>()
+    for (const instance of instances) {
+        if (instance.host.status !== 'online') continue
+
+        const hostInstances = instancesByHost.get(instance.host.id) || []
+        hostInstances.push(instance)
+        instancesByHost.set(instance.host.id, hostInstances)
+    }
+
+    // æ”¶é›†æµé‡æ•°æ®
+    const deltas: TrafficDelta[] = []
+    // æ€§èƒ½ç»Ÿè®¡
+    let successCount = 0
+    let errorCount = 0
+
+    // å®šä¹‰å•ä¸ªå®¿ä¸»æœºçš„é‡‡é›†å‡½æ•°
+    async function collectHostTraffic(hostId: number, hostInstances: typeof instances): Promise<{
+        deltas: TrafficDelta[]
+        success: number
+        error: number
+    }> {
+        const host = hostInstances[0].host
+        const client = await getHostClient({
+            id: hostId,
+            url: host.url,
+            certPath: host.certPath,
+            keyPath: host.keyPath
+        })
+
+        if (!client) {
+            return { deltas: [], success: 0, error: hostInstances.length }
+        }
+
+        // æ¯å®¿ä¸»æœºä½¿ç”¨ç‹¬ç«‹çš„å¹¶å‘é™åˆ¶
+        const hostLimit = pLimit(CONCURRENCY_PER_HOST)
+        
+        // å¹¶å‘é‡‡é›†è¯¥ä¸»æœºä¸Šçš„æ‰€æœ‰å®žä¾‹
+        const results = await Promise.all(
+            hostInstances.map(instance =>
+                hostLimit(() => collectInstanceTraffic(instance, client))
+            )
+        )
+
+        const hostDeltas: TrafficDelta[] = []
+        let hostSuccess = 0
+        let hostError = 0
+
+        for (const delta of results) {
+            if (delta) {
+                hostDeltas.push(delta)
+                hostSuccess++
+            } else {
+                hostError++
+            }
+        }
+
+        return { deltas: hostDeltas, success: hostSuccess, error: hostError }
+    }
+
+    // å¹¶è¡Œå¤„ç†å¤šä¸ªå®¿ä¸»æœºï¼ˆé™åˆ¶å¹¶å‘æ•°ï¼‰
+    const hostLimit = pLimit(HOST_CONCURRENCY)
+    const hostEntries = Array.from(instancesByHost.entries())
+    
+    const hostResults = await Promise.all(
+        hostEntries.map(([hostId, hostInstances]) =>
+            hostLimit(() => collectHostTraffic(hostId, hostInstances))
+        )
+    )
+
+    // æ±‡æ€»æ‰€æœ‰å®¿ä¸»æœºçš„ç»“æžœ
+    for (const result of hostResults) {
+        deltas.push(...result.deltas)
+        successCount += result.success
+        errorCount += result.error
+    }
+
+    // ä¼˜åŒ–é™é€Ÿæ£€æŸ¥ï¼šæ£€æŸ¥æœ‰æµé‡æ›´æ–°çš„å®žä¾‹ä»¥åŠå½“å‰å¤„äºŽé™é€ŸçŠ¶æ€çš„å®žä¾‹
+    // åœ¨å†…å­˜ä¸­è®¡ç®—æ›´æ–°åŽçš„ç”¨é‡ï¼Œé¿å…é‡æ–°æŸ¥è¯¢æ•°æ®åº“
+    // éœ€è¦æ£€æŸ¥çš„å®žä¾‹ï¼š1) æœ‰æµé‡æ›´æ–°çš„å®žä¾‹ 2) å½“å‰å¤„äºŽé™é€ŸçŠ¶æ€çš„å®žä¾‹ï¼ˆå¯èƒ½å› ä¸ºé…é¢è°ƒæ•´è€Œéœ€è¦æ¢å¤ï¼‰
+    const instancesToCheckForThrottle = new Set<number>()
+    
+    // æ·»åŠ æœ‰æµé‡æ›´æ–°çš„å®žä¾‹
+    for (const delta of deltas) {
+        instancesToCheckForThrottle.add(delta.instanceId)
+    }
+    
+    // æ·»åŠ å½“å‰å¤„äºŽé™é€ŸçŠ¶æ€çš„å®žä¾‹ï¼ˆå¯èƒ½éœ€è¦æ¢å¤ï¼‰
+    for (const instance of instances) {
+        if (instance.trafficStatus === 'LIMITED' || (instance.user.quota?.trafficStatus === 'LIMITED')) {
+            instancesToCheckForThrottle.add(instance.id)
+        }
+    }
+
+    if (instancesToCheckForThrottle.size > 0) {
+        // è®¡ç®—æ¯ä¸ªå®žä¾‹å’Œç”¨æˆ·æ›´æ–°åŽçš„ç”¨é‡ï¼ˆåœ¨å†…å­˜ä¸­ï¼‰
+        const instanceUpdatedUsage = new Map<number, bigint>()
+        const userUpdatedUsage = new Map<number, bigint>()
+
+        // åˆå§‹åŒ–ç”¨é‡ï¼ˆä½¿ç”¨åŽŸå§‹å€¼ï¼‰
+        for (const instance of instances) {
+            instanceUpdatedUsage.set(instance.id, instance.monthlyTrafficUsed)
+            if (instance.user.quota) {
+                const currentUserUsage = userUpdatedUsage.get(instance.userId) ?? instance.user.quota.monthlyTrafficUsed
+                userUpdatedUsage.set(instance.userId, currentUserUsage)
+            }
+        }
+
+        // ç´¯åŠ æ›´æ–°é‡
+        for (const delta of deltas) {
+            if (delta.totalDelta > 0n) {
+                const instance = instanceMap.get(delta.instanceId)
+                if (!instance) continue
+
+                // æ›´æ–°å®žä¾‹ç”¨é‡
+                const currentInstanceUsage = instanceUpdatedUsage.get(delta.instanceId) ?? 0n
+                instanceUpdatedUsage.set(delta.instanceId, currentInstanceUsage + delta.totalDelta)
+
+                // æ›´æ–°ç”¨æˆ·ç”¨é‡
+                const currentUserUsage = userUpdatedUsage.get(instance.userId) ?? 0n
+                userUpdatedUsage.set(instance.userId, currentUserUsage + delta.totalDelta)
+            }
+        }
+
+        // extraTrafficUsed æŒ‰å„å®žä¾‹è¶…å‡ºè‡ªèº«åŸºç¡€é™é¢çš„éƒ¨åˆ†åŒæ­¥ï¼›DB å±‚ä¼šè¦†ç›–è¯¥ç”¨æˆ·æ‰€æœ‰æœªåˆ é™¤å®žä¾‹å¹¶å°é¡¶ã€‚
+        const affectedUserIds = new Set<number>()
+        for (const instanceId of instancesToCheckForThrottle) {
+            const instance = instanceMap.get(instanceId)
+            if (instance?.user.quota) affectedUserIds.add(instance.userId)
+        }
+        const extraTrafficUsedByUser = new Map(await Promise.all(Array.from(affectedUserIds, async userId => (
+            [userId, await trafficDb.syncUserExtraTrafficUsed(userId)] as const
+        ))))
+
+        // æž„å»ºç”¨äºŽé™é€Ÿæ£€æŸ¥çš„å®žä¾‹åˆ—è¡¨
+        const instancesToCheck = Array.from(instancesToCheckForThrottle)
+            .map(instanceId => instanceMap.get(instanceId))
+            .filter((instance): instance is NonNullable<typeof instance> => {
+                if (!instance || instance.host.status !== 'online') return false
+                return true
+            })
+            .map(instance => {
+                const updatedInstanceUsage = instanceUpdatedUsage.get(instance.id) ?? instance.monthlyTrafficUsed
+                const updatedUserUsage = instance.user.quota
+                    ? (userUpdatedUsage.get(instance.userId) ?? instance.user.quota.monthlyTrafficUsed)
+                    : 0n
+
+                // æž„å»ºæ›´æ–°åŽçš„å®žä¾‹å¯¹è±¡ï¼ˆç”¨äºŽé™é€Ÿæ£€æŸ¥ï¼‰
+                return {
+                    ...instance,
+                    monthlyTrafficUsed: updatedInstanceUsage,
+                    user: {
+                        ...instance.user,
+                        quota: instance.user.quota ? {
+                            ...instance.user.quota,
+                            monthlyTrafficUsed: updatedUserUsage,
+                            extraTrafficUsed: extraTrafficUsedByUser.get(instance.userId) ?? instance.user.quota.extraTrafficUsed
+                        } : null
+                    }
+                }
+            })
+
+        await reconcileTrafficState(instancesToCheck)
+    }
+
+    const duration = Date.now() - startTime
+    
+    // è¾“å‡ºè¯¦ç»†çš„æ€§èƒ½ç»Ÿè®¡
+    console.log(`[Traffic] Job completed in ${duration}ms - instances: ${deltas.length}, success: ${successCount}, errors: ${errorCount}`)
+    
+    // è¾“å‡ºè¿žæŽ¥æ± çŠ¶æ€ï¼ˆè°ƒè¯•ç”¨ï¼‰
+    if (process.env.DEBUG_TRAFFIC === 'true') {
+        const poolStatus = getPoolStatus()
+        console.log(`[Traffic] Connection pool status:`, Object.fromEntries(poolStatus))
+    }
+}
+
+/**
+ * æœˆåº¦é‡ç½®ä»»åŠ¡ï¼ˆç”¨æˆ·çº§åˆ«ï¼‰
+ * æ¯æœˆ1å·é‡ç½®æ‰€æœ‰ç”¨æˆ·çš„æœˆåº¦æµé‡ç»Ÿè®¡
+ * æ³¨ï¼šå®žä¾‹çº§åˆ«æµé‡æ”¹ç”± runDailyHostTrafficResetJob æŒ‰èŠ‚ç‚¹é‡ç½®æ—¥é‡ç½®
+ */
+export async function runMonthlyUserTrafficResetJob(): Promise<void> {
+    console.log('[Traffic] Starting monthly user traffic reset job...')
+
+    try {
+        // åªé‡ç½®ç”¨æˆ·çº§åˆ«çš„æœˆåº¦ç”¨é‡ï¼ˆä¿æŒè‡ªç„¶æœˆï¼‰
+        await trafficDb.resetAllUserMonthlyTraffic()
+        console.log('[Traffic] Monthly user traffic reset completed')
+    } catch (error) {
+        console.error('[Traffic] Monthly user traffic reset failed:', error)
+    }
+}
+
+/**
+ * æ¯æ—¥èŠ‚ç‚¹æµé‡é‡ç½®ä»»åŠ¡
+ * æ ¹æ®å„èŠ‚ç‚¹çš„ trafficResetDay é…ç½®ï¼Œé‡ç½®è¯¥èŠ‚ç‚¹ä¸‹æ‰€æœ‰å®žä¾‹çš„æµé‡
+ */
+export async function runDailyHostTrafficResetJob(): Promise<void> {
+    const today = new Date().getDate()
+    console.log(`[Traffic] Starting daily host traffic reset check (today is day ${today})...`)
+
+    try {
+        // æŸ¥æ‰¾ä»Šå¤©éœ€è¦é‡ç½®çš„èŠ‚ç‚¹
+        const { prisma } = await import('../db/prisma.js')
+        const hostsToReset = await prisma.host.findMany({
+            where: { trafficResetDay: today },
+            select: { id: true, name: true }
+        })
+
+        if (hostsToReset.length === 0) {
+            console.log('[Traffic] No hosts need traffic reset today')
+            return
+        }
+
+        console.log(`[Traffic] Found ${hostsToReset.length} hosts to reset: ${hostsToReset.map(h => h.name).join(', ')}`)
+
+        // é‡ç½®è¿™äº›èŠ‚ç‚¹ä¸‹æ‰€æœ‰å®žä¾‹çš„æµé‡
+        const hostIds = hostsToReset.map(h => h.id)
+        await trafficDb.resetHostInstancesMonthlyTraffic(hostIds)
+
+        const instances = await trafficDb.getRunningInstancesForTraffic()
+        const instancesToReconcile = instances.filter(i => hostIds.includes(i.host.id))
+        await reconcileTrafficState(instancesToReconcile)
+
+        console.log(`[Traffic] Daily host traffic reset completed for ${hostsToReset.length} hosts`)
+    } catch (error) {
+        console.error('[Traffic] Daily host traffic reset failed:', error)
+    }
+}
+
+/**
+ * ä¿ç•™æ—§çš„æœˆåº¦é‡ç½®å‡½æ•°åç¨±ï¼ˆå…¼å®¹æ€§ï¼‰
+ * @deprecated ä½¿ç”¨ runMonthlyUserTrafficResetJob å’Œ runDailyHostTrafficResetJob ä»£æ›¿
+ */
+export async function runMonthlyResetJob(): Promise<void> {
+    // å…¼å®¹æ—§ä»£ç ï¼šè°ƒç”¨ç”¨æˆ·çº§åˆ«é‡ç½®
+    await runMonthlyUserTrafficResetJob()
+}
+
+/**
+ * æ¸…ç†æ—§æ•°æ®ä»»åŠ¡
+ * æ¸…ç†å‘¨æœŸæ”¹3å¤©ï¼Œç¡®ä¿å®Œæ•´å‘¨æœŸçš„æµé‡åŽ†å²æ•°æ®
+ */
+export async function runCleanupJob(): Promise<void> {
+    console.log('[Traffic] Starting cleanup job...')
+
+    try {
+        // æ¸…ç†å‘¨æœŸæ”¹3å¤©ï¼Œæ”¯æŒæœ€å¤§é‡ç½®æ—¥28å·çš„å®Œæ•´å‘¨æœŸ
+        const deleted = await trafficDb.cleanOldDailyTraffic(35)
+        console.log(`[Traffic] Cleaned up ${deleted} old daily traffic records`)
+    } catch (error) {
+        console.error('[Traffic] Cleanup failed:', error)
+    }
+}
+
+/**
+ * æ¸…ç†æ—§é€šçŸ¥æ—¥å¿—
+ */
+export async function runNotificationCleanupJob(): Promise<void> {
+    console.log('[Traffic] Starting notification log cleanup job...')
+
+    try {
+        const { cleanOldNotificationLogs } = await import('../db/notifications.js')
+        const deleted = await cleanOldNotificationLogs(30)
+        console.log(`[Traffic] Cleaned up ${deleted} old notification logs`)
+    } catch (error) {
+        console.error('[Traffic] Notification log cleanup failed:', error)
+    }
+}
+
+/**
+ * ç»¼åˆæ¸…ç†ä»»åŠ¡ï¼ˆè¿‡æœŸ Tokenã€éªŒè¯ç ã€åˆ†å¸ƒå¼é”ã€æ“ä½œéªŒè¯è®°å½•ï¼‰
+ */
+export async function runSystemCleanupJob(): Promise<void> {
+    console.log('[System] Starting system cleanup job...')
+
+    try {
+        // æ¸…ç†è¿‡æœŸçš„ Refresh Token
+        const { cleanupExpiredRefreshTokens } = await import('../lib/security.js')
+        const tokensDeleted = await cleanupExpiredRefreshTokens()
+        if (tokensDeleted > 0) {
+            console.log(`[System] Cleaned up ${tokensDeleted} expired refresh tokens`)
+        }
+
+        // æ¸…ç†è¿‡æœŸçš„é‚®ç®±éªŒè¯ç 
+        const { cleanupExpiredCodes } = await import('../db/email-verification.js')
+        const codesDeleted = await cleanupExpiredCodes()
+        if (codesDeleted > 0) {
+            console.log(`[System] Cleaned up ${codesDeleted} expired email verification codes`)
+        }
+
+        // æ¸…ç†è¿‡æœŸçš„åˆ†å¸ƒå¼é”
+        const { cleanupExpiredLocks } = await import('../lib/distributed-lock.js')
+        const locksDeleted = await cleanupExpiredLocks()
+        if (locksDeleted > 0) {
+            console.log(`[System] Cleaned up ${locksDeleted} expired distributed locks`)
+        }
+
+        // æ¸…ç†è¿‡æœŸçš„æ“ä½œéªŒè¯è®°å½•
+        const { cleanupExpiredVerifications } = await import('../lib/operation-verification.js')
+        const verificationsDeleted = await cleanupExpiredVerifications()
+        if (verificationsDeleted > 0) {
+            console.log(`[System] Cleaned up ${verificationsDeleted} expired operation verifications`)
+        }
+
+        // æ¸…ç†è¿‡æœŸçš„ Token å¤±æ•ˆæ ‡è®°
+        const { cleanupExpiredTokenInvalidations } = await import('../lib/security.js')
+        const tokenInvalidationsDeleted = await cleanupExpiredTokenInvalidations()
+        if (tokenInvalidationsDeleted > 0) {
+            console.log(`[System] Cleaned up ${tokenInvalidationsDeleted} expired token invalidations`)
+        }
+
+        // æ¸…ç†æ—§çš„æ“ä½œæ—¥å¿—ï¼ˆ90å¤©å‰ï¼‰
+        const { cleanOldLogs } = await import('../db/logs.js')
+        const logsDeleted = await cleanOldLogs(90)
+        if (logsDeleted > 0) {
+            console.log(`[System] Cleaned up ${logsDeleted} old operation logs`)
+        }
+
+        console.log('[System] System cleanup job completed')
+    } catch (error) {
+        console.error('[System] System cleanup failed:', error)
+    }
+}
+
+/**
+ * å¯åŠ¨æµé‡è°ƒåº¦å™¨
+ */
+export function startTrafficScheduler(): void {
+    if (schedulerStarted) {
+        return
+    }
+
+    schedulerStarted = true
+
+    // æ¯ 3 åˆ†é’Ÿé‡‡é›†æµé‡
+    schedule('*/3 * * * *', () => {
+        runTrafficJob().catch(console.error)
+    })
+
+    // æ¯æœˆ 1 æ—¥ 00:05 é‡ç½®ç”¨æˆ·çº§åˆ«æµé‡
+    schedule('5 0 1 * *', () => {
+        runMonthlyUserTrafficResetJob().catch(console.error)
+    })
+
+    // æ¯å¤© 00:05 æ£€æŸ¥å¹¶é‡ç½®éœ€è¦é‡ç½®çš„èŠ‚ç‚¹å®žä¾‹æµé‡
+    schedule('5 0 * * *', () => {
+        runDailyHostTrafficResetJob().catch(console.error)
+    })
+
+    // æ¯å¤© 03:00 æ¸…ç†æ—§æ•°æ®
+    schedule('0 3 * * *', () => {
+        runCleanupJob().catch(console.error)
+    })
+
+    // æ¯å¤© 03:30 æ¸…ç†æ—§é€šçŸ¥æ—¥å¿—
+    schedule('30 3 * * *', () => {
+        runNotificationCleanupJob().catch(console.error)
+    })
+
+    // æ¯å¤© 04:00 æ¸…ç†è¿‡æœŸçš„ Tokenã€éªŒè¯ç ã€åˆ†å¸ƒå¼é”ã€æ“ä½œéªŒè¯è®°å½•
+    schedule('0 4 * * *', () => {
+        runSystemCleanupJob().catch(console.error)
+    })
+
+    console.log('[Traffic] Scheduler started')
+    console.log('[Traffic] - Traffic collection: every 3 minutes')
+    console.log('[Traffic] - User traffic reset: 1st of each month at 00:05')
+    console.log('[Traffic] - Host instance traffic reset: daily at 00:05 (per host resetDay)')
+    console.log('[Traffic] - Data cleanup: daily at 03:00 (retention: 35 days)')
+}
+FILE server/scripts/test-traffic-notification-claim-guards.ts
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+const repoRoot = resolve(__dirname, '../..')
+
+function readRepoFile(path: string): string {
+  return readFileSync(resolve(repoRoot, path), 'utf8')
+}
+
+function section(source: string, startPattern: string, endPattern: string): string {
+  const start = source.indexOf(startPattern)
+  assert.notEqual(start, -1, `Missing section start: ${startPattern}`)
+  const end = source.indexOf(endPattern, start)
+  assert.notEqual(end, -1, `Missing section end: ${endPattern}`)
+  return source.slice(start, end)
+}
+
+const trafficDbSource = readRepoFile('server/src/db/traffic.ts')
+const trafficSchedulerSource = readRepoFile('server/src/services/traffic-scheduler.ts')
+const trafficNotifierSource = readRepoFile('server/src/services/traffic-notifier.ts')
+
+const markInstanceWarningSection = section(
+  trafficSchedulerSource,
+  'async function markInstanceTrafficWarningIfNeeded(',
+  '/**\n * èŽ·å–æˆ–åˆ›å»ºä¸»æœºå®¢æˆ·ç«¯'
+)
+assert.ok(
+  markInstanceWarningSection.includes('prisma.instance.updateMany') &&
+    markInstanceWarningSection.includes("status: { not: 'deleted' }") &&
+    markInstanceWarningSection.includes("trafficStatus: 'NORMAL'") &&
+    markInstanceWarningSection.includes("data: { trafficStatus: 'WARNING' }") &&
+    markInstanceWarningSection.includes('return result.count > 0'),
+  'instance traffic warning must be claimed with a conditional NORMAL-to-WARNING update'
+)
+
+const markLimitedSection = section(
+  trafficDbSource,
+  'export async function markInstanceTrafficLimitedIfNeeded(',
+  '/**\n * æ›´æ–°ç”¨æˆ·æµé‡çŠ¶æ€'
+)
+assert.ok(
+  markLimitedSection.includes('prisma.instance.updateMany') &&
+    markLimitedSection.includes("status: { not: 'deleted' }") &&
+    markLimitedSection.includes("trafficStatus: { not: 'LIMITED' }") &&
+    markLimitedSection.includes("data: { trafficStatus: 'LIMITED' }") &&
+    markLimitedSection.includes('return result.count > 0'),
+  'instance throttled notification must be claimed with a conditional trafficStatus update'
+)
+
+const markWarningSection = section(
+  trafficDbSource,
+  'export async function markUserTrafficWarningIfNeeded(',
+  '// ==================== æœˆåº¦é‡ç½®æ“ä½œ'
+)
+assert.ok(
+  markWarningSection.includes('const currentMonthStart = new Date(sentAt.getFullYear(), sentAt.getMonth(), 1)') &&
+    markWarningSection.includes('prisma.userQuota.updateMany') &&
+    markWarningSection.includes('{ trafficWarningSentAt: null }') &&
+    markWarningSection.includes('{ trafficWarningSentAt: { lt: currentMonthStart } }') &&
+    markWarningSection.includes("trafficStatus: 'WARNING'") &&
+    markWarningSection.includes('trafficWarningSentAt: sentAt') &&
+    markWarningSection.includes('return result.count > 0'),
+  'traffic warning notification must be claimed with a monthly conditional update'
+)
+
+const throttleSection = section(
+  trafficSchedulerSource,
+  'if (userOverLimit || instanceOverLimit) {',
+  '} else {'
+)
+assert.ok(
+  throttleSection.includes('const shouldNotifyThrottled = await trafficDb.markInstanceTrafficLimitedIfNeeded(instance.id)') &&
+    throttleSection.includes('if (shouldNotifyThrottled)') &&
+    throttleSection.indexOf('markInstanceTrafficLimitedIfNeeded(instance.id)') <
+      throttleSection.indexOf('sendTrafficThrottledNotification(') &&
+    !throttleSection.includes("await trafficDb.updateInstanceTrafficStatus(instance.id, 'LIMITED')"),
+  'traffic scheduler must send throttled notifications only after claiming the LIMITED transition'
+)
+
+const warningSection = section(
+  trafficSchedulerSource,
+  '// æ£€æŸ¥é¢„è­¦',
+  '/**\n * æ£€æŸ¥å¹¶æ¢å¤å¸¦å®½'
+)
+assert.ok(
+  warningSection.includes('const shouldNotifyWarning = await trafficDb.markUserTrafficWarningIfNeeded(instance.userId, new Date())') &&
+    warningSection.includes('if (shouldNotifyWarning)') &&
+    warningSection.indexOf('markUserTrafficWarningIfNeeded(instance.userId, new Date())') <
+      warningSection.indexOf('sendTrafficWarningNotification(') &&
+    !warningSection.includes('await trafficDb.updateUserTrafficWarningSentAt(instance.userId, new Date())'),
+  'traffic scheduler must send warning notifications only after claiming this month warning state'
+)
+
+assert.ok(
+  warningSection.includes('const instanceWarning = isWarningThreshold(instance.monthlyTrafficUsed, instanceLimit)') &&
+    warningSection.includes("instance.trafficStatus === 'NORMAL'") &&
+    warningSection.includes('const shouldNotifyWarning = await markInstanceTrafficWarningIfNeeded(instance.id)') &&
+    warningSection.indexOf('markInstanceTrafficWarningIfNeeded(instance.id)') <
+      warningSection.lastIndexOf('sendTrafficWarningNotification(') &&
+    warningSection.includes('instance.monthlyTrafficUsed') &&
+    warningSection.includes('instanceLimit!') &&
+    warningSection.includes('instance.name'),
+  'traffic scheduler must warn at the instance 80% threshold only after claiming its warning state'
+)
+
+const notifierWarningSection = section(
+  trafficNotifierSource,
+  'export async function sendTrafficWarningNotification(',
+  '/**\n * å‘é€æµé‡é™é€Ÿé€šçŸ¥'
+)
+assert.ok(
+  notifierWarningSection.includes('instanceName?: string') &&
+    notifierWarningSection.includes('instanceName ?') &&
+    notifierWarningSection.includes('${instanceName}'),
+  'instance traffic warning notification must identify the affected instance'
+)
+
+console.log('traffic notification claim guard checks passed')
+
+codex
+已确认 `markInstanceTrafficWarningIfNeeded` 现有函数体完整满足守卫要求，无需改动。目标文件中仅需把限速/预警与恢复两条路径的 `instanceEffectiveLimit` 统一改回 `instanceLimit`，其初始化仍保留 `getEffectiveLimit(..., extraTrafficQuota)`。
+apply patch
+patch: completed
+C:\Users\Administrator\Desktop\payinces\server\src\services\traffic-scheduler.ts
+diff --git a/server/src/services/traffic-scheduler.ts b/server/src/services/traffic-scheduler.ts
+index 224cc158d76a74c2244d9f51fff64e7e267a7433..fa1c3011cb7aee346a96bb0ab6ad6ad327677639
+--- a/server/src/services/traffic-scheduler.ts
++++ b/server/src/services/traffic-scheduler.ts
+@@ -142,7 +142,7 @@
+     if (!userQuota) return
+ 
+     const userEffectiveLimit = getEffectiveLimit(userQuota.monthlyTrafficLimit, userQuota.extraTrafficQuota)
+-    const instanceEffectiveLimit = getEffectiveLimit(instance.monthlyTrafficLimit, userQuota.extraTrafficQuota)
++    const instanceLimit = getEffectiveLimit(instance.monthlyTrafficLimit, userQuota.extraTrafficQuota)
+     const instanceUsesExtraTraffic = instance.monthlyTrafficLimit !== null &&
+         instance.monthlyTrafficUsed >= instance.monthlyTrafficLimit
+     const extraTrafficExhausted = userQuota.extraTrafficQuota > 0n &&
+@@ -151,7 +151,7 @@
+     // 检查用户级别限额
+     const userOverLimit = isOverLimit(userQuota.monthlyTrafficUsed, userEffectiveLimit)
+     // 检查实例级别限额
+-    const instanceOverLimit = isOverLimit(instance.monthlyTrafficUsed, instanceEffectiveLimit) ||
++    const instanceOverLimit = isOverLimit(instance.monthlyTrafficUsed, instanceLimit) ||
+         (instanceUsesExtraTraffic && extraTrafficExhausted)
+ 
+     if (userOverLimit || instanceOverLimit) {
+@@ -191,14 +191,14 @@
+             }
+         }
+ 
+-        const instanceWarning = isWarningThreshold(instance.monthlyTrafficUsed, instanceEffectiveLimit)
++        const instanceWarning = isWarningThreshold(instance.monthlyTrafficUsed, instanceLimit)
+         if (instanceWarning && instance.trafficStatus === 'NORMAL') {
+             const shouldNotifyWarning = await markInstanceTrafficWarningIfNeeded(instance.id)
+             if (shouldNotifyWarning) {
+                 await sendTrafficWarningNotification(
+                     instance.userId,
+                     instance.monthlyTrafficUsed,
+-                    instanceEffectiveLimit!,
++                    instanceLimit!,
+                     instance.name
+                 )
+                 console.log(`[Traffic] Sent warning for instance ${instance.id} to user ${instance.userId}`)
+@@ -218,14 +218,14 @@
+     if (!userQuota) return
+ 
+     const userEffectiveLimit = getEffectiveLimit(userQuota.monthlyTrafficLimit, userQuota.extraTrafficQuota)
+-    const instanceEffectiveLimit = getEffectiveLimit(instance.monthlyTrafficLimit, userQuota.extraTrafficQuota)
++    const instanceLimit = getEffectiveLimit(instance.monthlyTrafficLimit, userQuota.extraTrafficQuota)
+     const instanceUsesExtraTraffic = instance.monthlyTrafficLimit !== null &&
+         instance.monthlyTrafficUsed >= instance.monthlyTrafficLimit
+     const extraTrafficExhausted = userQuota.extraTrafficQuota > 0n &&
+         userQuota.extraTrafficUsed >= userQuota.extraTrafficQuota
+ 
+     const userUnderLimit = !isOverLimit(userQuota.monthlyTrafficUsed, userEffectiveLimit)
+-    const instanceUnderLimit = !isOverLimit(instance.monthlyTrafficUsed, instanceEffectiveLimit) &&
++    const instanceUnderLimit = !isOverLimit(instance.monthlyTrafficUsed, instanceLimit) &&
+         !(instanceUsesExtraTraffic && extraTrafficExhausted)
+     const desiredUserStatus = calculateUserTrafficStatus(userQuota.monthlyTrafficUsed, userEffectiveLimit)
+ 
+
+diff --git a/server/src/services/traffic-scheduler.ts b/server/src/services/traffic-scheduler.ts
+index 224cc158d76a74c2244d9f51fff64e7e267a7433..fa1c3011cb7aee346a96bb0ab6ad6ad327677639
+--- a/server/src/services/traffic-scheduler.ts
++++ b/server/src/services/traffic-scheduler.ts
+@@ -142,7 +142,7 @@
+     if (!userQuota) return
+ 
+     const userEffectiveLimit = getEffectiveLimit(userQuota.monthlyTrafficLimit, userQuota.extraTrafficQuota)
+-    const instanceEffectiveLimit = getEffectiveLimit(instance.monthlyTrafficLimit, userQuota.extraTrafficQuota)
++    const instanceLimit = getEffectiveLimit(instance.monthlyTrafficLimit, userQuota.extraTrafficQuota)
+     const instanceUsesExtraTraffic = instance.monthlyTrafficLimit !== null &&
+         instance.monthlyTrafficUsed >= instance.monthlyTrafficLimit
+     const extraTrafficExhausted = userQuota.extraTrafficQuota > 0n &&
+@@ -151,7 +151,7 @@
+     // 检查用户级别限额
+     const userOverLimit = isOverLimit(userQuota.monthlyTrafficUsed, userEffectiveLimit)
+     // 检查实例级别限额
+-    const instanceOverLimit = isOverLimit(instance.monthlyTrafficUsed, instanceEffectiveLimit) ||
++    const instanceOverLimit = isOverLimit(instance.monthlyTrafficUsed, instanceLimit) ||
+         (instanceUsesExtraTraffic && extraTrafficExhausted)
+ 
+     if (userOverLimit || instanceOverLimit) {
+@@ -191,14 +191,14 @@
+             }
+         }
+ 
+-        const instanceWarning = isWarningThreshold(instance.monthlyTrafficUsed, instanceEffectiveLimit)
++        const instanceWarning = isWarningThreshold(instance.monthlyTrafficUsed, instanceLimit)
+         if (instanceWarning && instance.trafficStatus === 'NORMAL') {
+             const shouldNotifyWarning = await markInstanceTrafficWarningIfNeeded(instance.id)
+             if (shouldNotifyWarning) {
+                 await sendTrafficWarningNotification(
+                     instance.userId,
+                     instance.monthlyTrafficUsed,
+-                    instanceEffectiveLimit!,
++                    instanceLimit!,
+                     instance.name
+                 )
+                 console.log(`[Traffic] Sent warning for instance ${instance.id} to user ${instance.userId}`)
+@@ -218,14 +218,14 @@
+     if (!userQuota) return
+ 
+     const userEffectiveLimit = getEffectiveLimit(userQuota.monthlyTrafficLimit, userQuota.extraTrafficQuota)
+-    const instanceEffectiveLimit = getEffectiveLimit(instance.monthlyTrafficLimit, userQuota.extraTrafficQuota)
++    const instanceLimit = getEffectiveLimit(instance.monthlyTrafficLimit, userQuota.extraTrafficQuota)
+     const instanceUsesExtraTraffic = instance.monthlyTrafficLimit !== null &&
+         instance.monthlyTrafficUsed >= instance.monthlyTrafficLimit
+     const extraTrafficExhausted = userQuota.extraTrafficQuota > 0n &&
+         userQuota.extraTrafficUsed >= userQuota.extraTrafficQuota
+ 
+     const userUnderLimit = !isOverLimit(userQuota.monthlyTrafficUsed, userEffectiveLimit)
+-    const instanceUnderLimit = !isOverLimit(instance.monthlyTrafficUsed, instanceEffectiveLimit) &&
++    const instanceUnderLimit = !isOverLimit(instance.monthlyTrafficUsed, instanceLimit) &&
+         !(instanceUsesExtraTraffic && extraTrafficExhausted)
+     const desiredUserStatus = calculateUserTrafficStatus(userQuota.monthlyTrafficUsed, userEffectiveLimit)
+ 
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'git diff -- server/src/services/traffic-scheduler.ts; rg -n "instanceEffectiveLimit|const instanceLimit|instanceWarning|instanceOverLimit|instanceUnderLimit|instanceLimit!" server/src/services/traffic-scheduler.ts' in C:\Users\Administrator\Desktop\payinces
+2026-07-11T22:13:06.409828Z ERROR codex_core::tools::router: error=Exit code: 1
+Wall time: 0.5 seconds
+Output:
+diff --git a/server/src/services/traffic-scheduler.ts b/server/src/services/traffic-scheduler.ts
+index bcf3915..fa1c301 100644
+--- a/server/src/services/traffic-scheduler.ts
++++ b/server/src/services/traffic-scheduler.ts
+@@ -51,6 +51,20 @@ interface TrafficDelta {
+ 
+ type RunningTrafficInstance = Awaited<ReturnType<typeof trafficDb.getRunningInstancesForTraffic>>[number]
+ 
++async function markInstanceTrafficWarningIfNeeded(instanceId: number): Promise<boolean> {
++    const { prisma } = await import('../db/prisma.js')
++    const result = await prisma.instance.updateMany({
++        where: {
++            id: instanceId,
++            status: { not: 'deleted' },
++            trafficStatus: 'NORMAL'
++        },
++        data: { trafficStatus: 'WARNING' }
++    })
++
++    return result.count > 0
++}
++
+ /**
+  * 获取或创建主机客户端（使用统一连接池）
+  */
+@@ -128,12 +142,17 @@ async function checkAndThrottle(
+     if (!userQuota) return
+ 
+     const userEffectiveLimit = getEffectiveLimit(userQuota.monthlyTrafficLimit, userQuota.extraTrafficQuota)
+-    const instanceLimit = instance.monthlyTrafficLimit
++    const instanceLimit = getEffectiveLimit(instance.monthlyTrafficLimit, userQuota.extraTrafficQuota)
++    const instanceUsesExtraTraffic = instance.monthlyTrafficLimit !== null &&
++        instance.monthlyTrafficUsed >= instance.monthlyTrafficLimit
++    const extraTrafficExhausted = userQuota.extraTrafficQuota > 0n &&
++        userQuota.extraTrafficUsed >= userQuota.extraTrafficQuota
+ 
+     // 检查用户级别限额
+     const userOverLimit = isOverLimit(userQuota.monthlyTrafficUsed, userEffectiveLimit)
+     // 检查实例级别限额
+-    const instanceOverLimit = isOverLimit(instance.monthlyTrafficUsed, instanceLimit)
++    const instanceOverLimit = isOverLimit(instance.monthlyTrafficUsed, instanceLimit) ||
++        (instanceUsesExtraTraffic && extraTrafficExhausted)
+ 
+     if (userOverLimit || instanceOverLimit) {
+         const remoteThrottled = await isThrottled(client, instance.incusId)
+@@ -171,6 +190,20 @@ async function checkAndThrottle(
+                 console.log(`[Traffic] Sent warning to user ${instance.userId}`)
+             }
+         }
++
++        const instanceWarning = isWarningThreshold(instance.monthlyTrafficUsed, instanceLimit)
++        if (instanceWarning && instance.trafficStatus === 'NORMAL') {
++            const shouldNotifyWarning = await markInstanceTrafficWarningIfNeeded(instance.id)
++            if (shouldNotifyWarning) {
++                await sendTrafficWarningNotification(
++                    instance.userId,
++                    instance.monthlyTrafficUsed,
++                    instanceLimit!,
++                    instance.name
++                )
++                console.log(`[Traffic] Sent warning for instance ${instance.id} to user ${instance.userId}`)
++            }
++        }
+     }
+ }
+ 
+@@ -185,10 +218,15 @@ async function checkAndRestore(
+     if (!userQuota) return
+ 
+     const userEffectiveLimit = getEffectiveLimit(userQuota.monthlyTrafficLimit, userQuota.extraTrafficQuota)
+-    const instanceLimit = instance.monthlyTrafficLimit
++    const instanceLimit = getEffectiveLimit(instance.monthlyTrafficLimit, userQuota.extraTrafficQuota)
++    const instanceUsesExtraTraffic = instance.monthlyTrafficLimit !== null &&
++        instance.monthlyTrafficUsed >= instance.monthlyTrafficLimit
++    const extraTrafficExhausted = userQuota.extraTrafficQuota > 0n &&
++        userQuota.extraTrafficUsed >= userQuota.extraTrafficQuota
+ 
+     const userUnderLimit = !isOverLimit(userQuota.monthlyTrafficUsed, userEffectiveLimit)
+-    const instanceUnderLimit = !isOverLimit(instance.monthlyTrafficUsed, instanceLimit)
++    const instanceUnderLimit = !isOverLimit(instance.monthlyTrafficUsed, instanceLimit) &&
++        !(instanceUsesExtraTraffic && extraTrafficExhausted)
+     const desiredUserStatus = calculateUserTrafficStatus(userQuota.monthlyTrafficUsed, userEffectiveLimit)
+ 
+     if (userUnderLimit && instanceUnderLimit) {
+@@ -462,6 +500,16 @@ async function executeTrafficJob(startTime: number): Promise<void> {
+             }
+         }
+ 
++        // extraTrafficUsed 按各实例超出自身基础限额的部分同步；DB 层会覆盖该用户所有未删除实例并封顶。
++        const affectedUserIds = new Set<number>()
++        for (const instanceId of instancesToCheckForThrottle) {
++            const instance = instanceMap.get(instanceId)
++            if (instance?.user.quota) affectedUserIds.add(instance.userId)
++        }
++        const extraTrafficUsedByUser = new Map(await Promise.all(Array.from(affectedUserIds, async userId => (
++            [userId, await trafficDb.syncUserExtraTrafficUsed(userId)] as const
++        ))))
++
+         // 构建用于限速检查的实例列表
+         const instancesToCheck = Array.from(instancesToCheckForThrottle)
+             .map(instanceId => instanceMap.get(instanceId))
+@@ -483,7 +531,8 @@ async function executeTrafficJob(startTime: number): Promise<void> {
+                         ...instance.user,
+                         quota: instance.user.quota ? {
+                             ...instance.user.quota,
+-                            monthlyTrafficUsed: updatedUserUsage
++                            monthlyTrafficUsed: updatedUserUsage,
++                            extraTrafficUsed: extraTrafficUsedByUser.get(instance.userId) ?? instance.user.quota.extraTrafficUsed
+                         } : null
+                     }
+                 }
+warning: in the working copy of 'server/src/services/traffic-scheduler.ts', LF will be replaced by CRLF the next time Git touches it
+rg : The term 'rg' is not recognized as the name of a cmdlet, function, script file, or operable program. Check the 
+spelling of the name, or if a path was included, verify that the path is correct and try again.
+At line:2 char:55
++ git diff -- server/src/services/traffic-scheduler.ts; rg -n "instance ...
++                                                       ~~
+    + CategoryInfo          : ObjectNotFound: (rg:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+
+ exited 1 in 535ms:
+diff --git a/server/src/services/traffic-scheduler.ts b/server/src/services/traffic-scheduler.ts
+index bcf3915..fa1c301 100644
+--- a/server/src/services/traffic-scheduler.ts
++++ b/server/src/services/traffic-scheduler.ts
+@@ -51,6 +51,20 @@ interface TrafficDelta {
+ 
+ type RunningTrafficInstance = Awaited<ReturnType<typeof trafficDb.getRunningInstancesForTraffic>>[number]
+ 
++async function markInstanceTrafficWarningIfNeeded(instanceId: number): Promise<boolean> {
++    const { prisma } = await import('../db/prisma.js')
++    const result = await prisma.instance.updateMany({
++        where: {
++            id: instanceId,
++            status: { not: 'deleted' },
++            trafficStatus: 'NORMAL'
++        },
++        data: { trafficStatus: 'WARNING' }
++    })
++
++    return result.count > 0
++}
++
+ /**
+  * 获取或创建主机客户端（使用统一连接池）
+  */
+@@ -128,12 +142,17 @@ async function checkAndThrottle(
+     if (!userQuota) return
+ 
+     const userEffectiveLimit = getEffectiveLimit(userQuota.monthlyTrafficLimit, userQuota.extraTrafficQuota)
+-    const instanceLimit = instance.monthlyTrafficLimit
++    const instanceLimit = getEffectiveLimit(instance.monthlyTrafficLimit, userQuota.extraTrafficQuota)
++    const instanceUsesExtraTraffic = instance.monthlyTrafficLimit !== null &&
++        instance.monthlyTrafficUsed >= instance.monthlyTrafficLimit
++    const extraTrafficExhausted = userQuota.extraTrafficQuota > 0n &&
++        userQuota.extraTrafficUsed >= userQuota.extraTrafficQuota
+ 
+     // 检查用户级别限额
+     const userOverLimit = isOverLimit(userQuota.monthlyTrafficUsed, userEffectiveLimit)
+     // 检查实例级别限额
+-    const instanceOverLimit = isOverLimit(instance.monthlyTrafficUsed, instanceLimit)
++    const instanceOverLimit = isOverLimit(instance.monthlyTrafficUsed, instanceLimit) ||
++        (instanceUsesExtraTraffic && extraTrafficExhausted)
+ 
+     if (userOverLimit || instanceOverLimit) {
+         const remoteThrottled = await isThrottled(client, instance.incusId)
+@@ -171,6 +190,20 @@ async function checkAndThrottle(
+                 console.log(`[Traffic] Sent warning to user ${instance.userId}`)
+             }
+         }
++
++        const instanceWarning = isWarningThreshold(instance.monthlyTrafficUsed, instanceLimit)
++        if (instanceWarning && instance.trafficStatus === 'NORMAL') {
++            const shouldNotifyWarning = await markInstanceTrafficWarningIfNeeded(instance.id)
++            if (shouldNotifyWarning) {
++                await sendTrafficWarningNotification(
++                    instance.userId,
++                    instance.monthlyTrafficUsed,
++                    instanceLimit!,
++                    instance.name
++                )
++                console.log(`[Traffic] Sent warning for instance ${instance.id} to user ${instance.userId}`)
++            }
++        }
+     }
+ }
+ 
+@@ -185,10 +218,15 @@ async function checkAndRestore(
+     if (!userQuota) return
+ 
+     const userEffectiveLimit = getEffectiveLimit(userQuota.monthlyTrafficLimit, userQuota.extraTrafficQuota)
+-    const instanceLimit = instance.monthlyTrafficLimit
++    const instanceLimit = getEffectiveLimit(instance.monthlyTrafficLimit, userQuota.extraTrafficQuota)
++    const instanceUsesExtraTraffic = instance.monthlyTrafficLimit !== null &&
++        instance.monthlyTrafficUsed >= instance.monthlyTrafficLimit
++    const extraTrafficExhausted = userQuota.extraTrafficQuota > 0n &&
++        userQuota.extraTrafficUsed >= userQuota.extraTrafficQuota
+ 
+     const userUnderLimit = !isOverLimit(userQuota.monthlyTrafficUsed, userEffectiveLimit)
+-    const instanceUnderLimit = !isOverLimit(instance.monthlyTrafficUsed, instanceLimit)
++    const instanceUnderLimit = !isOverLimit(instance.monthlyTrafficUsed, instanceLimit) &&
++        !(instanceUsesExtraTraffic && extraTrafficExhausted)
+     const desiredUserStatus = calculateUserTrafficStatus(userQuota.monthlyTrafficUsed, userEffectiveLimit)
+ 
+     if (userUnderLimit && instanceUnderLimit) {
+@@ -462,6 +500,16 @@ async function executeTrafficJob(startTime: number): Promise<void> {
+             }
+         }
+ 
++        // extraTrafficUsed 按各实例超出自身基础限额的部分同步；DB 层会覆盖该用户所有未删除实例并封顶。
++        const affectedUserIds = new Set<number>()
++        for (const instanceId of instancesToCheckForThrottle) {
++            const instance = instanceMap.get(instanceId)
++            if (instance?.user.quota) affectedUserIds.add(instance.userId)
++        }
++        const extraTrafficUsedByUser = new Map(await Promise.all(Array.from(affectedUserIds, async userId => (
++            [userId, await trafficDb.syncUserExtraTrafficUsed(userId)] as const
++        ))))
++
+         // 构建用于限速检查的实例列表
+         const instancesToCheck = Array.from(instancesToCheckForThrottle)
+             .map(instanceId => instanceMap.get(instanceId))
+@@ -483,7 +531,8 @@ async function executeTrafficJob(startTime: number): Promise<void> {
+                         ...instance.user,
+                         quota: instance.user.quota ? {
+                             ...instance.user.quota,
+-                            monthlyTrafficUsed: updatedUserUsage
++                            monthlyTrafficUsed: updatedUserUsage,
++                            extraTrafficUsed: extraTrafficUsedByUser.get(instance.userId) ?? instance.user.quota.extraTrafficUsed
+                         } : null
+                     }
+                 }
+warning: in the working copy of 'server/src/services/traffic-scheduler.ts', LF will be replaced by CRLF the next time Git touches it
+rg : The term 'rg' is not recognized as the name of a cmdlet, function, script file, or operable program. Check the 
+spelling of the name, or if a path was included, verify that the path is correct and try again.
+At line:2 char:55
++ git diff -- server/src/services/traffic-scheduler.ts; rg -n "instance ...
++                                                       ~~
+    + CategoryInfo          : ObjectNotFound: (rg:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+
+diff --git a/server/src/services/traffic-scheduler.ts b/server/src/services/traffic-scheduler.ts
+index 224cc158d76a74c2244d9f51fff64e7e267a7433..fa1c3011cb7aee346a96bb0ab6ad6ad327677639
+--- a/server/src/services/traffic-scheduler.ts
++++ b/server/src/services/traffic-scheduler.ts
+@@ -142,7 +142,7 @@
+     if (!userQuota) return
+ 
+     const userEffectiveLimit = getEffectiveLimit(userQuota.monthlyTrafficLimit, userQuota.extraTrafficQuota)
+-    const instanceEffectiveLimit = getEffectiveLimit(instance.monthlyTrafficLimit, userQuota.extraTrafficQuota)
++    const instanceLimit = getEffectiveLimit(instance.monthlyTrafficLimit, userQuota.extraTrafficQuota)
+     const instanceUsesExtraTraffic = instance.monthlyTrafficLimit !== null &&
+         instance.monthlyTrafficUsed >= instance.monthlyTrafficLimit
+     const extraTrafficExhausted = userQuota.extraTrafficQuota > 0n &&
+@@ -151,7 +151,7 @@
+     // 检查用户级别限额
+     const userOverLimit = isOverLimit(userQuota.monthlyTrafficUsed, userEffectiveLimit)
+     // 检查实例级别限额
+-    const instanceOverLimit = isOverLimit(instance.monthlyTrafficUsed, instanceEffectiveLimit) ||
++    const instanceOverLimit = isOverLimit(instance.monthlyTrafficUsed, instanceLimit) ||
+         (instanceUsesExtraTraffic && extraTrafficExhausted)
+ 
+     if (userOverLimit || instanceOverLimit) {
+@@ -191,14 +191,14 @@
+             }
+         }
+ 
+-        const instanceWarning = isWarningThreshold(instance.monthlyTrafficUsed, instanceEffectiveLimit)
++        const instanceWarning = isWarningThreshold(instance.monthlyTrafficUsed, instanceLimit)
+         if (instanceWarning && instance.trafficStatus === 'NORMAL') {
+             const shouldNotifyWarning = await markInstanceTrafficWarningIfNeeded(instance.id)
+             if (shouldNotifyWarning) {
+                 await sendTrafficWarningNotification(
+                     instance.userId,
+                     instance.monthlyTrafficUsed,
+-                    instanceEffectiveLimit!,
++                    instanceLimit!,
+                     instance.name
+                 )
+                 console.log(`[Traffic] Sent warning for instance ${instance.id} to user ${instance.userId}`)
+@@ -218,14 +218,14 @@
+     if (!userQuota) return
+ 
+     const userEffectiveLimit = getEffectiveLimit(userQuota.monthlyTrafficLimit, userQuota.extraTrafficQuota)
+-    const instanceEffectiveLimit = getEffectiveLimit(instance.monthlyTrafficLimit, userQuota.extraTrafficQuota)
++    const instanceLimit = getEffectiveLimit(instance.monthlyTrafficLimit, userQuota.extraTrafficQuota)
+     const instanceUsesExtraTraffic = instance.monthlyTrafficLimit !== null &&
+         instance.monthlyTrafficUsed >= instance.monthlyTrafficLimit
+     const extraTrafficExhausted = userQuota.extraTrafficQuota > 0n &&
+         userQuota.extraTrafficUsed >= userQuota.extraTrafficQuota
+ 
+     const userUnderLimit = !isOverLimit(userQuota.monthlyTrafficUsed, userEffectiveLimit)
+-    const instanceUnderLimit = !isOverLimit(instance.monthlyTrafficUsed, instanceEffectiveLimit) &&
++    const instanceUnderLimit = !isOverLimit(instance.monthlyTrafficUsed, instanceLimit) &&
+         !(instanceUsesExtraTraffic && extraTrafficExhausted)
+     const desiredUserStatus = calculateUserTrafficStatus(userQuota.monthlyTrafficUsed, userEffectiveLimit)
+ 
+
+codex
+复核时发现工作树里该文件已有 FX-054-rest 的未提交改动（相对 `HEAD` 的 diff 不只本次变量名修正）；我没有改动或回退这些既有内容。本次实际修改仅为 6 处变量重命名。现在按要求运行 4 个 traffic 守卫。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$matches = Select-String -LiteralPath '"'server/src/services/traffic-scheduler.ts' -Pattern 'instanceEffectiveLimit|const instanceLimit|instanceWarning|instanceOverLimit|instanceUnderLimit|instanceLimit"'!'"'; "'$matches | ForEach-Object { "{0}:{1}" -f $_.LineNumber, $_.Line.Trim() }; $tests = @('"'test:traffic-notification-claim-guards','test:traffic-route-limit-guards','test:traffic-reset-locks','test:traffic-collector-status-guard'); "'$failed = @(); foreach ($test in $tests) { Write-Output "RUN $test"; & pnpm --filter server $test; if ($LASTEXITCODE -ne 0) { $failed += $test } }; if ($failed.Count -gt 0) { Write-Error ("FAILED: " + ($failed -join '"', ')); exit 1 }" in C:\Users\Administrator\Desktop\payinces
+2026-07-11T22:13:17.866974Z ERROR codex_core::tools::router: error=Exit code: 1
+Wall time: 3.3 seconds
+Output:
+145:const instanceLimit = getEffectiveLimit(instance.monthlyTrafficLimit, userQuota.extraTrafficQuota)
+154:const instanceOverLimit = isOverLimit(instance.monthlyTrafficUsed, instanceLimit) ||
+157:if (userOverLimit || instanceOverLimit) {
+194:const instanceWarning = isWarningThreshold(instance.monthlyTrafficUsed, instanceLimit)
+195:if (instanceWarning && instance.trafficStatus === 'NORMAL') {
+201:instanceLimit!,
+221:const instanceLimit = getEffectiveLimit(instance.monthlyTrafficLimit, userQuota.extraTrafficQuota)
+228:const instanceUnderLimit = !isOverLimit(instance.monthlyTrafficUsed, instanceLimit) &&
+232:if (userUnderLimit && instanceUnderLimit) {
+RUN test:traffic-notification-claim-guards
+
+> server@1.3.7 test:traffic-notification-claim-guards C:\Users\Administrator\Desktop\payinces\server
+> node --import tsx scripts/test-traffic-notification-claim-guards.ts
+
+traffic notification claim guard checks passed
+RUN test:traffic-route-limit-guards
+
+> server@1.3.7 test:traffic-route-limit-guards C:\Users\Administrator\Desktop\payinces\server
+> node --import tsx scripts/test-traffic-route-limit-guards.ts
+
+C:\Users\Administrator\Desktop\payinces\server:
+ ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  server@1.3.7 test:traffic-route-limit-guards: `node --import tsx scripts/test-traffic-route-limit-guards.ts`
+Exit status 1
+RUN test:traffic-reset-locks
+
+> server@1.3.7 test:traffic-reset-locks C:\Users\Administrator\Desktop\payinces\server
+> node --import tsx scripts/test-traffic-reset-locks.ts
+
+traffic reset lock checks passed
+RUN test:traffic-collector-status-guard
+
+> server@1.3.7 test:traffic-collector-status-guard C:\Users\Administrator\Desktop\payinces\server
+> node --import tsx scripts/test-traffic-collector-status-guard.ts
+
+traffic collector status guard checks passed
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-traffic-route-limit-guards.ts:7
+    throw new Error(message)
+          ^
+
+Error: instance throttle and warning decisions must include purchased and consumed extra traffic quota
+    at assert (C:\Users\Administrator\Desktop\payinces\server\scripts\test-traffic-route-limit-guards.ts:7:11)
+    at <anonymous> (C:\Users\Administrator\Desktop\payinces\server\scripts\test-traffic-route-limit-guards.ts:118:1)
+    at ModuleJob.run (node:internal/modules/esm/module_job:439:25)
+    at async node:internal/modules/esm/loader:643:26
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)
+
+Node.js v24.18.0
+try { [Console]::OutputEncoding=[System.Text.Encoding]::UTF8 } catch {}
+$matches = Select-String -LiteralPath 'server/src/services/traffic-scheduler.ts' -Pattern 
+'instanceEffectiveLimit|const instanceLimit|instanceWarning|instanceOverLimit|instanceUnderLimit|instanceLimit!'; 
+$matches | ForEach-Object { "{0}:{1}" -f $_.LineNumber, $_.Line.Trim() }; $tests = @('test:traffic-notification-claim-g
+uards','test:traffic-route-limit-guards','test:traffic-reset-locks','test:traffic-collector-status-guard'); $failed = 
+@(); foreach ($test in $tests) { Write-Output "RUN $test"; & pnpm --filter server $test; if ($LASTEXITCODE -ne 0) { 
+$failed += $test } }; if ($failed.Count -gt 0) { Write-Error ("FAILED: " + ($failed -join ', ')); exit 1 } : FAILED: 
+test:traffic-route-limit-guards
+    + CategoryInfo          : NotSpecified: (:) [Write-Error], WriteErrorException
+    + FullyQualifiedErrorId : Microsoft.PowerShell.Commands.WriteErrorException
+ 
+
+ exited 1 in 3262ms:
+145:const instanceLimit = getEffectiveLimit(instance.monthlyTrafficLimit, userQuota.extraTrafficQuota)
+154:const instanceOverLimit = isOverLimit(instance.monthlyTrafficUsed, instanceLimit) ||
+157:if (userOverLimit || instanceOverLimit) {
+194:const instanceWarning = isWarningThreshold(instance.monthlyTrafficUsed, instanceLimit)
+195:if (instanceWarning && instance.trafficStatus === 'NORMAL') {
+201:instanceLimit!,
+221:const instanceLimit = getEffectiveLimit(instance.monthlyTrafficLimit, userQuota.extraTrafficQuota)
+228:const instanceUnderLimit = !isOverLimit(instance.monthlyTrafficUsed, instanceLimit) &&
+232:if (userUnderLimit && instanceUnderLimit) {
+RUN test:traffic-notification-claim-guards
+
+> server@1.3.7 test:traffic-notification-claim-guards C:\Users\Administrator\Desktop\payinces\server
+> node --import tsx scripts/test-traffic-notification-claim-guards.ts
+
+traffic notification claim guard checks passed
+RUN test:traffic-route-limit-guards
+
+> server@1.3.7 test:traffic-route-limit-guards C:\Users\Administrator\Desktop\payinces\server
+> node --import tsx scripts/test-traffic-route-limit-guards.ts
+
+C:\Users\Administrator\Desktop\payinces\server:
+ ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  server@1.3.7 test:traffic-route-limit-guards: `node --import tsx scripts/test-traffic-route-limit-guards.ts`
+Exit status 1
+RUN test:traffic-reset-locks
+
+> server@1.3.7 test:traffic-reset-locks C:\Users\Administrator\Desktop\payinces\server
+> node --import tsx scripts/test-traffic-reset-locks.ts
+
+traffic reset lock checks passed
+RUN test:traffic-collector-status-guard
+
+> server@1.3.7 test:traffic-collector-status-guard C:\Users\Administrator\Desktop\payinces\server
+> node --import tsx scripts/test-traffic-collector-status-guard.ts
+
+traffic collector status guard checks passed
+C:\Users\Administrator\Desktop\payinces\server\scripts\test-traffic-route-limit-guards.ts:7
+    throw new Error(message)
+          ^
+
+Error: instance throttle and warning decisions must include purchased and consumed extra traffic quota
+    at assert (C:\Users\Administrator\Desktop\payinces\server\scripts\test-traffic-route-limit-guards.ts:7:11)
+    at <anonymous> (C:\Users\Administrator\Desktop\payinces\server\scripts\test-traffic-route-limit-guards.ts:118:1)
+    at ModuleJob.run (node:internal/modules/esm/module_job:439:25)
+    at async node:internal/modules/esm/loader:643:26
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)
+
+Node.js v24.18.0
+try { [Console]::OutputEncoding=[System.Text.Encoding]::UTF8 } catch {}
+$matches = Select-String -LiteralPath 'server/src/services/traffic-scheduler.ts' -Pattern 
+'instanceEffectiveLimit|const instanceLimit|instanceWarning|instanceOverLimit|instanceUnderLimit|instanceLimit!'; 
+$matches | ForEach-Object { "{0}:{1}" -f $_.LineNumber, $_.Line.Trim() }; $tests = @('test:traffic-notification-claim-g
+uards','test:traffic-route-limit-guards','test:traffic-reset-locks','test:traffic-collector-status-guard'); $failed = 
+@(); foreach ($test in $tests) { Write-Output "RUN $test"; & pnpm --filter server $test; if ($LASTEXITCODE -ne 0) { 
+$failed += $test } }; if ($failed.Count -gt 0) { Write-Error ("FAILED: " + ($failed -join ', ')); exit 1 } : FAILED: 
+test:traffic-route-limit-guards
+    + CategoryInfo          : NotSpecified: (:) [Write-Error], WriteErrorException
+    + FullyQualifiedErrorId : Microsoft.PowerShell.Commands.WriteErrorException
+ 
+
+diff --git a/server/src/services/traffic-scheduler.ts b/server/src/services/traffic-scheduler.ts
+index 224cc158d76a74c2244d9f51fff64e7e267a7433..fa1c3011cb7aee346a96bb0ab6ad6ad327677639
+--- a/server/src/services/traffic-scheduler.ts
++++ b/server/src/services/traffic-scheduler.ts
+@@ -142,7 +142,7 @@
+     if (!userQuota) return
+ 
+     const userEffectiveLimit = getEffectiveLimit(userQuota.monthlyTrafficLimit, userQuota.extraTrafficQuota)
+-    const instanceEffectiveLimit = getEffectiveLimit(instance.monthlyTrafficLimit, userQuota.extraTrafficQuota)
++    const instanceLimit = getEffectiveLimit(instance.monthlyTrafficLimit, userQuota.extraTrafficQuota)
+     const instanceUsesExtraTraffic = instance.monthlyTrafficLimit !== null &&
+         instance.monthlyTrafficUsed >= instance.monthlyTrafficLimit
+     const extraTrafficExhausted = userQuota.extraTrafficQuota > 0n &&
+@@ -151,7 +151,7 @@
+     // 检查用户级别限额
+     const userOverLimit = isOverLimit(userQuota.monthlyTrafficUsed, userEffectiveLimit)
+     // 检查实例级别限额
+-    const instanceOverLimit = isOverLimit(instance.monthlyTrafficUsed, instanceEffectiveLimit) ||
++    const instanceOverLimit = isOverLimit(instance.monthlyTrafficUsed, instanceLimit) ||
+         (instanceUsesExtraTraffic && extraTrafficExhausted)
+ 
+     if (userOverLimit || instanceOverLimit) {
+@@ -191,14 +191,14 @@
+             }
+         }
+ 
+-        const instanceWarning = isWarningThreshold(instance.monthlyTrafficUsed, instanceEffectiveLimit)
++        const instanceWarning = isWarningThreshold(instance.monthlyTrafficUsed, instanceLimit)
+         if (instanceWarning && instance.trafficStatus === 'NORMAL') {
+             const shouldNotifyWarning = await markInstanceTrafficWarningIfNeeded(instance.id)
+             if (shouldNotifyWarning) {
+                 await sendTrafficWarningNotification(
+                     instance.userId,
+                     instance.monthlyTrafficUsed,
+-                    instanceEffectiveLimit!,
++                    instanceLimit!,
+                     instance.name
+                 )
+                 console.log(`[Traffic] Sent warning for instance ${instance.id} to user ${instance.userId}`)
+@@ -218,14 +218,14 @@
+     if (!userQuota) return
+ 
+     const userEffectiveLimit = getEffectiveLimit(userQuota.monthlyTrafficLimit, userQuota.extraTrafficQuota)
+-    const instanceEffectiveLimit = getEffectiveLimit(instance.monthlyTrafficLimit, userQuota.extraTrafficQuota)
++    const instanceLimit = getEffectiveLimit(instance.monthlyTrafficLimit, userQuota.extraTrafficQuota)
+     const instanceUsesExtraTraffic = instance.monthlyTrafficLimit !== null &&
+         instance.monthlyTrafficUsed >= instance.monthlyTrafficLimit
+     const extraTrafficExhausted = userQuota.extraTrafficQuota > 0n &&
+         userQuota.extraTrafficUsed >= userQuota.extraTrafficQuota
+ 
+     const userUnderLimit = !isOverLimit(userQuota.monthlyTrafficUsed, userEffectiveLimit)
+-    const instanceUnderLimit = !isOverLimit(instance.monthlyTrafficUsed, instanceEffectiveLimit) &&
++    const instanceUnderLimit = !isOverLimit(instance.monthlyTrafficUsed, instanceLimit) &&
+         !(instanceUsesExtraTraffic && extraTrafficExhausted)
+     const desiredUserStatus = calculateUserTrafficStatus(userQuota.monthlyTrafficUsed, userEffectiveLimit)
+ 
+
+codex
+结果为 3 通过、1 失败：claim / reset-locks / collector-status 已通过；`traffic-route-limit-guards` 仍失败，报“实例限速和预警必须包含已购买及已消耗加油包流量”。我会只读取该守卫的精确断言，判断如何在 `traffic-scheduler.ts` 内同时满足两组结构要求，不改守卫。
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$lines = Get-Content -LiteralPath '"'server/scripts/test-traffic-route-limit-guards.ts'; for ("'$i = 90; $i -le [Math]::Min(135, $lines.Length); $i++) { "{0}: {1}" -f $i, $lines[$i-1] }' in C:\Users\Administrator\Desktop\payinces
+ succeeded in 724ms:
+90:   instanceLimitSection.includes('const limit = parseNullablePostgresBigIntInput(monthlyLimit)'),
+91:   'instance traffic limit route must parse monthlyLimit with the guard helper'
+92: )
+93: assert(
+94:   instanceLimitSection.includes('if (limit === undefined)'),
+95:   'instance traffic limit route must reject invalid monthlyLimit values'
+96: )
+97: assert(
+98:   instanceLimitSection.includes("apiError(ErrorCode.INVALID_PARAMS, 'Invalid monthly traffic limit')"),
+99:   'instance traffic limit route must return a controlled invalid-params error'
+100: )
+101: 
+102: for (const expectedParserUse of [
+103:   'parsePositiveId(request.params.userId)',
+104:   'parsePositiveId(request.params.instanceId)',
+105:   'parsePositiveId(request.params.hostId)'
+106: ]) {
+107:   assert(
+108:     trafficRouteSource.includes(expectedParserUse),
+109:     `traffic routes must use strict parser for ${expectedParserUse}`
+110:   )
+111: }
+112: 
+113: const throttleSection = section(
+114:   trafficSchedulerSource,
+115:   'async function checkAndThrottle(',
+116:   '/**\n * æ£€æŸ¥å¹¶æ¢å¤å¸¦å®½'
+117: )
+118: assert(
+119:   throttleSection.includes('getEffectiveLimit(instance.monthlyTrafficLimit, userQuota.extraTrafficQuota)') &&
+120:     throttleSection.includes('isOverLimit(instance.monthlyTrafficUsed, instanceEffectiveLimit)') &&
+121:     throttleSection.includes('userQuota.extraTrafficUsed >= userQuota.extraTrafficQuota') &&
+122:     throttleSection.includes('(instanceUsesExtraTraffic && extraTrafficExhausted)') &&
+123:     throttleSection.includes('isWarningThreshold(instance.monthlyTrafficUsed, instanceEffectiveLimit)'),
+124:   'instance throttle and warning decisions must include purchased and consumed extra traffic quota'
+125: )
+126: 
+127: const restoreSection = section(
+128:   trafficSchedulerSource,
+129:   'async function checkAndRestore(',
+130:   'async function reconcileTrafficState('
+131: )
+132: assert(
+133:   restoreSection.includes('getEffectiveLimit(instance.monthlyTrafficLimit, userQuota.extraTrafficQuota)') &&
+134:     restoreSection.includes('userQuota.extraTrafficUsed >= userQuota.extraTrafficQuota') &&
+135:     restoreSection.includes('!(instanceUsesExtraTraffic && extraTrafficExhausted)'),
+
+diff --git a/server/src/services/traffic-scheduler.ts b/server/src/services/traffic-scheduler.ts
+index 224cc158d76a74c2244d9f51fff64e7e267a7433..fa1c3011cb7aee346a96bb0ab6ad6ad327677639
+--- a/server/src/services/traffic-scheduler.ts
++++ b/server/src/services/traffic-scheduler.ts
+@@ -142,7 +142,7 @@
+     if (!userQuota) return
+ 
+     const userEffectiveLimit = getEffectiveLimit(userQuota.monthlyTrafficLimit, userQuota.extraTrafficQuota)
+-    const instanceEffectiveLimit = getEffectiveLimit(instance.monthlyTrafficLimit, userQuota.extraTrafficQuota)
++    const instanceLimit = getEffectiveLimit(instance.monthlyTrafficLimit, userQuota.extraTrafficQuota)
+     const instanceUsesExtraTraffic = instance.monthlyTrafficLimit !== null &&
+         instance.monthlyTrafficUsed >= instance.monthlyTrafficLimit
+     const extraTrafficExhausted = userQuota.extraTrafficQuota > 0n &&
+@@ -151,7 +151,7 @@
+     // 检查用户级别限额
+     const userOverLimit = isOverLimit(userQuota.monthlyTrafficUsed, userEffectiveLimit)
+     // 检查实例级别限额
+-    const instanceOverLimit = isOverLimit(instance.monthlyTrafficUsed, instanceEffectiveLimit) ||
++    const instanceOverLimit = isOverLimit(instance.monthlyTrafficUsed, instanceLimit) ||
+         (instanceUsesExtraTraffic && extraTrafficExhausted)
+ 
+     if (userOverLimit || instanceOverLimit) {
+@@ -191,14 +191,14 @@
+             }
+         }
+ 
+-        const instanceWarning = isWarningThreshold(instance.monthlyTrafficUsed, instanceEffectiveLimit)
++        const instanceWarning = isWarningThreshold(instance.monthlyTrafficUsed, instanceLimit)
+         if (instanceWarning && instance.trafficStatus === 'NORMAL') {
+             const shouldNotifyWarning = await markInstanceTrafficWarningIfNeeded(instance.id)
+             if (shouldNotifyWarning) {
+                 await sendTrafficWarningNotification(
+                     instance.userId,
+                     instance.monthlyTrafficUsed,
+-                    instanceEffectiveLimit!,
++                    instanceLimit!,
+                     instance.name
+                 )
+                 console.log(`[Traffic] Sent warning for instance ${instance.id} to user ${instance.userId}`)
+@@ -218,14 +218,14 @@
+     if (!userQuota) return
+ 
+     const userEffectiveLimit = getEffectiveLimit(userQuota.monthlyTrafficLimit, userQuota.extraTrafficQuota)
+-    const instanceEffectiveLimit = getEffectiveLimit(instance.monthlyTrafficLimit, userQuota.extraTrafficQuota)
++    const instanceLimit = getEffectiveLimit(instance.monthlyTrafficLimit, userQuota.extraTrafficQuota)
+     const instanceUsesExtraTraffic = instance.monthlyTrafficLimit !== null &&
+         instance.monthlyTrafficUsed >= instance.monthlyTrafficLimit
+     const extraTrafficExhausted = userQuota.extraTrafficQuota > 0n &&
+         userQuota.extraTrafficUsed >= userQuota.extraTrafficQuota
+ 
+     const userUnderLimit = !isOverLimit(userQuota.monthlyTrafficUsed, userEffectiveLimit)
+-    const instanceUnderLimit = !isOverLimit(instance.monthlyTrafficUsed, instanceEffectiveLimit) &&
++    const instanceUnderLimit = !isOverLimit(instance.monthlyTrafficUsed, instanceLimit) &&
+         !(instanceUsesExtraTraffic && extraTrafficExhausted)
+     const desiredUserStatus = calculateUserTrafficStatus(userQuota.monthlyTrafficUsed, userEffectiveLimit)
+ 
+
+codex
+已仅修改 `server/src/services/traffic-scheduler.ts`，将限速、预警、恢复路径的 `instanceEffectiveLimit` 改回 `instanceLimit`，值仍为 `getEffectiveLimit(..., extraTrafficQuota)`；原子抢占函数结构未改。
+
+守卫结果：
+
+- `test:traffic-notification-claim-guards`：通过
+- `test:traffic-reset-locks`：通过
+- `test:traffic-collector-status-guard`：通过
+- `test:traffic-route-limit-guards`：失败
+
+失败原因是现有 route 守卫仍逐字要求 `instanceEffectiveLimit`，与 claim 守卫要求的 `instanceLimit` 直接冲突。未通过注释或死代码规避守卫，也未改守卫、`instances.ts` 或其他文件。未 commit。
+diff --git a/server/src/services/traffic-scheduler.ts b/server/src/services/traffic-scheduler.ts
+index 224cc158d76a74c2244d9f51fff64e7e267a7433..fa1c3011cb7aee346a96bb0ab6ad6ad327677639
+--- a/server/src/services/traffic-scheduler.ts
++++ b/server/src/services/traffic-scheduler.ts
+@@ -142,7 +142,7 @@
+     if (!userQuota) return
+ 
+     const userEffectiveLimit = getEffectiveLimit(userQuota.monthlyTrafficLimit, userQuota.extraTrafficQuota)
+-    const instanceEffectiveLimit = getEffectiveLimit(instance.monthlyTrafficLimit, userQuota.extraTrafficQuota)
++    const instanceLimit = getEffectiveLimit(instance.monthlyTrafficLimit, userQuota.extraTrafficQuota)
+     const instanceUsesExtraTraffic = instance.monthlyTrafficLimit !== null &&
+         instance.monthlyTrafficUsed >= instance.monthlyTrafficLimit
+     const extraTrafficExhausted = userQuota.extraTrafficQuota > 0n &&
+@@ -151,7 +151,7 @@
+     // 检查用户级别限额
+     const userOverLimit = isOverLimit(userQuota.monthlyTrafficUsed, userEffectiveLimit)
+     // 检查实例级别限额
+-    const instanceOverLimit = isOverLimit(instance.monthlyTrafficUsed, instanceEffectiveLimit) ||
++    const instanceOverLimit = isOverLimit(instance.monthlyTrafficUsed, instanceLimit) ||
+         (instanceUsesExtraTraffic && extraTrafficExhausted)
+ 
+     if (userOverLimit || instanceOverLimit) {
+@@ -191,14 +191,14 @@
+             }
+         }
+ 
+-        const instanceWarning = isWarningThreshold(instance.monthlyTrafficUsed, instanceEffectiveLimit)
++        const instanceWarning = isWarningThreshold(instance.monthlyTrafficUsed, instanceLimit)
+         if (instanceWarning && instance.trafficStatus === 'NORMAL') {
+             const shouldNotifyWarning = await markInstanceTrafficWarningIfNeeded(instance.id)
+             if (shouldNotifyWarning) {
+                 await sendTrafficWarningNotification(
+                     instance.userId,
+                     instance.monthlyTrafficUsed,
+-                    instanceEffectiveLimit!,
++                    instanceLimit!,
+                     instance.name
+                 )
+                 console.log(`[Traffic] Sent warning for instance ${instance.id} to user ${instance.userId}`)
+@@ -218,14 +218,14 @@
+     if (!userQuota) return
+ 
+     const userEffectiveLimit = getEffectiveLimit(userQuota.monthlyTrafficLimit, userQuota.extraTrafficQuota)
+-    const instanceEffectiveLimit = getEffectiveLimit(instance.monthlyTrafficLimit, userQuota.extraTrafficQuota)
++    const instanceLimit = getEffectiveLimit(instance.monthlyTrafficLimit, userQuota.extraTrafficQuota)
+     const instanceUsesExtraTraffic = instance.monthlyTrafficLimit !== null &&
+         instance.monthlyTrafficUsed >= instance.monthlyTrafficLimit
+     const extraTrafficExhausted = userQuota.extraTrafficQuota > 0n &&
+         userQuota.extraTrafficUsed >= userQuota.extraTrafficQuota
+ 
+     const userUnderLimit = !isOverLimit(userQuota.monthlyTrafficUsed, userEffectiveLimit)
+-    const instanceUnderLimit = !isOverLimit(instance.monthlyTrafficUsed, instanceEffectiveLimit) &&
++    const instanceUnderLimit = !isOverLimit(instance.monthlyTrafficUsed, instanceLimit) &&
+         !(instanceUsesExtraTraffic && extraTrafficExhausted)
+     const desiredUserStatus = calculateUserTrafficStatus(userQuota.monthlyTrafficUsed, userEffectiveLimit)
+ 
+
+tokens used
+28,754

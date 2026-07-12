@@ -1,0 +1,1 @@
+已完成 FX-023：在续费（含批量）和改配入口显式拒绝 `status='deleted'`，返回“实例已删除，无法续费/改配”；`performRenewal`、`performPlanChange` 同步增加快照检查，并在实例条件更新中使用 `id + status != deleted + version` 防止删除窗口竞态；对应守卫已追加。`server type-check`、`test:instance-billing-route-id-guards`、`test:billing-expiry-race-guards` 均通过。未改动并行文件，未 commit/push/发版。

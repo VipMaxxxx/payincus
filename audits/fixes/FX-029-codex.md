@@ -1,0 +1,1 @@
+已完成，仅修改 `admin-entertainment.ts` 及其 admin 守卫：抽奖成本更新、奖品新增/更新/删除均在保存前校验变更后的完整奖池——概率总和不得超过 100%，不足 100% 必须有 `nothing` 兜底；余额奖品期望产出不得超过 `costPoints / 100` 元；单奖面值上限取单抽消耗价值的 **100 倍**。`server type-check`、`test:admin-entertainment-route-guards`、`test:entertainment-route-guards` 和 `git diff --check` 全部通过。未触碰 `users.ts`/`hosting.ts` 的既有并行改动，未 commit/push/发版。
