@@ -1,6 +1,6 @@
 # PayIncus Handoff
 
-Last updated: 2026-07-13 08:00 CST
+Last updated: 2026-07-13 11:10 CST
 
 This file is a handoff note for a new Codex conversation. Do not include server passwords or other secrets in this file.
 
@@ -12,13 +12,32 @@ Give the next Codex session this file first. The active working directory is:
 C:\Users\Administrator\Desktop\payinces
 ```
 
-Production is currently on `v1.5.1`. This patch fixes a full-page white-screen on the System/Telegram settings page (an unescaped literal `@` in the Telegram username-hint i18n string was parsed by vue-i18n as linked-message syntax `@:key` and threw compile error code 10 INVALID_LINKED_FORMAT, crashing the whole page render; literal `@` is now escaped as `{'@'}` in all three locales, and the same bug in the Heleket payment placeholder `@TRON`/`@BSC` was fixed too). It also unifies refunds to balance-only by full-stack removing the plugin-gateway-dependent "original-route recharge refund" workbench (refunds are handled by order-refund approval + manual balance adjustment), adds a new i18n message-compile guard (`test:i18n-message-compile-guards`, compiles all ~21.7k messages with the real vue-i18n compiler so unescaped `@`/braces fail CI), and drops the `recharge_refund_requests` table + `RechargeRefundStatus` enum plus 6 orphan `Exchange*` enum types left by v1.5.0.
+Production is currently on `v1.5.2` — a systematic remediation of the three scripts that run as ROOT on customer hosts (host install / agent install / caddy), fixing defects that could lock an admin out of their own server (IPv6 accept_ra), orphan a host from the panel (cert rotation), destroy customer tooling/configs (blanket purge, rm -rf /etc/wireguard), or leak credentials (token script at 0755, caddy password in argv). See the v1.5.2 section below. Prior release v1.5.1: This patch fixes a full-page white-screen on the System/Telegram settings page (an unescaped literal `@` in the Telegram username-hint i18n string was parsed by vue-i18n as linked-message syntax `@:key` and threw compile error code 10 INVALID_LINKED_FORMAT, crashing the whole page render; literal `@` is now escaped as `{'@'}` in all three locales, and the same bug in the Heleket payment placeholder `@TRON`/`@BSC` was fixed too). It also unifies refunds to balance-only by full-stack removing the plugin-gateway-dependent "original-route recharge refund" workbench (refunds are handled by order-refund approval + manual balance adjustment), adds a new i18n message-compile guard (`test:i18n-message-compile-guards`, compiles all ~21.7k messages with the real vue-i18n compiler so unescaped `@`/braces fail CI), and drops the `recharge_refund_requests` table + `RechargeRefundStatus` enum plus 6 orphan `Exchange*` enum types left by v1.5.0.
 
 v1.5.0 (the prior release) removed 12 non-core modules and the entire plugin/theme platform full-stack, completed the Linear-style monochrome UI rebuild, and fixed the long-standing sidebar white-screen (`index.html` served with `Cache-Control: no-cache`).
 
 The Service Worker derives its cache name from the registered client version (`/sw.js?v=1.5.1` -> `incudal-cache-v1.5.1`). Removed features' backend routes return HTTP 404; retained routes (billing records, orders, telegram binding) return HTTP 401. All removal migrations are idempotent and lossless (`DROP ... IF EXISTS ... CASCADE`, safe enum narrowing), so open-source self-hosted users can OTA from any prior version without unintended data loss.
 
 The release commit/tag and OTA evidence below are production proof for `v1.5.1`.
+
+### Current v1.5.2 Production / OTA Status
+
+- `v1.5.2` release commit/tag: `9fda0a3` (`Release v1.5.2 宿主机/Agent/Caddy 安装脚本系统性整改`); annotated tag `v1.5.2`.
+- GitHub Actions: Build & Release run `29244740102` -> success; CI run `29244738231` -> success; Docs Pages run `29244738319` -> success.
+- GitHub Release `v1.5.2`: amd64/arm64 tarballs + both SHA256 + versioned/generic OTA manifests. OTA manifest proof: version `v1.5.2`, buildTime `2026-07-13T11:03:42.560Z`, amd64 sha256 `2bced9fec543f36ee314489180cb6b573fb78d6c9d40ede71914452e0ae286a5`, arm64 sha256 `6b70c332123bad631d9259f2d3a157bbb7a4a2e1efc8f8318c7002c2c1572f60`.
+- Final OTA task `#153`: `v1.5.1 -> v1.5.2`, status `success`, log `/opt/incudal/update-logs/system-update-153.log`, `RUN_DB_CHECKS=0` (standing directive). No schema change in this release. Log contains `System update completed successfully` at `2026-07-13T11:06:19.628Z`.
+- Current production state: `/opt/incudal/current -> /opt/incudal/releases/v1.5.2-20260713110441`; `version.json` v1.5.2; `incudal-backend` active; local/pay/admin `/api/health` HTTP 200.
+- **What v1.5.2 is:** a systematic remediation of the three scripts that run as ROOT on customer hosts (`server/templates/install.sh`, `agent-install.sh`, `caddy.sh`). All were pre-existing defects, unrelated to the feature-slimming work. Post-OTA it was verified that the panel now serves the FIXED templates (accept_ra x3, cert pre-validation, zero `rm -rf /etc/wireguard/`, zero `linux-headers-*` purge wildcard, `is_elf_binary` present, caddy password-injection marker present).
+  - **Could lock the admin out of their own server:** `nat` mode enabled IPv6 forwarding without `accept_ra=2`. Linux stops honouring Router Advertisements once forwarding is on; most VPS get their IPv6 default route via RA/SLAAC, so the route silently expires 30min–2h after install and is never refreshed — if the admin SSHes over IPv6 they get locked out hours later. `accept_ra=2` is now set for all modes.
+  - **Could orphan a host from the panel:** cert rotation removed the old `panel` trust *before* importing the new cert; a bad download (CDN error page) meant old trust gone + new cert not added + script exit. Now the download is validated as real X.509 before any trust change.
+  - **Could destroy customer data/tooling:** unconditional purge of `build-essential/gcc/g++/make` plus a `linux-headers-*` wildcard; `rm -rf /etc/wireguard/` on uninstall; unconditional overwrite of `wg0.conf`, `/etc/ndppd.conf`, `/etc/resolv.conf`; uninstall deleting unrelated `*.install.sh` / `/root/install.sh`. All now marker-based (only touch what we wrote), backup-before-overwrite, and scoped to packages this script actually installed.
+  - **Credential exposure:** token-bearing rendered script persisted at 0755; Caddy admin password passed via argv (visible in `ps`/history) and again via `hash-password --plaintext`; Caddy TLS key at 0644; agent dry-run printed `agent_secret`. All fixed (password now injected server-side into the script body with `Cache-Control: no-store` and fed to `hash-password` via stdin; key 0640; dry-run redacted).
+  - **`curl` without `-f`** in the host/caddy install commands meant a Cloudflare "Just a moment..." challenge page (HTTP 403 HTML) got saved/piped and executed by bash (`syntax error near unexpected token '<'` — a real user hit this). All install commands are now `curl -fsSL`. NOTE: if the panel domain is behind a CDN bot challenge, the CDN must still be configured to skip `/api/hosts/install.sh*`, `/api/hosts/caddy-script/*`, `/api/agent/install.sh` — the `-f` only makes the failure clean, it does not bypass the challenge.
+- **Deliberately NOT changed in v1.5.2 (needs owner decision):**
+  - Guardian mirrors every IPv4 NAT proxy onto the host's `[::]:port`, exposing instance ports on ALL host IPv6 addresses without the package/user opting in. This is product behaviour, not a bug fix — left as-is.
+  - No SHA-256/version pinning for wgcf/RFW downloads (they pull GitHub `latest`). ELF-magic validation now blocks the "execute an HTML error page" class, but not supply-chain tampering.
+- Verification: `bash -n` on all three templates (and on the rendered caddy script with an injected password), client+server type-check, full guard suite 159/159, Go agent cross-compiles for linux/amd64 + linux/arm64.
+- Standing owner directive from 2026-07-10 remains active: all OTA runs use `RUN_DB_CHECKS=0`.
 
 ### Current v1.5.1 Production / OTA Status
 
