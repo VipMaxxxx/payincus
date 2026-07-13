@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, onActivated, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import api from '@/api'
@@ -103,15 +103,36 @@ const statusInfo = computed(() => {
   return map[host.value.status] || map.offline
 })
 
+// 本组件被用户端和管理端共用，两侧的路由名不同：
+// 用户端 = 'my-host-detail'，管理端 = 'admin-my-host-detail'。
+// 之前只比较 'my-host-detail'，导致管理端的守卫永远提前 return、从不重新加载数据。
+const HOST_DETAIL_ROUTE_NAMES = ['my-host-detail', 'admin-my-host-detail']
+const isOnHostDetailRoute = () => HOST_DETAIL_ROUTE_NAMES.includes(String(route.name ?? ''))
+
 onMounted(async () => {
   await loadHost()
 })
 
+// 组件可能被外层 <KeepAlive> 缓存后复用 —— 这种情况下再次进入本页时 onMounted 不会执行。
+// 若此时缓存里 host 为空（或路由 id 已变），页面会停在「既不 loading、host 又为 null」的
+// 状态，模板两个分支都不成立 → 整页白屏（刷新后因为是全新挂载才恢复正常）。
+// 因此在 activated 时按需重新加载。
+onActivated(async () => {
+  if (!isOnHostDetailRoute()) return
+  const currentId = Number.parseInt(String(route.params.id ?? ''), 10)
+  if (!Number.isFinite(currentId) || currentId <= 0) return
+  if (!host.value || (host.value as any).id !== currentId) {
+    loading.value = true
+    host.value = null
+    await loadHost()
+  }
+})
+
 // 监听路由参数变化，重新加载数据
 watch(() => route.params.id, async (newId, oldId) => {
-  // 检查是否仍在节点详情页，防止路由切换到其他页面时误触发
-  if (route.name !== 'my-host-detail') return
-  
+  // 检查是否仍在节点详情页，防止路由切换到其他页面时误触发（需同时认用户端/管理端两个路由名）
+  if (!isOnHostDetailRoute()) return
+
   if (newId && newId !== oldId) {
     // 重置所有状态
     loading.value = true
@@ -153,6 +174,13 @@ async function loadHost() {
   } finally {
     loading.value = false
   }
+}
+
+// 兜底态里的「重试」：重新拉一次节点详情
+async function retryLoadHost() {
+  loading.value = true
+  host.value = null
+  await loadHost()
 }
 
 async function testConnection() {
@@ -648,6 +676,21 @@ const tabs = [
         </Transition>
       </Teleport>
     </template>
+
+    <!-- 兜底态：既不在 loading、host 又为空时必须给出明确状态。
+         此前这里没有 v-else，两个分支都不成立就什么都不渲染 —— 表现为整页白屏，
+         用户完全无从判断发生了什么，只能靠刷新。 -->
+    <div v-else class="card flex flex-col items-center justify-center gap-3 p-10 text-center">
+      <p class="text-themed-muted">{{ t('admin.hosts.loadFailed') }}</p>
+      <div class="flex gap-2">
+        <button type="button" class="btn-primary btn-sm" @click="retryLoadHost">
+          {{ t('common.retry') }}
+        </button>
+        <button type="button" class="btn-secondary btn-sm" @click="router.replace(hostsPath())">
+          {{ t('common.back') }}
+        </button>
+      </div>
+    </div>
   </div>
 </template>
 

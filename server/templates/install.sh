@@ -39,6 +39,19 @@ readonly BRIDGE_NAME="incusbr0"
 readonly WG_MANAGED_MARKER="# Managed by PayIncus (incudal) WARP - do not edit, will be overwritten"
 # /etc/ndppd.conf 是全局配置，客户可能已有自己的 NDP 代理规则；同样用标记区分。
 readonly NDPPD_MANAGED_MARKER="# Managed by PayIncus (incudal) - do not edit, will be overwritten"
+
+# ========== 第三方二进制：固定版本 + 固定 SHA-256（供应链防护）==========
+# 这些二进制以 root 身份安装并执行在客户宿主机上，因此版本和哈希都固定在本仓库里，
+# 下载后必须逐字节校验，不通过一律 fail closed。
+# 注意：只比对「上游同源的 checksums.txt」是不够的——能替换二进制的攻击者同样能替换
+# 那份校验和；哈希必须由我们自己固定下来。下列哈希已通过独立下载重算，与上游一致。
+# 升级步骤：改版本号 → 取上游新哈希 → 独立下载重算核对 → 连同版本号一起提交。
+readonly WGCF_VERSION="2.2.22"
+readonly WGCF_SHA256_AMD64="268d187e649870b603ad2e5c1b74a696251f6c2f6f075c726a174a0039b0b1e2"
+readonly WGCF_SHA256_ARM64="e5ff08d3aae5374935211053b2d64d96daaa3f1aec8e9a1dab7418125585a011"
+readonly RFW_VERSION="v0.1.9"
+readonly RFW_SHA256_X86_64="b2486f8a500ae2eb2da3aa8a4191878404ea46b8dbd6e4c9041a1bb2d20e3b6a"
+readonly RFW_SHA256_AARCH64="79781139edf77222560a9fd307d1bae5b5bc5aed6b80df44f02542950f42933a"
 # /etc/resolv.conf 可能由客户或系统网络服务管理；只恢复本脚本打过标记的版本。
 readonly RESOLV_MANAGED_MARKER="# Managed by PayIncus (incudal) DNS64 - restore backup on uninstall"
 readonly PRESEED_FILE="/tmp/.incus-preseed-$$.yaml"
@@ -98,6 +111,19 @@ is_elf_binary() {
     local magic
     magic=$(head -c 4 "$f" 2>/dev/null | od -An -tx1 2>/dev/null | tr -d ' \n')
     [[ "$magic" == "7f454c46" ]]
+}
+
+# 逐字节校验下载文件的 SHA-256 是否等于本仓库固定的期望值。
+# ELF 校验只能挡住"下载到 HTML 错误页"；要挡住供应链投毒/中间人替换，必须比对固定哈希。
+# 期望哈希为空视为校验失败（fail closed），绝不"没哈希就放行"。
+verify_sha256() {
+    local f="$1"
+    local expected="$2"
+    [[ -s "$f" && -n "$expected" ]] || return 1
+    command -v sha256sum >/dev/null 2>&1 || return 1
+    local actual
+    actual=$(sha256sum "$f" 2>/dev/null | awk '{print $1}')
+    [[ -n "$actual" && "$actual" == "$expected" ]]
 }
 
 is_valid_port() {
@@ -902,11 +928,15 @@ setup_warp_v4() {
         return 0
     fi
 
+    # 版本与期望 SHA-256 均固定在脚本顶部常量里（供应链防护）
     local wgcf_url=""
+    local wgcf_sha256=""
     if [[ "$ARCH" == "amd64" || "$ARCH" == "x86_64" ]]; then
-        wgcf_url="https://github.com/ViRb3/wgcf/releases/download/v2.2.22/wgcf_2.2.22_linux_amd64"
+        wgcf_url="https://github.com/ViRb3/wgcf/releases/download/v${WGCF_VERSION}/wgcf_${WGCF_VERSION}_linux_amd64"
+        wgcf_sha256="$WGCF_SHA256_AMD64"
     elif [[ "$ARCH" == "arm64" || "$ARCH" == "aarch64" ]]; then
-        wgcf_url="https://github.com/ViRb3/wgcf/releases/download/v2.2.22/wgcf_2.2.22_linux_arm64"
+        wgcf_url="https://github.com/ViRb3/wgcf/releases/download/v${WGCF_VERSION}/wgcf_${WGCF_VERSION}_linux_arm64"
+        wgcf_sha256="$WGCF_SHA256_ARM64"
     else
         warn "架构不受支持，跳过 WARP 安装"
         return 0
@@ -922,10 +952,14 @@ setup_warp_v4() {
             # 只看大小挡不住"体积够大的 HTML/错误页"，加 ELF 魔数校验才算真的拿到二进制。
             local fsize
             fsize=$(stat -c%s /usr/local/bin/wgcf 2>/dev/null || echo "0")
-            if [[ "$fsize" -gt 1048576 ]] && is_elf_binary /usr/local/bin/wgcf; then
+            # 三重校验：体积、ELF 魔数、以及最关键的——与本仓库固定的 SHA-256 逐字节比对。
+            # 前两项只能挡住"下载到错误页/截断文件"；只有固定哈希能挡住供应链投毒与中间人替换。
+            if [[ "$fsize" -gt 1048576 ]] \
+                && is_elf_binary /usr/local/bin/wgcf \
+                && verify_sha256 /usr/local/bin/wgcf "$wgcf_sha256"; then
                 break
             fi
-            warn "wgcf 下载内容校验未通过（非 ELF 可执行文件或体积异常）"
+            warn "wgcf 下载校验未通过（体积/ELF/SHA-256 任一不符），已丢弃该文件"
             rm -f /usr/local/bin/wgcf 2>/dev/null || true
         fi
         retry=$((retry + 1))
@@ -2050,7 +2084,9 @@ SHORTCUT
 # ========================== RFW 防火墙 ==========================
 
 # RFW 下载地址
-readonly RFW_RELEASE_URL="https://github.com/0xdabiaoge/incudal-rfw/releases/latest/download"
+# 固定到具体版本（原先用的是 latest/download）：latest 意味着上游一改，客户机器上
+# 装到的就是另一个二进制，既不可复现、也无法用固定哈希校验。版本与哈希见脚本顶部常量。
+readonly RFW_RELEASE_URL="https://github.com/0xdabiaoge/incudal-rfw/releases/download/${RFW_VERSION}"
 readonly RFW_INSTALL_DIR="/root/rfw"
 readonly RFW_SERVICE_FILE="/etc/systemd/system/rfw.service"
 
@@ -2294,6 +2330,16 @@ install_rfw() {
     mkdir -p "$RFW_INSTALL_DIR"
 
     local rfw_url="${RFW_RELEASE_URL}/rfw-${arch_suffix}-unknown-linux-musl"
+    # 期望 SHA-256 按架构取（固定在脚本顶部常量里）
+    local rfw_sha256=""
+    case "$arch_suffix" in
+        x86_64)  rfw_sha256="$RFW_SHA256_X86_64" ;;
+        aarch64) rfw_sha256="$RFW_SHA256_AARCH64" ;;
+        *)
+            error "RFW 不支持的架构: ${arch_suffix}"
+            return 1
+            ;;
+    esac
     local staged_binary="${RFW_INSTALL_DIR}/.rfw.new.$$"
     local staged_service="${RFW_SERVICE_FILE}.new.$$"
     local binary_backup="${RFW_INSTALL_DIR}/.rfw.before-incudal.$$"
@@ -2306,14 +2352,16 @@ install_rfw() {
         rm -f "$staged_binary" 2>/dev/null || true
         if curl -sSfL --connect-timeout 15 --max-time 120 \
             "$rfw_url" -o "$staged_binary" 2>/dev/null; then
-            # 必须确认拿到的确实是 ELF 可执行文件。Release 资产缺失或被 CDN/WAF
-            # 拦截时，HTTP 可能仍返回 200 + 一段 HTML；不校验就 chmod +x 去跑，
-            # 行为不可预测。校验不过一律按下载失败处理并重试。
-            if is_elf_binary "$staged_binary"; then
+            # 双重校验：
+            # 1) ELF 魔数 —— Release 资产缺失或被 CDN/WAF 拦截时，HTTP 可能仍返回
+            #    200 + 一段 HTML；不校验就 chmod +x 去跑，行为不可预测。
+            # 2) SHA-256 与本仓库固定值逐字节比对 —— 这一步才是真正的供应链防护，
+            #    能挡住上游被投毒或传输被替换。任一不符即按下载失败处理并重试。
+            if is_elf_binary "$staged_binary" && verify_sha256 "$staged_binary" "$rfw_sha256"; then
                 download_ok=true
                 break
             fi
-            warn "第 ${attempt} 次下载内容校验未通过（不是 ELF 可执行文件）"
+            warn "第 ${attempt} 次下载校验未通过（ELF 或 SHA-256 不符），已丢弃该文件"
             rm -f "$staged_binary" 2>/dev/null || true
             [[ "$attempt" -lt 3 ]] && sleep 3
         else
