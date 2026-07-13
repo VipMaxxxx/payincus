@@ -13,13 +13,13 @@ This is the operational handoff for engineers or agents taking over PayIncus / I
 - Production current symlink: `/opt/incudal/current`
 - User frontend: <https://pay.payincus.com>
 - Admin frontend: <https://admin.payincus.com>
-- Current production version: `v1.3.5`
-- Current production release path: `/opt/incudal/releases/v1.3.5-20260709205805`
-- Current production OTA task: `#144`
-- Current release commit/tag: `7f6f6b8c1070` / `v1.3.5`
-- Latest product main commit before this evidence update: `0f422e0e7`
+- Current production version: `v1.5.0`
+- Current production release path: `/opt/incudal/releases/v1.5.0-20260713061059`
+- Current production OTA task: `#151`
+- Current release commit/tag: `bb5a0ea8a080` / `v1.5.0`
+- Latest product main commit before this evidence update: `c7a6f8b`
 
-`v1.3.5` is the audited security, accounting, OTA, scheduler, authentication, UI, installer, and documentation release. Production task `#144` completed successfully with artifact sha256 `ffcf0f17e1290ec2ed43d7c02f3e37993d2df70b92d4b680353932e014ac7fea`.
+`v1.5.0` is the feature-slimming release: it removes 12 non-core modules and the entire plugin/theme platform full-stack, completes the Linear-style monochrome UI rebuild, fixes the sidebar white-screen bug (index.html no-cache), and restores the over-removed admin original-route recharge-refund workbench. Production OTA task `#151` (`v1.4.3 -> v1.5.0`) completed successfully with `RUN_DB_CHECKS=0`; all 9 removal migrations are idempotent and lossless so open-source self-hosted users can OTA without unintended data loss. See `HANDOFF.md` for full v1.5.0 evidence.
 
 The Claude UI work is already merged into main and included in production:
 

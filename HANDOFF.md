@@ -1,6 +1,6 @@
 # PayIncus Handoff
 
-Last updated: 2026-07-10 15:57 CST
+Last updated: 2026-07-13 06:15 CST
 
 This file is a handoff note for a new Codex conversation. Do not include server passwords or other secrets in this file.
 
@@ -12,11 +12,33 @@ Give the next Codex session this file first. The active working directory is:
 C:\Users\Administrator\Desktop\payinces
 ```
 
-Production is currently on `v1.3.7`. This release contains the second UI consistency pass completed after `v1.3.6`; Antom Hosted Checkout remains deployed but disabled by default.
+Production is currently on `v1.5.0`. This release removes 12 non-core modules and the entire plugin/theme platform full-stack (frontend + backend routes/workers + Prisma models + database tables), completes the Linear-style monochrome UI rebuild, roots out the long-standing sidebar white-screen bug (`index.html` served with `Cache-Control: no-cache`), and restores the accidentally over-removed admin "original-route recharge refund" workbench.
 
-The Service Worker derives its cache name from the registered client version. Antom code and its database enum are deployed, but no Antom provider record exists in production; keep it disabled until merchant credentials and a sandbox payment have been verified.
+The Service Worker derives its cache name from the registered client version (`/sw.js?v=1.5.0` -> `incudal-cache-v1.5.0`). Removed features' backend routes now return HTTP 404; retained/restored routes (recharge refunds, records, orders) return HTTP 401. All 9 removal migrations are idempotent and lossless (`DROP ... IF EXISTS ... CASCADE`, safe enum narrowing via rename/USING with removed-value rows deleted first, `plugin_gateway` payment providers disabled and converted to `manual`), so open-source self-hosted users can OTA from any prior version without data loss beyond the deliberately removed features.
 
-The release commit/tag and OTA evidence below are production proof for `v1.3.7`. Local UI audit screenshots and tool metadata are local-only evidence and are not tracked release content.
+The release commit/tag and OTA evidence below are production proof for `v1.5.0`.
+
+### Current v1.5.0 Production / OTA Status
+
+- `v1.5.0` release commit/tag: `bb5a0ea8a080` (`Release v1.5.0 精简12模块与插件平台 + UI重做 + 白屏根治 + 无损OTA迁移`); annotated tag `v1.5.0`. Docs/guard follow-up commit `c7a6f8b` on `main` drops the stale `theme-staging` deployment-doc guard (docs-site only, not part of the release tarball).
+- GitHub Actions:
+  - Build & Release run `29227974403` -> success.
+  - CI run `29228103620` -> success.
+  - Docs Pages run `29228103646` -> success.
+- GitHub Release `v1.5.0` contains amd64/arm64 tarballs, both SHA256 files, and versioned + generic OTA manifests. Plugin market assets are intentionally absent (plugin platform removed; `release.yml` skips plugin packaging when the plugin template is gone).
+- OTA manifest proof: version/tag `v1.5.0`, gitCommit `bb5a0ea8a080`, buildTime `2026-07-13T06:08:57.536Z`, minimumUpdaterVersion `v0.0.3`, amd64 sha256 `65c1174d0fb62490d30b8ad8558378f0e57a135df26e408188a1ba1c1e00804b`, arm64 sha256 `4ace7810eadef0e544603c068401f84cc9462ef3090845a0214d8c6110431850`.
+- Final OTA task `#151`: `v1.4.3 -> v1.5.0`, status `success`, log `/opt/incudal/update-logs/system-update-151.log`.
+  - Ran with the standing owner directive `RUN_DB_CHECKS=0`.
+  - Artifact SHA256, dependency install, Prisma migration (9 feature-removal migrations applied), atomic switch, backend health, split-host, Agent manifest, static production readiness, and log/header secret scan passed.
+  - Log contains `System update completed successfully` at `2026-07-13T06:12:32.521Z`.
+- Current production state:
+  - `/opt/incudal/current -> /opt/incudal/releases/v1.5.0-20260713061059`
+  - `version.json`: v1.5.0, commit `bb5a0ea8a080`, deployedAt `2026-07-13T06:11:23.881Z`.
+  - `incudal-backend` is enabled and active.
+  - local, public user, and public admin `/api/health` returned HTTP 200; user/admin index served with `Cache-Control: no-cache`; live user/admin bundles were rebuilt (new asset hashes from the v1.5.0 CI build supersede the earlier reversible dist-swap).
+  - Removed-feature admin API routes (flash-sales, exchange, sla-alerts, capacity, resource-risk, plugins/market) return HTTP 404; retained routes (billing recharge-refunds, records, orders) return HTTP 401.
+- Feature-removal note: the 12 removed modules + plugin/theme platform are gone full-stack. The restored "original-route recharge refund" admin workbench is live, but its auto-executor stays disabled because it depended on the removed `plugin_gateway` payment gateway; unsupported channels are safely rejected (never deducts balance, never falsely marks a refund completed) and admins are directed to order-refund approval or manual adjustment.
+- Standing owner directive from 2026-07-10 remains active: all future PayIncus OTA runs should use `RUN_DB_CHECKS=0`; do not ask again for the DB/payment readiness waiver. Continue running artifact, migration, static config, split-host, Agent, service health, and log/header checks.
 
 ### Current v1.3.7 Production / OTA Status
 
