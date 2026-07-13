@@ -66,7 +66,11 @@ write_file() {
 
   if [ "${DRY_RUN}" = "1" ]; then
     echo "+ write ${path} mode=${mode} owner=${owner}"
-    sed 's/^/| /'
+    if [ "${path}" = "${CONFIG_FILE}" ] || [ "${path}" = "${STAGED_CONFIG:-}" ]; then
+      sed -E 's/^([[:space:]]*agent_secret:).*/\1 "<redacted>"/; s/^/| /'
+    else
+      sed 's/^/| /'
+    fi
     return 0
   fi
 
@@ -240,6 +244,73 @@ install_binary_atomically() {
   mv -f "${next}" "${target}"
 }
 
+preflight_target_parent() {
+  local path="$1"
+  local parent
+  parent="$(dirname "${path}")"
+
+  if [ "${DRY_RUN}" = "1" ]; then
+    echo "+ preflight writable directory ${parent}"
+    return 0
+  fi
+
+  if [ ! -d "${parent}" ]; then
+    install -d -m 0755 "${parent}"
+  fi
+  [ -d "${parent}" ] && [ -w "${parent}" ] || fail "target directory is not writable: ${parent}"
+}
+
+preflight_environment() {
+  if [ "${DRY_RUN}" = "1" ]; then
+    echo "+ preflight root, systemd, curl, and target directories"
+  else
+    [ "$(id -u)" -eq 0 ] || fail "must run as root"
+    command -v systemctl >/dev/null 2>&1 || fail "systemctl is required"
+    [ -d /run/systemd/system ] || fail "systemd is not running"
+    command -v curl >/dev/null 2>&1 || fail "curl is required"
+  fi
+
+  preflight_target_parent "${BIN_PATH}"
+  preflight_target_parent "${CONFIG_FILE}"
+  preflight_target_parent "${SERVICE_FILE}"
+}
+
+rollback_agent_install() {
+  local restore_ok=1
+  systemctl stop "${SERVICE_NAME}" >/dev/null 2>&1 || true
+
+  if [ "${HAD_OLD_BIN}" = "1" ] && [ -e "${BACKUP_BIN}" ]; then
+    mv -f "${BACKUP_BIN}" "${BIN_PATH}" || restore_ok=0
+  else
+    rm -f "${BIN_PATH}"
+  fi
+  if [ "${HAD_OLD_CONFIG}" = "1" ] && [ -e "${BACKUP_CONFIG}" ]; then
+    mv -f "${BACKUP_CONFIG}" "${CONFIG_FILE}" || restore_ok=0
+  else
+    rm -f "${CONFIG_FILE}"
+  fi
+  if [ "${HAD_OLD_SERVICE}" = "1" ] && [ -e "${BACKUP_SERVICE}" ]; then
+    mv -f "${BACKUP_SERVICE}" "${SERVICE_FILE}" || restore_ok=0
+  else
+    rm -f "${SERVICE_FILE}"
+  fi
+
+  systemctl daemon-reload >/dev/null 2>&1 || restore_ok=0
+  if [ "${OLD_SERVICE_ENABLED}" = "1" ]; then
+    systemctl enable "${SERVICE_NAME}" >/dev/null 2>&1 || restore_ok=0
+  else
+    systemctl disable "${SERVICE_NAME}" >/dev/null 2>&1 || true
+  fi
+  if [ "${OLD_SERVICE_ACTIVE}" = "1" ]; then
+    systemctl restart "${SERVICE_NAME}" >/dev/null 2>&1 || restore_ok=0
+    systemctl is-active --quiet "${SERVICE_NAME}" 2>/dev/null || restore_ok=0
+  else
+    systemctl stop "${SERVICE_NAME}" >/dev/null 2>&1 || true
+  fi
+
+  [ "${restore_ok}" = "1" ]
+}
+
 fetch_agent_install_config() {
   local install_token="${INCUDAL_AGENT_INSTALL_TOKEN:-}"
   if [ -z "${install_token}" ]; then
@@ -248,7 +319,7 @@ fetch_agent_install_config() {
 
   local config_url="${PANEL_BASE_URL}/api/agent/install-config/${install_token}"
   if [ "${DRY_RUN}" = "1" ]; then
-    echo "+ fetch ${config_url}"
+    echo "+ fetch ${PANEL_BASE_URL}/api/agent/install-config/<redacted-install-token>"
     INCUDAL_AGENT_ID="${INCUDAL_AGENT_ID:-agt_from_install_token}"
     INCUDAL_AGENT_SECRET="${INCUDAL_AGENT_SECRET:-ias_from_install_token}"
     return 0
@@ -278,9 +349,20 @@ BINARY_FALLBACK_URL=""
 MANIFEST_PATH=""
 MANIFEST_URL="${INCUDAL_AGENT_MANIFEST_URL:-${PANEL_BASE_URL}/api/agent/manifest.json}"
 STAGED_BIN="${BIN_PATH}.download.$$"
+STAGED_CONFIG="${CONFIG_FILE}.new.$$"
+STAGED_SERVICE="${SERVICE_FILE}.new.$$"
+BACKUP_BIN="${BIN_PATH}.before-incudal-agent.$$"
+BACKUP_CONFIG="${CONFIG_FILE}.before-incudal-agent.$$"
+BACKUP_SERVICE="${SERVICE_FILE}.before-incudal-agent.$$"
+HAD_OLD_BIN="0"
+HAD_OLD_CONFIG="0"
+HAD_OLD_SERVICE="0"
+OLD_SERVICE_ACTIVE="0"
+OLD_SERVICE_ENABLED="0"
 
 cleanup() {
-  rm -f "${STAGED_BIN}" "${STAGED_BIN}.download" "${STAGED_BIN}.tmp" "${BIN_PATH}.new"
+  rm -f "${STAGED_BIN}" "${STAGED_BIN}.download" "${STAGED_BIN}.tmp" \
+    "${STAGED_CONFIG}" "${STAGED_SERVICE}" "${BIN_PATH}.new"
   if [ -n "${INSTALL_CONFIG_PATH:-}" ]; then
     rm -f "${INSTALL_CONFIG_PATH}"
   fi
@@ -290,9 +372,13 @@ cleanup() {
 }
 trap cleanup EXIT
 
-fetch_agent_install_config
-need_env INCUDAL_AGENT_ID
-need_env INCUDAL_AGENT_SECRET
+preflight_environment
+
+# 无一次性 token 时，静态凭据也必须在任何下载前完整存在。
+if [ -z "${INCUDAL_AGENT_INSTALL_TOKEN:-}" ]; then
+  need_env INCUDAL_AGENT_ID
+  need_env INCUDAL_AGENT_SECRET
+fi
 
 if [ -z "${INCUDAL_AGENT_BINARY_URL:-}" ]; then
   # Cloudflare 等边缘缓存可能缓存旧二进制；默认面板下载强制按安装批次换 URL。
@@ -321,6 +407,13 @@ elif [ -z "${BINARY_EXPECTED_SHA256}" ]; then
   fail "INCUDAL_AGENT_BINARY_SHA256 is required when INCUDAL_AGENT_BINARY_URL is set"
 fi
 
+# 实际下载和校验在消费一次性 token 之前完成，下载失败时同一条命令仍可重试。
+download_binary "${BINARY_URL}" "${STAGED_BIN}" "${BINARY_FALLBACK_URL}" "${BINARY_EXPECTED_SHA256}"
+
+fetch_agent_install_config
+need_env INCUDAL_AGENT_ID
+need_env INCUDAL_AGENT_SECRET
+
 echo "Installing Incudal Agent"
 echo "  panel: ${INCUDAL_PANEL_URL}"
 echo "  agent: ${INCUDAL_AGENT_ID}"
@@ -329,15 +422,8 @@ if [ -n "${BINARY_EXPECTED_SHA256}" ]; then
   echo "  sha256: ${BINARY_EXPECTED_SHA256}"
 fi
 
-if [ "${DRY_RUN}" != "1" ]; then
-  install -d -m 0755 "$(dirname "${STAGED_BIN}")"
-fi
-
-# 先下载到临时路径，再原子替换，避免覆盖正在运行的二进制时报 Text file busy。
-download_binary "${BINARY_URL}" "${STAGED_BIN}" "${BINARY_FALLBACK_URL}" "${BINARY_EXPECTED_SHA256}"
-install_binary_atomically "${STAGED_BIN}" "${BIN_PATH}"
-
-write_file "${CONFIG_FILE}" 0600 root:root <<EOF_CONFIG
+# 先生成 0600 临时配置并用暂存二进制冒烟，正式文件此时尚未被替换。
+write_file "${STAGED_CONFIG}" 0600 root:root <<EOF_CONFIG
 panel_url: "${INCUDAL_PANEL_URL}"
 agent_id: "${INCUDAL_AGENT_ID}"
 agent_secret: "${INCUDAL_AGENT_SECRET}"
@@ -345,7 +431,7 @@ heartbeat_interval_seconds: ${HEARTBEAT_INTERVAL}
 request_timeout_seconds: ${REQUEST_TIMEOUT}
 EOF_CONFIG
 
-write_file "${SERVICE_FILE}" 0644 root:root <<EOF_SERVICE
+write_file "${STAGED_SERVICE}" 0644 root:root <<EOF_SERVICE
 [Unit]
 Description=Incudal Host Agent
 After=network-online.target
@@ -379,11 +465,63 @@ if [ "${DRY_RUN}" = "1" ]; then
   exit 0
 fi
 
-systemctl daemon-reload
-"${BIN_PATH}" -config "${CONFIG_FILE}" -once
-systemctl enable "${SERVICE_NAME}"
-# 已安装场景下 enable --now 不会重启旧进程；restart 确保升级后立即使用最新二进制和配置。
-systemctl restart "${SERVICE_NAME}"
-systemctl status "${SERVICE_NAME}" --no-pager --lines=20
+if ! "${STAGED_BIN}" -config "${STAGED_CONFIG}" -once; then
+  fail "staged Agent smoke test failed; existing installation was not changed"
+fi
+
+# 冒烟通过后再备份旧文件。备份失败时仍未触碰正式安装。
+if [ -e "${BIN_PATH}" ]; then
+  cp -a "${BIN_PATH}" "${BACKUP_BIN}" || fail "failed to back up existing Agent binary"
+  HAD_OLD_BIN="1"
+fi
+if [ -e "${CONFIG_FILE}" ]; then
+  cp -a "${CONFIG_FILE}" "${BACKUP_CONFIG}" || fail "failed to back up existing Agent config"
+  HAD_OLD_CONFIG="1"
+fi
+if [ -e "${SERVICE_FILE}" ]; then
+  cp -a "${SERVICE_FILE}" "${BACKUP_SERVICE}" || fail "failed to back up existing Agent service"
+  HAD_OLD_SERVICE="1"
+fi
+if systemctl is-active --quiet "${SERVICE_NAME}" 2>/dev/null; then
+  OLD_SERVICE_ACTIVE="1"
+fi
+if systemctl is-enabled --quiet "${SERVICE_NAME}" 2>/dev/null; then
+  OLD_SERVICE_ENABLED="1"
+fi
+
+COMMIT_OK="1"
+install_binary_atomically "${STAGED_BIN}" "${BIN_PATH}" || COMMIT_OK="0"
+if [ "${COMMIT_OK}" = "1" ]; then
+  mv -f "${STAGED_CONFIG}" "${CONFIG_FILE}" || COMMIT_OK="0"
+fi
+if [ "${COMMIT_OK}" = "1" ]; then
+  mv -f "${STAGED_SERVICE}" "${SERVICE_FILE}" || COMMIT_OK="0"
+fi
+if [ "${COMMIT_OK}" = "1" ]; then
+  systemctl daemon-reload || COMMIT_OK="0"
+fi
+if [ "${COMMIT_OK}" = "1" ]; then
+  systemctl enable "${SERVICE_NAME}" || COMMIT_OK="0"
+fi
+if [ "${COMMIT_OK}" = "1" ]; then
+  # 已安装场景下 enable --now 不会重启旧进程；restart 确保升级后立即使用最新文件。
+  systemctl restart "${SERVICE_NAME}" || COMMIT_OK="0"
+fi
+if [ "${COMMIT_OK}" = "1" ]; then
+  sleep 2
+  systemctl is-enabled --quiet "${SERVICE_NAME}" 2>/dev/null || COMMIT_OK="0"
+  systemctl is-active --quiet "${SERVICE_NAME}" 2>/dev/null || COMMIT_OK="0"
+fi
+
+if [ "${COMMIT_OK}" != "1" ]; then
+  echo "error: new Agent failed post-install validation; rolling back" >&2
+  if rollback_agent_install; then
+    fail "new Agent failed; previous binary, config, service, and runtime state were restored"
+  fi
+  fail "new Agent failed and automatic rollback was incomplete; backup files were preserved"
+fi
+
+rm -f "${BACKUP_BIN}" "${BACKUP_CONFIG}" "${BACKUP_SERVICE}"
+systemctl status "${SERVICE_NAME}" --no-pager --lines=20 || true
 
 echo "Incudal Agent installed or upgraded and started."

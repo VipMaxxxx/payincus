@@ -6,17 +6,47 @@
 
 ## 最新发布状态 / Latest Release State
 
-- 最新发布提交 / Latest Release Commit: `bb5a0ea8a`
+- 最新发布提交 / Latest Release Commit: `7f5728f9e`
 - 提交日期 / Commit date: 2026-07-13
-- 最新 tag / Latest tag: `v1.5.0`
+- 提交说明 / Commit subject: Release v1.5.1 修复系统设置白屏 + 退款统一走余额 + i18n编译守卫
+- 最新 tag / Latest tag: `v1.5.1`
 
 ## 未发布变更 / Unreleased Changes
 
 ### 其他变更 / Other Changes
 
-- 修复文档部署守卫:移除已删主题平台的 theme-staging 断言 `c7a6f8b2f`
+- 宿主机安装脚本:再修 4 类问题(含可能把客户锁在服务器外的 IPv6 缺陷) `37fa9edb2`
+- 宿主机安装脚本:修复 3 类会毁客户数据/让宿主失联的问题 `69b15e437`
+- 修复安装命令会把 CDN/WAF 挑战页当脚本执行:curl 补 -f `dd6a6efcb`
+
+### 新增能力 / New Capabilities
+
+- 修复全新安装中断:create_user 必须早于 install_release `d9f355f02`
 
 ## 历史版本 / Historical Versions
+
+## v1.5.1
+
+- 发布提交 / Release commit: `7f5728f9e`
+- 提交日期 / Commit date: 2026-07-13
+- 提交说明 / Commit subject: Release v1.5.1 修复系统设置白屏 + 退款统一走余额 + i18n编译守卫
+
+
+### 修复
+
+- 修复系统设置 / Telegram 设置页整页白屏：Telegram「机器人用户名」提示文案中有一个未转义的字面量 `@`，被 vue-i18n 当作链接消息语法（`@:key`）解析，触发编译错误（code 10 INVALID_LINKED_FORMAT），导致整页渲染崩溃。现将字面量 `@` 统一写为 `{'@'}` 转义（三语言各处）。同类问题的 Heleket 支付方式占位符（`@TRON` / `@BSC`）一并修复，避免支付渠道设置页白屏。
+
+### 优化
+
+- 新增 i18n 文案编译守卫：用 vue-i18n 实际的消息编译器编译全部三语言文案（本版约 2.1 万条），任何编译错误即测试失败，从源头拦截未转义 `@` / 未配对花括号等会导致运行时白屏的文案语法问题。
+
+### 升级说明（面向自建 / 开源用户）
+
+- 本版新增两个下线迁移，均幂等无损：
+  - 删除「原路退款」的 `recharge_refund_requests` 表与 `RechargeRefundStatus` 枚举（`DROP TABLE IF EXISTS ... CASCADE` / `DROP TYPE IF EXISTS`）。
+- 其余业务数据完整保留，自建用户可安全 OTA。
+
+> 本版为 v1.5.0 的修复与收尾：根治了因文案未转义 `@` 导致的系统设置页白屏、把退款统一到余额、新增 i18n 文案编译守卫防此类问题复发，并清理了数据库中的孤儿枚举。基于 v1.5.0。
 
 ## v1.5.0
 

@@ -39,6 +39,8 @@ readonly BRIDGE_NAME="incusbr0"
 readonly WG_MANAGED_MARKER="# Managed by PayIncus (incudal) WARP - do not edit, will be overwritten"
 # /etc/ndppd.conf 是全局配置，客户可能已有自己的 NDP 代理规则；同样用标记区分。
 readonly NDPPD_MANAGED_MARKER="# Managed by PayIncus (incudal) - do not edit, will be overwritten"
+# /etc/resolv.conf 可能由客户或系统网络服务管理；只恢复本脚本打过标记的版本。
+readonly RESOLV_MANAGED_MARKER="# Managed by PayIncus (incudal) DNS64 - restore backup on uninstall"
 readonly PRESEED_FILE="/tmp/.incus-preseed-$$.yaml"
 readonly AGENT_ID="${INJECT_AGENT_ID:-}"
 readonly AGENT_SECRET="${INJECT_AGENT_SECRET:-}"
@@ -75,6 +77,9 @@ DEFAULT_IFACE=""
 IS_PURE_IPV6="false"
 AGENT_INSTALL_STATUS="未安装"
 AGENT_HEARTBEAT_INTERVAL_SECONDS="30"
+LISTEN_PORT=""
+IPV6_SUBNET=""
+IPV6_IFACE=""
 
 # ========================== 工具函数 ==========================
 log()   { echo -e "${GREEN}[✓]${NC} $1"; }
@@ -93,6 +98,41 @@ is_elf_binary() {
     local magic
     magic=$(head -c 4 "$f" 2>/dev/null | od -An -tx1 2>/dev/null | tr -d ' \n')
     [[ "$magic" == "7f454c46" ]]
+}
+
+is_valid_port() {
+    local value="${1:-}"
+    [[ "$value" =~ ^[0-9]+$ ]] || return 1
+    (( ${#value} <= 5 )) || return 1
+    local port=$((10#$value))
+    (( port >= 1 && port <= 65535 ))
+}
+
+resolve_self_script_path() {
+    local candidate="${0:-}"
+    local resolved=""
+    [[ -n "$candidate" ]] || return 1
+    resolved=$(realpath -- "$candidate" 2>/dev/null) || return 1
+    [[ -f "$resolved" ]] || return 1
+    grep -Fq '# Incudal 节点安装管理脚本' "$resolved" 2>/dev/null || return 1
+    grep -Fq 'readonly SCRIPT_VERSION=' "$resolved" 2>/dev/null || return 1
+    printf '%s\n' "$resolved"
+}
+
+backup_resolv_conf_before_incudal() {
+    if [[ ! -e /etc/resolv.conf && ! -L /etc/resolv.conf ]]; then
+        return 0
+    fi
+    if grep -Fq "$RESOLV_MANAGED_MARKER" /etc/resolv.conf 2>/dev/null; then
+        return 0
+    fi
+
+    local resolv_backup="/etc/resolv.conf.before-incudal.$(date +%Y%m%d%H%M%S)"
+    if ! cp -a -- /etc/resolv.conf "$resolv_backup"; then
+        error "无法备份 /etc/resolv.conf，拒绝覆盖 DNS 配置"
+        return 1
+    fi
+    warn "检测到现有 /etc/resolv.conf，已备份到: ${resolv_backup}"
 }
 
 # 分隔线
@@ -829,8 +869,9 @@ setup_temp_network() {
     step "临时急救：挂载 DNS64 解析补网..."
     # 为能够下载 Github 的代码，临时注入公益 DNS64
     if ! grep -q "2a00:1098:2b::1" /etc/resolv.conf; then
+        backup_resolv_conf_before_incudal
         # 插入 resolv.conf 顶部
-        sed -i '1i nameserver 2a00:1098:2b::1\nnameserver 2a01:4f8:c2c:123f::1' /etc/resolv.conf
+        sed -i "1i ${RESOLV_MANAGED_MARKER}\nnameserver 2a00:1098:2b::1\nnameserver 2a01:4f8:c2c:123f::1" /etc/resolv.conf
         info "已临时写入 NAT64 路由节点，恢复对纯 IPv4 站点的访问能力"
     fi
 }
@@ -944,10 +985,14 @@ setup_warp_v4() {
         sed -i "1i ${WG_MANAGED_MARKER}" wg0.conf
         chmod 600 wg0.conf
 
-        systemctl enable wg-quick@wg0 >/dev/null 2>&1 || true
-        systemctl start wg-quick@wg0 >/dev/null 2>&1 || true
-        
-        info "内核级网卡 wg0 启动完毕，您的服务器已具备虚拟双栈特性！"
+        if systemctl enable wg-quick@wg0 >/dev/null 2>&1 && \
+           systemctl start wg-quick@wg0 >/dev/null 2>&1 && \
+           systemctl is-enabled --quiet wg-quick@wg0 2>/dev/null && \
+           systemctl is-active --quiet wg-quick@wg0 2>/dev/null; then
+            info "内核级网卡 wg0 启动完毕，您的服务器已具备虚拟双栈特性！"
+        else
+            warn "WARP 配置已生成，但 wg-quick@wg0 未能启用并运行；IPv4 出站未启用"
+        fi
     else
         warn "WARP 配置文件未能生成（wgcf register 可能失败）"
         warn "容器将仅使用 IPv6 出站，可稍后手动配置 WARP"
@@ -974,7 +1019,18 @@ elif [[ "$1" == "off" ]]; then
         fi
     fi
     # 核心修复三：全面压实纯 DNS64 集群阵列防止 0% 超时现象
+    if ! grep -Fq "# Managed by PayIncus (incudal) DNS64 - restore backup on uninstall" /etc/resolv.conf 2>/dev/null; then
+        if [ -e /etc/resolv.conf ] || [ -L /etc/resolv.conf ]; then
+            RESOLV_BACKUP="/etc/resolv.conf.before-incudal.$(date +%Y%m%d%H%M%S)"
+            if ! cp -a -- /etc/resolv.conf "$RESOLV_BACKUP"; then
+                echo "无法备份 /etc/resolv.conf，拒绝覆盖 DNS 配置" >&2
+                exit 1
+            fi
+            echo "已备份现有 DNS 配置到: $RESOLV_BACKUP"
+        fi
+    fi
     cat > /etc/resolv.conf <<DNSEOF
+# Managed by PayIncus (incudal) DNS64 - restore backup on uninstall
 # Incudal WARP-OFF 模式 - 纯 NAT64+DNS64 解析器
 nameserver 2a00:1098:2b::1
 nameserver 2a01:4f8:c2c:123f::1
@@ -1041,8 +1097,13 @@ WantedBy=multi-user.target
 SVC_EOF
 
     systemctl daemon-reload
-    systemctl enable --now ipv6-route-guard > /dev/null 2>&1 || true
-    info "IPv6 路由守护已部署: 即使 WARP 意外断联，IPv6 也将在 10 秒内自愈"
+    if systemctl enable --now ipv6-route-guard > /dev/null 2>&1 && \
+       systemctl is-enabled --quiet ipv6-route-guard 2>/dev/null && \
+       systemctl is-active --quiet ipv6-route-guard 2>/dev/null; then
+        info "IPv6 路由守护已部署: 即使 WARP 意外断联，IPv6 也将在 10 秒内自愈"
+    else
+        warn "IPv6 路由守护文件已部署，但服务未能启用并运行；自动路由自愈未启用"
+    fi
 }
 
 # ========================== 安装步骤 ==========================
@@ -1123,8 +1184,32 @@ net.ipv6.conf.${DEFAULT_IFACE}.proxy_ndp = 1
 EOF
     fi
 
-    sysctl -p >/dev/null 2>&1 || true
+    if ! sysctl -p /etc/sysctl.d/99-incus.conf >/dev/null 2>&1; then
+        warn "部分可选内核参数未能应用，正在验证 Incus 必需的转发参数"
+    fi
     sysctl --system >/dev/null 2>&1 || true
+
+    local required_sysctl=""
+    local sysctl_key=""
+    local sysctl_expected=""
+    local sysctl_actual=""
+    for required_sysctl in \
+        "net.ipv4.ip_forward=1" \
+        "net.ipv4.conf.all.forwarding=1" \
+        "net.ipv4.conf.default.forwarding=1" \
+        "net.ipv6.conf.all.forwarding=1" \
+        "net.ipv6.conf.default.forwarding=1" \
+        "net.ipv6.conf.all.accept_ra=2" \
+        "net.ipv6.conf.default.accept_ra=2" \
+        "net.ipv6.conf.${DEFAULT_IFACE}.accept_ra=2"; do
+        sysctl_key="${required_sysctl%%=*}"
+        sysctl_expected="${required_sysctl#*=}"
+        sysctl_actual=$(sysctl -n "$sysctl_key" 2>/dev/null || true)
+        if [[ "$sysctl_actual" != "$sysctl_expected" ]]; then
+            error "必需内核参数未生效: ${sysctl_key}=${sysctl_actual:-unavailable}（期望 ${sysctl_expected}）"
+            return 1
+        fi
+    done
 
     # 验证 BBR 是否生效
     if lsmod | grep -q bbr 2>/dev/null || sysctl net.ipv4.tcp_congestion_control 2>/dev/null | grep -q bbr; then
@@ -1133,7 +1218,7 @@ EOF
         warn "BBR 未能自动加载（内核可能不支持），TCP 将使用默认拥塞算法"
     fi
 
-    log "内核参数配置完成（含 BBR + TCP 优化）"
+    log "Incus 必需内核转发参数已生效（可选 BBR 状态见上方提示）"
 }
 
 # 步骤 2: 安装系统依赖
@@ -1200,8 +1285,13 @@ install_deps() {
                 return 1
             fi
             info "开始 DKMS 即时编译..."
-            install_zfs_dkms
-            debian_zfs_compiled=true
+            if install_zfs_dkms; then
+                debian_zfs_compiled=true
+            else
+                debian_zfs_compiled=false
+                warn "ZFS DKMS 编译或模块加载失败，已保留编译工具链供排查"
+                warn "本次安装将继续；面板请改用 dir/btrfs 存储池"
+            fi
         fi
     else
         # Ubuntu: 直接安装（预编译模块随内核提供）
@@ -1299,10 +1389,54 @@ install_zfs_prebuilt() {
         module_path="updates/dkms"  # 默认路径
     fi
 
-    # 复制模块文件到正确位置
-    local target_dir="/lib/modules/${kernel_ver}/${module_path}"
+    # module_path 来自远端归档，必须是安全的相对路径；拒绝绝对路径、点目录和异常字符。
+    if [[ ! "$module_path" =~ ^[A-Za-z0-9._+-]+(/[A-Za-z0-9._+-]+)*$ ]] || \
+       [[ "$module_path" =~ (^|/)\.\.?(/|$) ]]; then
+        error "预编译包 module_path 非法，拒绝安装: ${module_path}"
+        rm -rf "$tmp_tar" "$tmp_dir" 2>/dev/null || true
+        return 1
+    fi
+
+    # realpath -m 会解析目标路径中已经存在的软链；最终路径必须仍位于当前内核目录内。
+    local modules_base="/lib/modules"
+    local modules_root="/lib/modules/${kernel_ver}"
+    local resolved_modules_base=""
+    local resolved_modules_root=""
+    local target_dir=""
+    resolved_modules_base=$(realpath -m -- "$modules_base") || {
+        error "无法解析内核模块基准目录: ${modules_base}"
+        rm -rf "$tmp_tar" "$tmp_dir" 2>/dev/null || true
+        return 1
+    }
+    resolved_modules_root=$(realpath -m -- "$modules_root") || {
+        error "无法解析内核模块根目录: ${modules_root}"
+        rm -rf "$tmp_tar" "$tmp_dir" 2>/dev/null || true
+        return 1
+    }
+    if [[ "$resolved_modules_root" != "${resolved_modules_base}/${kernel_ver}" ]]; then
+        error "当前内核模块目录存在软链逃逸，拒绝安装: ${modules_root}"
+        rm -rf "$tmp_tar" "$tmp_dir" 2>/dev/null || true
+        return 1
+    fi
+    target_dir=$(realpath -m -- "${modules_root}/${module_path}") || {
+        error "无法解析预编译模块安装路径"
+        rm -rf "$tmp_tar" "$tmp_dir" 2>/dev/null || true
+        return 1
+    }
+    if [[ "$target_dir" != "${resolved_modules_root}/"* ]]; then
+        error "预编译包 module_path 逃逸内核目录，拒绝安装: ${module_path}"
+        rm -rf "$tmp_tar" "$tmp_dir" 2>/dev/null || true
+        return 1
+    fi
+
+    # 复制模块文件到经过约束的目标位置
     mkdir -p "$target_dir"
-    cp "$pack_dir/modules/"*.ko* "$target_dir/" 2>/dev/null
+    if ! compgen -G "$pack_dir/modules/*.ko*" >/dev/null || \
+       ! cp "$pack_dir/modules/"*.ko* "$target_dir/" 2>/dev/null; then
+        error "预编译包缺少可安装的 ZFS 内核模块"
+        rm -rf "$tmp_tar" "$tmp_dir" 2>/dev/null || true
+        return 1
+    fi
 
     local ko_count
     ko_count=$(find "$target_dir" -name "*.ko*" -type f 2>/dev/null | wc -l)
@@ -1322,10 +1456,17 @@ install_zfs_prebuilt() {
 
     # 安装 ZFS 用户空间工具（不拉取 DKMS，避免触发编译）
     info "安装 ZFS 用户空间工具..."
-    apt-get install -y -qq --no-install-recommends zfsutils-linux >/dev/null 2>&1 || {
-        # 如果 --no-install-recommends 不够，强制跳过 dkms
-        apt-get install -y -qq zfsutils-linux >/dev/null 2>&1 || true
-    }
+    if ! apt-get install -y -qq --no-install-recommends zfsutils-linux >/dev/null 2>&1 && \
+       ! apt-get install -y -qq zfsutils-linux >/dev/null 2>&1; then
+        error "ZFS 用户空间工具安装失败，预编译 ZFS 未启用"
+        rm -rf "$tmp_tar" "$tmp_dir" 2>/dev/null || true
+        return 1
+    fi
+    if ! command -v zpool >/dev/null 2>&1; then
+        error "zfsutils-linux 安装后仍找不到 zpool，预编译 ZFS 未启用"
+        rm -rf "$tmp_tar" "$tmp_dir" 2>/dev/null || true
+        return 1
+    fi
 
     # 锁定内核版本
     # 必须锁定「当前正在运行」的内核 —— ZFS 模块正是为它编译/安装的。
@@ -1365,15 +1506,33 @@ install_zfs_dkms() {
     done
 
     # 优先安装通用编译核心工具，防止一处失败导致全部跳过
-    apt-get install -y -qq build-essential dkms >/dev/null 2>&1 || true
+    if ! apt-get install -y -qq build-essential dkms >/dev/null 2>&1; then
+        warn "DKMS 基础编译工具安装失败"
+        return 1
+    fi
 
     # 尝试安装精确版本内核源码头
     if ! apt-get install -y -qq "linux-headers-$(uname -r)" >/dev/null 2>&1; then
         warn "未找到精确的内核头文件 linux-headers-$(uname -r)"
-        info "正尝试拉取架构级通用头文件（linux-headers-amd64）..."
-        apt-get install -y -qq linux-headers-amd64 >/dev/null 2>&1 || {
-            warn "内核头文件均安装失败，ZFS DKMS 编译极可能无法正常进行"
-        }
+        local dpkg_arch=""
+        local generic_headers=""
+        dpkg_arch=$(dpkg --print-architecture 2>/dev/null || true)
+        case "$dpkg_arch" in
+            amd64) generic_headers="linux-headers-amd64" ;;
+            arm64) generic_headers="linux-headers-arm64" ;;
+            *)
+                warn "不支持的 Debian 架构，无法选择通用内核头文件: ${dpkg_arch:-unknown}"
+                return 1
+                ;;
+        esac
+        info "正尝试拉取架构级通用头文件（${generic_headers}）..."
+        if ! dpkg -s "$generic_headers" >/dev/null 2>&1; then
+            ZFS_BUILD_PKGS_ADDED_BY_US="${ZFS_BUILD_PKGS_ADDED_BY_US} ${generic_headers}"
+        fi
+        if ! apt-get install -y -qq "$generic_headers" >/dev/null 2>&1; then
+            warn "内核头文件均安装失败，无法编译 ZFS DKMS 模块"
+            return 1
+        fi
     fi
 
     info "开始 DKMS 编译 ZFS 模块（CPU 将跑满，请耐心等待）..."
@@ -1386,12 +1545,15 @@ install_zfs_dkms() {
         # 验证 ZFS 模块
         if modprobe zfs 2>/dev/null; then
             log "ZFS DKMS 编译成功（模块已加载）"
+            return 0
         else
             warn "ZFS 工具已安装但内核模块加载失败（DKMS 编译可能不完整）"
             info "面板仍可使用 dir/btrfs 存储池，ZFS 可稍后手动修复"
+            return 1
         fi
     else
         warn "ZFS 安装失败，已跳过（面板可使用 dir/btrfs 存储池）"
+        return 1
     fi
 }
 
@@ -1452,28 +1614,41 @@ init_incus() {
         fi
         
         # [核心修复区] Debian 默认闭合的内核转发
-        sysctl -w net.ipv6.conf.all.forwarding=1 >/dev/null 2>&1 || true
-        sysctl -w net.ipv6.conf.default.forwarding=1 >/dev/null 2>&1 || true
-        sysctl -w net.ipv6.conf.all.proxy_ndp=1 >/dev/null 2>&1 || true
-        sysctl -w net.ipv6.conf.default.proxy_ndp=1 >/dev/null 2>&1 || true
+        if ! sysctl -w net.ipv6.conf.all.forwarding=1 >/dev/null 2>&1 || \
+           ! sysctl -w net.ipv6.conf.default.forwarding=1 >/dev/null 2>&1 || \
+           ! sysctl -w net.ipv6.conf.all.proxy_ndp=1 >/dev/null 2>&1 || \
+           ! sysctl -w net.ipv6.conf.default.proxy_ndp=1 >/dev/null 2>&1; then
+            error "独立 IPv6 所需的转发/NDP 内核参数未能应用"
+            return 1
+        fi
         
         # 配置 ndppd (邻居发现)，这是对非直连路由云主机的保底策略
         if [[ -n "${IPV6_SUBNET:-}" && -n "${IPV6_IFACE:-}" ]]; then
             export DEBIAN_FRONTEND=noninteractive
-            apt-get install -y -qq ndppd >/dev/null 2>&1 || true
+            local configure_ndppd=true
+            if ! apt-get install -y -qq ndppd >/dev/null 2>&1; then
+                configure_ndppd=false
+                warn "ndppd 安装失败，NDP 代理保底能力未启用；独立 IPv6 将依赖上游直连路由"
+            fi
 
             # /etc/ndppd.conf 是全局配置，客户可能已经有自己的 NDP 代理规则。
             # 直接覆盖会把他原有规则整份抹掉，因此：本脚本写入的配置打标记；
             # 若发现已存在且不是我们写的，先备份再覆盖，并明确告警。
-            if [[ -f /etc/ndppd.conf ]] && ! grep -q "$NDPPD_MANAGED_MARKER" /etc/ndppd.conf 2>/dev/null; then
+            if [[ "$configure_ndppd" == "true" && -f /etc/ndppd.conf ]] && \
+               ! grep -q "$NDPPD_MANAGED_MARKER" /etc/ndppd.conf 2>/dev/null; then
                 local ndppd_backup
                 ndppd_backup="/etc/ndppd.conf.before-incudal.$(date +%Y%m%d%H%M%S)"
-                cp -a /etc/ndppd.conf "$ndppd_backup" 2>/dev/null || true
-                warn "检测到已存在的 /etc/ndppd.conf（疑似您自己的 NDP 代理配置）"
-                warn "已备份到: ${ndppd_backup}，随后将被覆盖"
+                if cp -a /etc/ndppd.conf "$ndppd_backup" 2>/dev/null; then
+                    warn "检测到已存在的 /etc/ndppd.conf（疑似您自己的 NDP 代理配置）"
+                    warn "已备份到: ${ndppd_backup}，随后将被覆盖"
+                else
+                    configure_ndppd=false
+                    warn "无法备份现有 /etc/ndppd.conf，已保留原配置且未启用 Incudal NDP 代理"
+                fi
             fi
 
-            cat > /etc/ndppd.conf <<EOF
+            if [[ "$configure_ndppd" == "true" ]]; then
+                cat > /etc/ndppd.conf <<EOF
 ${NDPPD_MANAGED_MARKER}
 proxy ${IPV6_IFACE} {
     rule ${IPV6_SUBNET} {
@@ -1481,9 +1656,15 @@ proxy ${IPV6_IFACE} {
     }
 }
 EOF
-            systemctl restart ndppd 2>/dev/null || true
-            systemctl enable ndppd 2>/dev/null || true
-            info "NDPPD 路由代理保活已附加配置"
+                if systemctl enable ndppd >/dev/null 2>&1 && \
+                   systemctl restart ndppd >/dev/null 2>&1 && \
+                   systemctl is-enabled --quiet ndppd 2>/dev/null && \
+                   systemctl is-active --quiet ndppd 2>/dev/null; then
+                    info "NDPPD 路由代理保活已附加配置并运行"
+                else
+                    warn "NDPPD 配置已写入，但服务未能启用并运行；NDP 代理保底能力未启用"
+                fi
+            fi
         fi
     else
         # MODE=nat（仅 IPv4）：检测是否为纯 IPv6 环境
@@ -1826,29 +2007,15 @@ show_result() {
         nat_ipv6) mode_label="NAT + IPv6" ;;
     esac
 
-    # 安装 incudal 快捷命令
-    local script_path=""
-    script_path=$(readlink -f "$0" 2>/dev/null || echo "$0")
-    
-    # 管道执行（curl | bash）时，$0 指向 bash 本身，不能直接复制
-    if [[ -f "$script_path" && ! "$script_path" =~ (bash|sh)$ ]]; then
-        # 正常文件执行：直接复制脚本
-        cp -f "$script_path" /usr/local/bin/incudal 2>/dev/null || true
-        chmod +x /usr/local/bin/incudal 2>/dev/null || true
-    elif [[ -f /root/incudal.sh ]]; then
-        # 回退方案 1：检查常见的下载位置
-        cp -f /root/incudal.sh /usr/local/bin/incudal 2>/dev/null || true
-        chmod +x /usr/local/bin/incudal 2>/dev/null || true
-    else
-        # 回退方案 2：创建自下载包装器，运行时从面板拉取最新脚本
-        cat > /usr/local/bin/incudal <<'SHORTCUT'
+    # 快捷入口只保存无凭据的下载包装器，绝不复制面板渲染后含 token/secret 的本脚本。
+    cat > /usr/local/bin/incudal <<'SHORTCUT'
 #!/bin/bash
 # Incudal 节点管理快捷入口 - 自动下载最新版本
 SCRIPT_CACHE="/root/incudal.sh"
 SCRIPT_URL="https://raw.githubusercontent.com/0xdabiaoge/incudal/main/server/templates/install.sh"
 echo "正在获取最新的节点管理脚本..."
 if curl -sSfL "$SCRIPT_URL" -o "$SCRIPT_CACHE" 2>/dev/null; then
-    chmod +x "$SCRIPT_CACHE"
+    chmod 0700 "$SCRIPT_CACHE"
     exec bash "$SCRIPT_CACHE" "$@"
 else
     echo "下载失败。如果本机是纯 IPv6 环境，请确保 WARP 已开启后重试。"
@@ -1856,8 +2023,8 @@ else
     exit 1
 fi
 SHORTCUT
-        chmod +x /usr/local/bin/incudal 2>/dev/null || true
-    fi
+    chown root:root /usr/local/bin/incudal
+    chmod 0755 /usr/local/bin/incudal
 
     echo ""
     echo -e "${GREEN}  ╔══════════════════════════════════════════════════╗${NC}"
@@ -2031,6 +2198,15 @@ install_rfw() {
     divider
     echo ""
 
+    local had_old_binary=false
+    local had_old_service=false
+    local old_service_active=false
+    local old_service_enabled=false
+    [[ -f "${RFW_INSTALL_DIR}/rfw" ]] && had_old_binary=true
+    [[ -f "$RFW_SERVICE_FILE" ]] && had_old_service=true
+    systemctl is-active --quiet rfw 2>/dev/null && old_service_active=true
+    systemctl is-enabled --quiet rfw 2>/dev/null && old_service_enabled=true
+
     # 检查是否已安装
     if [[ -f "${RFW_INSTALL_DIR}/rfw" ]] && systemctl is-active --quiet rfw 2>/dev/null; then
         local rfw_status
@@ -2042,9 +2218,6 @@ install_rfw() {
             info "已取消"
             return 0
         fi
-        # 先停止旧服务
-        systemctl stop rfw 2>/dev/null || true
-        systemctl disable rfw 2>/dev/null || true
     fi
 
     # 检测架构
@@ -2121,22 +2294,27 @@ install_rfw() {
     mkdir -p "$RFW_INSTALL_DIR"
 
     local rfw_url="${RFW_RELEASE_URL}/rfw-${arch_suffix}-unknown-linux-musl"
+    local staged_binary="${RFW_INSTALL_DIR}/.rfw.new.$$"
+    local staged_service="${RFW_SERVICE_FILE}.new.$$"
+    local binary_backup="${RFW_INSTALL_DIR}/.rfw.before-incudal.$$"
+    local service_backup="${RFW_SERVICE_FILE}.before-incudal.$$"
     local download_ok=false
     local attempt
 
     for attempt in 1 2 3; do
         info "下载 RFW (第 ${attempt} 次)..."
+        rm -f "$staged_binary" 2>/dev/null || true
         if curl -sSfL --connect-timeout 15 --max-time 120 \
-            "$rfw_url" -o "${RFW_INSTALL_DIR}/rfw" 2>/dev/null; then
+            "$rfw_url" -o "$staged_binary" 2>/dev/null; then
             # 必须确认拿到的确实是 ELF 可执行文件。Release 资产缺失或被 CDN/WAF
             # 拦截时，HTTP 可能仍返回 200 + 一段 HTML；不校验就 chmod +x 去跑，
             # 行为不可预测。校验不过一律按下载失败处理并重试。
-            if is_elf_binary "${RFW_INSTALL_DIR}/rfw"; then
+            if is_elf_binary "$staged_binary"; then
                 download_ok=true
                 break
             fi
             warn "第 ${attempt} 次下载内容校验未通过（不是 ELF 可执行文件）"
-            rm -f "${RFW_INSTALL_DIR}/rfw" 2>/dev/null || true
+            rm -f "$staged_binary" 2>/dev/null || true
             [[ "$attempt" -lt 3 ]] && sleep 3
         else
             warn "第 ${attempt} 次下载失败"
@@ -2147,21 +2325,23 @@ install_rfw() {
     if [[ "$download_ok" != "true" ]]; then
         error "RFW 下载失败（已重试 3 次）"
         error "下载地址: ${rfw_url}"
+        rm -f "$staged_binary" 2>/dev/null || true
         return 1
     fi
 
-    chmod +x "${RFW_INSTALL_DIR}/rfw"
-    log "RFW 下载完成"
+    chmod 0755 "$staged_binary"
+    log "RFW 下载并校验完成（旧服务保持原状态）"
 
     # 交互式配置 RFW 规则
     if ! configure_rfw_rules; then
+        rm -f "$staged_binary" 2>/dev/null || true
         return 0
     fi
 
-    # 创建 systemd 服务
+    # 先准备完整的新 systemd 服务文件，尚不触碰当前运行中的服务。
     step "配置 RFW 服务..."
 
-    cat > "$RFW_SERVICE_FILE" <<EOF
+    cat > "$staged_service" <<EOF
 [Unit]
 Description=RFW Firewall Service
 After=network.target
@@ -2177,17 +2357,95 @@ RestartSec=5
 [Install]
 WantedBy=multi-user.target
 EOF
+    chmod 0644 "$staged_service"
 
-    systemctl daemon-reload
+    # 切换前备份旧文件；任一备份失败都保持旧服务不动并退出。
+    if [[ "$had_old_binary" == "true" ]] && ! cp -a "${RFW_INSTALL_DIR}/rfw" "$binary_backup"; then
+        error "无法备份旧 RFW 二进制，已取消重装"
+        rm -f "$staged_binary" "$staged_service" 2>/dev/null || true
+        return 1
+    fi
+    if [[ "$had_old_service" == "true" ]] && ! cp -a "$RFW_SERVICE_FILE" "$service_backup"; then
+        error "无法备份旧 RFW 服务文件，已取消重装"
+        rm -f "$staged_binary" "$staged_service" "$binary_backup" 2>/dev/null || true
+        return 1
+    fi
 
-    # 启动服务
-    step "启动 RFW 服务..."
-    systemctl start rfw
-    systemctl enable rfw 2>/dev/null || true
+    # 所有新文件均已就绪，最后才停止旧服务并做同文件系统原子替换。
+    step "切换并启动 RFW 服务..."
+    if [[ "$old_service_active" == "true" ]]; then
+        if ! systemctl stop rfw >/dev/null 2>&1 || systemctl is-active --quiet rfw 2>/dev/null; then
+            error "旧 RFW 服务无法停止，已取消替换"
+            rm -f "$staged_binary" "$staged_service" "$binary_backup" "$service_backup" 2>/dev/null || true
+            return 1
+        fi
+    fi
 
-    # 验证
-    sleep 2
-    if systemctl is-active --quiet rfw 2>/dev/null; then
+    local switch_ok=true
+    mv -f "$staged_binary" "${RFW_INSTALL_DIR}/rfw" || switch_ok=false
+    if [[ "$switch_ok" == "true" ]]; then
+        mv -f "$staged_service" "$RFW_SERVICE_FILE" || switch_ok=false
+    fi
+    if [[ "$switch_ok" == "true" ]] && ! systemctl daemon-reload; then
+        switch_ok=false
+    fi
+    if [[ "$switch_ok" == "true" ]] && ! systemctl enable rfw >/dev/null 2>&1; then
+        switch_ok=false
+    fi
+    if [[ "$switch_ok" == "true" ]] && ! systemctl restart rfw; then
+        switch_ok=false
+    fi
+    if [[ "$switch_ok" == "true" ]]; then
+        sleep 2
+        if ! systemctl is-enabled --quiet rfw 2>/dev/null || \
+           ! systemctl is-active --quiet rfw 2>/dev/null; then
+            switch_ok=false
+        fi
+    fi
+
+    if [[ "$switch_ok" != "true" ]]; then
+        error "新 RFW 服务未能启用并运行，正在恢复旧版本"
+        systemctl stop rfw >/dev/null 2>&1 || true
+
+        local rollback_ok=true
+        if [[ "$had_old_binary" == "true" && -f "$binary_backup" ]]; then
+            mv -f "$binary_backup" "${RFW_INSTALL_DIR}/rfw" || rollback_ok=false
+        else
+            rm -f "${RFW_INSTALL_DIR}/rfw" 2>/dev/null || true
+        fi
+        if [[ "$had_old_service" == "true" && -f "$service_backup" ]]; then
+            mv -f "$service_backup" "$RFW_SERVICE_FILE" || rollback_ok=false
+        else
+            rm -f "$RFW_SERVICE_FILE" 2>/dev/null || true
+        fi
+        rm -f "$staged_binary" "$staged_service" 2>/dev/null || true
+        systemctl daemon-reload >/dev/null 2>&1 || rollback_ok=false
+
+        if [[ "$old_service_enabled" == "true" ]]; then
+            systemctl enable rfw >/dev/null 2>&1 || rollback_ok=false
+        else
+            systemctl disable rfw >/dev/null 2>&1 || true
+        fi
+        if [[ "$old_service_active" == "true" ]]; then
+            systemctl restart rfw >/dev/null 2>&1 || rollback_ok=false
+            if [[ "$rollback_ok" == "true" ]] && systemctl is-active --quiet rfw 2>/dev/null; then
+                warn "新版本安装失败，旧 RFW 服务已恢复运行"
+            else
+                error "旧 RFW 服务回滚后仍未运行，请立即检查 journalctl -u rfw"
+            fi
+        else
+            systemctl stop rfw >/dev/null 2>&1 || true
+            warn "新版本安装失败，已恢复安装前的未运行状态"
+        fi
+        if [[ "$rollback_ok" != "true" ]]; then
+            error "RFW 自动回滚不完整，备份文件已保留供人工恢复"
+        fi
+        return 1
+    fi
+
+    rm -f "$binary_backup" "$service_backup" 2>/dev/null || true
+
+    if systemctl is-enabled --quiet rfw 2>/dev/null && systemctl is-active --quiet rfw 2>/dev/null; then
         echo ""
         echo -e "${GREEN}  ╔══════════════════════════════════════════════════╗${NC}"
         echo -e "${GREEN}  ║                                                  ║${NC}"
@@ -2210,8 +2468,9 @@ EOF
         divider
         echo ""
     else
-        error "RFW 服务启动失败"
+        error "RFW 服务未处于 enabled + active 状态"
         error "请运行 journalctl -u rfw -n 20 查看日志"
+        return 1
     fi
 }
 
@@ -2504,6 +2763,25 @@ do_uninstall() {
         info "WARP 网络组件未安装，跳过"
     fi
 
+    # 仅当当前 resolv.conf 仍带有本脚本标记时才恢复，避免覆盖客户安装后手动接管的 DNS。
+    local resolv_backup=""
+    resolv_backup=$(ls -1t /etc/resolv.conf.before-incudal.* 2>/dev/null | head -n1 || true)
+    if [[ -n "$resolv_backup" ]]; then
+        if [[ ! -e /etc/resolv.conf && ! -L /etc/resolv.conf ]] || \
+           grep -Fq "$RESOLV_MANAGED_MARKER" /etc/resolv.conf 2>/dev/null; then
+            if mv -Tf -- "$resolv_backup" /etc/resolv.conf; then
+                info "已恢复安装前的 DNS 配置: /etc/resolv.conf"
+            else
+                error "恢复 /etc/resolv.conf 失败，备份仍保留在: ${resolv_backup}"
+                return 1
+            fi
+        else
+            warn "/etc/resolv.conf 已由客户或系统接管，未覆盖；备份保留在: ${resolv_backup}"
+        fi
+    elif grep -Fq "$RESOLV_MANAGED_MARKER" /etc/resolv.conf 2>/dev/null; then
+        warn "未找到安装前的 resolv.conf 备份，已保留当前文件以避免 DNS 中断"
+    fi
+
     # 3. 清除 IPv6 同步守护神服务
     if systemctl list-unit-files 2>/dev/null | grep -q "incus-v6-guardian.service"; then
         systemctl stop incus-v6-guardian 2>/dev/null || true
@@ -2567,11 +2845,12 @@ do_uninstall() {
 
     # 清除安装脚本、日志文件、下载的包缓存等
     rm -f /root/log.txt /root/zfs-modules-*.tar.gz 2>/dev/null || true
-    local script_path
-    script_path=$(realpath "$0" 2>/dev/null || echo "$0")
-    if [[ -f "$script_path" && ! "$script_path" =~ (bash|sh)$ ]]; then
-        rm -f "$script_path"
-        info "已清理安装脚本自身: $script_path"
+    local script_path=""
+    if script_path=$(resolve_self_script_path); then
+        rm -f -- "$script_path"
+        info "已清理安装脚本自身: ${script_path}"
+    else
+        info "无法确认当前输入对应真实安装脚本文件，未删除任何安装器"
     fi
 
     log "配置和数据文件清理完成"
@@ -2592,17 +2871,17 @@ do_uninstall() {
     echo -e "    ${GREEN}✓${NC}  RFW 防火墙"
     echo -e "    ${GREEN}✓${NC}  内核参数配置"
     echo -e "    ${GREEN}✓${NC}  数据和日志目录"
-    echo -e "    ${GREEN}✓${NC}  安装脚本自身及缓存"
+    if [[ -n "$script_path" ]]; then
+        echo -e "    ${GREEN}✓${NC}  已确认并删除本安装脚本自身"
+    else
+        echo -e "    ${YELLOW}!${NC}  未确认脚本真实路径，未删除任何安装器"
+    fi
     echo ""
     divider
     echo -e "  ${DIM}系统已还原。如需重新安装，请再次运行此脚本。${NC}"
     divider
     echo ""
 
-    # 删除自身脚本及任何下载的面板脚本残留
-    rm -f "$0" 2>/dev/null || true
-    rm -f incudal-install.sh *.install.sh install.sh incudal.sh 2>/dev/null || true
-    rm -f /root/install.sh /root/incudal.sh 2>/dev/null || true
 }
 
 # -----------------------------------------------------------------------------
@@ -2694,10 +2973,15 @@ RestartSec=10
 WantedBy=multi-user.target
 EOF
 
-    systemctl daemon-reload 2>/dev/null || true
-    systemctl enable incus-v6-guardian 2>/dev/null || true
-    systemctl restart incus-v6-guardian 2>/dev/null || true
-    
+    if ! systemctl daemon-reload >/dev/null 2>&1 || \
+       ! systemctl enable incus-v6-guardian >/dev/null 2>&1 || \
+       ! systemctl restart incus-v6-guardian >/dev/null 2>&1 || \
+       ! systemctl is-enabled --quiet incus-v6-guardian 2>/dev/null || \
+       ! systemctl is-active --quiet incus-v6-guardian 2>/dev/null; then
+        error "IPv6 Guardian 服务未能启用并运行"
+        return 1
+    fi
+
     info "守护神服务已启动：每隔 15 秒自动打通新增容器的反向 IPv6 映射"
 }
 
@@ -2713,22 +2997,24 @@ main() {
         exit 1
     fi
 
-    # 检测系统环境
-    detect_system
-
     # ---- 解析命令行参数（兼容非交互模式）----
     local ACTION="install"   # 默认动作为安装
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --mode)
+                if [[ $# -lt 2 ]]; then error "--mode 缺少参数值"; exit 1; fi
                 MODE="$2"; shift 2 ;;
             --token)
+                if [[ $# -lt 2 ]]; then error "--token 缺少参数值"; exit 1; fi
                 TOKEN="$2"; shift 2 ;;
             --ipv6-subnet)
+                if [[ $# -lt 2 ]]; then error "--ipv6-subnet 缺少参数值"; exit 1; fi
                 IPV6_SUBNET="$2"; shift 2 ;;
             --ipv6-iface)
+                if [[ $# -lt 2 ]]; then error "--ipv6-iface 缺少参数值"; exit 1; fi
                 IPV6_IFACE="$2"; shift 2 ;;
             --port|-p)
+                if [[ $# -lt 2 ]]; then error "$1 缺少参数值"; exit 1; fi
                 LISTEN_PORT="$2"; shift 2 ;;
             --uninstall)
                 ACTION="uninstall"; shift ;;
@@ -2760,6 +3046,23 @@ main() {
         esac
     done
 
+    # 合并面板注入值并在任何系统改动前完成非交互入参校验。
+    TOKEN="${INJECT_TOKEN:-${TOKEN:-}}"
+    MODE="${INJECT_MODE:-${MODE:-}}"
+    IPV6_SUBNET="${INJECT_IPV6_SUBNET:-${IPV6_SUBNET:-}}"
+    IPV6_IFACE="${INJECT_IPV6_IFACE:-${IPV6_IFACE:-}}"
+    if [[ -n "$MODE" && "$MODE" != "nat" && "$MODE" != "nat_ipv6" ]]; then
+        error "--mode 必须为 'nat' 或 'nat_ipv6'"
+        exit 1
+    fi
+    if [[ -n "$LISTEN_PORT" ]] && ! is_valid_port "$LISTEN_PORT"; then
+        error "--port 必须为 1-65535 的整数"
+        exit 1
+    fi
+
+    # 检测系统环境（只读探测；所有 CLI 入参已在此之前校验完毕）
+    detect_system
+
     # 如果通过命令行指定了卸载，直接执行
     if [[ "$ACTION" == "uninstall" ]]; then
         do_uninstall
@@ -2780,12 +3083,6 @@ main() {
             exit 1
         fi
     fi
-
-    # 合并注入变量与 CLI 参数
-    TOKEN="${INJECT_TOKEN:-${TOKEN:-}}"
-    MODE="${INJECT_MODE:-${MODE:-}}"
-    IPV6_SUBNET="${INJECT_IPV6_SUBNET:-${IPV6_SUBNET:-}}"
-    IPV6_IFACE="${INJECT_IPV6_IFACE:-${IPV6_IFACE:-}}"
 
     # 模式选择（未通过 CLI 或面板注入指定时进入菜单）
     if [[ -z "$MODE" ]]; then
@@ -2867,13 +3164,20 @@ main() {
     if [[ -z "${LISTEN_PORT:-}" ]]; then
         echo -e "\n${CYAN}==> (可选) 自定义通信端口${NC}"
         echo -e "  ${DIM}默认 8443，若被防火墙屏蔽可改为 10000+ 端口${NC}"
-        echo -ne "  ${BOLD}通信端口 [默认 8443]: ${NC}"
-        read -r USER_PORT
-        if [[ -n "$USER_PORT" && "$USER_PORT" =~ ^[0-9]+$ ]]; then
-            LISTEN_PORT="$USER_PORT"
-        else
-            LISTEN_PORT="8443"
-        fi
+        local USER_PORT=""
+        while true; do
+            echo -ne "  ${BOLD}通信端口 [默认 8443]: ${NC}"
+            read -r USER_PORT
+            if [[ -z "$USER_PORT" ]]; then
+                LISTEN_PORT="8443"
+                break
+            fi
+            if is_valid_port "$USER_PORT"; then
+                LISTEN_PORT="$USER_PORT"
+                break
+            fi
+            warn "端口必须为 1-65535 的整数，请重新输入"
+        done
     fi
 
     configure_agent_heartbeat_interval
@@ -2922,8 +3226,13 @@ main() {
     if ! install_deps; then
         warn "安装已中断，返回主菜单..."
         echo ""
-        exec "$0"  # 重新启动脚本回到主菜单
-        exit 0
+        local restart_script=""
+        if restart_script=$(resolve_self_script_path); then
+            exec bash "$restart_script"
+        fi
+        error "当前通过管道执行或脚本路径不可确认，无法安全返回菜单"
+        info "请重新下载脚本后使用: sudo bash <脚本路径>"
+        exit 1
     fi
 
     install_incus     # 3/5 安装 Incus

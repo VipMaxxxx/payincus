@@ -4173,7 +4173,7 @@ export default async function hostRoutes(fastify: FastifyInstance) {
       : 'https://incudal.com'
     // 生成带鉴权 token 的脚本下载 URL
     const scriptToken = generateCaddyScriptToken(hostId)
-    const installCommand = `curl -fsSL "${panelUrl}/api/hosts/caddy-script/${scriptToken}" | sudo bash -s -- --username "${username}" --password "${password}" --port ${port}`
+    const installCommand = `curl -fsSL "${panelUrl}/api/hosts/caddy-script/${scriptToken}" | sudo bash -s -- --username "${username}" --port ${port}`
 
     return {
       installCommand,
@@ -4233,7 +4233,7 @@ export default async function hostRoutes(fastify: FastifyInstance) {
       : 'https://incudal.com'
     // 生成带鉴权 token 的脚本下载 URL
     const scriptToken = generateCaddyScriptToken(hostId)
-    const installCommand = `curl -fsSL "${panelUrl}/api/hosts/caddy-script/${scriptToken}" | sudo bash -s -- --username "${username}" --password "${password}" --port ${port}`
+    const installCommand = `curl -fsSL "${panelUrl}/api/hosts/caddy-script/${scriptToken}" | sudo bash -s -- --username "${username}" --port ${port}`
 
     await createLog(
       user.id,
@@ -4361,18 +4361,28 @@ export default async function hostRoutes(fastify: FastifyInstance) {
     // 验证宿主机存在
     const host = await prisma.host.findUnique({
       where: { id: hostId },
-      select: { id: true, name: true }
+      select: { id: true, name: true, caddyPassword: true }
     })
     if (!host) {
       request.log.warn(`Caddy script download failed: host ${hostId} not found`)
       return reply.code(404).send('# Error: Host not found')
     }
+    if (!host.caddyPassword) {
+      request.log.warn(`Caddy script download failed: host ${hostId} has no Caddy password`)
+      return reply.code(409).send('# Error: Caddy credentials are not configured')
+    }
 
     try {
       const scriptPath = join(__dirname, '../../templates/caddy.sh')
       const scriptContent = readFileSync(scriptPath, 'utf-8')
+      const passwordInjection = `INJECT_CADDY_PASSWORD_B64="${Buffer.from(host.caddyPassword, 'utf8').toString('base64')}"`
+      if (!scriptContent.includes('INJECT_CADDY_PASSWORD_B64=""')) {
+        throw new Error('Caddy script password injection marker is missing')
+      }
+      const renderedScript = scriptContent.replace('INJECT_CADDY_PASSWORD_B64=""', passwordInjection)
       request.log.info(`Caddy script downloaded for host ${host.name}`)
-      reply.type('text/plain').send(scriptContent)
+      reply.header('Cache-Control', 'no-store')
+      reply.type('text/plain').send(renderedScript)
     } catch (err) {
       request.log.error(err, 'Failed to read caddy.sh')
       return reply.code(500).send('# Error: Failed to read script')
