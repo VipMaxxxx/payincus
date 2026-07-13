@@ -68,12 +68,6 @@ const RECONCILIATION_ITEM_STATUSES = new Set<FinancialReconciliationStatus>(['di
 const RECONCILIATION_EXPORT_TYPES = new Set(['orders', 'balance_logs', 'hosting_income', 'adjustments'])
 const BUSINESS_TIMEZONE_OFFSET_MINUTES = 8 * 60
 const FINANCIAL_NOTE_MAX_LENGTH = 500
-const PLUGIN_GATEWAY_PROVIDER_TYPE = 'plugin_gateway'
-
-interface RechargeRefundInput {
-  amount: number
-  reason: string
-}
 
 interface RechargeAggregateRow {
   amount: unknown
@@ -318,89 +312,6 @@ function resolveRechargeProviderConfig(
   snapshotValue: unknown
 ): { config: Record<string, unknown>; source: 'snapshot' | 'provider' } {
   return resolveRechargeProviderConfigSnapshot(providerType, currentConfig, snapshotValue)
-}
-
-function normalizeRechargeRefundInput(input: unknown): RechargeRefundInput {
-  if (!input || typeof input !== 'object' || Array.isArray(input)) {
-    throw { error: '请求参数无效' }
-  }
-
-  const record = input as Record<string, unknown>
-  const amount = record.amount
-  if (
-    typeof amount !== 'number' ||
-    !Number.isFinite(amount) ||
-    amount <= 0 ||
-    !/^\d+(\.\d{1,2})?$/.test(String(amount))
-  ) {
-    throw { error: '退款金额必须大于 0，最多两位小数' }
-  }
-
-  const reason = typeof record.reason === 'string' ? record.reason.trim() : ''
-  if (!reason) {
-    throw { error: '必须填写退款原因' }
-  }
-  if (reason.length > FINANCIAL_NOTE_MAX_LENGTH) {
-    throw { error: `退款原因不能超过 ${FINANCIAL_NOTE_MAX_LENGTH} 字符` }
-  }
-
-  return { amount: Number(amount.toFixed(2)), reason }
-}
-
-function serializeRechargeRefundRequest(request: db.RechargeRefundRequestWithRelations) {
-  return {
-    id: request.id,
-    rechargeRecordId: request.rechargeRecordId,
-    orderNo: request.rechargeRecord.orderNo,
-    userId: request.userId,
-    user: request.user,
-    providerId: request.providerId,
-    provider: request.provider,
-    requestedBy: request.requestedBy,
-    processedBy: request.processedBy || null,
-    amount: Number(request.amount),
-    status: request.status,
-    reason: request.reason,
-    idempotencyKey: request.idempotencyKey,
-    providerRequestId: request.providerRequestId,
-    providerRefundId: request.providerRefundId,
-    providerStatus: request.providerStatus,
-    providerMessage: request.providerMessage,
-    providerMetadata: request.providerMetadata,
-    failureReason: request.failureReason,
-    createdAt: request.createdAt.toISOString(),
-    updatedAt: request.updatedAt.toISOString(),
-    processedAt: request.processedAt?.toISOString() || null,
-    completedAt: request.completedAt?.toISOString() || null
-  }
-}
-
-async function assertRechargeRefundProviderSupported(recordId: number): Promise<void> {
-  const record = await prisma.rechargeRecord.findUnique({
-    where: { id: recordId },
-    select: {
-      id: true,
-      status: true,
-      providerId: true
-    }
-  })
-  if (!record) {
-    throw new Error('充值记录不存在')
-  }
-  if (record.status !== 'completed') {
-    throw new Error('仅已完成充值支持原路退款')
-  }
-
-  const paymentProvider = await db.getPaymentProviderById(record.providerId)
-  if (!paymentProvider) {
-    throw new Error('支付渠道不存在')
-  }
-  const provider: { type: string } = paymentProvider
-  if (provider.type !== PLUGIN_GATEWAY_PROVIDER_TYPE) {
-    throw new Error('当前充值支付渠道不支持自动原路退款；请改用订单退款审批或人工调账')
-  }
-
-  throw new Error('插件支付网关已下线，当前渠道无法执行自动原路退款')
 }
 
 // ==================== 辅助函数 ====================
@@ -1156,16 +1067,12 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
       if (!parsed) {
         return reply.code(400).send({ error: '对账日期格式必须是 YYYY-MM-DD' })
       }
-      const pendingRefundCutoff = new Date(Date.now() - 60 * 60 * 1000)
-      const processingRefundCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000)
-
       const run = await prisma.$transaction(async (tx) => {
         const [
           completedRecharges,
           businessBalanceLogs,
           deliveredInstances,
           approvedAdjustments,
-          rechargeRefundRequests,
           rechargeSummary,
           balanceSummary,
           billingSummary,
@@ -1209,20 +1116,6 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
               ]
             },
             select: { id: true, userId: true, amount: true, requestType: true, orderNo: true, sourceType: true, sourceId: true, reviewedAt: true, updatedAt: true }
-          }),
-          tx.rechargeRefundRequest.findMany({
-            where: {
-              status: { in: ['pending', 'processing', 'failed'] },
-              OR: [
-                { createdAt: { gte: parsed.start, lt: parsed.end } },
-                { updatedAt: { gte: parsed.start, lt: parsed.end } },
-                { processedAt: { gte: parsed.start, lt: parsed.end } }
-              ]
-            },
-            include: {
-              rechargeRecord: { select: { id: true, orderNo: true } },
-              provider: { select: { id: true, name: true, type: true } }
-            }
           }),
           tx.rechargeRecord.aggregate({
             where: {
@@ -1274,29 +1167,6 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
         const rechargeLogOrderNos = new Set(rechargeBalanceLogs.map(log => log.orderId).filter(Boolean))
 
         const candidates: ReconciliationCandidate[] = []
-        const failedRefundOrderNos = Array.from(new Set(
-          rechargeRefundRequests
-            .filter(refund => refund.status === 'failed' && refund.processedAt)
-            .map(refund => refund.rechargeRecord.orderNo)
-        ))
-        const failedRefundRestoreLogs = failedRefundOrderNos.length > 0
-          ? await tx.balanceLog.findMany({
-            where: {
-              type: 'admin_adjust',
-              orderId: { in: failedRefundOrderNos },
-              remark: { startsWith: '[原路退款失败返还预扣]' }
-            },
-            select: { orderId: true, amount: true, remark: true, createdAt: true }
-          })
-          : []
-        const hasFailedRefundRestoreLog = (orderNo: string, amount: unknown): boolean => {
-          const expectedAmount = Number(amount)
-          return failedRefundRestoreLogs.some(log =>
-            log.orderId === orderNo &&
-            Math.abs(Number(log.amount) - expectedAmount) < 0.01
-          )
-        }
-
         for (const record of completedRecharges) {
           if (!rechargeLogOrderNos.has(record.orderNo)) {
             candidates.push({
@@ -1371,77 +1241,6 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
               updatedAt: request.updatedAt.toISOString()
             }
           })
-        }
-
-        for (const refund of rechargeRefundRequests) {
-          if (refund.status === 'pending' && refund.createdAt < pendingRefundCutoff) {
-            candidates.push({
-              itemKey: `recharge-refund:${refund.id}:pending-stale`,
-              itemType: 'recharge_refund_lifecycle_issue',
-              sourceType: 'recharge_refund_request',
-              sourceId: refund.id,
-              userId: refund.userId,
-              amount: toDecimalMoney(refund.amount),
-              title: `原路退款申请长时间待处理：#${refund.id}`,
-              detail: {
-                issue: 'pending_stale',
-                orderNo: refund.rechargeRecord.orderNo,
-                providerId: refund.providerId,
-                providerType: refund.provider.type,
-                createdAt: refund.createdAt.toISOString(),
-                updatedAt: refund.updatedAt.toISOString()
-              }
-            })
-          }
-
-          if (refund.status === 'processing' && refund.updatedAt < processingRefundCutoff) {
-            candidates.push({
-              itemKey: `recharge-refund:${refund.id}:processing-stale`,
-              itemType: 'recharge_refund_lifecycle_issue',
-              sourceType: 'recharge_refund_request',
-              sourceId: refund.id,
-              userId: refund.userId,
-              amount: toDecimalMoney(refund.amount),
-              title: `原路退款申请长时间处理中：#${refund.id}`,
-              detail: {
-                issue: 'processing_stale',
-                orderNo: refund.rechargeRecord.orderNo,
-                providerId: refund.providerId,
-                providerType: refund.provider.type,
-                providerStatus: refund.providerStatus,
-                providerMessage: refund.providerMessage,
-                processedAt: refund.processedAt?.toISOString() ?? null,
-                updatedAt: refund.updatedAt.toISOString()
-              }
-            })
-          }
-
-          if (
-            refund.status === 'failed' &&
-            refund.processedAt &&
-            !hasFailedRefundRestoreLog(refund.rechargeRecord.orderNo, refund.amount)
-          ) {
-            candidates.push({
-              itemKey: `recharge-refund:${refund.id}:missing-failed-restore-log`,
-              itemType: 'recharge_refund_lifecycle_issue',
-              sourceType: 'recharge_refund_request',
-              sourceId: refund.id,
-              userId: refund.userId,
-              amount: toDecimalMoney(refund.amount),
-              title: `原路退款失败后未找到返还预扣流水：#${refund.id}`,
-              detail: {
-                issue: 'missing_failed_refund_restore_log',
-                orderNo: refund.rechargeRecord.orderNo,
-                providerId: refund.providerId,
-                providerType: refund.provider.type,
-                providerStatus: refund.providerStatus,
-                providerMessage: refund.providerMessage,
-                failureReason: refund.failureReason,
-                processedAt: refund.processedAt.toISOString(),
-                updatedAt: refund.updatedAt.toISOString()
-              }
-            })
-          }
         }
 
         const payableRechargeAmount = completedRecharges.reduce((sum, record) => {
@@ -3430,138 +3229,6 @@ export default async function adminBillingRoutes(app: FastifyInstance): Promise<
   })
 
   // POST /api/admin/billing/recharge-records/:id/sync - 同步充值订单状态
-  app.get('/api/admin/billing/recharge-refunds', {
-    onRequest: [app.authenticate, app.requireAdmin]
-  }, async (request, reply) => {
-    try {
-      const { page, pageSize, status, userId, providerId, rechargeRecordId, search } = request.query as {
-        page?: string
-        pageSize?: string
-        status?: string
-        userId?: string
-        providerId?: string
-        rechargeRecordId?: string
-        search?: string
-      }
-
-      const result = await db.listRechargeRefundRequests({
-        page: parsePositiveInteger(page, 1),
-        pageSize: parsePositiveInteger(pageSize, 20, 100),
-        status,
-        userId: parseOptionalPositiveInteger(userId),
-        providerId: parseOptionalPositiveInteger(providerId),
-        rechargeRecordId: parseOptionalPositiveInteger(rechargeRecordId),
-        search
-      })
-
-      return {
-        refunds: result.requests.map(serializeRechargeRefundRequest),
-        total: result.total,
-        page: result.page,
-        pageSize: result.pageSize
-      }
-    } catch (error) {
-      request.log.error(error, '获取原路退款请求列表失败')
-      return reply.status(500).send({ error: '获取原路退款请求列表失败' })
-    }
-  })
-
-  app.get('/api/admin/billing/recharge-records/:id/refunds', {
-    onRequest: [app.authenticate, app.requireAdmin]
-  }, async (request, reply) => {
-    const { id } = request.params as { id: string }
-    const recordId = parsePositiveRouteId(id)
-    if (!recordId) {
-      return reply.status(400).send({ error: '无效的充值记录 ID' })
-    }
-
-    const record = await prisma.rechargeRecord.findUnique({
-      where: { id: recordId },
-      select: { id: true }
-    })
-    if (!record) {
-      return reply.status(404).send({ error: '充值记录不存在' })
-    }
-
-    const result = await db.listRechargeRefundRequests({
-      rechargeRecordId: recordId,
-      page: 1,
-      pageSize: 100
-    })
-
-    return {
-      refunds: result.requests.map(serializeRechargeRefundRequest)
-    }
-  })
-
-  app.post('/api/admin/billing/recharge-records/:id/refunds', {
-    onRequest: [app.authenticate, app.requireAdmin],
-    config: { rateLimit: { max: 10, timeWindow: '1 minute' } }
-  }, async (request, reply) => {
-    const admin = request.user!
-    const { id } = request.params as { id: string }
-    const recordId = parsePositiveRouteId(id)
-    if (!recordId) {
-      return reply.status(400).send({ error: '无效的充值记录 ID' })
-    }
-
-    let refundInput: RechargeRefundInput
-    try {
-      refundInput = normalizeRechargeRefundInput(request.body)
-    } catch (error) {
-      return reply.status(400).send(error)
-    }
-
-    try {
-      await assertRechargeRefundProviderSupported(recordId)
-
-      const refundRequest = await db.createRechargeRefundRequest({
-        rechargeRecordId: recordId,
-        requestedByUserId: admin.id,
-        amount: refundInput.amount,
-        reason: refundInput.reason
-      })
-
-      return reply.status(201).send({
-        success: false,
-        status: refundRequest.status,
-        message: '退款申请已创建，等待支付渠道处理',
-        refundRequest: serializeRechargeRefundRequest(refundRequest)
-      })
-    } catch (error) {
-      return reply.status(400).send({ error: error instanceof Error ? error.message : '原路退款失败' })
-    }
-  })
-
-  app.post('/api/admin/billing/recharge-refunds/:id/retry', {
-    onRequest: [app.authenticate, app.requireAdmin],
-    config: { rateLimit: { max: 10, timeWindow: '1 minute' } }
-  }, async (request, reply) => {
-    const { id } = request.params as { id: string }
-    const refundRequestId = parsePositiveRouteId(id)
-    if (!refundRequestId) {
-      return reply.status(400).send({ error: '无效的退款申请 ID' })
-    }
-
-    const refundRequest = await db.getRechargeRefundRequestById(refundRequestId)
-    if (!refundRequest) {
-      return reply.status(404).send({ error: '退款申请不存在' })
-    }
-    if (refundRequest.status === 'completed') {
-      return {
-        success: true,
-        status: refundRequest.status,
-        message: '退款申请已完成',
-        refundRequest: serializeRechargeRefundRequest(refundRequest)
-      }
-    }
-
-    return reply.status(409).send({
-      error: '原支付渠道的自动退款执行器不可用，无法重试',
-      refundRequest: serializeRechargeRefundRequest(refundRequest)
-    })
-  })
-
   app.post('/api/admin/billing/recharge-records/:id/sync', {
     onRequest: [app.authenticate, app.requireAdmin],
     config: { rateLimit: { max: 10, timeWindow: '1 minute' } }

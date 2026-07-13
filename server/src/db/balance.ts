@@ -383,17 +383,17 @@ export async function approveBalanceAdjustmentRequest(
       throw new Error('调账申请已处理')
     }
 
-    const isRechargeRefund = request.requestType === 'refund' && request.sourceType === 'recharge'
-    const logType: BalanceLogType = request.requestType === 'refund' && Number(request.amount) > 0 && !isRechargeRefund
+    const isRechargeBalanceReclaim = request.requestType === 'refund' && request.sourceType === 'recharge'
+    const logType: BalanceLogType = request.requestType === 'refund' && Number(request.amount) > 0 && !isRechargeBalanceReclaim
       ? 'refund'
       : 'admin_adjust'
-    const balanceChangeAmount = isRechargeRefund
+    const balanceChangeAmount = isRechargeBalanceReclaim
       ? -Math.abs(Number(request.amount))
       : Number(request.amount)
     const remark = [
       `[审批通过] ${request.reason}`,
       request.orderNo ? `订单 ${request.orderNo}` : '',
-      isRechargeRefund ? '充值退款收回余额' : '',
+      isRechargeBalanceReclaim ? '充值退款收回余额' : '',
       reviewRemark ? `审核备注: ${reviewRemark}` : ''
     ].filter(Boolean).join('；')
 

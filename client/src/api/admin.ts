@@ -38,7 +38,6 @@ export type FinancialReconciliationItemType =
   | 'orphan_balance_log'
   | 'delivered_instance_missing_billing'
   | 'approved_adjustment_missing_balance_log'
-  | 'recharge_refund_lifecycle_issue'
 
 export interface FinancialReconciliationItem {
   id: number
@@ -77,34 +76,6 @@ export interface FinancialReconciliationRun {
   createdAt: string | null
   updatedAt: string | null
   items: FinancialReconciliationItem[]
-}
-
-export type RechargeRefundStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled'
-
-export interface RechargeRefundRequest {
-  id: number
-  rechargeRecordId: number
-  orderNo: string
-  userId: number
-  user: { id: number; username: string } | null
-  providerId: number
-  provider: { id: number; name: string; type: string } | null
-  requestedBy: { id: number; username: string } | null
-  processedBy: { id: number; username: string } | null
-  amount: number
-  status: RechargeRefundStatus
-  reason: string
-  idempotencyKey: string
-  providerRequestId: string | null
-  providerRefundId: string | null
-  providerStatus: string | null
-  providerMessage: string | null
-  providerMetadata: Record<string, unknown> | null
-  failureReason: string | null
-  createdAt: string
-  updatedAt: string
-  processedAt: string | null
-  completedAt: string | null
 }
 
 export interface VipLevelRule {
@@ -3209,39 +3180,7 @@ const api = {
       pageSize: number
     }> => http.get('/admin/billing/recharge-records', { params }),
 
-                // 同步充值订单状态
-    getRechargeRefundRequests: (params?: {
-      page?: number
-      pageSize?: number
-      status?: RechargeRefundStatus
-      userId?: number
-      providerId?: number
-      rechargeRecordId?: number
-      search?: string
-    }): Promise<{
-      refunds: RechargeRefundRequest[]
-      total: number
-      page: number
-      pageSize: number
-    }> => http.get('/admin/billing/recharge-refunds', { params }),
-
-    createRechargeRefund: (
-      rechargeRecordId: number,
-      data: { amount: number; reason: string }
-    ): Promise<{
-      success: boolean
-      status: RechargeRefundStatus
-      message: string
-      refundRequest: RechargeRefundRequest
-    }> => http.post(`/admin/billing/recharge-records/${rechargeRecordId}/refunds`, data),
-
-    retryRechargeRefund: (id: number): Promise<{
-      success: boolean
-      status: RechargeRefundStatus
-      message: string
-      refundRequest: RechargeRefundRequest
-    }> => http.post(`/admin/billing/recharge-refunds/${id}/retry`),
-
+    // 同步充值订单状态
     syncRechargeRecord: (id: number): Promise<{
       success: boolean
       synced: boolean

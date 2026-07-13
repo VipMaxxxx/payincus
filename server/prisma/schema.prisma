@@ -309,14 +309,6 @@ enum RechargeStatus {
   refunded      // 已退款
 }
 
-enum RechargeRefundStatus {
-  pending    // 待处理
-  processing // 支付渠道退款处理中
-  completed  // 已完成
-  failed     // 失败
-  cancelled  // 已取消
-}
-
 enum VipLevelRuleType {
   user
   hosting
@@ -484,9 +476,6 @@ model User {
   // 计费相关
   balanceLogs     BalanceLog[]
   rechargeRecords RechargeRecord[]
-  rechargeRefundTargets RechargeRefundRequest[] @relation("RechargeRefundTarget")
-  rechargeRefundRequests RechargeRefundRequest[] @relation("RechargeRefundRequester")
-  rechargeRefundProcessors RechargeRefundRequest[] @relation("RechargeRefundProcessor")
   balanceAdjustmentTargets BalanceAdjustmentRequest[] @relation("BalanceAdjustmentTarget")
   balanceAdjustmentRequests BalanceAdjustmentRequest[] @relation("BalanceAdjustmentRequester")
   balanceAdjustmentReviews BalanceAdjustmentRequest[] @relation("BalanceAdjustmentReviewer")
@@ -2611,7 +2600,6 @@ model PaymentProvider {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   rechargeRecords RechargeRecord[]
-  rechargeRefundRequests RechargeRefundRequest[]
 
   @@map("payment_providers")
 }
@@ -2656,48 +2644,12 @@ model RechargeRecord {
 
   user     User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   provider PaymentProvider @relation(fields: [providerId], references: [id])
-  refundRequests RechargeRefundRequest[]
 
   @@index([userId, status])
   @@index([status, createdAt])
   @@index([orderNo])
   @@index([tradeNo])
   @@map("recharge_records")
-}
-
-model RechargeRefundRequest {
-  id                Int                  @id @default(autoincrement())
-  rechargeRecordId  Int                  @map("recharge_record_id")
-  userId            Int                  @map("user_id")
-  providerId        Int                  @map("provider_id")
-  requestedByUserId Int                  @map("requested_by_user_id")
-  processedByUserId Int?                 @map("processed_by_user_id")
-  amount            Decimal              @db.Decimal(10, 2)
-  status            RechargeRefundStatus @default(pending)
-  reason            String               @db.Text
-  idempotencyKey    String               @unique @map("idempotency_key")
-  providerRequestId String?              @map("provider_request_id")
-  providerRefundId  String?              @map("provider_refund_id")
-  providerStatus    String?              @map("provider_status")
-  providerMessage   String?              @map("provider_message") @db.Text
-  providerMetadata  Json?                @map("provider_metadata")
-  failureReason     String?              @map("failure_reason") @db.Text
-  createdAt         DateTime             @default(now()) @map("created_at")
-  updatedAt         DateTime             @updatedAt @map("updated_at")
-  processedAt       DateTime?            @map("processed_at")
-  completedAt       DateTime?            @map("completed_at")
-
-  rechargeRecord RechargeRecord  @relation(fields: [rechargeRecordId], references: [id], onDelete: Cascade)
-  user           User            @relation("RechargeRefundTarget", fields: [userId], references: [id], onDelete: Cascade)
-  provider       PaymentProvider @relation(fields: [providerId], references: [id], onDelete: Restrict)
-  requestedBy    User            @relation("RechargeRefundRequester", fields: [requestedByUserId], references: [id], onDelete: Restrict)
-  processedBy    User?           @relation("RechargeRefundProcessor", fields: [processedByUserId], references: [id], onDelete: SetNull)
-
-  @@index([rechargeRecordId, status])
-  @@index([userId, createdAt])
-  @@index([providerId, status])
-  @@index([status, createdAt])
-  @@map("recharge_refund_requests")
 }
 
 // VIP 等级规则配置

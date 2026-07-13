@@ -41,11 +41,11 @@ const approvalEnd = balanceDb.indexOf('export async function rejectBalanceAdjust
 assert.notEqual(approvalEnd, -1, 'missing approval execution db function end marker')
 const approvalSection = balanceDb.slice(approvalStart, approvalEnd)
 assert.ok(
-  approvalSection.includes("const isRechargeRefund = request.requestType === 'refund' && request.sourceType === 'recharge'") &&
-    approvalSection.includes("const logType: BalanceLogType = request.requestType === 'refund' && Number(request.amount) > 0 && !isRechargeRefund") &&
+  approvalSection.includes("const isRechargeBalanceReclaim = request.requestType === 'refund' && request.sourceType === 'recharge'") &&
+    approvalSection.includes("const logType: BalanceLogType = request.requestType === 'refund' && Number(request.amount) > 0 && !isRechargeBalanceReclaim") &&
     approvalSection.includes(": 'admin_adjust'") &&
     approvalSection.includes("? -Math.abs(Number(request.amount))") &&
-    approvalSection.includes("isRechargeRefund ? '充值退款收回余额' : ''") &&
+    approvalSection.includes("isRechargeBalanceReclaim ? '充值退款收回余额' : ''") &&
     approvalSection.includes('type: logType') &&
     approvalSection.includes('amount: balanceChangeAmount'),
   'recharge refunds must reclaim balance with a negative admin_adjust instead of unconditionally crediting the user'

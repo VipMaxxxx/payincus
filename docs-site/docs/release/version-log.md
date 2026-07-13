@@ -6,26 +6,39 @@
 
 ## 最新发布状态 / Latest Release State
 
-- 最新发布提交 / Latest Release Commit: `cdcdeb583`
-- 提交日期 / Commit date: 2026-07-12
-- 提交说明 / Commit subject: Release v1.4.3: 修复 OTA 迁移前 pg_dump 连接（role "root"）
-- 最新 tag / Latest tag: `v1.4.3`
+- 最新发布提交 / Latest Release Commit: `bb5a0ea8a`
+- 提交日期 / Commit date: 2026-07-13
+- 最新 tag / Latest tag: `v1.5.0`
 
 ## 未发布变更 / Unreleased Changes
 
 ### 其他变更 / Other Changes
 
-- Nimbus P5+精修: 全站 Linear 级 UI 重做（80 视图 + token 层） `88b4e1220`
-- Nimbus P3/P4: 结构重构壳 + 首页 + 仪表盘（非换色，真重做布局/组件/动效） `05e94d39c`
-- Nimbus P2: 组件层润色（靛蓝 focus/输入、Nimbus 软阴影、hover lift、主按钮微光） `aa1344889`
-- Nimbus P1: token 层换新（白+靛蓝，明暗双主题）+ 自托管 Inter/JetBrains Mono `cc4181622`
-- docs-site: 重构文档站主题为「Substrate」设计系统 `255856afe`
-- docs-site: 清理两处文档小项 `69bc44cc1`
-- docs-site: 补齐 systemd.md 在线更新的加固流程（对齐现行安装脚本） `a32e5e51a`
-- docs-site: UI 交互/无障碍优化 + 修正 2 处文档错误 `2201bdd41`
-- docs: 补齐版本更新日志到 v1.4.3（含 v1.4.0/1/2/3 OTA 升级记录） `3e89cb210`
+- 修复文档部署守卫:移除已删主题平台的 theme-staging 断言 `c7a6f8b2f`
 
 ## 历史版本 / Historical Versions
+
+## v1.5.0
+
+- 发布提交 / Release commit: `bb5a0ea8a`
+- 提交日期 / Commit date: 2026-07-13
+
+
+### 精简（移除下列模块，含前端、后端路由/worker、Prisma 模型与数据库表）
+
+### 优化
+
+- 全站 UI 重做为纯净的浅色主色 + 单一强调色的 Linear 风格设计，支持浅色 / 深色双主题。
+- 修复长期存在的“点击侧边栏偶发白屏”问题：`index.html` 增加 `Cache-Control: no-cache`，避免浏览器 / CDN 缓存到旧入口导致的分块 404。
+- 文档站删减已下线功能的冗余内容，导航去除死链。
+
+### 修复
+
+### 升级说明（面向自建 / 开源用户）
+
+- 本版新增 9 个下线迁移，全部按幂等、无损原则编写：`DROP TABLE IF EXISTS ... CASCADE`、`DROP TYPE IF EXISTS`；共享枚举（`TicketObjectLinkType`、`PaymentProviderType`）采用“重命名旧类型 + 新建 + `USING` 转换”的安全收窄方式，且在收窄前先删除/转换被移除枚举值对应的数据行，不使用不受支持的 `ALTER TYPE ... DROP VALUE`。
+- `plugin_gateway` 类型的支付渠道会被自动置为 `disabled` 并归类为 `manual`，不会因外键约束中止升级；升级后管理员可自行清理这些遗留渠道。
+- 上述设计保证任意历史版本的部署都能顺利完成“备份 → 迁移 → 重启”的在线升级流程，仅删除被下线功能自身的数据，其余业务数据完整保留。
 
 ## v1.4.3
 

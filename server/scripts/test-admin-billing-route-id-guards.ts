@@ -48,21 +48,14 @@ assert.equal(
 
 assert.equal(
   source.match(/const recordId = parsePositiveRouteId\(id\)/g)?.length ?? 0,
-  3,
-  'admin recharge-record refund and sync routes must strictly validate record route IDs'
-)
-
-assert.equal(
-  source.match(/const refundRequestId = parsePositiveRouteId\(id\)/g)?.length ?? 0,
   1,
-  'admin recharge refund retry route must strictly validate refund request route IDs'
+  'admin recharge-record sync route must strictly validate record route IDs'
 )
 
 for (const forbiddenPattern of [
   'parseInt(id, 10)',
   'isNaN(instanceId)',
   'isNaN(recordId)',
-  'isNaN(refundRequestId)',
   'isNaN(newPlanId)'
 ] as const) {
   assert.ok(
@@ -130,22 +123,6 @@ assert.ok(
               tx
             )`),
   'admin delete-and-refund must deduct the actual refund amount from hosted income in the same transaction'
-)
-
-assert.ok(
-  source.includes('async function assertRechargeRefundProviderSupported(recordId: number): Promise<void>') &&
-    source.includes('provider.type !== PLUGIN_GATEWAY_PROVIDER_TYPE') &&
-    source.includes('当前充值支付渠道不支持自动原路退款；请改用订单退款审批或人工调账'),
-  'admin recharge refund must validate provider refund support before creating a refund request'
-)
-
-const refundCapabilityIndex = source.indexOf('await assertRechargeRefundProviderSupported(recordId)')
-const refundCreateIndex = source.indexOf('db.createRechargeRefundRequest({')
-assert.ok(
-  refundCapabilityIndex !== -1 &&
-    refundCreateIndex !== -1 &&
-    refundCapabilityIndex < refundCreateIndex,
-  'admin recharge refund route must run provider capability checks before persisting refund requests'
 )
 
 console.log('admin billing route ID guard tests passed')

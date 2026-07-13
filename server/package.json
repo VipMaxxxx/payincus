@@ -1,6 +1,6 @@
 {
   "name": "server",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "description": "PayIncus backend service",
   "type": "module",
   "main": "dist/app.js",
@@ -123,6 +123,7 @@
     "test:frontend-dist-boundary-guards": "node --import tsx scripts/test-frontend-dist-boundary-guards.ts",
     "test:frontend-route-guards": "node --import tsx scripts/test-frontend-route-guards.ts",
     "test:frontend-i18n-keys": "node --import tsx scripts/test-frontend-i18n-keys.ts",
+    "test:i18n-message-compile-guards": "node --import tsx scripts/test-i18n-message-compile-guards.ts",
     "test:friend-route-guards": "node --import tsx scripts/test-friend-route-guards.ts",
     "test:payment-provider-secret-redaction": "node --import tsx scripts/test-payment-provider-secret-redaction.ts",
     "test:manual-payment-provider-guards": "node --import tsx scripts/test-manual-payment-provider-guards.ts",
@@ -223,6 +224,7 @@
     "ws": "^8.18.3"
   },
   "devDependencies": {
+    "@intlify/message-compiler": "11.2.2",
     "@types/node": "^24.10.1",
     "@types/node-cron": "^3.0.11",
     "@types/nodemailer": "^7.0.4",
