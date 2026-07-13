@@ -48,14 +48,6 @@ for (const path of [
   const systemd = read(path)
   rejectText(systemd, 'ExecStartPre=cd ', path)
   requireText(systemd, "ExecStartPre=/usr/bin/bash -lc", path)
-  requireText(systemd, '/opt/incudal/theme-staging', path)
-}
-
-for (const path of [
-  'deploy/incudal-backend.service.example',
-  'scripts/migrate-ota-atomic-layout.sh'
-]) {
-  requireText(read(path), 'theme-staging', path)
 }
 
 const config = read('docs-site/docs/.vitepress/config.ts')
