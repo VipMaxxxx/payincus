@@ -13,13 +13,13 @@ This is the operational handoff for engineers or agents taking over PayIncus / I
 - Production current symlink: `/opt/incudal/current`
 - User frontend: <https://pay.payincus.com>
 - Admin frontend: <https://admin.payincus.com>
-- Current production version: `v1.5.0`
-- Current production release path: `/opt/incudal/releases/v1.5.0-20260713061059`
-- Current production OTA task: `#151`
-- Current release commit/tag: `bb5a0ea8a080` / `v1.5.0`
-- Latest product main commit before this evidence update: `c7a6f8b`
+- Current production version: `v1.5.1`
+- Current production release path: `/opt/incudal/releases/v1.5.1-20260713075028`
+- Current production OTA task: `#152`
+- Current release commit/tag: `7f5728f9e8d3` / `v1.5.1`
+- Latest product main commit before this evidence update: `7f5728f`
 
-`v1.5.0` is the feature-slimming release: it removes 12 non-core modules and the entire plugin/theme platform full-stack, completes the Linear-style monochrome UI rebuild, fixes the sidebar white-screen bug (index.html no-cache), and restores the over-removed admin original-route recharge-refund workbench. Production OTA task `#151` (`v1.4.3 -> v1.5.0`) completed successfully with `RUN_DB_CHECKS=0`; all 9 removal migrations are idempotent and lossless so open-source self-hosted users can OTA without unintended data loss. See `HANDOFF.md` for full v1.5.0 evidence.
+`v1.5.1` fixes a System/Telegram settings full-page white-screen caused by an unescaped literal `@` in an i18n string (vue-i18n compile error code 10; now escaped as `{'@'}`), unifies refunds to balance-only by removing the plugin-gateway-dependent original-route recharge-refund, adds an i18n message-compile guard (`test:i18n-message-compile-guards`) that compiles all messages with the real vue-i18n compiler to catch this class, and drops the `recharge_refund_requests` table/enum plus 6 orphan `Exchange*` enums. Production OTA task `#152` (`v1.5.0 -> v1.5.1`) completed successfully with `RUN_DB_CHECKS=0`; migrations are idempotent and lossless. `v1.5.0` (prior) removed 12 modules + the whole plugin/theme platform and fixed the sidebar white-screen. See `HANDOFF.md` for full v1.5.1 evidence.
 
 The Claude UI work is already merged into main and included in production:
 

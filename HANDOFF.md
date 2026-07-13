@@ -1,6 +1,6 @@
 # PayIncus Handoff
 
-Last updated: 2026-07-13 06:15 CST
+Last updated: 2026-07-13 08:00 CST
 
 This file is a handoff note for a new Codex conversation. Do not include server passwords or other secrets in this file.
 
@@ -12,11 +12,33 @@ Give the next Codex session this file first. The active working directory is:
 C:\Users\Administrator\Desktop\payinces
 ```
 
-Production is currently on `v1.5.0`. This release removes 12 non-core modules and the entire plugin/theme platform full-stack (frontend + backend routes/workers + Prisma models + database tables), completes the Linear-style monochrome UI rebuild, roots out the long-standing sidebar white-screen bug (`index.html` served with `Cache-Control: no-cache`), and restores the accidentally over-removed admin "original-route recharge refund" workbench.
+Production is currently on `v1.5.1`. This patch fixes a full-page white-screen on the System/Telegram settings page (an unescaped literal `@` in the Telegram username-hint i18n string was parsed by vue-i18n as linked-message syntax `@:key` and threw compile error code 10 INVALID_LINKED_FORMAT, crashing the whole page render; literal `@` is now escaped as `{'@'}` in all three locales, and the same bug in the Heleket payment placeholder `@TRON`/`@BSC` was fixed too). It also unifies refunds to balance-only by full-stack removing the plugin-gateway-dependent "original-route recharge refund" workbench (refunds are handled by order-refund approval + manual balance adjustment), adds a new i18n message-compile guard (`test:i18n-message-compile-guards`, compiles all ~21.7k messages with the real vue-i18n compiler so unescaped `@`/braces fail CI), and drops the `recharge_refund_requests` table + `RechargeRefundStatus` enum plus 6 orphan `Exchange*` enum types left by v1.5.0.
 
-The Service Worker derives its cache name from the registered client version (`/sw.js?v=1.5.0` -> `incudal-cache-v1.5.0`). Removed features' backend routes now return HTTP 404; retained/restored routes (recharge refunds, records, orders) return HTTP 401. All 9 removal migrations are idempotent and lossless (`DROP ... IF EXISTS ... CASCADE`, safe enum narrowing via rename/USING with removed-value rows deleted first, `plugin_gateway` payment providers disabled and converted to `manual`), so open-source self-hosted users can OTA from any prior version without data loss beyond the deliberately removed features.
+v1.5.0 (the prior release) removed 12 non-core modules and the entire plugin/theme platform full-stack, completed the Linear-style monochrome UI rebuild, and fixed the long-standing sidebar white-screen (`index.html` served with `Cache-Control: no-cache`).
 
-The release commit/tag and OTA evidence below are production proof for `v1.5.0`.
+The Service Worker derives its cache name from the registered client version (`/sw.js?v=1.5.1` -> `incudal-cache-v1.5.1`). Removed features' backend routes return HTTP 404; retained routes (billing records, orders, telegram binding) return HTTP 401. All removal migrations are idempotent and lossless (`DROP ... IF EXISTS ... CASCADE`, safe enum narrowing), so open-source self-hosted users can OTA from any prior version without unintended data loss.
+
+The release commit/tag and OTA evidence below are production proof for `v1.5.1`.
+
+### Current v1.5.1 Production / OTA Status
+
+- `v1.5.1` release commit/tag: `7f5728f9e8d3` (`Release v1.5.1 修复系统设置白屏 + 退款统一走余额 + i18n编译守卫`); annotated tag `v1.5.1`.
+- GitHub Actions:
+  - Build & Release run `29233118876` -> success.
+  - CI run `29233117073` -> success.
+  - Docs Pages run `29233117150` -> success.
+- GitHub Release `v1.5.1` contains amd64/arm64 tarballs, both SHA256 files, and versioned + generic OTA manifests. No plugin assets (plugin platform removed in v1.5.0).
+- OTA manifest proof: version/tag `v1.5.1`, gitCommit `7f5728f9e8d3`, buildTime `2026-07-13T07:48:38.833Z`, amd64 sha256 `8e30b1e1b02f4589db7a32f7856983523efa9c92e65b4e1d784865649eabcd4d`, arm64 sha256 `5a9d4ae5bb8273ea6758ddf801bdaf217bee11d802146ec762d1a2ff83dca605`.
+- Final OTA task `#152`: `v1.5.0 -> v1.5.1`, status `success`, log `/opt/incudal/update-logs/system-update-152.log`.
+  - Ran with the standing owner directive `RUN_DB_CHECKS=0`.
+  - Migrations applied: `drop_recharge_original_route_refund` (drops `recharge_refund_requests` table + `RechargeRefundStatus` enum) and `drop_exchange_orphan_enums` (drops 6 orphan `Exchange*` enum types). Artifact SHA256, atomic switch, backend health, split-host, production readiness, and log/header scan passed. Log contains `System update completed successfully` at `2026-07-13T07:52:01.026Z`.
+- Current production state:
+  - `/opt/incudal/current -> /opt/incudal/releases/v1.5.1-20260713075028`
+  - `version.json`: v1.5.1, commit `7f5728f9e8d3`.
+  - `incudal-backend` is enabled and active; local/pay/admin `/api/health` return HTTP 200; admin index served `Cache-Control: no-cache` with the new v1.5.1 bundle.
+  - DB verified post-OTA: `recharge_refund_requests` table absent, `RechargeRefundStatus` + `Exchange*` enums absent, `prisma migrate status` = up to date. Removed `/api/admin/billing/recharge-refunds` returns HTTP 404; retained routes return HTTP 401.
+- White-screen root cause + guard: unescaped literal `@` in an i18n string → vue-i18n compile code 10 → render crash. The System/Telegram settings page white-screen the owner reported (and initially misdiagnosed as browser cache) was this. New guard `test:i18n-message-compile-guards` now compiles every locale message with `@intlify/message-compiler` (added as a server devDependency) and fails on any compile error, catching this class before release. To use a literal `@` in a message write `{'@'}`; literal braces `{'{'}`/`{'}'}`.
+- Standing owner directive from 2026-07-10 remains active: all future PayIncus OTA runs should use `RUN_DB_CHECKS=0`.
 
 ### Current v1.5.0 Production / OTA Status
 
