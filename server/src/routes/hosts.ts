@@ -755,7 +755,9 @@ function injectInstallVariable(script: string, name: string, value: string): str
 }
 
 function buildHostInstallCommand(panelUrl: string, installToken: string): string {
-  return `curl -sL ${panelUrl}/api/hosts/install.sh/${installToken} -o incudal.sh && sudo bash incudal.sh`
+  // -f: HTTP 错误（例如被 CDN/WAF 以 403 挑战页拦截）时让 curl 直接失败，
+  // 避免把挑战页 HTML 存成 incudal.sh 再交给 bash 执行（会报 syntax error near unexpected token '<'）。
+  return `curl -fsSL ${panelUrl}/api/hosts/install.sh/${installToken} -o incudal.sh && sudo bash incudal.sh`
 }
 
 export default async function hostRoutes(fastify: FastifyInstance) {
@@ -4171,7 +4173,7 @@ export default async function hostRoutes(fastify: FastifyInstance) {
       : 'https://incudal.com'
     // 生成带鉴权 token 的脚本下载 URL
     const scriptToken = generateCaddyScriptToken(hostId)
-    const installCommand = `curl -sSL "${panelUrl}/api/hosts/caddy-script/${scriptToken}" | sudo bash -s -- --username "${username}" --password "${password}" --port ${port}`
+    const installCommand = `curl -fsSL "${panelUrl}/api/hosts/caddy-script/${scriptToken}" | sudo bash -s -- --username "${username}" --password "${password}" --port ${port}`
 
     return {
       installCommand,
@@ -4231,7 +4233,7 @@ export default async function hostRoutes(fastify: FastifyInstance) {
       : 'https://incudal.com'
     // 生成带鉴权 token 的脚本下载 URL
     const scriptToken = generateCaddyScriptToken(hostId)
-    const installCommand = `curl -sSL "${panelUrl}/api/hosts/caddy-script/${scriptToken}" | sudo bash -s -- --username "${username}" --password "${password}" --port ${port}`
+    const installCommand = `curl -fsSL "${panelUrl}/api/hosts/caddy-script/${scriptToken}" | sudo bash -s -- --username "${username}" --password "${password}" --port ${port}`
 
     await createLog(
       user.id,
