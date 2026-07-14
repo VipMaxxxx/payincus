@@ -735,6 +735,7 @@ model Host {
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   instances    Instance[]
   ipAddresses  IpAddress[]
+  natIpv4Reservations NatIpv4Reservation[]
   publicIpv4Pools PublicIpv4Pool[]
   publicIpv4Addresses PublicIpv4Address[]
   allowedImages HostAllowedImage[]
@@ -1126,6 +1127,30 @@ enum PublicIpv4AddressStatus {
 }
 
 // IP 地址池模型 (支持多 IP)
+// NAT 内网 IPv4 的「分配预留」。
+//
+// 分配到落库之间隔着实例交付的数分钟（克隆更久）。此前这段窗口里 IP 对查重完全隐形，
+// 同一宿主机上并发创建的实例会拿到同一个内网 IP —— 两个容器同 IP，端口转发打到错的容器。
+// 预留行让「已分配但尚未落地」的地址立刻对所有分配可见。
+//
+// 独立成表（而不是写在 instance.ipv4 上）的原因：
+//   - 克隆流程在新实例入库之前就要确定 IP，那时还没有 instanceId；
+//   - 换节点时实例仍挂在旧宿主机下，写 instance.ipv4 对目标宿主机不可见。
+// 预留靠 expiresAt 自然过期，无需在每条成功/失败路径上显式释放。
+model NatIpv4Reservation {
+  id        Int      @id @default(autoincrement())
+  hostId    Int      @map("host_id")
+  address   String
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  host Host @relation(fields: [hostId], references: [id], onDelete: Cascade)
+
+  @@unique([hostId, address])
+  @@index([expiresAt])
+  @@map("nat_ipv4_reservations")
+}
+
 model IpAddress {
   id        Int     @id @default(autoincrement())
   address   String

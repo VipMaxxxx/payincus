@@ -26,6 +26,8 @@ import {
   tryAdvisoryTransactionLock
 } from '../db/advisory-locks.js'
 import { IncusClient, getIncusClient, removeIncusClient } from '../lib/incus/index.js'
+import { getInstance, updateInstance } from '../lib/incus/incus-instances.js'
+import { selectBindableIpv4ListenAddress } from '../lib/network-address.js'
 import { listStoragePools, getStoragePoolResources, createStoragePool, deleteStoragePool, updateStoragePool } from '../lib/incus/incus-storage.js'
 import type { CreateHostRequest, UpdateHostRequest } from '../types/api.js'
 import type { Host } from '../types/database.js'
@@ -36,7 +38,7 @@ import { createCaddyClient } from '../lib/caddy-client.js'
 import { normalizeArchitecture } from '../lib/architecture.js'
 import { generateIncusConfig } from '../lib/incus-config-generator.js'
 import { sendAdminInstanceCreatedEmail, sendRenewalPriceUpdatedEmail } from '../lib/mailer.js'
-import { generateRandomIPv4, generateRandomIPv6 } from '../lib/ip-calculator.js'
+import { generateRandomIPv6 } from '../lib/ip-calculator.js'
 import { calculateCreateBilling } from '../db/billing-operations.js'
 import { getDnsRecordType } from '../lib/network-address.js'
 import { resolveInstanceTrafficLimitForHost } from '../lib/traffic-multiplier.js'
@@ -5680,7 +5682,7 @@ export default async function hostRoutes(fastify: FastifyInstance) {
     const { buildInstanceConfig } = await import('../lib/incus/incus-instances.js')
     const { generateIncusConfig, generateRandomPassword } = await import('../lib/incus-config-generator.js')
     const { generateVmConfig } = await import('../lib/incus-config-vm.js')
-    const { generateRandomIPv4, generateRandomIPv6 } = await import('../lib/ip-calculator.js')
+    const { generateRandomIPv6 } = await import('../lib/ip-calculator.js')
     const { decryptSensitiveData, encryptSensitiveData } = await import('../lib/security.js')
     const { getInstanceAffBinding, createAffBinding } = await import('../db/aff.js')
     const { createInboxMessage } = await import('../db/inbox.js')
@@ -5785,13 +5787,8 @@ export default async function hostRoutes(fastify: FastifyInstance) {
         let staticIPv4: string | null = null
         let staticIPv6: string | null = null
 
-        // 分配 IPv4
-        for (let attempts = 0; attempts < 50; attempts++) {
-          staticIPv4 = generateRandomIPv4()
-          const exists = await db.isIpAddressExistsOnHost(staticIPv4, targetHostId)
-          if (!exists) break
-          staticIPv4 = null
-        }
+        // 分配 IPv4（锁内分配 + 锁内预留，防止并发换节点撞到同一个内网 IP）
+        staticIPv4 = await db.allocateAndReserveNatIpv4(targetHostId, instance.id)
         if (!staticIPv4) {
           results.push({ id: instance.id, name: instance.name, success: false, error: '无法分配 IPv4 地址' })
           continue
@@ -6583,14 +6580,7 @@ export default async function hostRoutes(fastify: FastifyInstance) {
 
       if (networkModeNeedsNatIpv4(networkMode)) {
         try {
-          let attempts = 0
-          while (attempts < 50) {
-            staticIPv4 = generateRandomIPv4()
-            const exists = await db.isIpAddressExistsOnHost(staticIPv4, lockedHost.id)
-            if (!exists) break
-            attempts++
-            staticIPv4 = null
-          }
+          staticIPv4 = await db.allocateAndReserveNatIpv4(lockedHost.id, instanceId)
         } catch (error) {
           fastify.log.warn(error, '[Host Create For User] failed to allocate IPv4')
         }
@@ -7198,6 +7188,120 @@ export default async function hostRoutes(fastify: FastifyInstance) {
   })
 
   // 宿主机基线同步：同步资源信息 + 批量同步实例状态/IP
+  // 把存量的 LXC 端口映射就地转成内核 NAT（nftables DNAT）。
+  //
+  // Incus 的 proxy device 默认给每个端口映射 fork 一个常驻 forkproxy 进程（~10-30 MB RSS），
+  // 实例一多就能吃掉几百 MB。nat=true 改走内核转发，零进程。新建的映射已经默认走 NAT
+  // （见 LxcProxyStrategy），但存量设备的配置不会自己变 —— 需要这个操作把它们改过来。
+  //
+  // 只改「本来就该走 NAT」的设备：容器 + IPv4 NAT 模式 + listen 是宿主机的具体 IPv4。
+  // 不满足条件的一律跳过，绝不为了省内存把一条正在用的端口映射改坏。
+  fastify.post<{ Params: { id: string } }>('/:id/ops/optimize-port-mappings', {
+    onRequest: [fastify.authenticate]
+  }, async (request, reply) => {
+    const { user } = request
+    const hostId = parsePositiveRouteId(request.params.id)
+    if (!hostId) {
+      return reply.code(400).send(apiError(ErrorCode.INVALID_ID))
+    }
+
+    const host = await db.getHostById(hostId)
+    if (!host) {
+      return reply.code(404).send(apiError(ErrorCode.HOST_NOT_FOUND))
+    }
+    if (host.user_id !== user.id && user.role !== 'admin') {
+      return reply.code(403).send(apiError(ErrorCode.FORBIDDEN))
+    }
+
+    const bindableIpv4 = selectBindableIpv4ListenAddress(
+      (host as unknown as Record<string, unknown>).nat_bind_ip as string | null || null,
+      host.nat_public_ip || null,
+      host.url,
+      host.ip_address || null
+    )
+    if (!bindableIpv4 || bindableIpv4 === '0.0.0.0') {
+      return reply.code(400).send(apiError(
+        ErrorCode.INVALID_PARAMS,
+        '该节点没有可用于监听的具体 IPv4 地址（请先在节点设置里补充 NAT 绑定 IP），内核 NAT 需要具体监听地址'
+      ))
+    }
+
+    const instances = await prisma.instance.findMany({
+      where: {
+        hostId,
+        status: { notIn: ['deleted'] },
+        networkMode: { in: ['nat', 'nat_ipv6', 'nat_ipv6_nat'] }
+      },
+      select: { id: true, incusId: true, name: true, packageId: true }
+    })
+
+    let converted = 0
+    let skipped = 0
+    let failed = 0
+    const details: Array<{ instance: string; device: string; result: string }> = []
+
+    try {
+      const client = await getIncusClient(host)
+
+      for (const instance of instances) {
+        // 只处理容器：KVM 的 IPv4 映射本来就已经是 nat=true。
+        const pkg = instance.packageId
+          ? await prisma.package.findUnique({ where: { id: instance.packageId }, select: { instanceType: true } })
+          : null
+        if (pkg?.instanceType === 'vm') {
+          continue
+        }
+
+        let current: { devices?: Record<string, Record<string, string>> }
+        try {
+          current = await getInstance(client, instance.incusId) as { devices?: Record<string, Record<string, string>> }
+        } catch (error) {
+          failed += 1
+          details.push({ instance: instance.name, device: '-', result: `读取实例配置失败: ${error instanceof Error ? error.message : String(error)}` })
+          continue
+        }
+
+        const updatedDevices: Record<string, Record<string, string>> = {}
+        for (const [deviceName, device] of Object.entries(current.devices || {})) {
+          if (device?.type !== 'proxy') continue
+          if (device.nat === 'true') continue          // 已经是内核 NAT，无需处理
+
+          // listen 必须是宿主机的具体 IPv4；通配监听（0.0.0.0 / [::]）和 IPv6 监听都开不了 NAT。
+          const listen = String(device.listen || '')
+          const expectedPrefixes = [`tcp:${bindableIpv4}:`, `udp:${bindableIpv4}:`]
+          if (!expectedPrefixes.some(prefix => listen.startsWith(prefix))) {
+            skipped += 1
+            details.push({ instance: instance.name, device: deviceName, result: `跳过（监听地址不是宿主机具体 IPv4: ${listen}）` })
+            continue
+          }
+
+          updatedDevices[deviceName] = { ...device, nat: 'true' }
+        }
+
+        if (Object.keys(updatedDevices).length === 0) continue
+
+        try {
+          await updateInstance(client, instance.incusId, { devices: { ...current.devices, ...updatedDevices } })
+          converted += Object.keys(updatedDevices).length
+          for (const deviceName of Object.keys(updatedDevices)) {
+            details.push({ instance: instance.name, device: deviceName, result: '已转为内核 NAT' })
+          }
+        } catch (error) {
+          failed += Object.keys(updatedDevices).length
+          details.push({ instance: instance.name, device: Object.keys(updatedDevices).join(','), result: `转换失败: ${error instanceof Error ? error.message : String(error)}` })
+        }
+      }
+    } catch (error) {
+      return reply.code(500).send({ error: error instanceof Error ? error.message : String(error) })
+    }
+
+    await createLog(user.id, 'host', 'ops.optimize_port_mappings',
+      `Optimized port mappings on host "${host.name}": converted=${converted}, skipped=${skipped}, failed=${failed}`,
+      failed > 0 ? 'failed' : 'success')
+
+    return { converted, skipped, failed, details }
+  })
+
   fastify.post<{ Params: { id: string } }>('/:id/ops/baseline-sync', {
     onRequest: [fastify.authenticate]
   }, async (request, reply) => {

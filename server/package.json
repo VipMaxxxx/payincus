@@ -1,6 +1,6 @@
 {
   "name": "server",
-  "version": "1.5.7",
+  "version": "1.5.8",
   "description": "PayIncus backend service",
   "type": "module",
   "main": "dist/app.js",
@@ -185,7 +185,8 @@
     "test:traffic-reset-locks": "node --import tsx scripts/test-traffic-reset-locks.ts",
     "test:instance-create-failure-compensation": "node --import tsx scripts/test-instance-create-failure-compensation.ts",
     "test:instance-create-turnstile-guards": "node --import tsx scripts/test-instance-create-turnstile-guards.ts",
-    "test:websocket-origin-guard": "node --import tsx scripts/test-websocket-origin-guard.ts"
+    "test:websocket-origin-guard": "node --import tsx scripts/test-websocket-origin-guard.ts",
+    "test:nat-ipv4-allocation-guards": "node --import tsx scripts/test-nat-ipv4-allocation-guards.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1075.0",

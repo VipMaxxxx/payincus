@@ -35,7 +35,7 @@ import {
   isValidSystemImage
 } from '../db/images.js'
 import { sendAdminInstanceCreatedEmail, sendInstanceDestroyRefundEmail } from '../lib/mailer.js'
-import { generateRandomIPv4, generateRandomIPv6 } from '../lib/ip-calculator.js'
+import { generateRandomIPv6 } from '../lib/ip-calculator.js'
 import { validateCommandsOwnership, mergeCommandContents, getImageDistroFromAlias } from '../db/custom-init-commands.js'
 import { customAlphabet } from 'nanoid'
 import { buildInstanceConfig, getIncusClient, createInstance, deleteInstance, startInstance, stopInstance, getInstanceState } from '../lib/incus/index.js'
@@ -3977,15 +3977,7 @@ if (provider.type === 'yipay') {
 
       if (networkModeNeedsNatIpv4(networkMode)) {
         try {
-          let attempts = 0
-          const maxAttempts = 50
-          while (attempts < maxAttempts) {
-            staticIPv4 = generateRandomIPv4()
-            const exists = await db.isIpAddressExistsOnHost(staticIPv4, host.id)
-            if (!exists) break
-            attempts++
-            staticIPv4 = null
-          }
+          staticIPv4 = await db.allocateAndReserveNatIpv4(host.id, instanceId)
         } catch (err) {
           console.error('[Admin Create Instance] IPv4 分配错误:', err)
         }

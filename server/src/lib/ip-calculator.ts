@@ -50,9 +50,25 @@ export function generateRandomIPv4(): string {
   const start = ipv4ToInt('10.10.1.1')
   const end = ipv4ToInt('10.10.3.254')
   const range = end - start + 1
-  
+
   const randomOffset = Math.floor(Math.random() * range)
   return intToIpv4(start + randomOffset)
+}
+
+// NAT 内网 IPv4 地址池：10.10.1.1 - 10.10.3.254（766 个）。
+// 池子不大，「随机取一个再查重、最多试 N 次」在实例变多后会频繁撞车、甚至试不出来
+// （生日问题）。分配器改为一次性列出候选，从「未被占用」的集合里挑，杜绝试不出来的情况。
+export const NAT_IPV4_POOL_START = '10.10.1.1'
+export const NAT_IPV4_POOL_END = '10.10.3.254'
+
+export function listNatIpv4Pool(): string[] {
+  const start = ipv4ToInt(NAT_IPV4_POOL_START)
+  const end = ipv4ToInt(NAT_IPV4_POOL_END)
+  const pool: string[] = []
+  for (let value = start; value <= end; value++) {
+    pool.push(intToIpv4(value))
+  }
+  return pool
 }
 
 /**

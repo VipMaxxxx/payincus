@@ -29,7 +29,7 @@ import { generateIncusConfig, generateRandomPassword } from '../lib/incus-config
 import { encryptSensitiveData, decryptSensitiveData } from '../lib/security.js'
 import { generateVmNicMacs } from '../lib/vm-network-identifiers.js'
 import { customAlphabet } from 'nanoid'
-import { generateRandomIPv4, generateRandomIPv6 } from '../lib/ip-calculator.js'
+import { generateRandomIPv6 } from '../lib/ip-calculator.js'
 import pLimit from 'p-limit'
 import { updateClientResponseTime, recordClientError } from '../lib/incus/incus-pool.js'
 import { getCommandsByIds, mergeCommandContents, getImageDistroFromAlias } from '../db/custom-init-commands.js'
@@ -1394,21 +1394,11 @@ async function executeRecreateTask(
 
   // 7. 分配新的随机内网 IPv4 地址（避免 IP 冲突）
   await updateInstanceTaskProgress(task.id, 'creating')
-  const { generateRandomIPv4 } = await import('../lib/ip-calculator.js')
   let newIPv4: string | null = null
   try {
-    let attempts = 0
-    const maxAttempts = 50
-    while (attempts < maxAttempts) {
-      newIPv4 = generateRandomIPv4()
-      // 内网 IPv4 只需在同一宿主机内唯一
-      const exists = await db.isIpAddressExistsOnHost(newIPv4, host.id)
-      if (!exists) {
-        console.log(`[Recreate] 分配新的随机 IPv4: ${newIPv4} (尝试次数: ${attempts + 1})`)
-        break
-      }
-      attempts++
-      newIPv4 = null
+    newIPv4 = await db.allocateAndReserveNatIpv4(host.id, task.instanceId)
+    if (newIPv4) {
+      console.log(`[Recreate] 分配并预留新的内网 IPv4: ${newIPv4}`)
     }
     if (!newIPv4) {
       throw new Error('IPv4 地址池已耗尽，无法分配新地址')
@@ -1802,13 +1792,8 @@ async function executeChangeHostTask(
     }
 
     await updateInstanceTaskProgress(task.id, 'allocating_network')
-    let staticIPv4: string | null = null
-    for (let attempts = 0; attempts < 50; attempts++) {
-      staticIPv4 = generateRandomIPv4()
-      const exists = await db.isIpAddressExistsOnHost(staticIPv4, targetHostId)
-      if (!exists) break
-      staticIPv4 = null
-    }
+    // 换节点：实例此刻仍挂在旧宿主机下，预留必须落在目标宿主机的 ip_addresses 行上。
+    const staticIPv4: string | null = await db.allocateAndReserveNatIpv4(targetHostId, task.instanceId)
     if (!staticIPv4) {
       throw new Error('IPv4 地址池已耗尽，无法分配新地址')
     }
@@ -2384,21 +2369,10 @@ async function executeCloneTask(
     // 3. 分配新的 IPv4 地址（克隆实例必须使用新的 IPv4，避免 IP 冲突）
     let newIPv4: string | null = null
     try {
-      let attempts = 0
-      const maxAttempts = 50
-
-      while (attempts < maxAttempts) {
-        newIPv4 = generateRandomIPv4()
-        // 内网 IPv4 只需在同一宿主机内唯一（不同宿主机的内网是隔离的）
-        const exists = await db.isIpAddressExistsOnHost(newIPv4, host.id)
-
-        if (!exists) {
-          console.log(`[Clone] 为新实例随机分配 IPv4: ${newIPv4} (尝试次数: ${attempts + 1})`)
-          break
-        }
-
-        attempts++
-        newIPv4 = null
+      // 克隆此刻还没有新实例行（incus 设备配置要先定 IP），因此只做预留，不写 instance.ipv4。
+      newIPv4 = await db.allocateAndReserveNatIpv4(host.id)
+      if (newIPv4) {
+        console.log(`[Clone] 为新实例分配并预留内网 IPv4: ${newIPv4}`)
       }
 
       if (!newIPv4) {

@@ -49,7 +49,7 @@ import {
   isImageCompatibleWithMemory,
   isValidSystemImage
 } from '../db/images.js'
-import { generateRandomIPv4, generateRandomIPv6 } from '../lib/ip-calculator.js'
+import { generateRandomIPv6 } from '../lib/ip-calculator.js'
 import { getProxySitesByInstanceId, deleteProxySite } from '../db/proxy-sites.js'
 import { calculateVipLevel, getVipBadgeStyleForLevel, getVipRules } from '../services/vip-levels.js'
 import { ProxyStrategyFactory } from '../lib/proxy/index.js'
@@ -2022,25 +2022,12 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
 
     if (networkModeNeedsNatIpv4(networkMode)) {
       try {
-        let attempts = 0
-        const maxAttempts = 50
-
-        while (attempts < maxAttempts) {
-          staticIPv4 = generateRandomIPv4()
-          // 内网 IPv4 只需在同一宿主机内唯一（不同宿主机的内网是隔离的）
-          const exists = await db.isIpAddressExistsOnHost(staticIPv4, host.id)
-
-          if (!exists) {
-            console.log(`[Provisioning] 分配 NAT 内网 IPv4: ${staticIPv4} (尝试次数: ${attempts + 1})`)
-            break
-          }
-
-          attempts++
-          staticIPv4 = null
-        }
-
-        if (!staticIPv4) {
-          staticIpAllocationError = `NAT 内网 IPv4 分配失败（已尝试 ${maxAttempts} 次）`
+        // 分配与预留在同一把「每宿主机」的锁内完成：IP 立刻落库，后续并发创建马上看得见它。
+        staticIPv4 = await db.allocateAndReserveNatIpv4(host.id, instanceId)
+        if (staticIPv4) {
+          console.log(`[Provisioning] 分配并预留 NAT 内网 IPv4: ${staticIPv4}`)
+        } else {
+          staticIpAllocationError = `NAT 内网 IPv4 分配失败（该宿主机内网地址池已满）`
           console.error(`[Provisioning] ${staticIpAllocationError}`)
         }
       } catch (err) {

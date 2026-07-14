@@ -7,6 +7,7 @@ import {
     IP_ADDRESS_ALLOCATION_LOCK_NAMESPACE,
     advisoryTransactionLockString
 } from './advisory-locks.js'
+import { listNatIpv4Pool } from '../lib/ip-calculator.js'
 
 export interface CreateIpAddressData {
     address: string
@@ -352,5 +353,97 @@ export async function isIpAddressExistsOnHost(address: string, hostId: number): 
 export async function countIpAddresses(instanceId: number): Promise<number> {
     return prisma.ipAddress.count({
         where: { instanceId }
+    })
+}
+
+/**
+ * 分配一个宿主机内网 NAT IPv4，并在同一把锁内立即把它写进 instance.ipv4 完成「预留」。
+ *
+ * ── 为什么必须这样做 ──
+ * 原来的做法散落在 7 处：generateRandomIPv4() 随机取一个 → isIpAddressExistsOnHost() 查重 →
+ * 把 IP 只留在内存里 → 等实例交付完成（数分钟后）才写回 instance.ipv4 并建 ip_addresses 记录。
+ *
+ * 在这数分钟的窗口里，这个已被「分配」的 IP 对查重的两处（ip_addresses 表、instance.ipv4）
+ * 都是隐形的。同一宿主机上并发创建的实例会分到同一个内网 IP —— 两个容器同 IP，端口转发随即
+ * 打到错误的容器上。地址池只有 766 个，实例越多撞得越狠。DB 侧当时也没有唯一约束兜底。
+ *
+ * 因此：
+ *   1. 分配全程在「每宿主机一把」的事务级 advisory lock 内，并发创建被串行化；
+ *   2. 仍在锁内就把 IP 落库（instance.ipv4）——预留立刻对所有后续分配可见；
+ *   3. 不再「随机试 N 次」，而是一次性算出空闲集合再挑：池子只有 766 个，随机重试在池子
+ *      填满时会退化成试不出来。
+ */
+const NAT_IPV4_RESERVATION_TTL_MS = 60 * 60 * 1000
+
+export async function allocateAndReserveNatIpv4(
+    hostId: number,
+    instanceId?: number
+): Promise<string | null> {
+    return await prisma.$transaction(async (tx) => {
+        // 每宿主机一把锁：内网 IP 只需在同一宿主机内唯一，不同宿主机之间互不影响。
+        await advisoryTransactionLockString(
+            tx,
+            IP_ADDRESS_ALLOCATION_LOCK_NAMESPACE,
+            `nat-ipv4:host:${hostId}`
+        )
+
+        const now = new Date()
+        // 顺手清掉过期预留：交付失败的地址不该被永久占住。
+        await tx.natIpv4Reservation.deleteMany({ where: { expiresAt: { lt: now } } })
+
+        const [usedInIpTable, usedOnInstances, reserved] = await Promise.all([
+            tx.ipAddress.findMany({
+                where: {
+                    hostId,
+                    type: 'inet4',
+                    instance: { status: { not: 'deleted' } }
+                },
+                select: { address: true }
+            }),
+            tx.instance.findMany({
+                where: {
+                    hostId,
+                    ipv4: { not: null },
+                    status: { not: 'deleted' }
+                },
+                select: { ipv4: true }
+            }),
+            tx.natIpv4Reservation.findMany({
+                where: { hostId, expiresAt: { gte: now } },
+                select: { address: true }
+            })
+        ])
+
+        const used = new Set<string>()
+        for (const row of usedInIpTable) used.add(row.address)
+        for (const row of usedOnInstances) if (row.ipv4) used.add(row.ipv4)
+        for (const row of reserved) used.add(row.address)
+
+        const free = listNatIpv4Pool().filter(address => !used.has(address))
+        if (free.length === 0) return null
+
+        const candidate = free[Math.floor(Math.random() * free.length)]
+
+        // 预留必须在锁内落库，否则窗口依旧存在。
+        // 预留独立成行（而不是写在 instance.ipv4 上）：克隆流程在新实例入库之前就要确定 IP，
+        // 那时还没有 instanceId；换节点时实例仍挂在旧宿主机下，写 instance.ipv4 对目标宿主机不可见。
+        await tx.natIpv4Reservation.create({
+            data: {
+                hostId,
+                address: candidate,
+                expiresAt: new Date(now.getTime() + NAT_IPV4_RESERVATION_TTL_MS)
+            }
+        })
+
+        // 实例已经存在且就在这台宿主机上时，顺带把 IP 写进 instance.ipv4，让面板立刻能看到。
+        // 换节点场景（实例仍挂在旧宿主机）会被 hostId 条件挡掉，hostId 由换节点流程最后统一切换。
+        if (instanceId) {
+            await tx.instance.updateMany({
+                where: { id: instanceId, hostId },
+                data: { ipv4: candidate }
+            })
+        }
+
+        return candidate
     })
 }
