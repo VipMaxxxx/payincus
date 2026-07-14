@@ -432,7 +432,9 @@ export async function checkPortQuota(_userId: number, instanceId: number): Promi
     select: {
       portLimit: true,
       _count: {
-        select: { portMappings: true }
+        // 系统自动下发的远程端口（Linux=22 / Windows=3389）不计入配额，否则等于凭空扣掉
+        // 用户一个名额。只统计用户手动创建的映射。
+        select: { portMappings: { where: { systemManaged: false } } }
       }
     }
   })

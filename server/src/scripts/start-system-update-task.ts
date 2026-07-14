@@ -4,7 +4,7 @@ import { dirname, join, resolve } from 'path'
 import { spawn } from 'child_process'
 import { prisma, closePrismaDatabase } from '../db/prisma.js'
 import { createSystemUpdateTask, hasRunningSystemUpdateTask, serializeSystemUpdateTask } from '../db/system-update-tasks.js'
-import { getCurrentVersionMetadata, isGitRepository, isValidReleaseTag } from '../lib/system-version.js'
+import { canApplyUpdate, getCurrentVersionMetadata, isValidReleaseTag } from '../lib/system-version.js'
 
 const targetVersion = String(process.argv[2] || '').trim()
 const appDir = resolve(process.env.INCUDAL_APP_DIR || process.cwd())
@@ -45,8 +45,9 @@ async function main(): Promise<void> {
   if (!isValidReleaseTag(targetVersion)) {
     throw new Error('Usage: pnpm update:online v1.2.3')
   }
-  if (!(await isGitRepository(appDir))) {
-    throw new Error('Current deployment directory is not a Git working tree; online updates require a Git checkout with release tags.')
+  // artifact 模式不需要 Git；只有必须回退到源码构建时才需要 Git 工作区。
+  if (!(await canApplyUpdate(targetVersion, appDir))) {
+    throw new Error('No usable OTA artifact for this platform and the deployment directory is not a Git working tree; online updates need either a release artifact or a Git checkout.')
   }
   if (await hasRunningSystemUpdateTask()) {
     throw new Error('Another system update task is already running')

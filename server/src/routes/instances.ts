@@ -71,6 +71,7 @@ import { calculateCreateBilling } from '../db/billing-operations.js'
 import { getUserBalance } from '../db/balance.js'
 import type { PublicIpv4Assignment } from '../db/public-ipv4.js'
 import { selectBindableIpv4ListenAddress } from '../lib/network-address.js'
+import { addInstancePortMapping, provisionAutoRemotePort } from '../lib/instance-port-mapping.js'
 import { applyTrafficMultiplier, normalizeTrafficMultiplier, resolveInstanceTrafficLimitForHost } from '../lib/traffic-multiplier.js'
 import { arbitrateVipPrice, getUserContinuousVipBenefit } from '../services/vip-benefits.js'
 import {
@@ -1172,6 +1173,8 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
       promoCode?: string  // AFF 优惠码
       idempotencyKey?: string
       turnstileToken?: string
+      // 是否自动下发远程端口映射（Linux=22 / Windows=3389）。不传 = 跟随全局开关。
+      autoRemotePort?: boolean
     }
   }>('/', {
     onRequest: [fastify.authenticateUser],
@@ -1194,7 +1197,8 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
           idempotencyKey: { type: 'string', maxLength: 128 },
           turnstileToken: { type: 'string', maxLength: 2048 },
           customInitCommandIds: { type: 'array', items: { type: 'integer' }, maxItems: 20 },
-          promoCode: { type: 'string', maxLength: 32 }
+          promoCode: { type: 'string', maxLength: 32 },
+          autoRemotePort: { type: 'boolean' }
         }
       }
     }
@@ -1215,6 +1219,8 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
       promoCode?: string  // AFF 优惠码
       idempotencyKey?: string
       turnstileToken?: string
+      // 是否自动下发远程端口映射（Linux=22 / Windows=3389）。不传 = 跟随全局开关。
+      autoRemotePort?: boolean
     }
   }>, reply: FastifyReply) => {
     const { packageId, planId, image, cpu, memory, disk, hostId, sshKeyId, customInitCommandIds, promoCode, idempotencyKey } = request.body
@@ -2195,6 +2201,7 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
     const ioMode = pkgConfig.io_limit_mode || 'throughput'
 
     createInstanceAsync(instanceId, host, {
+      autoRemotePort: request.body.autoRemotePort,
       name: incusId,
       image: actualImageAlias,
       cpu: requestedCpu,
@@ -2332,7 +2339,9 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
 
     // 新配额系统：端口/快照/备份/站点限制在实例级别（从套餐包获取）
     // 计算当前实例已使用的端口/快照/备份/站点数
-    const currentPortCount = portMappings.length
+    // 与 checkPortQuota 保持一致：系统自动下发的远程端口不计入配额，展示上也不能占用户名额，
+    // 否则用户一条都没加就看到 1/20。
+    const currentPortCount = portMappings.filter(mapping => !mapping.system_managed).length
     const currentSnapshotCount = await prisma.snapshot.count({ where: { instanceId } })
     const currentBackupCount = await prisma.backup.count({ where: { instanceId, status: { not: 'deleted' } } })
     const currentSiteCount = await prisma.proxySite.count({ where: { instanceId } })
@@ -4304,116 +4313,33 @@ export default async function instanceRoutes(fastify: FastifyInstance) {
       return reply.code(404).send(apiError(ErrorCode.HOST_NOT_FOUND))
     }
 
-    let allocatedPort: number | undefined = publicPort
-    if (!allocatedPort) {
-      const port = await db.allocatePort(instance.host_id, protocol)
-      if (!port) {
-        return reply.code(503).send(apiError(ErrorCode.PORT_NO_AVAILABLE))
+    // 端口映射的下发（含「先查冲突再预留、失败只回滚本次创建的设备」这套安全序列）统一由
+    // addInstancePortMapping 实现 —— 创建实例时自动下发远程端口走的是同一个函数，不再有第二份。
+    const result = await addInstancePortMapping({
+      instance,
+      host,
+      protocol,
+      privatePort,
+      publicPort,
+      remark
+    })
+
+    if (!result.ok) {
+      if (result.code === ErrorCode.INTERNAL_ERROR) {
+        await createLog(user.id, 'instance', 'port.add', `Failed to add port mapping: ${result.message}`, 'failed', { instanceId })
+        return reply.code(500).send({ error: result.message })
       }
-      allocatedPort = port
-    } else {
-      if (host.nat_port_start && host.nat_port_end) {
-        if (allocatedPort < host.nat_port_start || allocatedPort > host.nat_port_end) {
-          return reply.code(400).send(apiError(ErrorCode.PORT_RANGE_INVALID, `${host.nat_port_start}-${host.nat_port_end}`))
-        }
-      }
+      const status = result.code === ErrorCode.PORT_NO_AVAILABLE ? 503
+        : result.code === ErrorCode.HOST_NOT_FOUND ? 404
+        : 400
+      return reply.code(status).send(apiError(result.code, result.detail))
     }
 
-    const existingPort = await db.checkPortInUse(instance.host_id, allocatedPort, protocol)
-    if (existingPort) {
-      return reply.code(400).send(apiError(ErrorCode.PORT_IN_USE))
-    }
+    await createLog(user.id, 'instance', 'port.add', `Added port mapping for instance "${instance.name}" [host: ${host?.name || 'unknown'}, ${protocol.toUpperCase()} ${result.mapping.publicPort}:${result.mapping.privatePort}${remark ? `, remark: ${remark}` : ''}]`, 'success', { instanceId })
 
-    const createdDeviceNames: string[] = []
-    let reservedMappingId: number | null = null
-    try {
-      const client = await getIncusClient(host)
-
-      const deviceName = `proxy-${protocol}-${allocatedPort}`
-      // 获取当前用于建立底层设备的实例准确类别（解决 params.type 不能 100% 同步问题）
-      let isVM = false;
-      if (instance.package_id) {
-        const pkg = await prisma.package.findUnique({
-          where: { id: instance.package_id }
-        });
-        isVM = !!pkg && (('instance_type' in pkg && pkg.instance_type === 'vm') || ('instanceType' in pkg && pkg.instanceType === 'vm'));
-      }
-      const actualInstanceType = isVM ? 'virtual-machine' : 'container';
-      if (instance.network_mode === 'ipv6_only') {
-        return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, 'IPv6 Only instances do not require port mappings'))
-      }
-
-      // 获取保底 IPv6 供双路网卡调用
-      let explicitIpv6 = (host as any).nat_bind_ipv6 || host.nat_public_ipv6 || host.ipv6_gateway || (host.ip_address?.includes(':') ? host.ip_address : null);
-      if (!explicitIpv6 && host) {
-        try {
-          const ipv6Alias = await prisma.hostAddressAlias.findFirst({
-            where: { hostId: host.id, kind: 'ipv6' },
-            select: { address: true }
-          })
-          if (ipv6Alias?.address) explicitIpv6 = ipv6Alias.address
-        } catch { }
-      }
-
-      // == 通过分离解耦工厂彻底剥夺创建网络监听阻拦的逻辑 ==
-      const proxyStrategy = ProxyStrategyFactory.getStrategy(actualInstanceType);
-      const bindableIpv4 = selectBindableIpv4ListenAddress(
-        (host as any).nat_bind_ip || null,
-        host.nat_public_ip || null,
-        host.url,
-        host.ip_address || null
-      )
-      const proxyDeviceRes = proxyStrategy.createProxyDevice(bindableIpv4, explicitIpv6, instance.network_mode, protocol, allocatedPort, privatePort);
-
-      const deviceConfigs = proxyDeviceRes.deviceConfigs
-        || (proxyDeviceRes.deviceConfig ? [{ deviceConfig: proxyDeviceRes.deviceConfig }] : [])
-
-      if (!proxyDeviceRes.success || deviceConfigs.length === 0) {
-        return reply.code(400).send(apiError(ErrorCode.INVALID_PARAMS, proxyDeviceRes.errorMessage || '底层代理生成异常被工厂截断'));
-      }
-
-      reservedMappingId = await db.createPortMapping({
-        instanceId: instanceId,
-        hostId: instance.host_id,
-        protocol,
-        publicPort: allocatedPort,
-        privatePort,
-        remark: remark?.trim()
-      })
-
-      for (const deviceEntry of deviceConfigs) {
-        const resolvedDeviceName = `${deviceName}${deviceEntry.nameSuffix || ''}`
-        await addDevice(client, instance.incus_id, resolvedDeviceName, deviceEntry.deviceConfig as Record<string, string>)
-        createdDeviceNames.push(resolvedDeviceName)
-      }
-
-      await createLog(user.id, 'instance', 'port.add', `Added port mapping for instance "${instance.name}" [host: ${host?.name || 'unknown'}, ${protocol.toUpperCase()} ${allocatedPort}:${privatePort}${remark ? `, remark: ${remark}` : ''}]`, 'success', { instanceId })
-
-      return {
-        message: 'Port mapping added',
-        mapping: { id: reservedMappingId, protocol, publicPort: allocatedPort, privatePort, remark: remark?.trim() || null }
-      }
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      try {
-        const host = await db.getHostById(instance.host_id)
-        if (host) {
-          const client = await getIncusClient(host)
-          for (const createdDeviceName of createdDeviceNames) {
-            await removeDevice(client, instance.incus_id, createdDeviceName)
-          }
-        }
-        if (reservedMappingId !== null) {
-          await db.deletePortMapping(reservedMappingId)
-        }
-      } catch {
-        // 忽略回滚失败，保留原始错误
-      }
-      await createLog(user.id, 'instance', 'port.add', `Failed to add port mapping: ${errorMessage}`, 'failed', { instanceId })
-      if (isUniqueConstraintError(error)) {
-        return reply.code(400).send(apiError(ErrorCode.PORT_IN_USE))
-      }
-      return reply.code(500).send({ error: errorMessage })
+    return {
+      message: 'Port mapping added',
+      mapping: result.mapping
     }
     } finally {
       await releaseLock(portLockKey, portLock.ownerId)
@@ -6615,6 +6541,9 @@ async function createInstanceAsync(
     portLimit?: number
     // 实例类型: container(容器) 或 vm(虚拟机)
     instanceType?: 'container' | 'vm'
+    // 创建实例时是否自动下发远程端口映射（Linux=22 / Windows=3389）。用户在创建页可取消勾选；
+    // 未传时按全局开关 instance_auto_remote_port 走。
+    autoRemotePort?: boolean
     // SSH 端口（固定 22）
     sshPort?: number | null
     // 存储池配置
@@ -6795,6 +6724,15 @@ async function createInstanceAsync(
     }
 
     console.log(`[Provisioning] ✔ 实例 ${instanceId} (${config.name}) 创建成功!`)
+
+    // 自动下发远程端口映射（Linux=22/SSH，Windows=3389/RDP）。不计入用户端口配额；
+    // 失败只记日志，不影响实例创建结果。
+    await provisionAutoRemotePort({
+      instanceId,
+      image: config.image,
+      networkMode: config.networkMode,
+      autoRemotePort: config.autoRemotePort
+    })
 
     const instance = await db.getInstanceById(instanceId)
     if (instance) {

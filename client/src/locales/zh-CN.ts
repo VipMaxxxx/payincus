@@ -1143,6 +1143,8 @@ export default {
         },
         confirmDelete: '确定删除实例 "{name}"？此操作不可恢复。',
         createPage: {
+        autoRemotePort: '自动转发远程端口',
+        autoRemotePortDesc: '自动映射一个公网端口到远程端口（Linux 为 22，Windows 为 3389）。该映射不占用你的端口配额。',
             packagePrerequisiteRequired: '缺少前置套餐实例',
             title: '创建实例',
             description: '选择套餐并配置您的容器实例',

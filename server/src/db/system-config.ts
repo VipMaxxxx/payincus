@@ -70,6 +70,7 @@ export async function initSystemConfig(): Promise<void> {
         { key: 'hosting_market_entry_enabled', value: 'true', type: 'boolean', label: '托管套餐购买入口', description: '控制开通实例页面是否显示托管专区和托管套餐购买入口' },
         { key: 'hosting_notice', value: '', type: 'string', label: '托管公告', description: '显示在托管收益页面的公告内容，留空则不显示' },
         { key: 'ticket_enabled', value: 'true', type: 'boolean', label: '工单开关', description: '关闭后，普通用户无法发起工单，用户端隐藏工单入口' },
+        { key: 'instance_auto_remote_port', value: 'true', type: 'boolean', label: '自动远程端口转发', description: '创建实例时自动下发一条远程端口映射（Linux=22/SSH，Windows=3389/RDP）。该映射不计入用户端口配额；用户可在创建实例时取消勾选' },
         { key: 'free_site_mode', value: 'false', type: 'boolean', label: '白嫖站', description: '开启后，用户端隐藏充值入口、充值记录和推荐计划' },
         { key: 'free_site_register_gift_enabled', value: 'false', type: 'boolean', label: '注册自动赠送', description: '白嫖站开启后，新用户注册成功自动赠送余额和积分' },
         { key: 'free_site_register_gift_balance', value: '0', type: 'number', label: '注册赠送余额', description: '白嫖站注册自动赠送的账户余额（元）' },
@@ -160,6 +161,14 @@ export async function isInviteCodeRequired(): Promise<boolean> {
  */
 export async function isRegistrationEnabled(): Promise<boolean> {
     return getSystemConfigBoolean('registration_enabled', true)
+}
+
+/**
+ * 创建实例时是否自动下发远程端口映射（Linux=22/SSH，Windows=3389/RDP）。
+ * 这是全局开关；用户还可在创建实例时逐个取消勾选。
+ */
+export async function isInstanceAutoRemotePortEnabled(): Promise<boolean> {
+    return getSystemConfigBoolean('instance_auto_remote_port', true)
 }
 
 /**

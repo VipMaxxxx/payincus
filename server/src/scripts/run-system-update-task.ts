@@ -12,8 +12,11 @@ import {
   getCurrentVersionMetadata,
   getOtaReleaseInfo,
   getReleaseToken,
+  getRuntimeArch,
+  getRuntimePlatform,
   isTrustedReleaseHost,
   isValidReleaseTag,
+  selectRuntimeArtifact,
   type OtaArtifactInfo
 } from '../lib/system-version.js'
 
@@ -440,22 +443,6 @@ async function switchCurrentRelease(targetDir: string): Promise<void> {
   await symlink(targetDir, nextLink)
   await rename(nextLink, currentLink)
   await log(`Switched current release to ${targetDir}`)
-}
-
-function getRuntimePlatform(): string {
-  return process.platform
-}
-
-function getRuntimeArch(): string {
-  if (process.arch === 'x64') return 'amd64'
-  if (process.arch === 'arm64') return 'arm64'
-  return process.arch
-}
-
-function selectRuntimeArtifact(artifacts: OtaArtifactInfo[]): OtaArtifactInfo | null {
-  const platform = getRuntimePlatform()
-  const arch = getRuntimeArch()
-  return artifacts.find(artifact => artifact.platform === platform && artifact.arch === arch) || null
 }
 
 async function sha256File(path: string): Promise<string> {

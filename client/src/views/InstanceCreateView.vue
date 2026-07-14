@@ -136,6 +136,7 @@ interface InstanceForm {
   sshKeyId: number | null
   customInitCommandIds: number[]  // 用户自定义初始化命令
   promoCode: string  // 优惠码
+  autoRemotePort: boolean  // 自动下发远程端口（Linux=22 / Windows=3389），不计入端口配额
 }
 
 const form = ref<InstanceForm>({
@@ -149,7 +150,8 @@ const form = ref<InstanceForm>({
   disk: 512,
   sshKeyId: null,
   customInitCommandIds: [],
-  promoCode: ''
+  promoCode: '',
+  autoRemotePort: true
 })
 
 watch(form, () => {
@@ -1087,7 +1089,8 @@ async function handleSubmit(): Promise<void> {
       customInitCommandIds: form.value.customInitCommandIds.length > 0 ? form.value.customInitCommandIds : undefined,
       promoCode: (isPaidPackage.value && promoCodeValid.value && form.value.promoCode.trim()) ? form.value.promoCode.trim() : undefined,
       idempotencyKey: isPaidPackage.value ? createIntentIdempotencyKey.value || undefined : undefined,
-      turnstileToken: verificationToken
+      turnstileToken: verificationToken,
+      autoRemotePort: form.value.autoRemotePort
     }
 
     const response = await api.instances.create(requestPayload)
@@ -1425,6 +1428,17 @@ async function handleSubmit(): Promise<void> {
             <div v-if="prerequisiteMissing" class="p-3 rounded-xl border border-amber-500/30 bg-amber-500/10">
               <p class="text-sm font-medium text-amber-700 dark:text-amber-400">{{ prerequisiteMessage }}</p>
             </div>
+            <label class="flex items-start gap-3 p-3 rounded-xl border border-themed bg-themed-tertiary cursor-pointer">
+              <input
+                v-model="form.autoRemotePort"
+                type="checkbox"
+                class="mt-0.5 h-4 w-4 shrink-0 cursor-pointer"
+              />
+              <span class="text-sm">
+                <span class="font-medium text-themed">{{ $t('instance.createPage.autoRemotePort') }}</span>
+                <span class="mt-1 block text-xs text-themed-muted">{{ $t('instance.createPage.autoRemotePortDesc') }}</span>
+              </span>
+            </label>
             <div
               v-if="isCreateTurnstileRequired"
               ref="turnstileSectionRef"

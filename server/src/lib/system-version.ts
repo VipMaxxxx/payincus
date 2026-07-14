@@ -57,6 +57,12 @@ interface GitHubReleaseAsset {
 
 interface GitHubReleaseResponse {
   assets?: GitHubReleaseAsset[]
+  tag_name?: string
+  name?: string
+  body?: string
+  draft?: boolean
+  prerelease?: boolean
+  published_at?: string
 }
 
 export function getProjectRoot(): string {
@@ -197,6 +203,57 @@ export async function isGitRepository(root = getProjectRoot()): Promise<boolean>
   return (await runGit(['rev-parse', '--is-inside-work-tree'], root)) === 'true'
 }
 
+export function getRuntimePlatform(): string {
+  return process.platform
+}
+
+export function getRuntimeArch(): string {
+  if (process.arch === 'x64') return 'amd64'
+  if (process.arch === 'arm64') return 'arm64'
+  return process.arch
+}
+
+export function selectRuntimeArtifact(artifacts: OtaArtifactInfo[]): OtaArtifactInfo | null {
+  const platform = getRuntimePlatform()
+  const arch = getRuntimeArch()
+  return artifacts.find(artifact => artifact.platform === platform && artifact.arch === arch) || null
+}
+
+// OTA 的 artifact 路径（下载 release tar 包 + 校验 sha256 + 原子发布）完全不需要 Git —— Git 只是
+// 拿不到 artifact 时「在机器上从源码构建」的回退路径。因此只要目标版本有本机可用的 artifact，
+// 用 release 包部署（一键脚本的默认形态）的机器就应当允许在线更新。
+export async function hasUsableOtaArtifact(tag: string): Promise<boolean> {
+  if (!isValidReleaseTag(tag)) return false
+  try {
+    const ota = await getOtaReleaseInfo(tag)
+    return selectRuntimeArtifact(ota.artifacts) !== null
+  } catch {
+    return false
+  }
+}
+
+export async function canApplyUpdate(tag: string, root = getProjectRoot()): Promise<boolean> {
+  if (await hasUsableOtaArtifact(tag)) return true
+  return await isGitRepository(root)
+}
+
+// 非 Git 部署下的版本发现：改用 GitHub Releases API，语义与 `git tag --list` 一致（只取正式 release tag）。
+async function listReleaseTagsFromGitHub(): Promise<string[] | null> {
+  const repository = getReleaseRepository()
+  try {
+    const releases = await fetchJson<GitHubReleaseResponse[]>(
+      `https://api.github.com/repos/${repository}/releases?per_page=30`
+    )
+    if (!Array.isArray(releases)) return null
+    return releases
+      .filter(release => !release.draft && !release.prerelease)
+      .map(release => String(release.tag_name || '').trim())
+      .filter(tag => isValidReleaseTag(tag))
+  } catch {
+    return null
+  }
+}
+
 function normalizeChangelog(input: unknown): string[] {
   if (Array.isArray(input)) {
     return input
@@ -261,17 +318,51 @@ async function getTagCommit(tag: string, root: string): Promise<string | null> {
   return await runGit(['rev-list', '-n', '1', '--abbrev-commit', '--abbrev=12', tag], root)
 }
 
-export async function checkForUpdates(root = getProjectRoot()): Promise<UpdateCheckResult> {
-  const current = await getCurrentVersionMetadata(root)
-  if (!(await isGitRepository(root))) {
+// 用 release tar 包部署（一键脚本的默认形态）时目录不是 Git 工作区，此时靠 GitHub Releases API
+// 发现版本、靠 artifact 完成更新，全程不需要 Git。只有当 Releases API 也拉不到时才算真的不可更新。
+async function checkForUpdatesWithoutGit(current: VersionMetadata): Promise<UpdateCheckResult> {
+  const tags = await listReleaseTagsFromGitHub()
+  if (!tags) {
     return {
       current,
       latest: null,
       updates: [],
       updateAvailable: false,
       repositoryAvailable: false,
-      repositoryError: '当前部署目录不是 Git 工作区，无法通过 release tag 在线更新。请先将生产目录切换为 Git checkout，或继续使用 release 包手动部署。'
+      repositoryError: '当前部署目录不是 Git 工作区，且无法访问 GitHub Releases（网络不通或仓库不可达），暂时无法在线更新。请检查服务器到 api.github.com 的网络后重试。'
     }
+  }
+
+  const currentTag = current.gitTag || current.version
+  const buildAvailableUpdate = async (tag: string): Promise<AvailableUpdate> => ({
+    version: tag,
+    commit: null,
+    date: null,
+    changelog: [],
+    ota: await getOtaReleaseInfo(tag)
+  })
+  const latest = tags[0] ? await buildAvailableUpdate(tags[0]) : null
+  const updates: AvailableUpdate[] = []
+
+  for (const tag of tags) {
+    if (tag === currentTag || tag === current.version) break
+    updates.push(latest?.version === tag ? latest : await buildAvailableUpdate(tag))
+  }
+
+  return {
+    current,
+    latest,
+    updates,
+    updateAvailable: updates.length > 0,
+    repositoryAvailable: true,
+    repositoryError: null
+  }
+}
+
+export async function checkForUpdates(root = getProjectRoot()): Promise<UpdateCheckResult> {
+  const current = await getCurrentVersionMetadata(root)
+  if (!(await isGitRepository(root))) {
+    return await checkForUpdatesWithoutGit(current)
   }
 
   await runGit(['fetch', '--tags', '--quiet'], root)

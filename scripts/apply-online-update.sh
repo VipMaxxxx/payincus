@@ -21,10 +21,12 @@ fi
 
 cd "$INSTALL_DIR"
 
+# 不是 Git 工作区并不代表不能在线更新：OTA 的 artifact 模式（下载 release 包 + 校验 sha256 +
+# 原子发布）全程不需要 Git。Git 只是拿不到 artifact 时「在机器上从源码构建」的回退路径。
+# 这里不再硬性拦截，由 start-system-update-task.js 做权威判断（它能真正查到目标版本有没有
+# 本机可用的 artifact），避免把用 release 包部署的机器错误地挡在门外。
 if [[ ! -d .git ]] || ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-  echo "当前目录不是 Git 工作区，在线更新需要 /opt/incudal 是包含 release tag 的 Git checkout。" >&2
-  echo "如果当前机器仍使用 release tar 包部署，请先继续使用手动部署包，或把生产目录迁移为 Git checkout 后再执行在线更新。" >&2
-  exit 1
+  echo "提示：当前目录不是 Git 工作区，将走 OTA release 包（artifact）模式更新；若目标版本没有本机可用的 artifact，更新会被拒绝。" >&2
 fi
 
 corepack enable

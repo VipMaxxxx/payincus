@@ -28,6 +28,7 @@ const onlineTaskHelper = read('deploy/incudal-online-task.sh.example')
 const systemctlWrapper = read('deploy/incudal-systemctl-wrapper.sh.example')
 const otaChownWrapper = read('deploy/incudal-ota-chown-wrapper.sh.example')
 const runTask = read('server/src/scripts/run-system-update-task.ts')
+const startTask = read('server/src/scripts/start-system-update-task.ts')
 const rollbackTask = read('server/src/scripts/rollback-system-update-task.ts')
 const systemUpdateTasksDb = read('server/src/db/system-update-tasks.ts')
 const rootPackage = read('package.json')
@@ -58,7 +59,27 @@ assert.ok(
     route.includes('isValidReleaseTag(targetVersion)') &&
     route.includes('GIT_REPOSITORY_REQUIRED') &&
     route.includes('additionalProperties: false'),
-  'system update must only accept controlled release tags, require a Git checkout, expose OTA manifest metadata, and reject extra input'
+  'system update must only accept controlled release tags, keep the Git working-tree probe available, expose OTA manifest metadata, and reject extra input'
+)
+
+// OTA 的 artifact 模式（下载 release 包 + 校验 sha256 + 原子发布）不需要 Git —— Git 只是拿不到
+// artifact 时「在机器上从源码构建」的回退路径。用 release 包部署（一键脚本的默认形态）的机器
+// 曾被入口处的硬性 Git 检查整个挡在门外，无法在线更新。因此判定必须是「有本机可用 artifact
+// 或 是 Git 工作区」，且这个判定必须在所有入口保持一致，绝不能退回成无条件要求 Git。
+assert.ok(
+  versionLib.includes('export async function hasUsableOtaArtifact') &&
+    versionLib.includes('export async function canApplyUpdate') &&
+    versionLib.includes('if (await hasUsableOtaArtifact(tag)) return true') &&
+    versionLib.includes('return await isGitRepository(root)') &&
+    versionLib.includes('async function listReleaseTagsFromGitHub') &&
+    versionLib.includes('/releases?per_page=30') &&
+    versionLib.includes('async function checkForUpdatesWithoutGit') &&
+    route.includes('canApplyUpdate(targetVersion)') &&
+    startTask.includes('canApplyUpdate(targetVersion, appDir)') &&
+    !route.includes('if (!(await isGitRepository()))') &&
+    !startTask.includes('if (!(await isGitRepository(appDir)))') &&
+    !onlineScript.includes('在线更新需要 /opt/incudal 是包含 release tag 的 Git checkout'),
+  'online updates must be allowed whenever a usable OTA artifact exists, falling back to requiring a Git checkout only for source-build mode; no entry point may hard-require Git again'
 )
 
 assert.ok(

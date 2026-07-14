@@ -7,6 +7,11 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 const source = readFileSync(resolve(__dirname, '../src/routes/instances.ts'), 'utf8')
 const kvmProxyStrategySource = readFileSync(resolve(__dirname, '../src/lib/proxy/KvmProxyStrategy.ts'), 'utf8')
+// 单条端口映射的下发逻辑（含安全序列）住在这里 —— 用户手动添加的路由和创建实例时的自动下发
+// 共用同一份实现，守卫必须钉住真正的实现处，而不是路由里那层薄薄的转发。
+const portLib = readFileSync(resolve(__dirname, '../src/lib/instance-port-mapping.ts'), 'utf8')
+const quotaSource = readFileSync(resolve(__dirname, '../src/db/quota-operations.ts'), 'utf8')
+const provisionSource = readFileSync(resolve(__dirname, '../src/lib/managed-instance-provision.ts'), 'utf8')
 
 function sectionBetween(startMarker: string, endMarker: string): string {
   const start = source.indexOf(startMarker)
@@ -24,10 +29,10 @@ function assertCreateBeforeAddDevice(section: string, label: string): void {
   assert.ok(createIndex < addDeviceIndex, `${label}: DB port reservation must happen before Incus device mutation`)
 }
 
-const singlePortSection = sectionBetween('// 添加端口映射', '// 删除端口映射')
-assertCreateBeforeAddDevice(singlePortSection, 'single port mapping')
-const automaticAllocationIndex = singlePortSection.indexOf('await db.allocatePort(instance.host_id, protocol)')
-const unifiedPortCheckIndex = singlePortSection.indexOf('await db.checkPortInUse(instance.host_id, allocatedPort, protocol)')
+// ── 单条端口映射的安全序列（实现已抽到 lib/instance-port-mapping.ts，路由与创建实例共用）──
+assertCreateBeforeAddDevice(portLib, 'single port mapping (lib)')
+const automaticAllocationIndex = portLib.indexOf('await db.allocatePort(instance.host_id, protocol)')
+const unifiedPortCheckIndex = portLib.indexOf('await db.checkPortInUse(instance.host_id, allocatedPort, protocol)')
 assert.notEqual(automaticAllocationIndex, -1, 'single port mapping: automatic allocation not found')
 assert.notEqual(unifiedPortCheckIndex, -1, 'single port mapping: unified checkPortInUse not found')
 assert.ok(
@@ -35,12 +40,58 @@ assert.ok(
   'single port mapping: automatically allocated ports must pass checkPortInUse before DB reservation'
 )
 assert.ok(
-  unifiedPortCheckIndex < singlePortSection.indexOf('await db.createPortMapping'),
+  unifiedPortCheckIndex < portLib.indexOf('await db.createPortMapping'),
   'single port mapping: checkPortInUse must run before DB reservation'
 )
 assert.ok(
-  !singlePortSection.includes('await removeDevice(client, instance.incus_id, deviceName)'),
-  'single port rollback must not remove a generic device name that may belong to another request'
+  !portLib.includes('await removeDevice(client, instance.incus_id, deviceName)') &&
+    portLib.includes('for (const createdDeviceName of createdDeviceNames)') &&
+    portLib.includes('await db.deletePortMapping(reservedMappingId)'),
+  'single port rollback must remove only the device names this request actually created, and undo the DB reservation'
+)
+
+const singlePortSection = sectionBetween('// 添加端口映射', '// 删除端口映射')
+assert.ok(
+  singlePortSection.includes('await addInstancePortMapping(') &&
+    singlePortSection.includes('await db.checkPortQuota(instance.user_id, instanceId)'),
+  'the manual add-port route must delegate to the shared addInstancePortMapping and still enforce the port quota'
+)
+
+// ── 创建实例时自动下发的远程端口（Linux=22 / Windows=3389）──
+// 这条映射不计入用户端口配额，否则等于凭空扣掉用户一个名额。实例创建有两条独立路径
+// （用户自建 createInstanceAsync、托管 provisionManagedInstanceAsync），两条都必须下发，
+// 否则会漏掉一半实例。
+assert.ok(
+  portLib.includes('export async function provisionAutoRemotePort') &&
+    portLib.includes('systemManaged: true') &&
+    portLib.includes('isInstanceAutoRemotePortEnabled()') &&
+    portLib.includes('input.autoRemotePort === false'),
+  'auto remote port must be marked systemManaged and honour both the global switch and the per-create opt-out'
+)
+
+// 真正调用一次，别只匹配字符串：镜像 → 私有端口的映射错了会直接给用户一条永远连不通的映射。
+// 从零依赖的 remote-port.ts 导入 —— 从 instance-port-mapping.ts 导入会连带拉起 Prisma 并挂住进程。
+const { resolveRemotePrivatePort, REMOTE_PORT_SSH, REMOTE_PORT_RDP } =
+  await import('../src/lib/remote-port.js')
+for (const image of ['windows-11', 'Windows Server 2022', 'win2019', 'WINDOWS10']) {
+  assert.equal(resolveRemotePrivatePort(image), REMOTE_PORT_RDP, `Windows image "${image}" must map to RDP ${REMOTE_PORT_RDP}`)
+}
+for (const image of ['debian/12', 'ubuntu/24.04', 'alpine/3.20', 'centos/9-Stream', '']) {
+  assert.equal(resolveRemotePrivatePort(image), REMOTE_PORT_SSH, `non-Windows image "${image}" must map to SSH ${REMOTE_PORT_SSH}`)
+}
+assert.equal(resolveRemotePrivatePort(null), REMOTE_PORT_SSH, 'a missing image must fall back to SSH, never to RDP')
+assert.ok(
+  quotaSource.includes('portMappings: { where: { systemManaged: false } }'),
+  'the system-managed remote port must not consume the user port quota'
+)
+assert.ok(
+  source.includes('portMappings.filter(mapping => !mapping.system_managed).length'),
+  'the displayed port usage must exclude the system-managed remote port, matching checkPortQuota'
+)
+assert.ok(
+  source.includes('await provisionAutoRemotePort({') &&
+    provisionSource.includes('await provisionAutoRemotePort({'),
+  'both instance creation paths (self-serve and managed) must provision the auto remote port'
 )
 
 const batchPortSection = sectionBetween('// 批量添加端口映射', '// 设置实例配额')

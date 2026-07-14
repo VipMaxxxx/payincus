@@ -1224,6 +1224,8 @@ const zhTW = {
         },
         confirmDelete: '確定刪除實例「{name}」？此操作不可回復。',
         createPage: {
+        autoRemotePort: '自動轉發遠端連接埠',
+        autoRemotePortDesc: '自動對應一個公網連接埠到遠端連接埠（Linux 為 22，Windows 為 3389）。該對應不佔用你的連接埠配額。',
             title: '建立實例',
             description: '選擇方案並設定您的容器實例',
             instanceName: '實例名稱',

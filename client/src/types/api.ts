@@ -902,6 +902,9 @@ export interface CreateInstanceRequest {
   customInitCommandIds?: number[]  // 用户自定义初始化命令 ID 列表
   promoCode?: string
   idempotencyKey?: string
+  // 是否自动下发远程端口映射（Linux=22/SSH，Windows=3389/RDP）。不传 = 跟随全局开关。
+  // 该映射不计入端口配额。
+  autoRemotePort?: boolean
   turnstileToken?: string
 }
 

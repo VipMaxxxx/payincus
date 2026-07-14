@@ -256,6 +256,8 @@ export interface PortMapping {
   private_port: number
   remark: string | null
   created_at: string
+  // 创建实例时系统自动下发的远程端口（Linux=22 / Windows=3389）。这条不计入用户端口配额。
+  system_managed: boolean
 }
 
 // ==================== 快照/备份 ====================

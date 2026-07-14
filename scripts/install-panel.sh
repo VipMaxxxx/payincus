@@ -396,6 +396,17 @@ install_system_tools() {
 
     apt-get install -y -qq ca-certificates curl git sudo tar >/dev/null 2>&1
 
+    # apt 的错误此前被完全吞掉：任何一个基础工具没装上，后面都会以难以定位的方式失败
+    # （例如 git 缺失会让部署目录不是 Git 工作区，只留下一句 warn）。这里显式验一遍。
+    local missing=""
+    for _tool in curl git sudo tar; do
+        command -v "$_tool" &>/dev/null || missing="${missing} ${_tool}"
+    done
+    if [[ -n "$missing" ]]; then
+        error "基础系统工具安装失败，缺少：${missing# }。请先修复 apt 源后重试。"
+        exit 1
+    fi
+
     log "基础系统工具安装完成"
 }
 

@@ -1089,6 +1089,8 @@ export default {
         },
         confirmDelete: 'Are you sure to delete instance "{name}"? This action cannot be undone.',
         createPage: {
+        autoRemotePort: 'Auto-forward remote port',
+        autoRemotePortDesc: 'Automatically map a public port to the remote port (Linux 22 / Windows 3389). This mapping does not count against your port quota.',
             packagePrerequisiteRequired: 'A required package instance is missing',
             title: 'Create Instance',
             description: 'Select a package and configure your container instance',

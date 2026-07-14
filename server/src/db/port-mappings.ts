@@ -26,7 +26,8 @@ export async function getPortMappings(instanceId: number): Promise<PortMapping[]
     public_port: m.publicPort,
     private_port: m.privatePort,
     remark: m.remark,
-    created_at: m.createdAt.toISOString()
+    created_at: m.createdAt.toISOString(),
+    system_managed: m.systemManaged
   }))
 }
 
@@ -48,7 +49,8 @@ export async function getPortMappingById(id: number): Promise<PortMapping | null
     public_port: mapping.publicPort,
     private_port: mapping.privatePort,
     remark: mapping.remark,
-    created_at: mapping.createdAt.toISOString()
+    created_at: mapping.createdAt.toISOString(),
+    system_managed: mapping.systemManaged
   }
 }
 
@@ -78,7 +80,8 @@ export async function checkPortInUse(
     public_port: mapping.publicPort,
     private_port: mapping.privatePort,
     remark: mapping.remark,
-    created_at: mapping.createdAt.toISOString()
+    created_at: mapping.createdAt.toISOString(),
+    system_managed: mapping.systemManaged
   }
 }
 
@@ -92,6 +95,8 @@ export async function createPortMapping(data: {
   publicPort: number
   privatePort: number
   remark?: string
+  // 创建实例时系统自动下发的远程端口。这条不计入用户端口配额（见 checkPortQuota）。
+  systemManaged?: boolean
 }): Promise<number> {
   const mapping = await prisma.portMapping.create({
     data: {
@@ -100,7 +105,8 @@ export async function createPortMapping(data: {
       protocol: data.protocol,
       publicPort: data.publicPort,
       privatePort: data.privatePort,
-      remark: data.remark || null
+      remark: data.remark || null,
+      systemManaged: data.systemManaged ?? false
     }
   })
 

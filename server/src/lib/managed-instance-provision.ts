@@ -3,6 +3,7 @@ import * as db from '../db/index.js'
 import { buildInstanceConfig, createInstance, deleteInstance, getIncusClient, getInstanceState, startInstance, stopInstance } from '../lib/incus/index.js'
 import type { Host } from '../types/database.js'
 import { networkModeAllowsPortMapping, networkModeNeedsPublicIpv4 } from './network-modes.js'
+import { provisionAutoRemotePort } from './instance-port-mapping.js'
 
 export interface ManagedInstanceProvisionConfig {
   name: string
@@ -34,6 +35,9 @@ export interface ManagedInstanceProvisionConfig {
   bootAutostartPriority?: number | null
   bootAutostartDelay?: number | null
   bootHostShutdownTimeout?: number | null
+  // 创建实例时是否自动下发远程端口映射（Linux=22 / Windows=3389）。用户在创建页可取消勾选；
+  // 未传时按全局开关 instance_auto_remote_port 走。
+  autoRemotePort?: boolean
 }
 
 export async function provisionManagedInstanceAsync(
@@ -184,6 +188,16 @@ export async function provisionManagedInstanceAsync(
         console.warn(`[Managed Provisioning] failed to create IPv6 record for instance ${instanceId}:`, error)
       }
     }
+
+    // 自动下发远程端口映射（Linux=22/SSH，Windows=3389/RDP）。
+    // 只对新建实例生效，不回填存量；这条映射不计入用户端口配额（systemManaged=true）。
+    // 失败只记日志、不影响实例创建结果 —— 实例已经跑起来了，用户随时可以自己手动加一条。
+    await provisionAutoRemotePort({
+      instanceId,
+      image: config.image,
+      networkMode: config.networkMode,
+      autoRemotePort: config.autoRemotePort
+    })
 
     const instance = await db.getInstanceById(instanceId).catch((error) => {
       console.warn(`[Managed Provisioning] failed to load notification context for instance ${instanceId}:`, error)

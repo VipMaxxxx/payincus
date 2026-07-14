@@ -1221,6 +1221,9 @@ model PortMapping {
   privatePort Int      @map("private_port")
   remark      String?
   createdAt   DateTime @default(now()) @map("created_at")
+  // 创建实例时系统自动下发的远程端口（Linux=22 / Windows=3389）。这条不计入用户的端口配额
+  // （portLimit），否则等于凭空扣掉用户一个名额；用户手动加的映射一律为 false。
+  systemManaged Boolean @default(false) @map("system_managed")
 
   instance Instance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
   host     Host     @relation(fields: [hostId], references: [id])
