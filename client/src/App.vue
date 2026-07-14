@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import AppLayout from '@/components/layout/AppLayout.vue'
+import RouteErrorBoundary from '@/components/RouteErrorBoundary.vue'
 import PublicSiteLayout from '@/components/public/PublicSiteLayout.vue'
 import ToastContainer from '@/components/ToastContainer.vue'
 import PopupAnnouncementModal from '@/components/PopupAnnouncementModal.vue'
@@ -176,16 +177,18 @@ onUnmounted(() => {
 
 <template>
   <AppLayout v-if="showLayout">
-    <RouterView v-slot="{ Component, route: currentRoute }">
-      <template v-if="Component">
-        <Transition name="kawaii-route">
-          <!-- 使用 exclude 排除不需要缓存的页面，避免 include 匹配问题 -->
-          <KeepAlive :exclude="['InstancesView', 'InstanceCreateView', 'InstanceDetailView', 'PackageFormView', 'MyHostDetailView']" :max="10">
-            <component :is="Component" :key="currentRoute.name" />
-          </KeepAlive>
-        </Transition>
-      </template>
-    </RouterView>
+    <RouteErrorBoundary>
+      <RouterView v-slot="{ Component, route: currentRoute }">
+        <template v-if="Component">
+          <Transition name="kawaii-route">
+            <!-- 使用 exclude 排除不需要缓存的页面，避免 include 匹配问题 -->
+            <KeepAlive :exclude="['InstancesView', 'InstanceCreateView', 'InstanceDetailView', 'PackageFormView', 'MyHostDetailView']" :max="10">
+              <component :is="Component" :key="currentRoute.name" />
+            </KeepAlive>
+          </Transition>
+        </template>
+      </RouterView>
+    </RouteErrorBoundary>
   </AppLayout>
   <PublicSiteLayout v-else-if="showPublicSiteLayout">
     <RouterView v-slot="{ Component, route: currentRoute }">

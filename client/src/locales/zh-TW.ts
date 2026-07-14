@@ -5654,6 +5654,7 @@ const zhTW = {
 
     // 錯誤頁面
     error: {
+        pageErrorDesc: '此頁面轉譯時發生錯誤。可以重試，或重新整理頁面。',
         notFound: '頁面不存在',
         notFoundMessage: '您尋找的頁面不存在或已被移動。',
         serverError: '伺服器錯誤',

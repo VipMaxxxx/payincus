@@ -4893,6 +4893,7 @@ export default {
 
     // Error pages
     error: {
+        pageErrorDesc: 'This page failed to render. Retry, or refresh the page.',
         notFound: 'Page Not Found',
         notFoundDesc: 'Sorry, the page you visited does not exist',
         backHome: 'Back to Home',

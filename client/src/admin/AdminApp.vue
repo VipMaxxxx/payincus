@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import AppLayout from '@/components/layout/AppLayout.vue'
+import RouteErrorBoundary from '@/components/RouteErrorBoundary.vue'
 import ToastContainer from '@/components/ToastContainer.vue'
 import { buildApiUrl } from '@/utils/api-url'
 import { isStaleAssetLoadError, scheduleStaleAssetReload } from '@/utils/staleAssetRecovery'
@@ -126,18 +127,20 @@ onUnmounted(() => {
 
 <template>
   <AppLayout v-if="showLayout">
-    <RouterView v-slot="{ Component, route: currentRoute }">
-      <template v-if="Component">
-        <!-- 这里绝不能加 mode="out-in"：它与外层 KeepAlive 组合时，离场动画的 afterLeave 回调
-             不会触发，Transition 会永远停在离场占位符上 —— 新页面从不挂载，表现为整页白屏且无任何
-             报错（刷新才恢复）。用户端 App.vue 的同一处也是不带 mode 的，两端保持一致。 -->
-        <Transition name="kawaii-route">
-          <KeepAlive :exclude="['AdminInstanceCreateView', 'MyHostDetailView', 'PackageFormView']" :max="10">
-            <component :is="Component" :key="currentRoute.name" />
-          </KeepAlive>
-        </Transition>
-      </template>
-    </RouterView>
+    <RouteErrorBoundary>
+      <RouterView v-slot="{ Component, route: currentRoute }">
+        <template v-if="Component">
+          <!-- 这里绝不能加 mode="out-in"：它与外层 KeepAlive 组合时，离场动画的 afterLeave 回调
+               不会触发，Transition 会永远停在离场占位符上 —— 新页面从不挂载，表现为整页白屏且无任何
+               报错（刷新才恢复）。用户端 App.vue 的同一处也是不带 mode 的，两端保持一致。 -->
+          <Transition name="kawaii-route">
+            <KeepAlive :exclude="['AdminInstanceCreateView', 'MyHostDetailView', 'PackageFormView']" :max="10">
+              <component :is="Component" :key="currentRoute.name" />
+            </KeepAlive>
+          </Transition>
+        </template>
+      </RouterView>
+    </RouteErrorBoundary>
   </AppLayout>
   <RouterView v-else v-slot="{ Component, route: currentRoute }">
     <template v-if="Component">

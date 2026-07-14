@@ -4953,6 +4953,7 @@ export default {
 
     // 错误页面
     error: {
+        pageErrorDesc: '此页面渲染时出错。可以重试，或刷新页面。',
         notFound: '页面不存在',
         notFoundDesc: '抱歉，您访问的页面不存在',
         backHome: '返回首页',
