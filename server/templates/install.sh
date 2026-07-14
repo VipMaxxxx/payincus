@@ -69,6 +69,44 @@ readonly AGENT_BIN_PATH="${INCUDAL_AGENT_BIN:-/usr/local/bin/incudal-agent}"
 # 格式: ${ZFS_PREBUILT_URL}/zfs-modules-<内核版本>.tar.gz
 readonly ZFS_PREBUILT_URL="https://github.com/0xdabiaoge/Incudal-Debian-ZFS/releases/download/Debian-ZFS"
 
+# 预编译 ZFS 内核模块的 SHA-256 固定清单。
+#
+# 这些 .ko 会被 insmod 进内核 —— 是 ring-0 代码，而上游仓库不在我们控制之下。因此校验和
+# 必须固定在这里（随 install.sh 一起发布），绝不能从上游同一个 release 里取 .sha256：
+# 能替换 tar 包的人同样能替换旁边的校验和文件，那种「校验」等于没有。
+#
+# fail-closed：清单里没有的内核版本一律跳过预编译，改走 DKMS / 换内核，绝不放行未经核验的
+# 内核模块。新增内核版本时必须先人工核验上游产物、再把哈希登记到这里。
+zfs_prebuilt_sha256() {
+    case "$1" in
+        6.1.0-39-amd64)           echo "421a1027da51a461dbe5de0539ef7233d452e14c3d10b0bfb231db4e0b43bac5" ;;
+        6.1.0-39-arm64)           echo "896cd8cc53e17d21468bcc03a89bbff0a6482e13048092eca27957c0dd64d7eb" ;;
+        6.1.0-39-cloud-amd64)     echo "b0138010ca444e46da8f4715046edc23cef4a3312a31509515639c913d0038c9" ;;
+        6.1.0-39-cloud-arm64)     echo "325391c076202e46c1fc6b0e50bf6479b54be00581c34d1f501c3d29a6debea5" ;;
+        6.1.0-42-amd64)           echo "b6eaf3edb57cd5ffdef21db09b20d5fc2f29c4f1824f72715cce9d8c8e8adb38" ;;
+        6.1.0-42-arm64)           echo "2b3d8508a0891841226d6d598aa0e0ce68555214d5d052c9671cef3729f66201" ;;
+        6.1.0-42-cloud-amd64)     echo "a20938641dd68986e7d5358b45e258debc3a570ddd42078081f2cda630e69354" ;;
+        6.1.0-42-cloud-arm64)     echo "2b11c4eba8349396b6d054694f8529b19e9f290fe0a8d094baf889d000b23f7d" ;;
+        6.1.0-44-amd64)           echo "7a168bc479007aa4820055e14b79f05f3094f7272de8c90709e1fb0c2161e66d" ;;
+        6.1.0-44-arm64)           echo "1ad9b50a35d1f649751edf783a5cbff1ef3a35d62f1f8cfb12322a152e3459a1" ;;
+        6.1.0-44-cloud-amd64)     echo "84843c7f80022d79feebd277b13242699e91377a06725db379d548d99fa817b2" ;;
+        6.1.0-44-cloud-arm64)     echo "212999c1bf07a1db92dccd4cab1524a9d47282a67cf358043bc7a5e5c7779acf" ;;
+        6.12.63+deb13-amd64)      echo "4f799f4fdc2603c7e22379448ccace30b4827569aca0c0b8b41e58388518a4a4" ;;
+        6.12.63+deb13-arm64)      echo "4713340c49bcc32434506365ad06b3c445d105a6db420ae4dacf55c1cc15d995" ;;
+        6.12.63+deb13-cloud-amd64) echo "0cde92c576a4328d1a285d2e5299409004735dc42d7879c3dd7b16ce4a5c2b9c" ;;
+        6.12.63+deb13-cloud-arm64) echo "d08f908727727859e5ebaadfebf1f31a06478cf666e520165e7071c57f5b953f" ;;
+        6.12.73+deb13-amd64)      echo "76ef02ac792c68812d6daa63005338f4ccf975c4457a432235979358fa106c82" ;;
+        6.12.73+deb13-arm64)      echo "540c7c302e173782362dcd0a70e25b9120fb43e184f980944cfae76ad182ee8f" ;;
+        6.12.73+deb13-cloud-amd64) echo "a4a5091ca93c2f48b8768a394f2a605e6bfafd622300604c0777b7d2aa661855" ;;
+        6.12.73+deb13-cloud-arm64) echo "81e374ee9f127e5c851b7b9bb4dc9eb2365be087b57fbf31ec81a40c6b7b35cf" ;;
+        6.12.74+deb13+1-amd64)    echo "ccfdfb3d40dfe5aa5e2dda08818ac375f57c208975c503a9b22e5c7a764d05da" ;;
+        6.12.74+deb13+1-arm64)    echo "377e8b8d4c6970acaf8053d05f8fb36b2d95d640f81e2021123aa3d47790833c" ;;
+        6.12.74+deb13+1-cloud-amd64) echo "aa926d7a446fcc185af3d7f103fbeb05d5366a8ef380b41246d51d7738ac7a73" ;;
+        6.12.74+deb13+1-cloud-arm64) echo "ee2b18e0815a88d01b01d2c4270ca895d10991f26e5ca4d2a4354c6e2461c6c5" ;;
+        *) return 1 ;;
+    esac
+}
+
 # ========================== 颜色定义 ==========================
 readonly RED='\033[1;31m'
 readonly GREEN='\033[1;32m'
@@ -1303,28 +1341,32 @@ install_deps() {
         local kernel_ver
         kernel_ver=$(uname -r)
 
-        # 策略 1: 尝试下载预编译 ZFS 模块包
+        # 策略 1: 预编译模块（秒级，需在已核验的哈希清单内）
         if install_zfs_prebuilt "$kernel_ver"; then
             debian_zfs_compiled=false  # 预编译模式不需要后续清理编译环境
             log "系统依赖安装完成（ZFS 预编译模块，秒级部署）"
-        # 策略 2: 询问用户是否进行 DKMS 即时编译
         else
-            warn "未找到内核 ${kernel_ver} 的预编译 ZFS 模块包"
-            echo ""
-            info "当前内核版本暂无预编译包，可选择 DKMS 即时编译（约 5-10 分钟）"
-            echo -ne "  ${BOLD}是否进行实时编译？${NC}[Y/n]: "
-            read -r dkms_confirm || true
-            if [[ "${dkms_confirm:-}" =~ ^[nN]$ ]]; then
-                warn "已跳过 ZFS 安装，返回主菜单"
-                return 1
-            fi
-            info "开始 DKMS 即时编译..."
-            if install_zfs_dkms; then
+            # 策略 2: DKMS 编译。
+            # ZFS 装不上不是安装失败 —— 面板用 dir 存储池一样能跑。所以这里所有失败路径都只
+            # 降级、不中断安装，也不打红字（此前把可降级的回退打成 error，用户看到就是「ZFS 安装报错」）。
+            info "尝试 DKMS 编译 ZFS 模块（约 5-10 分钟）..."
+            install_zfs_dkms
+            local dkms_rc=$?
+
+            if [[ $dkms_rc -eq 0 ]]; then
                 debian_zfs_compiled=true
+            elif [[ $dkms_rc -eq 2 ]]; then
+                # 当前内核没有配套头文件 —— 唯一正确的出路是换成有头文件的内核，
+                # 绝不能对着另一个内核的头文件编译（那会产出一个当前内核加载不了的模块）。
+                debian_zfs_compiled=false
+                if offer_kernel_switch_for_zfs; then
+                    log "请重启后重新执行本脚本以启用 ZFS"
+                    exit 0
+                fi
+                info "本次不启用 ZFS，面板将使用 dir 存储池（功能不受影响）"
             else
                 debian_zfs_compiled=false
-                warn "ZFS DKMS 编译或模块加载失败，已保留编译工具链供排查"
-                warn "本次安装将继续；面板请改用 dir/btrfs 存储池"
+                warn "ZFS 模块未能启用；本次安装继续，面板将使用 dir/btrfs 存储池"
             fi
         fi
     else
@@ -1341,10 +1383,11 @@ install_deps() {
     if [[ "$debian_zfs_compiled" == "true" ]]; then
         info "ZFS DKMS 编译成功，清理编译环境以释放资源..."
 
-        # 锁定当前内核版本，防止自动更新时 DKMS 在无编译环境下重编译失败
-        local kernel_pkg
-        kernel_pkg=$(dpkg -l | awk '/^ii.*linux-image-[0-9]/ {print $2}' | head -n1 || true)
-        if [[ -n "$kernel_pkg" ]]; then
+        # 锁定「当前正在运行」的内核 —— ZFS 模块正是为它编译的。
+        # 取 dpkg 列表里的第一个 linux-image 是错的：机器上有多个内核时会锁错版本，
+        # 重启后进入另一个没有 ZFS 模块的内核，存储池直接不可用。
+        local kernel_pkg="linux-image-$(uname -r)"
+        if dpkg -s "$kernel_pkg" >/dev/null 2>&1; then
             apt-mark hold "$kernel_pkg" >/dev/null 2>&1 || true
             info "已锁定内核版本: ${kernel_pkg}（防止自动更新导致 ZFS 失效）"
         fi
@@ -1352,7 +1395,17 @@ install_deps() {
         # 只卸载「本脚本为了编译 ZFS 而新装的」软件包。
         # 绝不使用 linux-headers-* 这类通配符，也绝不动客户机器上原本就有的工具链——
         # 否则会把客户自己的开发环境和其它内核的头文件一起删掉。
-        local zfs_added_pkgs="${ZFS_BUILD_PKGS_ADDED_BY_US:-}"
+        #
+        # zfs-dkms / zfsutils-linux 必须排除在外：purge zfs-dkms 会触发 DKMS 卸载钩子，
+        # 把刚刚编译好的内核模块一起删掉，ZFS 当场失效。
+        local zfs_added_pkgs=""
+        local _pkg
+        for _pkg in ${ZFS_BUILD_PKGS_ADDED_BY_US:-}; do
+            case "$_pkg" in
+                zfs-dkms|zfsutils-linux|zfs-zed) continue ;;
+                *) zfs_added_pkgs="${zfs_added_pkgs} ${_pkg}" ;;
+            esac
+        done
         if [[ -n "${zfs_added_pkgs// /}" ]]; then
             # shellcheck disable=SC2086
             apt-get purge -y -qq $zfs_added_pkgs >/dev/null 2>&1 || true
@@ -1360,6 +1413,11 @@ install_deps() {
             info "已清理本次为编译 ZFS 新装的工具链:${zfs_added_pkgs}"
         else
             info "编译工具链为客户机器原有环境，全部保留不清理"
+        fi
+
+        # 清理后复验：确认 ZFS 仍然可用。清理不该把刚装好的 ZFS 弄坏，坏了必须当场告诉用户。
+        if ! modprobe zfs 2>/dev/null || ! command -v zpool >/dev/null 2>&1; then
+            warn "清理编译环境后 ZFS 不再可用，请检查；面板可改用 dir 存储池"
         fi
         # 清理 APT 下载缓存
         apt-get clean 2>/dev/null || true
@@ -1377,8 +1435,14 @@ install_zfs_prebuilt() {
     local tmp_tar="/tmp/zfs-prebuilt-$$.tar.gz"
     local tmp_dir="/tmp/zfs-prebuilt-$$"
 
+    # fail-closed：内核不在已核验的哈希清单里就不下载。装进内核的模块必须是我们核验过的那一份。
+    local expected_sha=""
+    if ! expected_sha=$(zfs_prebuilt_sha256 "$kernel_ver"); then
+        info "内核 ${kernel_ver} 不在已核验的预编译清单内，跳过预编译模块"
+        return 1
+    fi
+
     info "尝试下载预编译 ZFS 模块 (${kernel_ver})..."
-    info "下载地址: ${prebuilt_url}"
 
     # 下载预编译包
     if ! curl -sSfL --connect-timeout 10 --max-time 60 \
@@ -1388,12 +1452,19 @@ install_zfs_prebuilt() {
         return 1
     fi
 
-    info "预编译包下载成功，开始安装..."
+    # 校验必须在解压之前：不合就当场丢弃，绝不让未经核验的内容落到磁盘上被展开。
+    if ! verify_sha256 "$tmp_tar" "$expected_sha"; then
+        error "预编译 ZFS 模块校验失败（SHA-256 不匹配），已拒绝安装"
+        error "这可能意味着上游产物被替换或下载被篡改，请勿手动绕过"
+        rm -f "$tmp_tar" 2>/dev/null || true
+        return 1
+    fi
+    info "预编译包 SHA-256 校验通过，开始安装..."
 
     # 解压
     mkdir -p "$tmp_dir"
     if ! tar -xzf "$tmp_tar" -C "$tmp_dir" 2>/dev/null; then
-        error "预编译包解压失败"
+        warn "预编译包解压失败"
         rm -rf "$tmp_tar" "$tmp_dir" 2>/dev/null || true
         return 1
     fi
@@ -1402,7 +1473,7 @@ install_zfs_prebuilt() {
     local pack_dir
     pack_dir=$(find "$tmp_dir" -name "metadata.txt" -printf '%h\n' 2>/dev/null | head -n1)
     if [[ -z "$pack_dir" ]]; then
-        error "预编译包格式无效（缺少 metadata.txt）"
+        warn "预编译包格式无效（缺少 metadata.txt）"
         rm -rf "$tmp_tar" "$tmp_dir" 2>/dev/null || true
         return 1
     fi
@@ -1467,7 +1538,7 @@ install_zfs_prebuilt() {
     mkdir -p "$target_dir"
     if ! compgen -G "$pack_dir/modules/*.ko*" >/dev/null || \
        ! cp "$pack_dir/modules/"*.ko* "$target_dir/" 2>/dev/null; then
-        error "预编译包缺少可安装的 ZFS 内核模块"
+        warn "预编译包缺少可安装的 ZFS 内核模块"
         rm -rf "$tmp_tar" "$tmp_dir" 2>/dev/null || true
         return 1
     fi
@@ -1481,7 +1552,7 @@ install_zfs_prebuilt() {
 
     # 加载 ZFS 模块验证
     if ! modprobe zfs 2>/dev/null; then
-        error "预编译模块加载失败"
+        warn "预编译模块加载失败"
         rm -rf "$tmp_tar" "$tmp_dir" 2>/dev/null || true
         return 1
     fi
@@ -1492,12 +1563,12 @@ install_zfs_prebuilt() {
     info "安装 ZFS 用户空间工具..."
     if ! apt-get install -y -qq --no-install-recommends zfsutils-linux >/dev/null 2>&1 && \
        ! apt-get install -y -qq zfsutils-linux >/dev/null 2>&1; then
-        error "ZFS 用户空间工具安装失败，预编译 ZFS 未启用"
+        warn "ZFS 用户空间工具安装失败，预编译 ZFS 未启用"
         rm -rf "$tmp_tar" "$tmp_dir" 2>/dev/null || true
         return 1
     fi
     if ! command -v zpool >/dev/null 2>&1; then
-        error "zfsutils-linux 安装后仍找不到 zpool，预编译 ZFS 未启用"
+        warn "zfsutils-linux 安装后仍找不到 zpool，预编译 ZFS 未启用"
         rm -rf "$tmp_tar" "$tmp_dir" 2>/dev/null || true
         return 1
     fi
@@ -1508,14 +1579,15 @@ install_zfs_prebuilt() {
     # 重启后进入另一个没有 ZFS 模块的内核，存储池直接不可用。
     local kernel_pkg
     kernel_pkg=""
-    if dpkg -s "linux-image-$(uname -r)" >/dev/null 2>&1; then
-        kernel_pkg="linux-image-$(uname -r)"
-    else
-        kernel_pkg=$(dpkg -l | awk '/^ii.*linux-image-[0-9]/ {print $2}' | head -n1 || true)
-    fi
-    if [[ -n "$kernel_pkg" ]]; then
+    # 只锁「当前正在运行」的内核 —— ZFS 模块正是为它装的。
+    # 运行内核不是 dpkg 管理的包时（厂商/自定义内核），本来就没有可锁的东西：
+    # 回退去 hold dpkg 列表里的第一个 linux-image 只会锁错一个无关内核，既无意义又有害。
+    kernel_pkg="linux-image-$(uname -r)"
+    if dpkg -s "$kernel_pkg" >/dev/null 2>&1; then
         apt-mark hold "$kernel_pkg" >/dev/null 2>&1 || true
         info "已锁定内核版本: ${kernel_pkg}"
+    else
+        info "当前内核 $(uname -r) 不由 apt 管理，无需锁定"
     fi
 
     # 清理临时文件
@@ -1545,50 +1617,117 @@ install_zfs_dkms() {
         return 1
     fi
 
-    # 尝试安装精确版本内核源码头
-    if ! apt-get install -y -qq "linux-headers-$(uname -r)" >/dev/null 2>&1; then
-        warn "未找到精确的内核头文件 linux-headers-$(uname -r)"
-        local dpkg_arch=""
-        local generic_headers=""
-        dpkg_arch=$(dpkg --print-architecture 2>/dev/null || true)
-        case "$dpkg_arch" in
-            amd64) generic_headers="linux-headers-amd64" ;;
-            arm64) generic_headers="linux-headers-arm64" ;;
-            *)
-                warn "不支持的 Debian 架构，无法选择通用内核头文件: ${dpkg_arch:-unknown}"
-                return 1
-                ;;
-        esac
-        info "正尝试拉取架构级通用头文件（${generic_headers}）..."
-        if ! dpkg -s "$generic_headers" >/dev/null 2>&1; then
-            ZFS_BUILD_PKGS_ADDED_BY_US="${ZFS_BUILD_PKGS_ADDED_BY_US} ${generic_headers}"
-        fi
-        if ! apt-get install -y -qq "$generic_headers" >/dev/null 2>&1; then
-            warn "内核头文件均安装失败，无法编译 ZFS DKMS 模块"
-            return 1
-        fi
+    # 必须是「当前正在运行的内核」的头文件。
+    #
+    # 原实现在拿不到精确头文件时回退去装 linux-headers-amd64 —— 那是个 meta 包，拉的是 Debian
+    # 最新 stock 内核的头文件，不是当前运行内核的。DKMS 会把模块编译进 /lib/modules/<stock内核>/，
+    # 而机器跑的是另一个内核，modprobe zfs 必然失败。厂商内核（cloud/vendor kernel）的 VPS 上
+    # linux-headers-$(uname -r) 在 apt 里根本不存在，这个「兜底」实际是保证失败。
+    #
+    # 拿不到就不编译，返回 2 让调用方去走「换内核」这条路，绝不对着另一个内核编译。
+    local running_kernel
+    running_kernel="$(uname -r)"
+    if ! apt-get install -y -qq "linux-headers-${running_kernel}" >/dev/null 2>&1; then
+        info "当前内核 ${running_kernel} 在软件源里没有对应的头文件（linux-headers-${running_kernel}）"
+        return 2
     fi
 
     info "开始 DKMS 编译 ZFS 模块（CPU 将跑满，请耐心等待）..."
     local start_time=$SECONDS
 
-    if apt-get install -y -qq zfsutils-linux >/dev/null 2>&1; then
-        local elapsed=$(( SECONDS - start_time ))
-        info "编译耗时: ${elapsed} 秒"
-
-        # 验证 ZFS 模块
-        if modprobe zfs 2>/dev/null; then
-            log "ZFS DKMS 编译成功（模块已加载）"
-            return 0
-        else
-            warn "ZFS 工具已安装但内核模块加载失败（DKMS 编译可能不完整）"
-            info "面板仍可使用 dir/btrfs 存储池，ZFS 可稍后手动修复"
-            return 1
-        fi
-    else
-        warn "ZFS 安装失败，已跳过（面板可使用 dir/btrfs 存储池）"
+    # 必须显式安装 zfs-dkms —— 它才是触发 DKMS 编译内核模块的包。
+    # 原实现只装 zfsutils-linux（用户态工具），能不能带出 zfs-dkms 全看 Recommends，
+    # 而前面预编译那条路又特意用 --no-install-recommends 来避开它，等于这里在靠运气。
+    if ! dpkg -s zfs-dkms >/dev/null 2>&1; then
+        ZFS_BUILD_PKGS_ADDED_BY_US="${ZFS_BUILD_PKGS_ADDED_BY_US} zfs-dkms"
+    fi
+    if ! apt-get install -y -qq zfs-dkms zfsutils-linux >/dev/null 2>&1; then
+        warn "ZFS DKMS 软件包安装失败"
         return 1
     fi
+
+    local elapsed=$(( SECONDS - start_time ))
+    info "编译耗时: ${elapsed} 秒"
+
+    # 成功判定必须是实证，不能只看 apt 的退出码：
+    # 模块要确实落在「当前运行内核」的目录下，并且真的能加载。
+    if ! find "/lib/modules/${running_kernel}" -name 'zfs.ko*' -type f 2>/dev/null | grep -q .; then
+        warn "DKMS 未在当前内核 ${running_kernel} 下产出 zfs 模块"
+        return 1
+    fi
+    depmod -a 2>/dev/null || true
+    if ! modprobe zfs 2>/dev/null; then
+        warn "zfs 模块已编译但加载失败"
+        return 1
+    fi
+    if ! command -v zpool >/dev/null 2>&1; then
+        warn "zfsutils-linux 安装后仍找不到 zpool"
+        return 1
+    fi
+
+    log "ZFS DKMS 编译成功（模块已在当前内核加载）"
+    return 0
+}
+
+# 当前内核没有对应的头文件时，可以换成 Debian 官方内核（它有配套头文件，DKMS 才能正确编译）。
+#
+# 这是会改动客户生产机引导配置的高危操作，因此：
+#   - 容器型虚拟化（OpenVZ/LXC）用的是宿主机内核，装了也不会生效，直接跳过；
+#   - 没有 GRUB 的机器（部分厂商用自定义引导）换了也未必切得过去，直接跳过；
+#   - 非交互 / 用户不同意 → 静默跳过 ZFS，改用 dir 存储池继续安装，绝不擅自动引导。
+offer_kernel_switch_for_zfs() {
+    local virt=""
+    if command -v systemd-detect-virt >/dev/null 2>&1; then
+        virt="$(systemd-detect-virt 2>/dev/null || true)"
+        if systemd-detect-virt --container >/dev/null 2>&1; then
+            info "当前是容器型虚拟化（${virt}），使用宿主机内核，无法自行更换内核；跳过 ZFS"
+            return 1
+        fi
+    fi
+
+    if [[ ! -d /boot/grub ]] || ! command -v update-grub >/dev/null 2>&1; then
+        info "未检测到 GRUB 引导，更换内核可能不会生效；跳过 ZFS"
+        return 1
+    fi
+
+    local dpkg_arch=""
+    dpkg_arch=$(dpkg --print-architecture 2>/dev/null || true)
+    case "$dpkg_arch" in
+        amd64|arm64) ;;
+        *) info "不支持的架构（${dpkg_arch:-unknown}），跳过换内核"; return 1 ;;
+    esac
+
+    if [[ ! -t 0 ]]; then
+        info "非交互环境，不擅自更换内核；跳过 ZFS（可稍后重跑脚本手动选择）"
+        return 1
+    fi
+
+    echo ""
+    warn "当前内核（$(uname -r)）没有配套头文件，无法编译 ZFS 模块。"
+    info "可以安装 Debian 官方内核（linux-image-${dpkg_arch}）并重启，之后重跑本脚本即可启用 ZFS。"
+    warn "注意：这会安装新内核并更新 GRUB 引导配置。极少数厂商使用自定义引导，重启后可能不会切换到新内核。"
+    info "不更换也完全可以继续安装 —— 面板会使用 dir 存储池，功能不受影响。"
+    echo -ne "  ${BOLD}是否安装 Debian 官方内核并在重启后启用 ZFS？${NC}[y/N]: "
+    local reply=""
+    read -r reply || true
+    if [[ ! "${reply:-}" =~ ^[yY]$ ]]; then
+        info "已跳过更换内核；本次使用 dir 存储池继续安装"
+        return 1
+    fi
+
+    info "正在安装 Debian 官方内核与头文件..."
+    if ! apt-get install -y -qq "linux-image-${dpkg_arch}" "linux-headers-${dpkg_arch}" >/dev/null 2>&1; then
+        warn "官方内核安装失败；本次使用 dir 存储池继续安装"
+        return 1
+    fi
+    update-grub >/dev/null 2>&1 || true
+
+    echo ""
+    log "Debian 官方内核已安装。"
+    warn "请重启服务器，然后重新执行本安装脚本 —— 重启后内核将有配套头文件，ZFS 会自动启用。"
+    info "  重启: reboot"
+    echo ""
+    return 0
 }
 
 # 步骤 3: 安装 Incus
