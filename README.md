@@ -115,6 +115,55 @@ sudo bash install-panel.sh --uninstall
 
 完整安装说明见：<https://payincus.com/deployment/one-click-install>
 
+## Docker Compose 部署
+
+Docker Compose 部署适合快速试用、单机自托管或放在外部 HTTPS 反向代理后运行。当前 Compose 会启动 PostgreSQL 16、Redis 7、后端 API 和 Nginx 静态前端四个服务：
+
+- 用户端默认暴露到 `http://localhost:8080`。
+- 管理端默认暴露到 `http://localhost:8081`。
+- 前端 Nginx 通过容器内网络反向代理 `/api` 和 `/api/ws` 到后端。
+- 后端启动时默认执行 `prisma migrate deploy`。
+
+快速启动：
+
+```bash
+cp .env.docker.example .env.docker
+# 编辑 .env.docker，至少替换 POSTGRES_PASSWORD、REDIS_PASSWORD、JWT_SECRET、COOKIE_SECRET、ENCRYPTION_KEY、PLUGIN_WEBHOOK_SIGNING_SECRET、ADMIN_PASSWORD。
+docker compose --env-file .env.docker up -d --build
+```
+
+首次启动后访问：
+
+```text
+用户端：http://localhost:8080
+管理端：http://localhost:8081
+```
+
+生产使用建议：
+
+- 将 `FRONTEND_URL`、`ADMIN_FRONTEND_URL`、`SITE_URL`、`PAYMENT_CALLBACK_BASE_URL`、`VITE_CUSTOMER_BASE_URL`、`VITE_ADMIN_BASE_URL` 改为真实 HTTPS 域名。
+- 如果修改了 `VITE_*` 前端构建变量，需要重新执行 `docker compose --env-file .env.docker up -d --build`。
+- 真实生产环境建议在 `USER_HTTP_PORT` 和 `ADMIN_HTTP_PORT` 前面放置 Caddy、Nginx、Traefik 或云厂商负载均衡，并启用 HTTPS。
+- HTTPS 生产环境请移除 `COOKIE_SECURE=false` 或设置为 `COOKIE_SECURE=true`，`COOKIE_DOMAIN` 保持空值以隔离用户端和管理端 refresh cookie。
+- 数据库、Redis 和插件/主题/OTA 运行数据分别保存在 `postgres-data`、`redis-data`、`payincus-data` Docker volume 中。
+- 若需要手动执行数据迁移，可临时设置 `RUN_DATA_MIGRATIONS=true` 后重启后端，或执行 `docker compose --env-file .env.docker exec backend pnpm --dir /app/server migrate:data`。
+
+常用命令：
+
+```bash
+# 查看服务状态
+docker compose --env-file .env.docker ps
+
+# 查看后端日志
+docker compose --env-file .env.docker logs -f backend
+
+# 停止服务但保留数据
+docker compose --env-file .env.docker down
+
+# 停止并删除全部数据卷（危险）
+docker compose --env-file .env.docker down -v
+```
+
 ## 手动部署
 
 安装依赖并构建：
