@@ -1,0 +1,16 @@
+node_modules
+client/node_modules
+server/node_modules
+agent
+.git
+.github
+docs-site
+plugin-templates
+theme-templates
+*.log
+.env
+.env.*
+!.env.example
+!.env.docker.example
+Dockerfile*
+docker-compose*.yml

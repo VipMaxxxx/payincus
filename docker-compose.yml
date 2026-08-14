@@ -1,0 +1,94 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-payincus}
+      POSTGRES_USER: ${POSTGRES_USER:-payincus}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.docker}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?set REDIS_PASSWORD in .env.docker}"]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD in .env.docker}
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$${REDIS_PASSWORD}\" ping | grep PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: .
+      target: backend
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
+        VITE_CUSTOMER_BASE_URL: ${VITE_CUSTOMER_BASE_URL:-http://localhost:8080}
+        VITE_ADMIN_BASE_URL: ${VITE_ADMIN_BASE_URL:-http://localhost:8081}
+    restart: unless-stopped
+    env_file:
+      - .env.docker
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 3001
+      TRUST_PROXY: "true"
+      SERVE_STATIC_CLIENT: "false"
+      DATABASE_URL: postgresql://${POSTGRES_USER:-payincus}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-payincus}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      INCUDAL_APP_DIR: /app
+      INCUDAL_INSTALL_DIR: /opt/incudal
+      SYSTEM_UPDATE_LOG_DIR: /opt/incudal/update-logs
+      PLUGIN_MARKET_PUBLISH_DIR: /opt/incudal/plugin-market
+      PLUGIN_INSTALL_DIR: /opt/incudal/plugins
+      PLUGIN_DATA_DIR: /opt/incudal/plugin-data
+      PLUGIN_LOG_DIR: /opt/incudal/plugin-logs
+      PLUGIN_STAGING_DIR: /opt/incudal/plugin-staging
+      THEME_MARKET_PUBLISH_DIR: /opt/incudal/theme-market
+      THEME_INSTALL_DIR: /opt/incudal/themes
+      THEME_DATA_DIR: /opt/incudal/theme-data
+      THEME_STAGING_DIR: /opt/incudal/theme-staging
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - payincus-data:/opt/incudal
+    expose:
+      - "3001"
+
+  frontend:
+    build:
+      context: .
+      target: frontend
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
+        VITE_CUSTOMER_BASE_URL: ${VITE_CUSTOMER_BASE_URL:-http://localhost:8080}
+        VITE_ADMIN_BASE_URL: ${VITE_ADMIN_BASE_URL:-http://localhost:8081}
+    restart: unless-stopped
+    environment:
+      BACKEND_UPSTREAM: http://backend:3001
+      NGINX_CLIENT_MAX_BODY_SIZE: ${NGINX_CLIENT_MAX_BODY_SIZE:-50m}
+    depends_on:
+      backend:
+        condition: service_started
+    ports:
+      - "${USER_HTTP_PORT:-8080}:80"
+      - "${ADMIN_HTTP_PORT:-8081}:81"
+
+volumes:
+  postgres-data:
+  redis-data:
+  payincus-data:

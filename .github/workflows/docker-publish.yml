@@ -1,0 +1,175 @@
+# ============================================================================
+# PayIncus Docker 镜像发布工作流
+# 在推送版本 tag (v*) 或手动触发时，自动构建 backend 和 frontend 镜像
+# 支持 amd64 和 arm64 双架构，推送到 Docker Hub 和 GHCR
+#
+# 需要配置的 GitHub Secrets:
+#   DOCKERHUB_TOKEN     - Docker Hub Access Token (非密码)
+# 用户名固定为 aklibk
+# ============================================================================
+
+name: Docker Publish
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '镜像版本号（例如 v1.2.12），留空则使用 git SHA'
+        required: false
+        default: ''
+      platforms:
+        description: '构建平台（逗号分隔，例如 linux/amd64,linux/arm64）'
+        required: false
+        default: 'linux/amd64,linux/arm64'
+
+env:
+  REGISTRY_DOCKERHUB: docker.io
+  REGISTRY_GHCR: ghcr.io
+  DOCKERHUB_USERNAME: aklibk
+
+jobs:
+  build-and-push:
+    name: 构建镜像 (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: [backend, frontend]
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 确定版本号
+        id: version
+        run: |
+          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref_type }}" == "tag" ]]; then
+            VERSION="${{ github.ref_name }}"
+          elif [[ -n "${{ github.event.inputs.tag }}" ]]; then
+            VERSION="${{ github.event.inputs.tag }}"
+          else
+            VERSION="preview-$(echo ${{ github.sha }} | head -c 7)"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "is_latest=true" >> $GITHUB_OUTPUT
+          # 预览版不标记 latest
+          if [[ "$VERSION" == preview-* ]]; then
+            echo "is_latest=false" >> $GITHUB_OUTPUT
+          fi
+          echo "📦 版本号: $VERSION"
+
+      # ===== 多架构构建准备 =====
+      - name: 设置 QEMU（多架构模拟）
+        uses: docker/setup-qemu-action@v3
+
+      - name: 设置 Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver-opts: |
+            image=moby/buildkit:latest
+
+      # ===== 登录 Docker Hub =====
+      - name: 登录 Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # ===== 登录 GHCR =====
+      - name: 登录 GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY_GHCR }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # ===== 提取元数据 =====
+      - name: 提取镜像元数据
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ${{ env.REGISTRY_DOCKERHUB }}/${{ env.DOCKERHUB_USERNAME }}/payincus-${{ matrix.target }}
+            ${{ env.REGISTRY_GHCR }}/${{ github.repository_owner }}/payincus-${{ matrix.target }}
+          tags: |
+            type=raw,value=${{ steps.version.outputs.version }}
+            type=raw,value=latest,enable=${{ steps.version.outputs.is_latest }}
+
+      # ===== 构建并推送镜像 =====
+      - name: 构建并推送 ${{ matrix.target }} 镜像
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          target: ${{ matrix.target }}
+          platforms: ${{ github.event.inputs.platforms || 'linux/amd64,linux/arm64' }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VITE_API_BASE_URL=/api
+            VITE_CUSTOMER_BASE_URL=http://localhost:8080
+            VITE_ADMIN_BASE_URL=http://localhost:8081
+          cache-from: type=gha,scope=${{ matrix.target }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.target }}
+
+      # ===== 输出镜像摘要 =====
+      - name: 输出镜像信息
+        run: |
+          echo "✅ 镜像构建完成: ${{ matrix.target }}"
+          echo "📋 版本: ${{ steps.version.outputs.version }}"
+          echo "🏷️  标签:"
+          echo "${{ steps.meta.outputs.tags }}" | sed 's/^/   - /'
+          echo ""
+          echo "🐳 Docker Hub: ${{ env.REGISTRY_DOCKERHUB }}/${{ env.DOCKERHUB_USERNAME }}/payincus-${{ matrix.target }}:${{ steps.version.outputs.version }}"
+          echo "📦 GHCR:       ${{ env.REGISTRY_GHCR }}/${{ github.repository_owner }}/payincus-${{ matrix.target }}:${{ steps.version.outputs.version }}"
+
+  # ===== 发布完成后输出汇总 =====
+  summary:
+    name: 发布汇总
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: 确定版本号
+        id: version
+        run: |
+          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref_type }}" == "tag" ]]; then
+            VERSION="${{ github.ref_name }}"
+          elif [[ -n "${{ github.event.inputs.tag }}" ]]; then
+            VERSION="${{ github.event.inputs.tag }}"
+          else
+            VERSION="preview-$(echo ${{ github.sha }} | head -c 7)"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: 发布结果
+        run: |
+          echo "============================================"
+          echo "  PayIncus Docker 镜像发布结果"
+          echo "============================================"
+          echo ""
+          echo "版本: ${{ steps.version.outputs.version }}"
+          echo "构建状态: ${{ needs.build-and-push.result }}"
+          echo ""
+          if [[ "${{ needs.build-and-push.result }}" == "success" ]]; then
+            echo "✅ 所有镜像构建并推送成功"
+            echo ""
+            echo "镜像地址:"
+            echo "  Docker Hub:"
+            echo "    docker pull docker.io/aklibk/payincus-backend:${{ steps.version.outputs.version }}"
+            echo "    docker pull docker.io/aklibk/payincus-frontend:${{ steps.version.outputs.version }}"
+            echo ""
+            echo "  GHCR:"
+            echo "    docker pull ghcr.io/${{ github.repository_owner }}/payincus-backend:${{ steps.version.outputs.version }}"
+            echo "    docker pull ghcr.io/${{ github.repository_owner }}/payincus-frontend:${{ steps.version.outputs.version }}"
+          else
+            echo "❌ 镜像构建失败，请检查日志"
+          fi
+          echo ""
+          echo "============================================"
