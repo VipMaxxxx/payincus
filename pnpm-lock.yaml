@@ -203,8 +203,8 @@ importers:
         specifier: ^2.0.2
         version: 2.0.2
       ip-address:
-        specifier: ^10.1.0
-        version: 10.1.0
+        specifier: ^10.7.5
+        version: 10.7.5
       jsonwebtoken:
         specifier: ^9.0.3
         version: 9.0.3
@@ -2963,8 +2963,8 @@ packages:
   inversify@6.1.4:
     resolution: {integrity: sha512-PbxrZH/gTa1fpPEEGAjJQzK8tKMIp5gRg6EFNJlCtzUcycuNdmhv3uk5P8Itm/RIjgHJO16oQRLo9IHzQN51bA==}
 
-  ip-address@10.1.0:
-    resolution: {integrity: sha512-XXADHxXmvT9+CRxhXg56LJovE+bmWnEWB78LB83VZTprKTmaC5QfruXocxzTZ2Kl0DNwKuBdlIhjL8LeY8Sf8Q==}
+  ip-address@10.7.5:
+    resolution: {integrity: sha512-t2v0rkILYv9WXmSL7TpAaU3HXgaFYOPUcH3QHgwQ++gpJuH3bqyMy4Fvt/DJCTKwzH3Cf+bAp5W/mFL39KPLzA==}
     engines: {node: '>= 12'}
 
   ipaddr.js@2.3.0:
@@ -7421,7 +7421,7 @@ snapshots:
     transitivePeerDependencies:
       - reflect-metadata
 
-  ip-address@10.1.0: {}
+  ip-address@10.7.5: {}
 
   ipaddr.js@2.3.0: {}
 
